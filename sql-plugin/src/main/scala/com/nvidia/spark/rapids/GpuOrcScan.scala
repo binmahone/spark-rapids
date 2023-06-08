@@ -44,7 +44,7 @@ import org.apache.commons.io.IOUtils
 import org.apache.commons.io.output.CountingOutputStream
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, FSDataInputStream, Path}
-import org.apache.hadoop.hive.common.io.DiskRangeList
+import org.apache.hadoop.hive.common.DiskRangeList
 import org.apache.hadoop.io.Text
 import org.apache.orc.{CompressionKind, DataReader, FileFormatException, OrcConf, OrcFile, OrcProto, PhysicalWriter, Reader, StripeInformation, TypeDescription}
 import org.apache.orc.impl._
@@ -813,7 +813,6 @@ trait OrcCommonFunctions extends OrcCodecWritingHelper { self: FilePartitionRead
       dataReader: GpuOrcDataReader,
       out: HostMemoryOutputStream,
       inputDataRanges: DiskRangeList): Unit = {
-
     val start = System.nanoTime()
     dataReader.copyFileDataToHostStream(out, inputDataRanges)
     val end = System.nanoTime()
@@ -1542,7 +1541,7 @@ private case class GpuOrcFileFilterHandler(
         inputStripe: StripeInformation,
         inputFooter: OrcProto.StripeFooter,
         columnMapping: Array[Int]): OrcOutputStripe = {
-      val rangeCreator = new DiskRangeList.CreateHelper
+      // val rangeCreator = new DiskRangeList.CreateHelper
       val footerBuilder = OrcProto.StripeFooter.newBuilder()
       var inputFileOffset = inputStripe.getOffset
       var outputStripeDataLength = 0L
@@ -1559,8 +1558,6 @@ private case class GpuOrcFileFilterHandler(
             footerBuilder.addStreams(
               OrcProto.Stream.newBuilder(stream).setColumn(outputColumn).build)
             outputStripeDataLength += stream.getLength
-            rangeCreator.addOrMerge(inputFileOffset, streamEndOffset,
-              GpuOrcDataReader.shouldMergeDiskRanges, true)
           }
         }
 
@@ -1588,7 +1585,7 @@ private case class GpuOrcFileFilterHandler(
         .setDataLength(outputStripeDataLength)
         .setNumberOfRows(inputStripe.getNumberOfRows)
 
-      OrcOutputStripe(infoBuilder, outputStripeFooter, rangeCreator.get)
+      OrcOutputStripe(infoBuilder, outputStripeFooter, null)
     }
 
     /**

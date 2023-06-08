@@ -39,7 +39,7 @@ case class GpuHashPartitioning(expressions: Seq[Expression], numPartitions: Int)
           expressions.length == h.expressions.length && expressions.zip(h.expressions).forall {
             case (l, r) => l.semanticEquals(r)
           }
-        case ClusteredDistribution(requiredClustering, _) =>
+        case ClusteredDistribution(requiredClustering, _, _) =>
           expressions.forall(x => requiredClustering.exists(_.semanticEquals(x)))
         case _ => false
       }

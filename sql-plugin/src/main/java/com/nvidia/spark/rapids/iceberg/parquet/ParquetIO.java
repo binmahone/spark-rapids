@@ -74,6 +74,11 @@ public class ParquetIO {
     public void seek(long newPos) throws IOException {
       delegate.seek(newPos);
     }
+
+    @Override
+    public void readFully(long l, byte[] bytes, int i, int i1) throws IOException {
+
+    }
   }
 
   private static class ParquetInputFile implements InputFile {

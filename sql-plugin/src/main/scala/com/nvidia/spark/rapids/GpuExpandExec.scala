@@ -20,7 +20,6 @@ import scala.util.Random
 
 import ai.rapids.cudf.NvtxColor
 import com.nvidia.spark.rapids.Arm.withResource
-import com.nvidia.spark.rapids.GpuExpressionsUtils.NullVecCache
 import com.nvidia.spark.rapids.GpuMetric._
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
 import com.nvidia.spark.rapids.shims.ShimUnaryExecNode
@@ -55,9 +54,7 @@ class GpuExpandExecMeta(
     val projections = gpuProjections.map(_.map(_.convertToGpu()))
     GpuExpandExec(projections, expand.output, childPlans.head.convertIfNeeded())(
       useTieredProject = conf.isTieredProjectEnabled,
-      preprojectEnabled = conf.isExpandPreprojectEnabled,
-      coalesceEnabled = conf.isCoalesceAfterExpandEnabled,
-      cacheNullMaxCount = conf.expandCachingNullVecMaxCount)
+      preprojectEnabled = conf.isExpandPreprojectEnabled)
   }
 }
 
@@ -75,12 +72,7 @@ case class GpuExpandExec(
     output: Seq[Attribute],
     child: SparkPlan)(
     useTieredProject: Boolean = false,
-    preprojectEnabled: Boolean = false,
-    coalesceEnabled: Boolean = false,
-    cacheNullMaxCount: Int = 0
-) extends ShimUnaryExecNode with GpuExec {
-
-  override val coalesceAfter: Boolean = true
+    preprojectEnabled: Boolean = false) extends ShimUnaryExecNode with GpuExec {
 
   override def otherCopyArgs: Seq[AnyRef] = Seq[AnyRef](
     useTieredProject.asInstanceOf[java.lang.Boolean],
@@ -135,8 +127,7 @@ case class GpuExpandExec(
     }
 
     child.executeColumnar().mapPartitions { it =>
-      new GpuExpandIterator(boundProjections, metricsMap, preprojectIter(it),
-        coalesceEnabled, cacheNullMaxCount)
+      new GpuExpandIterator(boundProjections, metricsMap, preprojectIter(it))
     }
   }
 
@@ -155,16 +146,16 @@ case class GpuExpandExec(
    * expanding to avoid duplicate evaluation of semantic-equal (sub) expressions.
    *
    * e.g. projections:
-   * [if((a+b)>0) 1 else 0, null], [null, if((a+b)=0 "no" else "yes")];
+   *     [if((a+b)>0) 1 else 0, null], [null, if((a+b)=0 "no" else "yes")];
    * without pre-projection, "a+b" will be evaluated twice.
    * while with pre-projection, it has
-   * preprojectionList:
-   * [if((a+b)>0) 1 else 0, if((a+b)=0 "no" else "yes")]
-   * preprojectedProjections:
-   * [_pre-project-c1#0, null], [null, _pre-project-c3#1]
+   *    preprojectionList:
+   *            [if((a+b)>0) 1 else 0, if((a+b)=0 "no" else "yes")]
+   *    preprojectedProjections:
+   *            [_pre-project-c1#0, null], [null, _pre-project-c3#1]
    * and
-   * "_pre-project-c1#0" refers to "if((a+b)>0) 1 else 0",
-   * "_pre-project-c3#1" refers to "if((a+b)=0 "no" else "yes"
+   *    "_pre-project-c1#0" refers to "if((a+b)>0) 1 else 0",
+   *    "_pre-project-c3#1" refers to "if((a+b)=0 "no" else "yes"
    * By leveraging the tiered projection, "a+b" will be evaluated only once.
    */
   private[this] lazy val (preprojectionList, preprojectedProjections) = {
@@ -200,9 +191,7 @@ case class GpuExpandExec(
 class GpuExpandIterator(
     boundProjections: Seq[GpuTieredProject],
     metrics: Map[String, GpuMetric],
-    it: Iterator[ColumnarBatch],
-    coalesceEnabled: Boolean,
-    cacheNullMaxCount: Int)
+    it: Iterator[ColumnarBatch])
   extends Iterator[ColumnarBatch] {
 
   private var sb: Option[SpillableColumnarBatch] = None
@@ -217,19 +206,8 @@ class GpuExpandIterator(
   Option(TaskContext.get()).foreach { tc =>
     onTaskCompletion(tc) {
       sb.foreach(_.close())
-
-      if (cacheNullMaxCount > 0) {
-        import scala.collection.JavaConverters._
-        GpuExpressionsUtils.cachedNullVectors.get().values().asScala.foreach(_.close())
-        GpuExpressionsUtils.cachedNullVectors.get().clear()
-      }
     }
   }
-
-  if (cacheNullMaxCount > 0 && GpuExpressionsUtils.cachedNullVectors.get() == null) {
-    GpuExpressionsUtils.cachedNullVectors.set(new NullVecCache(cacheNullMaxCount))
-  }
-
 
   override def hasNext: Boolean = sb.isDefined || it.hasNext
 

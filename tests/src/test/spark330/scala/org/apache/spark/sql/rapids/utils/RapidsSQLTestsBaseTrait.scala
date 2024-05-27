@@ -147,6 +147,7 @@ object RapidsSQLTestsBaseTrait {
       .set("spark.rapids.sql.exec.CollectLimitExec", "true")
       .set("spark.rapids.sql.exec.FlatMapCoGroupsInPandasExec", "true")
       .set("spark.rapids.sql.exec.WindowInPandasExec", "true")
+      .set("spark.rapids.sql.hasExtendedYearValues", "false")
       // uncomment below config to run `strict mode`, where fallback to CPU is treated as fail
       // .set("spark.rapids.sql.test.enabled", "true")
       // .set("spark.rapids.sql.test.allowedNonGpu",

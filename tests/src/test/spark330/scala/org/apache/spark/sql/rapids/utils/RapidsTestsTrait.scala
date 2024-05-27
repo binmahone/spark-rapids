@@ -129,6 +129,7 @@ trait RapidsTestsTrait extends RapidsTestsCommonTrait {
         .config("spark.rapids.sql.exec.CollectLimitExec", "true")
         .config("spark.rapids.sql.exec.FlatMapCoGroupsInPandasExec", "true")
         .config("spark.rapids.sql.exec.WindowInPandasExec", "true")
+        .config("spark.rapids.sql.hasExtendedYearValues", "false")
         // uncomment below config to run `strict mode`, where fallback to CPU is treated as fail
         // .config("spark.rapids.sql.test.enabled", "true")
         // .config("spark.rapids.sql.test.allowedNonGpu",

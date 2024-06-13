@@ -132,6 +132,10 @@ def pytest_sessionstart(session):
 
     if ('PYTEST_XDIST_WORKER' in os.environ):
         wid = os.environ['PYTEST_XDIST_WORKER']
+
+        if(str(wid) == 'gw3'):
+            driver_opts += ' -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005 -Dspark.testing=true '
+
         _handle_event_log_dir(_sb, wid)
         driver_opts += _get_driver_opts_for_worker_logs(_sb, wid)
         _handle_derby_dir(_sb, driver_opts, wid)
@@ -229,7 +233,11 @@ def _handle_event_log_dir(sb, wid):
         .config('spark.eventLog.dir', "file://{}".format(os.path.abspath(d))) \
         .config('spark.eventLog.compress', True) \
         .config('spark.eventLog.enabled', True) \
-        .config('spark.eventLog.compression.codec', event_log_codec)
+        .config('spark.eventLog.compression.codec', event_log_codec) \
+        .config('spark.sql.codegen.wholeStage', False) \
+        .config('spark.sql.codegen.factoryMode', 'NO_CODEGEN')
+
+
 
 def _handle_ivy_cache_dir(sb, wid):
     if os.environ.get('SPARK_IVY_CACHE_ENABLED', str(True)).lower() in [

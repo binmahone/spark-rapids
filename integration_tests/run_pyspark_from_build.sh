@@ -12,6 +12,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+__conda_setup="$('/home/hongbin/anaconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+
+else
+    if [ -f "/home/hongbin/anaconda3/etc/profile.d/conda.sh" ]; then
+        . "/home/hongbin/anaconda3/etc/profile.d/conda.sh"
+    else
+        export PATH="/home/hongbin/anaconda3/bin:$PATH"
+    fi
+fi
+unset __conda_setup
+# <<< conda initialize <<<
+
+conda activate py38
+python --version
+
+conda list
+
 set -ex
 
 SCRIPTPATH="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
@@ -206,7 +228,7 @@ else
 
     REPORT_CHARS=${REPORT_CHARS:="fE"} # default as (f)ailed, (E)rror
     STD_INPUT_PATH="$INPUT_PATH"/src/test/resources
-    TEST_COMMON_OPTS=(-v
+    TEST_COMMON_OPTS=(-v -x # if add -s here, logger output will show inplace, but stdout will be missing(even at final)
           -r"$REPORT_CHARS"
           "$TEST_TAGS"
           --std_input_path="$STD_INPUT_PATH"

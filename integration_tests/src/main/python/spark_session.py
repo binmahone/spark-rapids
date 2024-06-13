@@ -68,6 +68,7 @@ def _set_all_confs(conf):
     newconf.update(conf)
     for key, value in newconf.items():
         if _spark.conf.get(key, None) != value:
+            print("set key: " + key + " value: " + str(value))
             _spark.conf.set(key, value)
 
 def reset_spark_session_conf():
@@ -79,6 +80,7 @@ def reset_spark_session_conf():
     current_keys = _from_scala_map(_spark.conf._jconf.getAll()).keys()
     for key in current_keys:
         if key not in _orig_conf_keys:
+            print("unset key: " + key)
             _spark.conf.unset(key)
 
 def _check_for_proper_return_values(something):
@@ -130,6 +132,10 @@ def with_spark_session(func, conf={}):
     _set_all_confs(conf)
     ret = func(_spark)
     _check_for_proper_return_values(ret)
+
+    current_keys = _from_scala_map(_spark.conf._jconf.getAll()).keys()
+    for key in current_keys:
+        print("current key: " + key + " value: " + _spark.conf.get(key))
     return ret
 
 
@@ -144,6 +150,7 @@ def with_cpu_session(func, conf={}):
     """Run func that takes a spark session as input with the given configs set on the CPU."""
     copy = dict(conf)
     copy['spark.rapids.sql.enabled'] = 'false'
+    copy['spark.sql.codegen.wholeStage'] = 'false'
     return with_spark_session(func, conf=copy)
 
 def with_gpu_session(func, conf={}):

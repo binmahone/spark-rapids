@@ -125,6 +125,7 @@ class DataGen:
             def choose_one():
                 pick = rand.random()
                 total = 0
+                # print('choose one ' + str(normalized_choices) + '.pick is ' + str(pick))
                 for (weight, gen) in normalized_choices:
                     total += weight
                     if total >= pick:
@@ -667,7 +668,8 @@ class ArrayGen(DataGen):
         return super().__repr__() + '(' + str(self._child_gen) + ')'
 
     def _cache_repr(self):
-        return super()._cache_repr() + '(' + self._child_gen._cache_repr() + ')'
+        return (super()._cache_repr() + '(' + self._child_gen._cache_repr() + ')'
+                + '(' + str(self.all_null) + ',' + str(self.convert_to_tuple) + ')')
 
     def start(self, rand):
         self._child_gen.start(rand)
@@ -807,7 +809,7 @@ class BinaryGen(DataGen):
 
 # Note: Current(2023/06/06) maxmium IT data size is 7282688 bytes, so LRU cache with maxsize 128
 # will lead to 7282688 * 128 = 932 MB additional memory usage in edge case, which is acceptable.
-@lru_cache(maxsize=128, typed=True)
+# @lru_cache(maxsize=128, typed=True)
 def gen_df_help(data_gen, length, seed_value):
     rand = random.Random(seed_value)
     data_gen.start(rand)
@@ -828,6 +830,7 @@ def gen_df(spark, data_gen, length=2048, seed=None, num_slices=None):
         # we cannot create a data frame from a nullable struct
         assert not data_gen.nullable
 
+    print('Generating DataFrame with seed=' + str(seed_value) + ' and length=' + str(length))
     data = gen_df_help(src, length, seed_value)
 
     # We use `numSlices` to create an RDD with the specific number of partitions,

@@ -23,6 +23,10 @@ from pyspark.sql.types import *
 from pyspark.sql.types import IntegralType
 from pyspark.sql.functions import array_contains, col, element_at, lit, array
 
+import logging
+
+LOGGER = logging.getLogger(__name__)
+
 # max_val is a little larger than the default max size(20) of ArrayGen
 # so we can get the out-of-bound indices.
 array_neg_index_gen = IntegerGen(min_val=-25, max_val=-1, special_cases=[None])
@@ -147,8 +151,15 @@ def test_array_item_with_strict_index(strict_index_enabled, index):
 @pytest.mark.parametrize('index', [-2, 100, array_neg_index_gen, array_out_index_gen], ids=idfn)
 def test_array_item_ansi_fail_invalid_index(index):
     message = "SparkArrayIndexOutOfBoundsException" if (is_databricks104_or_later() or is_spark_330_or_later()) else "java.lang.ArrayIndexOutOfBoundsException"
+    print("Hello, World!")
+    import sys
+    sys.stderr.write("This is an error message\n")
+    LOGGER.error('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
+    LOGGER.error('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
+    import time
+    time.sleep(15)
     if isinstance(index, int):
-        test_func = lambda spark: unary_op_df(spark, ArrayGen(int_gen)).select(col('a')[index]).collect()
+        test_func = lambda spark: unary_op_df(spark, ArrayGen(int_gen)).select(col('a')[index], col('a')).collect()
     else:
         test_func = lambda spark: two_col_df(spark, ArrayGen(int_gen), index).selectExpr('a[b]').collect()
     assert_gpu_and_cpu_error(

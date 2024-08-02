@@ -1329,7 +1329,7 @@ abstract class JoinPartitioner(
       opTime.ns {
         val partsTable = GpuHashPartitioningBase.hashPartitionAndClose(
           spillableBatch.getColumnarBatch(), boundJoinKeys, numPartitions, "partition for join",
-          JoinPartitioner.HASH_SEED)
+          HashMode.MURMUR3, JoinPartitioner.HASH_SEED)
         val contigTables = withResource(partsTable) { _ =>
           partsTable.getTable.contiguousSplit(partsTable.getPartitions.tail: _*)
         }

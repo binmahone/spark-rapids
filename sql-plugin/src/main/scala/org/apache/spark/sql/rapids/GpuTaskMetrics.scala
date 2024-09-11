@@ -27,8 +27,8 @@ import ai.rapids.cudf.{NvtxColor, NvtxRange}
 import com.nvidia.spark.rapids.Arm.withResource
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
 import com.nvidia.spark.rapids.jni.RmmSpark
-
 import org.apache.spark.{SparkContext, TaskContext}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.{AccumulatorV2, LongAccumulator, Utils}
 
@@ -78,12 +78,57 @@ class NanoSecondAccumulator extends AccumulatorV2[jl.Long, NanoTime] {
   override def value: NanoTime = NanoTime(_sum)
 }
 
+class MaxLongAccumulator extends AccumulatorV2[jl.Long, jl.Long] {
+  private var _v = 0L
+
+  override def isZero: Boolean = _v == 0
+
+  override def copy(): MaxLongAccumulator = {
+    val newAcc = new MaxLongAccumulator
+    newAcc._v = this._v
+    newAcc
+  }
+
+  override def reset(): Unit = {
+    _v = 0L
+  }
+
+  override def add(v: jl.Long): Unit = {
+    if(v > _v) {
+      _v = v
+    }
+  }
+
+  def add(v: Long): Unit = {
+    if(v > _v) {
+      _v = v
+    }
+  }
+
+  override def merge(other: AccumulatorV2[jl.Long, jl.Long]): Unit = other match {
+    case o: MaxLongAccumulator =>
+      add(o.value)
+    case _ =>
+      throw new UnsupportedOperationException(
+        s"Cannot merge ${this.getClass.getName} with ${other.getClass.getName}")
+  }
+
+  override def value: jl.Long = _v
+}
+
 class GpuTaskMetrics extends Serializable {
   private val semWaitTimeNs = new NanoSecondAccumulator
   private val retryCount = new LongAccumulator
   private val splitAndRetryCount = new LongAccumulator
   private val retryBlockTime = new NanoSecondAccumulator
   private val retryComputationTime = new NanoSecondAccumulator
+  // onGpuTask means a task that has data in GPU memory.
+  // Since it's not easy to decided if a task has data in GPU memory,
+  // We only count the tasks that had held semaphore before,
+  // so it's very likely to have data in GPU memory
+  private val onGpuTasksRecordedTimes = new LongAccumulator
+  private val onGpuTasksInWaitingQueueTotalCount = new LongAccumulator
+  private val onGpuTasksInWaitingQueueMaxCount = new MaxLongAccumulator
 
   // Spill
   private val spillToHostTimeNs = new NanoSecondAccumulator
@@ -100,7 +145,10 @@ class GpuTaskMetrics extends Serializable {
     "gpuSpillToHostTime" -> spillToHostTimeNs,
     "gpuSpillToDiskTime" -> spillToDiskTimeNs,
     "gpuReadSpillFromHostTime" -> readSpillFromHostTimeNs,
-    "gpuReadSpillFromDiskTime" -> readSpillFromDiskTimeNs
+    "gpuReadSpillFromDiskTime" -> readSpillFromDiskTimeNs,
+    "gpuOnGpuTasksRecordedTimes" -> onGpuTasksRecordedTimes,
+    "gpuOnGpuTasksObservedInWaitingQueueTotalCount" -> onGpuTasksInWaitingQueueTotalCount,
+    "gpuOnGpuTasksObservedInWaitingQueueMaxCount" -> onGpuTasksInWaitingQueueMaxCount
   )
 
   def register(sc: SparkContext): Unit = {
@@ -177,6 +225,12 @@ class GpuTaskMetrics extends Serializable {
     if (compNs > 0) {
       retryComputationTime.add(compNs)
     }
+  }
+
+  def recordOnGpuTasksNumber(num: Int): Unit = {
+    onGpuTasksRecordedTimes.add(1)
+    onGpuTasksInWaitingQueueTotalCount.add(num)
+    onGpuTasksInWaitingQueueMaxCount.add(num)
   }
 }
 

@@ -277,17 +277,20 @@ object GpuTaskMetrics extends Logging {
       // avoid double registering the task metrics...
       if (!taskLevelMetrics.contains(id)) {
         taskLevelMetrics.put(id, metrics)
+        val startTime = System.nanoTime()
         onTaskCompletion(tc, tc =>
           synchronized {
             taskLevelMetrics.remove(tc.taskAttemptId()).map(metrics => {
               DynamicGpuTaskMetricsSummary.updateTime(
                 id,
                 TimeUnit.NANOSECONDS.toMillis(
+                  System.nanoTime() - startTime
+                ),
+                TimeUnit.NANOSECONDS.toMillis(
                   metrics.spillToHostTimeNs.value.value +
                     metrics.spillToDiskTimeNs.value.value +
                     metrics.readSpillFromHostTimeNs.value.value +
-                    metrics.readSpillFromDiskTimeNs.value.value),
-                tc.taskMetrics().executorRunTime)
+                    metrics.readSpillFromDiskTimeNs.value.value))
 
             })
           }

@@ -21,14 +21,16 @@ import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.JavaConverters.enumerationAsScalaIteratorConverter
 
 import ai.rapids.cudf.{NvtxColor, NvtxRange}
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
-
 import org.apache.spark.TaskContext
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.rapids.GpuTaskMetrics
+import org.apache.spark.sql.rapids.GpuTaskMetrics.DynamicGpuTaskMetricsSummary
 
 /**
  * The result of trying to acquire a semaphore could be
@@ -65,6 +67,8 @@ object GpuSemaphore {
     }
     instance
   }
+
+  def activeTaskIds = getInstance.activeTaskIds
 
   /**
    * Initializes the GPU task semaphore.
@@ -145,6 +149,14 @@ object GpuSemaphore {
     val permits = MAX_PERMITS / math.min(math.max(concurrentInt, 1), MAX_PERMITS)
     math.max(permits, 1)
   }
+
+  def getExecutorCores(conf: SQLConf): Integer = {
+    val coresStr = conf.getConfString("spark.executor.cores", null)
+    val coresInt: Integer = Option(coresStr)
+      .map(ConfHelper.toInteger(_, "spark.executor.cores"))
+      .getOrElse(8)
+    coresInt
+  }
 }
 
 /**
@@ -178,12 +190,14 @@ private final class SemaphoreTaskInfo() extends Logging {
    * should be very few in here at a time.
    */
   private val activeThreads = new util.LinkedHashSet[Thread]()
+
   private lazy val numPermits = GpuSemaphore.computeNumPermits(SQLConf.get)
+  private lazy val numCores = GpuSemaphore.getExecutorCores(SQLConf.get)
   /**
    * If this task holds the GPU semaphore or not.
    */
   private var hasSemaphore = false
-  private var lastHeld: Long = 0
+  private var lastHeld: Long = Long.MaxValue
 
   type GpuBackingSemaphore = PrioritySemaphore
 
@@ -253,7 +267,7 @@ private final class SemaphoreTaskInfo() extends Logging {
         if (!done && shouldBlockOnSemaphore) {
           // We cannot be in a synchronized block and wait on the semaphore
           // so we have to release it and grab it again afterwards.
-          semaphore.acquire(numPermits, lastHeld)
+          semaphore.acquire(numPermits, lastHeld, numCores)
           synchronized {
             // We now own the semaphore so we need to wake up all of the other tasks that are
             // waiting.
@@ -288,7 +302,7 @@ private final class SemaphoreTaskInfo() extends Logging {
     } else {
       if (blockedThreads.size() == 0) {
         // No other threads for this task are waiting, so we might be able to grab this directly
-        val ret = semaphore.tryAcquire(numPermits, lastHeld)
+        val ret = semaphore.tryAcquire(numPermits, lastHeld, numCores)
         if (ret) {
           hasSemaphore = true
           activeThreads.add(t)
@@ -302,11 +316,15 @@ private final class SemaphoreTaskInfo() extends Logging {
     }
   }
 
+  def signalOthers(semaphore: GpuBackingSemaphore): Unit = synchronized {
+    semaphore.signalOthers(numCores)
+  }
+
   def releaseSemaphore(semaphore: GpuBackingSemaphore): Unit = synchronized {
     val t = Thread.currentThread()
     activeThreads.remove(t)
     if (hasSemaphore) {
-      semaphore.release(numPermits)
+      semaphore.release(numPermits, numCores)
       hasSemaphore = false
       lastHeld = System.currentTimeMillis()
     }
@@ -326,6 +344,8 @@ private final class GpuSemaphore() extends Logging {
   private val semaphore = new GpuBackingSemaphore(MAX_PERMITS)
   // Keep track of all tasks that are both active on the GPU and blocked waiting on the GPU
   private val tasks = new ConcurrentHashMap[Long, SemaphoreTaskInfo]
+
+  def activeTaskIds = tasks.keys().asScala.toSet
 
   def tryAcquire(context: TaskContext): TryAcquireResult = {
     // Make sure that the thread/task is registered before we try and block
@@ -386,6 +406,12 @@ private final class GpuSemaphore() extends Logging {
       throw new IllegalStateException(s"Completion of unknown task $taskAttemptId")
     }
     refs.releaseSemaphore(semaphore)
+
+    DynamicGpuTaskMetricsSummary.flowControlPermitTasks.remove(taskAttemptId)
+    println(s"Task ${taskAttemptId} completed, removed ${taskAttemptId}" +
+      s"flow control permit tasks: " +
+      s"${DynamicGpuTaskMetricsSummary.flowControlPermitTasks}")
+    refs.signalOthers(semaphore)
   }
 
   def dumpActiveStackTracesToLog(): Unit = {

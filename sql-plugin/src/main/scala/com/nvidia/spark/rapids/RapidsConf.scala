@@ -549,6 +549,7 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
           "GPU out of memory errors.")
       .commonlyUsed()
       .integerConf
+      .checkValue(v => v >= 1 && v <= 1000, "Concurrent GPU tasks must be between 1 and 1000.")
       .createWithDefault(2)
 
   val SHUFFLE_SPILL_THREADS = conf("spark.rapids.sql.shuffle.spillThreads")

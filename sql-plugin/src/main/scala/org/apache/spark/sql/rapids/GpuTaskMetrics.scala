@@ -19,7 +19,7 @@ package org.apache.spark.sql.rapids
 import java.{lang => jl}
 import java.io.ObjectInputStream
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 
 import scala.collection.mutable
 
@@ -238,6 +238,36 @@ class GpuTaskMetrics extends Serializable {
  * Provides task level metrics
  */
 object GpuTaskMetrics extends Logging {
+  object DynamicGpuTaskMetricsSummary {
+    val flowControlPermitTasks = ConcurrentHashMap.newKeySet[Long]()
+    var flowControlMaxTasks = 8
+
+    private var totalRunTimeMs = 0L
+    private var totalSpillTimeMs = 0L
+
+    private var excludedTasks: Set[Long] = Set()
+
+    def excludeTasks(tasks: Set[Long]): Unit = synchronized {
+      excludedTasks = tasks
+    }
+
+    def reset(): Unit = synchronized {
+      totalRunTimeMs = 0L
+      totalSpillTimeMs = 0L
+    }
+
+    def updateTime(taskId: Long, runTime: Long, spillTime: Long): Unit = synchronized {
+      if (!excludedTasks.contains(taskId)) {
+        this.totalRunTimeMs += runTime
+        this.totalSpillTimeMs += spillTime
+      }
+    }
+
+    def getSummary: (Long, Long) = synchronized {
+      (totalRunTimeMs, totalSpillTimeMs)
+    }
+  }
+
   private val taskLevelMetrics = mutable.Map[Long, GpuTaskMetrics]()
 
   def registerOnTask(metrics: GpuTaskMetrics): Unit = synchronized {
@@ -249,7 +279,17 @@ object GpuTaskMetrics extends Logging {
         taskLevelMetrics.put(id, metrics)
         onTaskCompletion(tc, tc =>
           synchronized {
-            taskLevelMetrics.remove(tc.taskAttemptId())
+            taskLevelMetrics.remove(tc.taskAttemptId()).map(metrics => {
+              DynamicGpuTaskMetricsSummary.updateTime(
+                id,
+                TimeUnit.NANOSECONDS.toMillis(
+                  metrics.spillToHostTimeNs.value.value +
+                    metrics.spillToDiskTimeNs.value.value +
+                    metrics.readSpillFromHostTimeNs.value.value +
+                    metrics.readSpillFromDiskTimeNs.value.value),
+                tc.taskMetrics().executorRunTime)
+
+            })
           }
         )
       }

@@ -23,6 +23,8 @@ import scala.collection.mutable
 import scala.math.Ordering.comparatorToOrdering
 
 import org.apache.spark.TaskContext
+
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.rapids.GpuTaskMetrics
 import org.apache.spark.sql.rapids.GpuTaskMetrics.DynamicGpuTaskMetricsSummary
 import org.apache.spark.sql.rapids.GpuTaskMetrics.DynamicGpuTaskMetricsSummary._
@@ -35,6 +37,7 @@ class PrioritySemaphore(val maxPermits: Int)(implicit ordering: Ordering[Long]) 
   private val lock = new ReentrantLock()
   private var occupiedSlots: Int = 0
   private val priorityForUnstarted = Long.MaxValue
+  private lazy val numCores = GpuSemaphore.getExecutorCores(SQLConf.get)
 
   private case class ThreadInfo(priority: Long, condition: Condition, numPermits: Int,
       taskId: Long) {
@@ -59,13 +62,13 @@ class PrioritySemaphore(val maxPermits: Int)(implicit ordering: Ordering[Long]) 
     }
   }
 
-  def tryAcquire(numPermits: Int, priority: Long, numCores: Int): Boolean = {
+  def tryAcquire(numPermits: Int, priority: Long): Boolean = {
     lock.lock()
     try {
       if (waitingQueue.nonEmpty &&
         waitingQueue.exists(info => ordering.lt(info.priority, priority))) {
         false
-      } else if (!canAcquire(numPermits, numCores, TaskContext.get().taskAttemptId())) {
+      } else if (!canAcquire(numPermits, TaskContext.get().taskAttemptId())) {
         false
       } else {
         commitAcquire(numPermits)
@@ -76,10 +79,10 @@ class PrioritySemaphore(val maxPermits: Int)(implicit ordering: Ordering[Long]) 
     }
   }
 
-  def acquire(numPermits: Int, priority: Long, numCores: Int = 1): Unit = {
+  def acquire(numPermits: Int, priority: Long): Unit = {
     lock.lock()
     try {
-      if (!tryAcquire(numPermits, priority, numCores)) {
+      if (!tryAcquire(numPermits, priority)) {
         val condition = lock.newCondition()
         val taskId = TaskContext.get().taskAttemptId()
         val info = ThreadInfo(priority, condition, numPermits, taskId)
@@ -98,7 +101,7 @@ class PrioritySemaphore(val maxPermits: Int)(implicit ordering: Ordering[Long]) 
           case e: Exception =>
             waitingQueue -= info
             if (info.signaled) {
-              release(numPermits, numCores)
+              release(numPermits)
             }
             throw e
         }
@@ -113,14 +116,14 @@ class PrioritySemaphore(val maxPermits: Int)(implicit ordering: Ordering[Long]) 
   }
 
 
-  def signalOthers(numCores: Int): Unit = {
+  def signalOthers(): Unit = {
     lock.lock()
     try {
       // acquire and wakeup for all threads that now have enough permits
       var done = false
       while (!done && waitingQueue.nonEmpty) {
         val nextThread = waitingQueue.min(comparatorToOrdering(threadInfoComp))
-        if (canAcquire(nextThread.numPermits, numCores, nextThread.taskId)) {
+        if (canAcquire(nextThread.numPermits, nextThread.taskId)) {
           waitingQueue -= nextThread
           println(s"Flow control released!" +
             s" task id: ${nextThread.taskId} current " +
@@ -137,36 +140,37 @@ class PrioritySemaphore(val maxPermits: Int)(implicit ordering: Ordering[Long]) 
     }
   }
 
-  def release(numPermits: Int, numCores: Int = 1): Unit = {
+  def release(numPermits: Int): Unit = {
     lock.lock()
     try {
       occupiedSlots -= numPermits
-      signalOthers(numCores)
+      signalOthers()
     } finally {
       lock.unlock()
     }
   }
 
-  private def canAcquire(numPermits: Int, numCores: Int, taskId: Long): Boolean = {
+  private def canAcquire(numPermits: Int, taskId: Long): Boolean = {
     // Flow control logic
-    def updateFlowControl(): Unit = {
+    def tryUpdateFlowControl(): Unit = {
       val summary = DynamicGpuTaskMetricsSummary.getSummary
-      println(s"updating Flow control: " +
+      println(s"checking Flow control: " +
         s"runtime: ${summary._1} spill time: ${summary._2} " +
         s"cores: ${numCores} max tasks: ${flowControlMaxTasks}")
       if (summary._2 * numCores > summary._1 * 0.5) {
-        flowControlMaxTasks = Math.max(1, flowControlMaxTasks / 2)
+        flowControlMaxTasks = Math.floor(Math.max(2, flowControlMaxTasks / 2.0)).toInt
         println(s"Flow control updated!!!!! " +
           s"max tasks: ${flowControlMaxTasks} trigger task: ${taskId}")
 //        flowControlPermitTasks.clear()
         GpuTaskMetrics.DynamicGpuTaskMetricsSummary.excludeTasks(
             GpuSemaphore.activeTaskIds --
               waitingQueue.filter(_.priority == priorityForUnstarted).map(_.taskId))
-        GpuTaskMetrics.DynamicGpuTaskMetricsSummary.reset()
+        GpuTaskMetrics.DynamicGpuTaskMetricsSummary.resetStats()
       }
     }
     if (!flowControlPermitTasks.contains(taskId)) {
-      updateFlowControl()
+      resetFlowControlIfNecessary(TaskContext.get().stageId(), numCores)
+      tryUpdateFlowControl()
       if (flowControlPermitTasks.size < flowControlMaxTasks) {
         println(s"Flow control accepted!" +
           s" task id: ${taskId} current permit tasks: ${flowControlPermitTasks}" +

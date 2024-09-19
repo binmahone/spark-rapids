@@ -154,7 +154,8 @@ object GpuSemaphore {
     val coresStr = conf.getConfString("spark.executor.cores", null)
     val coresInt: Integer = Option(coresStr)
       .map(ConfHelper.toInteger(_, "spark.executor.cores"))
-      .getOrElse(8)
+      .getOrElse(6)
+    println("coresInt: " + coresInt)
     coresInt
   }
 }
@@ -192,7 +193,6 @@ private final class SemaphoreTaskInfo() extends Logging {
   private val activeThreads = new util.LinkedHashSet[Thread]()
 
   private lazy val numPermits = GpuSemaphore.computeNumPermits(SQLConf.get)
-  private lazy val numCores = GpuSemaphore.getExecutorCores(SQLConf.get)
   /**
    * If this task holds the GPU semaphore or not.
    */
@@ -267,7 +267,7 @@ private final class SemaphoreTaskInfo() extends Logging {
         if (!done && shouldBlockOnSemaphore) {
           // We cannot be in a synchronized block and wait on the semaphore
           // so we have to release it and grab it again afterwards.
-          semaphore.acquire(numPermits, lastHeld, numCores)
+          semaphore.acquire(numPermits, lastHeld)
           synchronized {
             // We now own the semaphore so we need to wake up all of the other tasks that are
             // waiting.
@@ -302,7 +302,7 @@ private final class SemaphoreTaskInfo() extends Logging {
     } else {
       if (blockedThreads.size() == 0) {
         // No other threads for this task are waiting, so we might be able to grab this directly
-        val ret = semaphore.tryAcquire(numPermits, lastHeld, numCores)
+        val ret = semaphore.tryAcquire(numPermits, lastHeld)
         if (ret) {
           hasSemaphore = true
           activeThreads.add(t)
@@ -317,14 +317,14 @@ private final class SemaphoreTaskInfo() extends Logging {
   }
 
   def signalOthers(semaphore: GpuBackingSemaphore): Unit = synchronized {
-    semaphore.signalOthers(numCores)
+    semaphore.signalOthers()
   }
 
   def releaseSemaphore(semaphore: GpuBackingSemaphore): Unit = synchronized {
     val t = Thread.currentThread()
     activeThreads.remove(t)
     if (hasSemaphore) {
-      semaphore.release(numPermits, numCores)
+      semaphore.release(numPermits)
       hasSemaphore = false
       lastHeld = System.currentTimeMillis()
     }

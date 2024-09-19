@@ -240,23 +240,35 @@ class GpuTaskMetrics extends Serializable {
 object GpuTaskMetrics extends Logging {
   object DynamicGpuTaskMetricsSummary {
     val flowControlPermitTasks = ConcurrentHashMap.newKeySet[Long]()
-    var flowControlMaxTasks = 8
+    var flowControlMaxTasks = -1
 
     private var totalRunTimeMs = 0L
     private var totalSpillTimeMs = 0L
-
+    private var lastStageId = -1L
     private var excludedTasks: Set[Long] = Set()
+
+    def resetFlowControlIfNecessary(stageId: Long, defaultFlowControlMaxTasks: Int): Unit =
+      synchronized {
+        if (stageId != lastStageId) {
+          lastStageId = stageId
+          flowControlPermitTasks.clear()
+          flowControlMaxTasks = defaultFlowControlMaxTasks
+          excludeTasks(Set())
+          resetStats()
+        }
+      }
 
     def excludeTasks(tasks: Set[Long]): Unit = synchronized {
       excludedTasks = tasks
     }
 
-    def reset(): Unit = synchronized {
+    def resetStats(): Unit = synchronized {
       totalRunTimeMs = 0L
       totalSpillTimeMs = 0L
     }
 
     def updateTime(taskId: Long, runTime: Long, spillTime: Long): Unit = synchronized {
+      println(s"Updating time for task $taskId: runTime: $runTime spillTime: $spillTime")
       if (!excludedTasks.contains(taskId)) {
         this.totalRunTimeMs += runTime
         this.totalSpillTimeMs += spillTime

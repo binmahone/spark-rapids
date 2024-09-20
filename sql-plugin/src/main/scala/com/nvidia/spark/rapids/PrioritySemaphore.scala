@@ -38,6 +38,12 @@ class PrioritySemaphore(val maxPermits: Int)(implicit ordering: Ordering[Long]) 
   private var occupiedSlots: Int = 0
   private val priorityForUnstarted = Long.MaxValue
   private lazy val numCores = GpuSemaphore.getExecutorCores(SQLConf.get)
+  private lazy val defaultFlowControlMaxTasks = {
+    GpuSemaphore.getDefaultFlowControlMaxTasks(SQLConf.get) match {
+      case -1 => numCores
+      case n => n
+    }
+  }
 
   private case class ThreadInfo(priority: Long, condition: Condition, numPermits: Int,
       taskId: Long) {
@@ -169,7 +175,7 @@ class PrioritySemaphore(val maxPermits: Int)(implicit ordering: Ordering[Long]) 
       }
     }
     if (!flowControlPermitTasks.contains(taskId)) {
-      resetFlowControlIfNecessary(TaskContext.get().stageId(), numCores)
+      resetFlowControlIfNecessary(TaskContext.get().stageId(), defaultFlowControlMaxTasks)
       tryUpdateFlowControl()
       if (flowControlPermitTasks.size < flowControlMaxTasks) {
         println(s"Flow control accepted!" +

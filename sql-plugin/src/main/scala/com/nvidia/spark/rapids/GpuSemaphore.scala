@@ -150,14 +150,22 @@ object GpuSemaphore {
     math.max(permits, 1)
   }
 
-  def getExecutorCores(conf: SQLConf): Integer = {
+  def getExecutorCores(conf: SQLConf): Int = {
     val coresStr = conf.getConfString("spark.executor.cores", null)
-    val coresInt: Integer = Option(coresStr)
-      .map(ConfHelper.toInteger(_, "spark.executor.cores"))
+    val coresInt: Int = Option(coresStr)
+      .map(ConfHelper.toInteger(_, "spark.executor.cores").intValue())
       .getOrElse(6)
     println("coresInt: " + coresInt)
     coresInt
   }
+
+  def getDefaultFlowControlMaxTasks(conf: SQLConf): Int = {
+    val str = conf.getConfString("spark.rapids.sql.defaultFlowControlMaxTasks", null)
+    Option(str)
+      .map(ConfHelper.toInteger(_, "spark.rapids.sql.defaultFlowControlMaxTasks").intValue())
+      .getOrElse(-1)
+  }
+
 }
 
 /**

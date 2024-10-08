@@ -185,7 +185,7 @@ private final class SemaphoreTaskInfo() extends Logging {
   private var hasSemaphore = false
   private var lastHeld: Long = 0
 
-  type GpuBackingSemaphore = PrioritySemaphore[Long]
+  type GpuBackingSemaphore = PrioritySemaphore
 
   /**
    * Does this task have the GPU semaphore or not. Be careful because it can change at
@@ -322,7 +322,7 @@ private final class SemaphoreTaskInfo() extends Logging {
 private final class GpuSemaphore() extends Logging {
   import GpuSemaphore._
 
-  type GpuBackingSemaphore = PrioritySemaphore[Long]
+  type GpuBackingSemaphore = PrioritySemaphore
   private val semaphore = new GpuBackingSemaphore(MAX_PERMITS)
   // Keep track of all tasks that are both active on the GPU and blocked waiting on the GPU
   private val tasks = new ConcurrentHashMap[Long, SemaphoreTaskInfo]

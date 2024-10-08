@@ -19,7 +19,9 @@ package com.nvidia.spark.rapids
 import java.util.PriorityQueue
 import java.util.concurrent.locks.{Condition, ReentrantLock}
 
-class PrioritySemaphore[T](val maxPermits: Int)(implicit ordering: Ordering[T]) {
+import org.apache.spark.TaskContext
+
+class PrioritySemaphore(val maxPermits: Int)(implicit ordering: Ordering[Long]) {
   // This lock is used to generate condition variables, which affords us the flexibility to notify
   // specific threads at a time. If we use the regular synchronized pattern, we have to either
   // notify randomly, or if we try creating condition variables not tied to a shared lock, they
@@ -27,19 +29,20 @@ class PrioritySemaphore[T](val maxPermits: Int)(implicit ordering: Ordering[T]) 
   private val lock = new ReentrantLock()
   private var occupiedSlots: Int = 0
 
-  private case class ThreadInfo(priority: T, condition: Condition, numPermits: Int) {
+  private case class ThreadInfo(priority: Long,
+      condition: Condition, numPermits: Int, taskId: Long) {
     var signaled: Boolean = false
   }
 
   // We expect a relatively small number of threads to be contending for this lock at any given
   // time, therefore we are not concerned with the insertion/removal time complexity.
   private val waitingQueue: PriorityQueue[ThreadInfo] =
-    new PriorityQueue[ThreadInfo](Ordering.by[ThreadInfo, T](_.priority).reverse)
+    new PriorityQueue[ThreadInfo](Ordering.by[ThreadInfo, Long](_.taskId))
 
-  def tryAcquire(numPermits: Int, priority: T): Boolean = {
+  def tryAcquire(numPermits: Int, priority: Long): Boolean = {
     lock.lock()
     try {
-      if (waitingQueue.size() > 0 && ordering.gt(waitingQueue.peek.priority, priority)) {
+      if (waitingQueue.size() > 0 && ordering.lt(waitingQueue.peek.priority, priority)) {
         false
       } else if (!canAcquire(numPermits)) {
         false
@@ -52,12 +55,13 @@ class PrioritySemaphore[T](val maxPermits: Int)(implicit ordering: Ordering[T]) 
     }
   }
 
-  def acquire(numPermits: Int, priority: T): Unit = {
+  def acquire(numPermits: Int, priority: Long): Unit = {
     lock.lock()
     try {
       if (!tryAcquire(numPermits, priority)) {
         val condition = lock.newCondition()
-        val info = ThreadInfo(priority, condition, numPermits)
+        val info = ThreadInfo(priority, condition, numPermits,
+          TaskContext.get().taskAttemptId())
         try {
           waitingQueue.add(info)
           while (!info.signaled) {

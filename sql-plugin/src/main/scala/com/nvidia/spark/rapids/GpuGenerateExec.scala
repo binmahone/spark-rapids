@@ -884,8 +884,13 @@ case class GpuGenerateExec(
           GpuBindReferences.bindGpuReferences(requiredChildOutput, child.output)
 
         child.executeColumnar().flatMap { inputFromChild =>
-          doGenerateAndClose(inputFromChild, genProjectList, othersProjectList,
-            numOutputRows, numOutputBatches, opTime)
+          try {
+            doGenerateAndClose(inputFromChild, genProjectList, othersProjectList,
+              numOutputRows, numOutputBatches, opTime)
+          } catch {
+            case e: Throwable =>
+              throw e
+          }
         }
     }
   }

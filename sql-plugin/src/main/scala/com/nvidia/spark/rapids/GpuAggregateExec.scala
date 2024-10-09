@@ -172,12 +172,16 @@ object AggregateUtils extends Logging {
         closeOnExcept(new ArrayBuffer[SpillableColumnarBatch]) { stagingBatches => {
           var currentSize = 0L
           while (aggregatedBatches.hasNext) {
-            val nextBatch = aggregatedBatches.head
+            val nextBatch = withResource(new NvtxRange("first-pass", NvtxColor.RED)) { _ =>
+              aggregatedBatches.head
+            }
             if (currentSize + nextBatch.sizeInBytes > targetMergeBatchSize) {
               if (stagingBatches.size == 1) {
                 return stagingBatches.head
               } else if (stagingBatches.isEmpty) {
-                aggregatedBatches.next
+                withResource(new NvtxRange("first-pass-", NvtxColor.RED)) { _ =>
+                  aggregatedBatches.next
+                }
                 return nextBatch
               }
               val merged = concatenateAndMerge(stagingBatches, metrics, helper)
@@ -192,7 +196,9 @@ object AggregateUtils extends Logging {
             } else {
               stagingBatches.append(nextBatch)
               currentSize += nextBatch.sizeInBytes
-              aggregatedBatches.next
+              withResource(new NvtxRange("first-pass-", NvtxColor.RED)) { _ =>
+                aggregatedBatches.next
+              }
             }
           }
 

@@ -34,7 +34,11 @@ import com.nvidia.spark.rapids.filecache.{FileCache, FileCacheLocalityManager, F
 import com.nvidia.spark.rapids.io.async.TrafficController
 import com.nvidia.spark.rapids.jni.GpuTimeZoneDB
 import com.nvidia.spark.rapids.python.PythonWorkerSemaphore
+import com.nvidia.spark.rapids.RapidsExecutorPlugin.{currentProfilingStage, profiler}
+import one.profiler.AsyncProfiler
 import org.apache.commons.lang3.exception.ExceptionUtils
+import sun.misc.Signal
+import sun.misc.SignalHandler
 
 import org.apache.spark.{ExceptionFailure, SparkConf, SparkContext, TaskContext, TaskFailedReason}
 import org.apache.spark.api.plugin.{DriverPlugin, ExecutorPlugin, PluginContext, SparkPlugin}
@@ -689,6 +693,37 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
   }
 
   override def onTaskStart(): Unit = {
+    val stageid = TaskContext.get.stageId()
+    //    log.error("Task started: " + stageid + ", task id: " + TaskContext.get.taskAttemptId())
+    if (stageid > currentProfilingStage) {
+      profiler.synchronized {
+        if (stageid > currentProfilingStage) {
+          try {
+            log.error("stop profiling for stage " + currentProfilingStage +
+              ", my stage is " + stageid)
+            profiler.execute("stop");
+            log.error("successfully stopped profiling for stage " + currentProfilingStage)
+          } catch {
+            case e: Exception =>
+              log.error("error stopping profiling for stage " + currentProfilingStage, e)
+          }
+
+          log.error("setting current profiling stage to " + stageid + " from " +
+            currentProfilingStage)
+          currentProfilingStage = stageid
+          val prefix = System.getProperty("JFR_PREFIX", "/tmp/")
+          try {
+            profiler.execute("start,jfr,event=nativemem,file=" + prefix + "malloc-%p-"
+              + currentProfilingStage + ".jfr")
+            log.error("successfully started profiling for stage " + currentProfilingStage)
+          } catch {
+            case e: Exception =>
+              log.error("error starting profiling for stage " + currentProfilingStage, e)
+          }
+        }
+
+      }
+    }
     startTaskNvtx(TaskContext.get)
     extraExecutorPlugins.foreach(_.onTaskStart())
     ProfilerOnExecutor.onTaskStart()
@@ -716,6 +751,33 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
 }
 
 object RapidsExecutorPlugin {
+  @volatile var currentProfilingStage = -1
+  val profiler = AsyncProfiler.getInstance
+
+  // Register the SIGUSR2 signal handler
+  Signal.handle(new Signal("USR2"), new SignalHandler() {
+    override def handle(sig: Signal): Unit = {
+
+      profiler.synchronized {
+        System.err.println("Received SIGUSR2 signal, stopping profiling current stage "
+          + currentProfilingStage)
+        if (currentProfilingStage != -1) {
+          System.err.println("stop profiling for stage " + currentProfilingStage)
+          try {
+            profiler.execute("stop");
+          } catch {
+            case e: Exception =>
+              System.err.println("Signal Handler: " +
+                "error stopping profiling for stage " + currentProfilingStage)
+              e.printStackTrace(System.err)
+          }
+        }
+        currentProfilingStage = 100000
+      }
+    }
+  })
+
+
   /**
    * Return true if the expected cudf version is satisfied by the actual version found.
    * The version is satisfied if the major and minor versions match exactly. If there is a requested

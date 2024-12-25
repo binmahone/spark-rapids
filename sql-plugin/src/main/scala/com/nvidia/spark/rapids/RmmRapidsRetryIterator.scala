@@ -611,10 +611,12 @@ object RmmRapidsRetryIterator extends Logging {
           try {
             RmmSpark.blockThreadUntilReady()
           } catch {
-            case _: GpuSplitAndRetryOOM =>
+            case gpu: GpuSplitAndRetryOOM =>
+              logError("meet GpuSplitAndRetryOOM: ", gpu)
               doSplit = true
               isFromGpuOom = true
-            case _: CpuSplitAndRetryOOM =>
+            case cpu: CpuSplitAndRetryOOM =>
+              logError("meet CpuSplitAndRetryOOM: ", cpu)
               doSplit = true
               isFromGpuOom = false
           }
@@ -650,6 +652,7 @@ object RmmRapidsRetryIterator extends Logging {
           clearInjectedOOMIfNeeded()
         } catch {
           case ex: Throwable =>
+            logError("meet Throwable: ", ex)
             // handle a retry as the top-level exception
             val (topLevelIsRetry, topLevelIsSplit, isGpuOom) = isRetryOrSplitAndRetry(ex)
             doSplit = topLevelIsSplit

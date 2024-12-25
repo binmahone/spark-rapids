@@ -266,7 +266,7 @@ abstract class MultiFilePartitionReaderFactoryBase(
     assert(partition.isInstanceOf[FilePartition])
     val filePartition = partition.asInstanceOf[FilePartition]
     val files = filePartition.files
-    val filePaths = files.map(_.filePath.toString())
+    val filePaths = files.map(f => s"${f.filePath}(${f.start}-${f.start + f.length})")
     val conf = broadcastedConf.value.value
 
     if (useMultiThread(filePaths)) {

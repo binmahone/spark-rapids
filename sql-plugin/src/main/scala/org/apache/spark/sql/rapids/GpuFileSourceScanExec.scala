@@ -43,6 +43,7 @@ import org.apache.spark.sql.execution.rapids.shims.FilePartitionShims
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.ColumnarBatch
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.util.SerializableConfiguration
 import org.apache.spark.util.collection.BitSet
 
@@ -555,10 +556,29 @@ case class GpuFileSourceScanExec(
   private def createNonBucketedReadRDD(
       readFile: Option[(PartitionedFile) => Iterator[InternalRow]],
       fsRelation: HadoopFsRelation): RDD[InternalRow] = {
+    def myMaxSplitBytes(
+        sparkSession: SparkSession,
+        selectedPartitions: Seq[PartitionDirectory]): Long = {
+      val defaultMaxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
+      val openCostInBytes = sparkSession.sessionState.conf.filesOpenCostInBytes
+      val minPartitionNum = sparkSession.sessionState.conf.filesMinPartitionNum
+        .getOrElse(sparkSession.leafNodeDefaultParallelism)
+      val totalBytes = selectedPartitions.flatMap(_.files.map(_.getLen + openCostInBytes)).sum
+      val bytesPerCore = totalBytes / minPartitionNum
+
+      logInfo(s"all variables: defaultMaxSplitBytes: $defaultMaxSplitBytes, " +
+        s"openCostInBytes: $openCostInBytes, minPartitionNum: $minPartitionNum, " +
+        s"totalBytes: $totalBytes, bytesPerCore: $bytesPerCore")
+      logInfo(s"Calculated maxSplitBytes: " +
+        s"${Math.min(defaultMaxSplitBytes, Math.max(openCostInBytes, bytesPerCore))} bytes")
+      logInfo(s"All files: ${selectedPartitions.flatMap(_.files).mkString(",")}")
+      Math.min(defaultMaxSplitBytes, Math.max(openCostInBytes, bytesPerCore))
+    }
+
     val partitions = StaticPartitionShims.getStaticPartitions(fsRelation).getOrElse {
       val openCostInBytes = fsRelation.sparkSession.sessionState.conf.filesOpenCostInBytes
       val maxSplitBytes =
-        FilePartition.maxSplitBytes(fsRelation.sparkSession, dynamicallySelectedPartitions)
+        myMaxSplitBytes(fsRelation.sparkSession, dynamicallySelectedPartitions)
       logInfo(s"Planning scan with bin packing, max size: $maxSplitBytes bytes, " +
         s"open cost is considered as scanning $openCostInBytes bytes.")
 

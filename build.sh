@@ -22,5 +22,7 @@ set -x
 
 rm -rf output
 mkdir output
-mvn -Dbuildver=321 install -Drat.skip=true -DskipTests
-mv dist/target/rapids-4-spark_2.12-24.12.0-SNAPSHOT-cuda11.jar ./output/
+
+export MAVEN_OPTS="-Xmx3000m"
+mvn clean install -Drat.skip=true -Dmaven.javadoc.skip=true -Dskip -Dmaven.scalastyle.skip=true -DskipTests -Dbuildver=321 ${MVN_OPT}
+mv dist/target/rapids-4-spark_2.12-*.jar ./output/

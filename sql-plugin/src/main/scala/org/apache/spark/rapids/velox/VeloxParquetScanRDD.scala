@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,88 +16,68 @@
 
 package org.apache.spark.rapids.velox
 
-import io.glutenproject.execution._
-import io.substrait.proto.Plan
+import java.util.concurrent.locks.ReentrantLock
 
-import ai.rapids.cudf.{NvtxColor, NvtxRange}
-import com.nvidia.spark.rapids.{CoalesceSizeGoal, GpuMetric}
+import ai.rapids.cudf.NvtxColor
+import com.nvidia.spark.rapids.{CoalesceSizeGoal, GpuMetric, NvtxWithMetrics}
 import com.nvidia.spark.rapids.Arm.withResource
+import com.nvidia.spark.rapids.velox.ByteDanceUtils
+import com.nvidia.spark.rapids.velox.RapidsHostColumn
 
 import org.apache.spark.{InterruptibleIterator, Partition, TaskContext}
+import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.execution.metric.SQLMetric
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.rapids.execution.TrampolineUtil
+import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
 class VeloxParquetScanRDD(scanRDD: RDD[ColumnarBatch],
                           outputAttr: Seq[Attribute],
-                          outputSchema: StructType,
                           coalesceGoal: CoalesceSizeGoal,
-                          useNativeConverter: Boolean,
-                          @transient metrics: Map[String, GpuMetric])
-  extends RDD[InternalRow](scanRDD.sparkContext, Nil) {
+                          metrics: Map[String, GpuMetric],
+                          preloadedCapacity: Int
+                         ) extends RDD[InternalRow](scanRDD.sparkContext, Nil) {
 
-  private val veloxScanTime = GpuMetric.unwrap(metrics("veloxScanTime"))
-
-  private val convertMetrics = if (useNativeConverter) {
-    Map(
-      "gpuAcquireTime" -> metrics("gpuAcquireTime"),
-      "VeloxC2CTime" -> metrics("VeloxC2CTime"),
-      "VeloxC2CConvertTime" -> metrics("VeloxC2CConvertTime"),
-      "OutputSizeInBytes" -> metrics("OutputSizeInBytes"),
-      "CoalesceConcatTime" -> metrics("CoalesceConcatTime"),
-      "CoalesceOpTime" -> metrics("CoalesceOpTime"),
-      "H2DTime" -> metrics("H2DTime"),
-      "C2COutputBatches" -> metrics("C2COutputBatches"),
-      "VeloxOutputBatches" -> metrics("VeloxOutputBatches"),
-    )
-  } else {
-    Map(
-      "C2ROutputRows" -> metrics("C2ROutputRows"),
-      "C2ROutputBatches" -> metrics("C2ROutputBatches"),
-      "VeloxC2RTime" -> metrics("VeloxC2RTime"),
-      "gpuAcquireTime" -> metrics("gpuAcquireTime"),
-      "R2CStreamTime" -> metrics("R2CStreamTime"),
-      "R2CTime" -> metrics("R2CTime"),
-      "R2CInputRows" -> metrics("R2CInputRows"),
-      "R2COutputRows" -> metrics("R2COutputRows"),
-      "R2COutputBatches" -> metrics("R2COutputBatches"),
-    )
-  }
+  private val veloxScanTime = GpuMetric.unwrap(metrics("VeloxScanTime"))
 
   override protected def getPartitions: Array[Partition] = scanRDD.partitions
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
-    split match {
-      case FirstZippedPartitionsPartition(_, inputPartition, _) => {
-        inputPartition match {
-          case GlutenPartition(_, plan, _, _) => {
-            val planObj = Plan.parseFrom(plan)
-            planObj.getRelationsList.forEach { relation =>
-              val root = relation.getRoot
-              logInfo("Reading parquet with Velox at: " + root.getInput.getRead.getLocalFiles.getItems(0).getUriFile)
-            }
-          }
-        }
+    // Dump Task-wise FilePartition via Spark Logging
+    ByteDanceUtils.logGlutenPartition(split, context)
+
+    // the wrapping Iterator for the underlying VeloxScan task
+    val veloxIter = new VeloxScanMetricsIter(scanRDD.compute(split, context), veloxScanTime)
+
+    val resIter =  {
+      val schema = StructType(outputAttr.map { ar =>
+        StructField(ar.name, ar.dataType, ar.nullable)
+      })
+      require(coalesceGoal.targetSizeBytes <= Int.MaxValue,
+        s"targetSizeBytes should be smaller than 2GB, but got ${coalesceGoal.targetSizeBytes}"
+      )
+      val coalesceConverter = new CoalesceConvertIterator(
+        veloxIter, coalesceGoal.targetSizeBytes.toInt, schema, metrics)
+
+      val hostIter: RapidsHostBatchProducer = if (preloadedCapacity > 0) {
+        PrefetchHostBatchProducer(context.taskAttemptId(),
+          coalesceConverter,
+          preloadedCapacity,
+          metrics("preloadWaitTime"))
+      } else {
+        SyncHostBatchProducer(coalesceConverter)
       }
-    }
-    val veloxCbIter = new VeloxScanMetricsIter(
-      scanRDD.compute(split, context),
-      veloxScanTime
-    )
-    val deviceIter = if (useNativeConverter) {
-      VeloxColumnarBatchConverter.nativeConvert(
-        veloxCbIter, outputAttr, coalesceGoal, convertMetrics)
-    } else {
-      VeloxColumnarBatchConverter.roundTripConvert(
-        veloxCbIter, outputAttr, coalesceGoal, convertMetrics)
+
+      CoalesceConvertIterator.hostToDevice(hostIter, outputAttr, metrics)
     }
 
     // TODO: SPARK-25083 remove the type erasure hack in data source scan
-    new InterruptibleIterator(context, deviceIter.asInstanceOf[Iterator[InternalRow]])
+    new InterruptibleIterator(context, resIter.asInstanceOf[Iterator[InternalRow]])
   }
+
 }
 
 private class VeloxScanMetricsIter(iter: Iterator[ColumnarBatch],
@@ -106,9 +86,7 @@ private class VeloxScanMetricsIter(iter: Iterator[ColumnarBatch],
   override def hasNext: Boolean = {
     val start = System.nanoTime()
     try {
-      withResource(new NvtxRange("velox scan hasNext", NvtxColor.WHITE)) { _ =>
-        iter.hasNext
-      }
+      iter.hasNext
     } finally {
       scanTime += System.nanoTime() - start
     }
@@ -117,11 +95,145 @@ private class VeloxScanMetricsIter(iter: Iterator[ColumnarBatch],
   override def next(): ColumnarBatch = {
     val start = System.nanoTime()
     try {
-      withResource(new NvtxRange("velox scan next", NvtxColor.BLUE)) { _ =>
-        iter.next()
-      }
+      iter.next()
     } finally {
       scanTime += System.nanoTime() - start
+    }
+  }
+}
+
+private case class PrefetchHostBatchProducer(taskAttId: Long,
+                                             iterImpl: Iterator[Array[RapidsHostColumn]],
+                                             capacity: Int,
+                                             waitTimeMetric: GpuMetric
+                                            ) extends RapidsHostBatchProducer with Logging {
+
+  @transient
+  @volatile private var isInit: Boolean = false
+  @transient
+  @volatile private var isProducing: Boolean = false
+  @transient @volatile private var readIndex: Int = 0
+  @transient @volatile private var writeIndex: Int = 0
+  // This lock guarantees anytime if ProducerStatus == running there must be a working batch
+  // being produced or waiting to be put into the queue.
+  @transient private lazy val hasNextLock = new ReentrantLock()
+
+  @transient private lazy val emptyLock = new ReentrantLock()
+  @transient private lazy val fullLock = new ReentrantLock()
+
+  private var producer: Thread = _
+
+  @transient private lazy val buffer: Array[Either[Throwable, Array[RapidsHostColumn]]] = {
+    Array.ofDim[Either[Throwable, Array[RapidsHostColumn]]](capacity)
+  }
+
+  @transient private lazy val produceFn: Runnable = new Runnable {
+
+    // This context will be got in the main Thread during the initialization of `produceFn`
+    private val taskContext: TaskContext = TaskContext.get()
+
+    override def run(): Unit = {
+      TrampolineUtil.setTaskContext(taskContext)
+      hasNextLock.lock()
+      try {
+        do {
+          isProducing = true
+          hasNextLock.unlock()
+
+          do {
+            fullLock.synchronized {
+              if (writeIndex - readIndex == capacity) {
+                fullLock.wait()
+              }
+            }
+          } while (writeIndex - readIndex == capacity)
+
+          buffer(writeIndex % capacity) = Right(iterImpl.next())
+          emptyLock.synchronized {
+            writeIndex += 1
+            emptyLock.notify()
+          }
+
+          hasNextLock.lock()
+          isProducing = false
+          logInfo(s"[$taskAttId] PreloadedIterator produced $writeIndex batches, " +
+            s"currently preloaded batchNum: ${writeIndex - readIndex}"
+          )
+        }
+        while (iterImpl.hasNext)
+        hasNextLock.unlock()
+      } catch {
+        case ex: Throwable =>
+          // transfer the exception info to the main thread as an interrupted signal
+          buffer(writeIndex % capacity) = Left(ex)
+          writeIndex += 1
+          isProducing = false
+          if (hasNextLock.isHeldByCurrentThread) {
+            hasNextLock.unlock()
+          }
+          throw new RuntimeException(ex)
+      } finally {
+        TrampolineUtil.unsetTaskContext()
+      }
+    }
+  }
+
+  override def hasNext: Boolean = {
+    if (!isInit) {
+      withResource(new NvtxWithMetrics("waitForCPU", NvtxColor.RED, waitTimeMetric)) { _ =>
+        if (!iterImpl.hasNext) {
+          return false
+        }
+        isInit = true
+        isProducing = true
+        producer = new Thread(produceFn)
+        producer.start()
+        return true
+      }
+    }
+
+    writeIndex > readIndex || {
+      hasNextLock.lock()
+      val ret = writeIndex > readIndex || isProducing
+      hasNextLock.unlock()
+      ret
+    }
+  }
+
+  override def waitForNext(): Unit = {
+    // Return if buffer is not empty
+    if (writeIndex > readIndex) {
+      return
+    }
+    // Waiting for "emptyLock"
+    withResource(new NvtxWithMetrics("waitForCPU", NvtxColor.RED, waitTimeMetric)) { _ =>
+      do {
+        emptyLock.synchronized {
+          if (writeIndex == readIndex) {
+            emptyLock.wait()
+          }
+        }
+      } while (writeIndex == readIndex)
+    }
+  }
+
+  override def takeNext: Array[RapidsHostColumn] = {
+    require(writeIndex > readIndex, "The RingBuffer is EMPTY")
+
+    buffer(readIndex % capacity) match {
+      case Left(ex: Throwable) =>
+        logError(s"[$taskAttId] PreloadedIterator: AsyncProducer failed with exceptions")
+        throw new RuntimeException(s"[$taskAttId] PreloadedIterator", ex)
+      case Right(ret: Array[RapidsHostColumn]) =>
+        logInfo(s"[$taskAttId] PreloadedIterator consumed $readIndex batches, " +
+          s"currently preloaded batchNum: ${writeIndex - readIndex}"
+        )
+        // Update the readIndex and activate "fullLock"
+        fullLock.synchronized {
+          readIndex += 1
+          fullLock.notify()
+        }
+        ret
     }
   }
 }

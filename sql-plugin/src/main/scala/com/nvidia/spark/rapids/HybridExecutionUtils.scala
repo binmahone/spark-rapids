@@ -18,7 +18,7 @@ package com.nvidia.spark.rapids
 
 object HybridExecutionUtils {
 
-  private val HYBRID_JAR_PLUGIN_CLASS_NAME = "com.nvidia.spark.rapids.hybrid.HybridPluginWrapper"
+  private val HYBRID_JAR_PLUGIN_CLASS_NAME = "com.nvidia.spark.rapids.velox.PluginWrapper"
 
   /**
    * Check if the Hybrid jar is in the classpath,

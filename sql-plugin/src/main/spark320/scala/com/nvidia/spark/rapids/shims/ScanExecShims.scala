@@ -25,6 +25,7 @@ spark-rapids-shim-json-lines ***/
 package com.nvidia.spark.rapids.shims
 
 import com.nvidia.spark.rapids._
+import com.nvidia.spark.rapids.shims.bd.VeloxFileSourceScanExecMeta
 
 import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
 import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
@@ -49,7 +50,7 @@ object ScanExecShims {
           val sqlConf = fsse.relation.sparkSession.sessionState.conf
           val v1SourceList = sqlConf.getConfString("spark.sql.sources.useV1SourceList", "")
           HybridFileSourceScanExecMeta.checkRuntimes(v1SourceList)
-          new HybridFileSourceScanExecMeta(fsse, conf, p, r)
+          new VeloxFileSourceScanExecMeta(fsse, conf, p, r)
         } else {
           new FileSourceScanExecMeta(fsse, conf, p, r)
         }

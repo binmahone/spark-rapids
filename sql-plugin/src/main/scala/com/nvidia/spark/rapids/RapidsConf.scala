@@ -1739,13 +1739,20 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
     .booleanConf
     .createWithDefault(false)
 
-  val HYBRID_PARQUET_READER = conf("spark.rapids.sql.parquet.useHybridReader")
+  val HYBRID_PARQUET_READER = conf("spark.rapids.sql.hybrid.parquet.enableReader")
     .doc("Use HybridScan to read Parquet data using CPUs. The underlying implementation " +
         "leverages both Gluten and Velox. Supports Spark 3.2.2, 3.3.1, 3.4.2, and 3.5.1 " +
         "as Gluten does, also supports other versions but not fully tested.")
     .internal()
     .booleanConf
     .createWithDefault(false)
+
+  val HYBRID_PARQUET_PRELOAD_CAP = conf("spark.rapids.sql.hybrid.parquet.numPreloadedBatches")
+    .doc("Preloading capacity of HybridParquetScan. If > 0, will enable preloading" +
+        " the result of HybridParquetScan asynchronously in a separate thread")
+    .internal()
+    .integerConf
+    .createWithDefault(0)
 
   // This config name is the same as HybridPluginWrapper in Hybrid jar,
   // can not refer to Hybrid jar because of the jar is optional.
@@ -1755,6 +1762,21 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
     .startupOnly()
     .booleanConf
     .createWithDefault(false)
+
+  object VeloxFilterPushdownType extends Enumeration {
+    val ALL_SUPPORTED, NONE, UNCHANGED = Value
+  }
+
+  val HYBRID_PARQUET_FILTER_PUSHDOWN = conf("spark.rapids.sql.hybrid.parquet.filterPushDown")
+    .doc("Push down all supported filters to Velox if set to ALL_SUPPORTED. " +
+      "If set to NONE, no filters will be pushed down so all filters are on the GPU. " +
+      "If set to UNCHANGED, filters will be both pushed down and keeped on the GPU. " +
+      "UNCHANGED is to make the behavior same as before.")
+    .internal()
+    .stringConf
+    .transform(_.toUpperCase(java.util.Locale.ROOT))
+    .checkValues(VeloxFilterPushdownType.values.map(_.toString))
+    .createWithDefault(VeloxFilterPushdownType.ALL_SUPPORTED.toString)
 
   val HASH_AGG_REPLACE_MODE = conf("spark.rapids.sql.hashAgg.replaceMode")
     .doc("Only when hash aggregate exec has these modes (\"all\" by default): " +
@@ -2865,7 +2887,11 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val useHybridParquetReader: Boolean = get(HYBRID_PARQUET_READER)
 
+  lazy val hybridParquetPreloadBatches: Int = get(HYBRID_PARQUET_PRELOAD_CAP)
+
   lazy val loadHybridBackend: Boolean = get(LOAD_HYBRID_BACKEND)
+
+  lazy val hybridParquetFilterPushDown: String = get(HYBRID_PARQUET_FILTER_PUSHDOWN)
 
   lazy val hashAggReplaceMode: String = get(HASH_AGG_REPLACE_MODE)
 

@@ -22,7 +22,7 @@ import scala.concurrent.Future
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.GpuMetric.{DEBUG_LEVEL, ESSENTIAL_LEVEL, MODERATE_LEVEL}
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
-import com.nvidia.spark.rapids.shims.{GpuHashPartitioning, GpuRangePartitioning, ShimUnaryExecNode, ShuffleOriginUtil, SparkShimImpl}
+import com.nvidia.spark.rapids.shims.{GpuHashPartitioning, GpuRangePartitioning, ShimUnaryExecNode, SparkShimImpl}
 
 import org.apache.spark.{MapOutputStatistics, ShuffleDependency}
 import org.apache.spark.rapids.shims.GpuShuffleExchangeExec
@@ -83,10 +83,12 @@ abstract class GpuShuffleMetaBase(
     childPlans.head.availableRuntimeDataTransition
 
   override def tagPlanForGpu(): Unit = {
-
-    if (!ShuffleOriginUtil.isSupported(shuffle.shuffleOrigin)) {
-      willNotWorkOnGpu(s"${shuffle.shuffleOrigin} not supported on GPU")
-    }
+    // Remove the check of shuffleOrigin to adapt ByteDance-specific origin:
+    //   `REPARTITION_FOR_BUCKET`
+    //
+    // if (!ShuffleOriginUtil.isSupported(shuffle.shuffleOrigin)) {
+    //   willNotWorkOnGpu(s"${shuffle.shuffleOrigin} not supported on GPU")
+    // }
 
     shuffle.outputPartitioning match {
       case _: RoundRobinPartitioning

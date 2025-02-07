@@ -26,17 +26,18 @@ import scala.collection.JavaConverters._
 import scala.sys.process._
 import scala.util.Try
 
-import ai.rapids.cudf.{Cuda, CudaException, CudaFatalException, CudfException, MemoryCleaner, NvtxColor, NvtxRange}
+import ai.rapids.cudf.{BaseDeviceMemoryBuffer, Cuda, CudaException, CudaFatalException, CudfException, MemoryCleaner, NvtxColor, NvtxRange}
 import com.nvidia.spark.DFUDFPlugin
 import com.nvidia.spark.rapids.RapidsConf.AllowMultipleJars
 import com.nvidia.spark.rapids.RapidsPluginUtils.buildInfoEvent
 import com.nvidia.spark.rapids.filecache.{FileCache, FileCacheLocalityManager, FileCacheLocalityMsg}
 import com.nvidia.spark.rapids.io.async.TrafficController
-import com.nvidia.spark.rapids.jni.GpuTimeZoneDB
+import com.nvidia.spark.rapids.jni.{CpuRetryOOM, CpuSplitAndRetryOOM, GpuRetryOOM, GpuSplitAndRetryOOM, GpuTimeZoneDB}
 import com.nvidia.spark.rapids.python.PythonWorkerSemaphore
 import org.apache.commons.lang3.exception.ExceptionUtils
-
+import sun.misc.{Signal, SignalHandler}
 import org.apache.spark.{ExceptionFailure, SparkConf, SparkContext, TaskContext, TaskFailedReason}
+
 import org.apache.spark.api.plugin.{DriverPlugin, ExecutorPlugin, PluginContext, SparkPlugin}
 import org.apache.spark.internal.Logging
 import org.apache.spark.rapids.hybrid.HybridExecutionUtils
@@ -505,6 +506,8 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
   private lazy val extraExecutorPlugins =
     RapidsPluginUtils.extraPlugins.map(_.executorPlugin()).filterNot(_ == null)
   private val activeTaskNvtx = new ConcurrentHashMap[Thread, NvtxRange]()
+  private val BOOKEEP_MEMORY: Boolean =
+    java.lang.Boolean.getBoolean("ai.rapids.memory.bookkeep")
 
   override def init(
       pluginContext: PluginContext,
@@ -667,6 +670,27 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
     System.exit(systemExitCode)
   }
 
+  // use synchronized to avoid multiple threads to print the bookkeeping info at the same time
+  private def logMemoryBookkeeping(): Unit = synchronized {
+    logError(s"Memory Bookkeeping for thread ${Thread.currentThread().getName}")
+    logError(HostAlloc.getHostAllocBookkeepSummary())
+    logError(BaseDeviceMemoryBuffer.getDeviceMemoryBookkeepSummary())
+    val sb = new StringBuilder("<<Jstack Details>>\n\n")
+    // Get all threads currently running in the JVM
+    Thread.getAllStackTraces.forEach((thread: Thread, stackTrace: Array[StackTraceElement])
+    => {
+      // Print the thread name and its state
+      sb.append(s"Thread: ${thread.getName} - State: ${thread.getState} " +
+        s"- Thread ID: ${thread.getId}\n")
+      // Print the stack trace for this thread
+      for (element <- stackTrace) {
+        sb.append(s"\tat $element")
+      }
+      sb.append("\n\n")
+    })
+    logError(sb.toString())
+  }
+
   override def shutdown(): Unit = {
     GpuTimeZoneDB.shutdown()
     GpuSemaphore.shutdown()
@@ -684,6 +708,26 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
     def containsCudaFatalException(e: Throwable): Boolean = {
       ExceptionUtils.getThrowableList(e).asScala.exists(e => e.isInstanceOf[CudaFatalException])
     }
+
+    def isOOMRelatedException(e: Throwable): Boolean = {
+      e.isInstanceOf[GpuSplitAndRetryOOM] || e.isInstanceOf[CpuSplitAndRetryOOM] ||
+        e.isInstanceOf[GpuRetryOOM] || e.isInstanceOf[CpuRetryOOM]
+    }
+
+    def containsOOMRelatedException(e: Throwable): Boolean = {
+      if ("org.apache.spark.util.TaskCompletionListenerException".
+        equals(e.getClass.getCanonicalName)) {
+        // use reflection to access e's field called previousError
+        val field = e.getClass.getDeclaredField("previousError")
+        field.setAccessible(true)
+        return field.get(e).asInstanceOf[Option[Throwable]] match {
+          case Some(cause) => isOOMRelatedException(cause)
+          case None => false
+        }
+      }
+      false
+    }
+
     failureReason match {
       case ef: ExceptionFailure =>
         ef.exception match {
@@ -697,6 +741,10 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
               s"${ef.toErrorString}")
           case Some(_: CudfException) =>
             logDebug(s"Executor onTaskFailed because of a CUDF error: ${ef.toErrorString}")
+          case Some(e) if BOOKEEP_MEMORY &&
+            (isOOMRelatedException(e) || containsOOMRelatedException(e)) =>
+            logError(s"Task failed because of CpuSplitAndRetryOOM or GpuSplitAndRetryOOM")
+            logMemoryBookkeeping()
           case _ =>
             logDebug(s"Executor onTaskFailed: ${ef.toErrorString}")
         }
@@ -706,6 +754,7 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
     extraExecutorPlugins.foreach(_.onTaskFailed(failureReason))
     endTaskNvtx()
   }
+
 
   override def onTaskStart(): Unit = {
     startTaskNvtx(TaskContext.get)
@@ -735,6 +784,29 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
 }
 
 object RapidsExecutorPlugin {
+
+  // Register the SIGUSR2 signal handler
+  Signal.handle(new Signal("USR2"), new SignalHandler() {
+    override def handle(sig: Signal): Unit = {
+      System.err.println("Received SIGUSR2 signal, dumping bookkeepping information!!!")
+      System.err.println()
+      System.err.println(HostAlloc.getHostAllocBookkeepSummary())
+      System.err.println(BaseDeviceMemoryBuffer.getDeviceMemoryBookkeepSummary())
+      System.err.println("<<Jstack Details>>")
+      // Get all threads currently running in the JVM
+      Thread.getAllStackTraces.forEach((thread: Thread, stackTrace: Array[StackTraceElement]) => {
+        // Print the thread name and its state
+        System.err.println("Thread: " + thread.getName + " - State: " + thread.getState +
+          " - ID: " + thread.getId)
+        // Print the stack trace for this thread
+        for (element <- stackTrace) {
+          System.err.println("\tat " + element)
+        }
+        System.err.println()
+      })
+    }
+  })
+
   /**
    * Return true if the expected cudf version is satisfied by the actual version found.
    * The version is satisfied if the major and minor versions match exactly. If there is a requested

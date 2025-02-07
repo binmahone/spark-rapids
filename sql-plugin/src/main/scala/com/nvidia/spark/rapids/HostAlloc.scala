@@ -16,6 +16,9 @@
 
 package com.nvidia.spark.rapids
 
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.LongAdder
+
 import ai.rapids.cudf.{DefaultHostMemoryAllocator, HostMemoryAllocator, HostMemoryBuffer, MemoryBuffer, PinnedMemoryPool}
 import com.nvidia.spark.rapids.jni.{CpuRetryOOM, RmmSpark}
 import com.nvidia.spark.rapids.spill.SpillFramework
@@ -40,6 +43,21 @@ private class HostAlloc(nonPinnedLimit: Long) extends HostMemoryAllocator with L
     override def onClosed(refCount: Int): Unit = {
       if (refCount == 0) {
         releaseNonPinned(ptr, amount)
+        if (HostAlloc.BOOKEEP_MEMORY) {
+          val threadId = HostAlloc.addr2threadId.get(ptr)
+          if (threadId != null) {
+            val adder = HostAlloc.hostMemPerThread.get(threadId)
+            if (adder != null) {
+              adder.add(-amount)
+            } else {
+              logWarning(s"Could not find adder for thread $threadId from address $ptr, " +
+                s"bytes: $amount")
+            }
+            HostAlloc.addr2threadId.remove(ptr)
+          } else {
+            logWarning(s"Could not find thread id for address $ptr, bytes: $amount")
+          }
+        }
       }
     }
   }
@@ -203,6 +221,11 @@ private class HostAlloc(nonPinnedLimit: Long) extends HostMemoryAllocator with L
       if (ret.isDefined) {
         val metrics = GpuTaskMetrics.get
         metrics.incHostBytesAllocated(amount)
+        if (HostAlloc.BOOKEEP_MEMORY) {
+          val threadId = Thread.currentThread().getId
+          HostAlloc.addr2threadId.put(ret.get.getAddress, threadId)
+          HostAlloc.bookkeepHostAlloc(threadId, amount)
+        }
         logTrace(getHostAllocMetricsLogStr(metrics))
         RmmSpark.postCpuAllocSuccess(ret.get.getAddress, amount, blocking, isRecursive)
       } else {
@@ -362,6 +385,36 @@ object HostAlloc {
       t.foreach { error =>
         throw error
       }
+    }
+  }
+
+  /**
+   * For bookkeeping host memory usage per thread
+   */
+  private val BOOKEEP_MEMORY: Boolean =
+    java.lang.Boolean.getBoolean("ai.rapids.memory.bookkeep")
+  private val hostMemPerThread = new ConcurrentHashMap[Long, LongAdder]()
+  private val threadId2ThreadName = new ConcurrentHashMap[Long, String]()
+  private val addr2threadId = new ConcurrentHashMap[Long, java.lang.Long]()
+
+  private def bookkeepHostAlloc(threadId: Long, amount: Long): Unit = {
+    val adder = hostMemPerThread.computeIfAbsent(threadId, _ => new LongAdder())
+    adder.add(amount)
+    val threadName = Thread.currentThread().getName
+    threadId2ThreadName.putIfAbsent(threadId, threadName)
+  }
+
+  def getHostAllocBookkeepSummary(): String = {
+    if (BOOKEEP_MEMORY) {
+      val sb = new StringBuilder
+      sb.append("<<Host Memory Bookkeeping>>\n")
+      hostMemPerThread.forEach((threadId, adder) => {
+        val threadName = threadId2ThreadName.get(threadId)
+        sb.append(s"Thread $threadId ($threadName) has ${adder.sum()} bytes\n")
+      })
+      sb.toString()
+    } else {
+      "Host memory bookkeeping is disabled"
     }
   }
 }

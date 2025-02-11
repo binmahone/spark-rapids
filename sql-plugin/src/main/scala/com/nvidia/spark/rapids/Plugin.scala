@@ -32,12 +32,12 @@ import com.nvidia.spark.rapids.RapidsConf.AllowMultipleJars
 import com.nvidia.spark.rapids.RapidsPluginUtils.buildInfoEvent
 import com.nvidia.spark.rapids.filecache.{FileCache, FileCacheLocalityManager, FileCacheLocalityMsg}
 import com.nvidia.spark.rapids.io.async.TrafficController
-import com.nvidia.spark.rapids.jni.{CpuRetryOOM, CpuSplitAndRetryOOM, GpuRetryOOM, GpuSplitAndRetryOOM, GpuTimeZoneDB}
+import com.nvidia.spark.rapids.jni.GpuTimeZoneDB
 import com.nvidia.spark.rapids.python.PythonWorkerSemaphore
 import org.apache.commons.lang3.exception.ExceptionUtils
 import sun.misc.{Signal, SignalHandler}
-import org.apache.spark.{ExceptionFailure, SparkConf, SparkContext, TaskContext, TaskFailedReason}
 
+import org.apache.spark.{ExceptionFailure, SparkConf, SparkContext, TaskContext, TaskFailedReason}
 import org.apache.spark.api.plugin.{DriverPlugin, ExecutorPlugin, PluginContext, SparkPlugin}
 import org.apache.spark.internal.Logging
 import org.apache.spark.rapids.hybrid.HybridExecutionUtils
@@ -710,8 +710,7 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
     }
 
     def isOOMRelatedException(e: Throwable): Boolean = {
-      e.isInstanceOf[GpuSplitAndRetryOOM] || e.isInstanceOf[CpuSplitAndRetryOOM] ||
-        e.isInstanceOf[GpuRetryOOM] || e.isInstanceOf[CpuRetryOOM]
+      RmmRapidsRetryIterator.isRetryOrSplitAndRetry(e)._1
     }
 
     def containsOOMRelatedException(e: Throwable): Boolean = {

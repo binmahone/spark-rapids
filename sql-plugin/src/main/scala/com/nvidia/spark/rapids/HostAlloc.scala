@@ -36,6 +36,24 @@ private class HostAlloc(nonPinnedLimit: Long) extends HostMemoryAllocator with L
   private val isUnlimited = nonPinnedLimit < 0
   private val isPinnedOnly = nonPinnedLimit == 0
 
+  private def bookkeepHostMemory(ptr: Long, amount: Long) = {
+    if (HostAlloc.BOOKEEP_MEMORY) {
+      val threadId = HostAlloc.addr2threadId.get(ptr)
+      if (threadId != null) {
+        val adder = HostAlloc.hostMemPerThread.get(threadId)
+        if (adder != null) {
+          adder.add(-amount)
+        } else {
+          logWarning(s"Could not find adder for thread $threadId from address $ptr, " +
+            s"bytes: $amount")
+        }
+        HostAlloc.addr2threadId.remove(ptr)
+      } else {
+        logWarning(s"Could not find thread id for address $ptr, bytes: $amount")
+      }
+    }
+  }
+
   /**
    * A callback class so we know when a non-pinned host buffer was released
    */
@@ -43,21 +61,7 @@ private class HostAlloc(nonPinnedLimit: Long) extends HostMemoryAllocator with L
     override def onClosed(refCount: Int): Unit = {
       if (refCount == 0) {
         releaseNonPinned(ptr, amount)
-        if (HostAlloc.BOOKEEP_MEMORY) {
-          val threadId = HostAlloc.addr2threadId.get(ptr)
-          if (threadId != null) {
-            val adder = HostAlloc.hostMemPerThread.get(threadId)
-            if (adder != null) {
-              adder.add(-amount)
-            } else {
-              logWarning(s"Could not find adder for thread $threadId from address $ptr, " +
-                s"bytes: $amount")
-            }
-            HostAlloc.addr2threadId.remove(ptr)
-          } else {
-            logWarning(s"Could not find thread id for address $ptr, bytes: $amount")
-          }
-        }
+        bookkeepHostMemory(ptr, amount)
       }
     }
   }
@@ -69,6 +73,7 @@ private class HostAlloc(nonPinnedLimit: Long) extends HostMemoryAllocator with L
     override def onClosed(refCount: Int): Unit = {
       if (refCount == 0) {
         releasePinned(ptr, amount)
+        bookkeepHostMemory(ptr, amount)
       }
     }
   }

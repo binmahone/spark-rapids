@@ -24,6 +24,7 @@ import ai.rapids.cudf.{JCudfSerialization, NvtxColor, NvtxRange}
 import ai.rapids.cudf.JCudfSerialization.HostConcatResult
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.GpuMetric.{CONCAT_BUFFER_TIME, CONCAT_HEADER_TIME}
+import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
 import com.nvidia.spark.rapids.jni.kudo.{KudoHostMergeResult, KudoSerializer, KudoTable}
 import com.nvidia.spark.rapids.shims.ShimUnaryExecNode
@@ -301,9 +302,10 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
 
   private def concatenateTablesInHost(): CoalescedHostResult = {
     val result = withResource(new MetricRange(concatTimeMetric)) { _ =>
-      withResource(new Array[T](numTablesInBatch)) { tables =>
-        tables.indices.foreach(i => tables(i) = serializedTables.removeFirst())
-        tableOperator.concatOnHost(tables)
+      val input = for (_ <- 0 until numTablesInBatch) yield serializedTables.removeFirst()
+
+      withRetryNoSplit(input) { tables =>
+        tableOperator.concatOnHost(tables.toArray)
       }
     }
 

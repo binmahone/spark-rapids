@@ -26,6 +26,7 @@ import ai.rapids.cudf.{Cuda, HostColumnVector, HostMemoryBuffer, JCudfSerializat
 import ai.rapids.cudf.JCudfSerialization.SerializedTableHeader
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
+import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
 import com.nvidia.spark.rapids.jni.kudo.{KudoSerializer, KudoTable, KudoTableHeader}
 
@@ -553,9 +554,16 @@ class KudoSerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric)
       val header = nextHeader.get
       nextHeader = None
       if (header.getNumColumns > 0) {
+
+        // this is not perfect, but it is the best we can do for now
+        // when retrying, current thread still hold many other host buffers
+        val ret = withRetryNoSplit[HostMemoryBuffer] (
+          HostMemoryBuffer.allocate(header.getTotalDataLen, false)
+        )
+
         // This buffer will later be concatenated into another host buffer before being
         // sent to the GPU, so no need to use pinned memory for these buffers.
-        closeOnExcept(HostMemoryBuffer.allocate(header.getTotalDataLen, false)) { hostBuffer =>
+        closeOnExcept(ret) { hostBuffer =>
           hostBuffer.copyFromStream(0, dIn, header.getTotalDataLen)
           val kudoTable = new KudoTable(header, hostBuffer)
           KudoSerializedTableColumn.from(kudoTable)

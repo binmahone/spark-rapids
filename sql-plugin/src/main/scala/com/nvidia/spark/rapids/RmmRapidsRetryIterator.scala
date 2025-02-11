@@ -189,7 +189,7 @@ object RmmRapidsRetryIterator extends Logging {
    * Returns a tuple of (shouldRetry, shouldSplit, isFromGpuOom) depending the exception
    * passed
    */
-  private def isRetryOrSplitAndRetry(ex: Throwable): (Boolean, Boolean, Boolean) = {
+  def isRetryOrSplitAndRetry(ex: Throwable): (Boolean, Boolean, Boolean) = {
     ex match {
       case _: GpuRetryOOM => (true, false, true)
       case _: CpuRetryOOM => (true, false, false)

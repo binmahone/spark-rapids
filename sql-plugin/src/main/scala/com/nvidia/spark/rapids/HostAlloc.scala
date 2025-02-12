@@ -399,14 +399,11 @@ object HostAlloc {
   private val BOOKEEP_MEMORY: Boolean =
     java.lang.Boolean.getBoolean("ai.rapids.memory.bookkeep")
   private val hostMemPerThread = new ConcurrentHashMap[Long, LongAdder]()
-  private val threadId2ThreadName = new ConcurrentHashMap[Long, String]()
   private val addr2threadId = new ConcurrentHashMap[Long, java.lang.Long]()
 
   private def bookkeepHostAlloc(threadId: Long, amount: Long): Unit = {
     val adder = hostMemPerThread.computeIfAbsent(threadId, _ => new LongAdder())
     adder.add(amount)
-    val threadName = Thread.currentThread().getName
-    threadId2ThreadName.putIfAbsent(threadId, threadName)
   }
 
   def getHostAllocBookkeepSummary(): String = {
@@ -414,8 +411,7 @@ object HostAlloc {
       val sb = new StringBuilder
       sb.append("<<Host Memory Bookkeeping>>\n")
       hostMemPerThread.forEach((threadId, adder) => {
-        val threadName = threadId2ThreadName.get(threadId)
-        sb.append(s"Thread $threadId ($threadName) has ${adder.sum()} bytes\n")
+        sb.append(s"Thread with ID $threadId is accountable for ${adder.sum()} bytes\n")
       })
       sb.toString()
     } else {

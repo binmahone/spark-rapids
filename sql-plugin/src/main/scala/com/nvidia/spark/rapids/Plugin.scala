@@ -670,26 +670,28 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
     System.exit(systemExitCode)
   }
 
-  // use synchronized to avoid multiple threads to print the bookkeeping info at the same time
-  private def logMemoryBookkeeping(): Unit = synchronized {
-    logError(s"Memory Bookkeeping for thread ${Thread.currentThread().getName}")
-    logError(HostAlloc.getHostAllocBookkeepSummary())
-    logError(BaseDeviceMemoryBuffer.getDeviceMemoryBookkeepSummary())
-    val sb = new StringBuilder("<<Jstack Details>>\n\n")
-    // Get all threads currently running in the JVM
-    Thread.getAllStackTraces.forEach((thread: Thread, stackTrace: Array[StackTraceElement])
-    => {
-      // Print the thread name and its state
-      sb.append(s"Thread: ${thread.getName} - State: ${thread.getState} " +
-        s"- Thread ID: ${thread.getId}\n")
-      // Print the stack trace for this thread
-      for (element <- stackTrace) {
-        sb.append(s"\tat $element")
-      }
-      sb.append("\n\n")
-    })
-    logError(sb.toString())
-  }
+//
+//  // use synchronized to avoid multiple threads to print the bookkeeping info at the same time
+//  private def logMemoryBookkeeping(): Unit = synchronized {
+//    logError(s"Memory Bookkeeping for thread ${Thread.currentThread().getName} with thread id : " +
+//      s"${Thread.currentThread().getId}")
+//    logError(HostAlloc.getHostAllocBookkeepSummary())
+//    logError(BaseDeviceMemoryBuffer.getDeviceMemoryBookkeepSummary())
+//    val sb = new StringBuilder("<<Jstack Details>>\n\n")
+//    // Get all threads currently running in the JVM
+//    Thread.getAllStackTraces.forEach((thread: Thread, stackTrace: Array[StackTraceElement])
+//    => {
+//      // Print the thread name and its state
+//      sb.append(s"Thread: ${thread.getName} - State: ${thread.getState} " +
+//        s"- Thread ID: ${thread.getId}\n")
+//      // Print the stack trace for this thread
+//      for (element <- stackTrace) {
+//        sb.append(s"\tat $element")
+//      }
+//      sb.append("\n\n")
+//    })
+//    logError(sb.toString())
+//  }
 
   override def shutdown(): Unit = {
     GpuTimeZoneDB.shutdown()
@@ -742,8 +744,8 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
             logDebug(s"Executor onTaskFailed because of a CUDF error: ${ef.toErrorString}")
           case Some(e) if BOOKEEP_MEMORY &&
             (isOOMRelatedException(e) || containsOOMRelatedException(e)) =>
-            logError(s"Task failed because of CpuSplitAndRetryOOM or GpuSplitAndRetryOOM")
-            logMemoryBookkeeping()
+            logError(s"Task failed because of Cpu OOM or Gpu OOM")
+//            logMemoryBookkeeping()
           case _ =>
             logDebug(s"Executor onTaskFailed: ${ef.toErrorString}")
         }

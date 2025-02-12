@@ -19,7 +19,7 @@ package com.nvidia.spark.rapids
 import scala.annotation.tailrec
 import scala.collection.mutable
 
-import ai.rapids.cudf.CudfColumnSizeOverflowException
+import ai.rapids.cudf.{BaseDeviceMemoryBuffer, CudfColumnSizeOverflowException}
 import com.nvidia.spark.Retryable
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
@@ -389,7 +389,30 @@ object RmmRapidsRetryIterator extends Logging {
 
     override def hasNext: Boolean = !wasCalledSuccessfully
 
+
+    // use synchronized to avoid multiple threads to print the bookkeeping info at the same time
+    private def logMemoryBookkeeping(): Unit = synchronized {
+      logError(s"Memory Bookkeeping for thread ${Thread.currentThread().getName} " +
+        s"with thread id : ${Thread.currentThread().getId}")
+      logError(HostAlloc.getHostAllocBookkeepSummary())
+      logError(BaseDeviceMemoryBuffer.getDeviceMemoryBookkeepSummary())
+      val sb = new StringBuilder("<<Jstack Details>>\n\n")
+      // Get all threads currently running in the JVM
+      Thread.getAllStackTraces.forEach((thread: Thread, stackTrace: Array[StackTraceElement])
+      => {
+        // Print the thread name and its state
+        sb.append(s"Thread: ${thread.getName} - State: ${thread.getState} " +
+          s"- Thread ID: ${thread.getId}\n")
+        // Print the stack trace for this thread
+        for (element <- stackTrace) {
+          sb.append(s"\tat $element")
+        }
+        sb.append("\n\n")
+      })
+      logError(sb.toString())
+    }
     override def split(isFromGpuOom: Boolean): Unit = {
+      logMemoryBookkeeping()
       if (isFromGpuOom) {
         throw new GpuSplitAndRetryOOM("GPU OutOfMemory: could not split inputs and retry")
       } else {
@@ -605,6 +628,7 @@ object RmmRapidsRetryIterator extends Logging {
       var result: Option[K] = None
       var doSplit = false
       var isFromGpuOom = true
+      var t: Throwable = null
       while (result.isEmpty && attemptIter.hasNext) {
         RetryStateTracker.setCurThreadRetrying(!firstAttempt)
         if (!firstAttempt) {
@@ -612,16 +636,20 @@ object RmmRapidsRetryIterator extends Logging {
           try {
             RmmSpark.blockThreadUntilReady()
           } catch {
-            case _: GpuSplitAndRetryOOM =>
+            case e1: GpuSplitAndRetryOOM =>
               doSplit = true
+              t = e1
               isFromGpuOom = true
-            case _: CpuSplitAndRetryOOM =>
+            case e2: CpuSplitAndRetryOOM =>
               doSplit = true
+              t = e2
               isFromGpuOom = false
           }
         }
         firstAttempt = false
         if (doSplit) {
+//          assert(t != null)
+          logError(s"Splitting due to throwable, its stacktrace being:", t)
           attemptIter.split(isFromGpuOom)
         }
         doSplit = false

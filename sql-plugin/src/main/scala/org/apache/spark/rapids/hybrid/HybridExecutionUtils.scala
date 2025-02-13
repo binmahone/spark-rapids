@@ -28,7 +28,7 @@ import org.apache.spark.sql.types._
 
 object HybridExecutionUtils extends PredicateHelper {
   
-  private val HYBRID_JAR_PLUGIN_CLASS_NAME = "com.nvidia.spark.rapids.hybrid.HybridPluginWrapper"
+  private val HYBRID_JAR_PLUGIN_CLASS_NAME = "com.nvidia.spark.rapids.velox.PluginWrapper"
 
   /**
    * Check if the Hybrid jar is in the classpath,

@@ -1739,13 +1739,20 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
     .booleanConf
     .createWithDefault(false)
 
-  val HYBRID_PARQUET_READER = conf("spark.rapids.sql.parquet.useHybridReader")
+  val HYBRID_PARQUET_READER = conf("spark.rapids.sql.hybrid.parquet.enableReader")
     .doc("Use HybridScan to read Parquet data using CPUs. The underlying implementation " +
         "leverages both Gluten and Velox. Supports Spark 3.2.2, 3.3.1, 3.4.2, and 3.5.1 " +
         "as Gluten does, also supports other versions but not fully tested.")
     .internal()
     .booleanConf
     .createWithDefault(false)
+
+  val HYBRID_PARQUET_PRELOAD_CAP = conf("spark.rapids.sql.hybrid.parquet.numPreloadedBatches")
+    .doc("Preloading capacity of HybridParquetScan. If > 0, will enable preloading" +
+        " the result of HybridParquetScan asynchronously in a separate thread")
+    .internal()
+    .integerConf
+    .createWithDefault(0)
 
   // This config name is the same as HybridPluginWrapper in Hybrid jar,
   // can not refer to Hybrid jar because of the jar is optional.
@@ -2396,6 +2403,16 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
     .booleanConf
     .createWithDefault(false)
 
+  val ENABLE_HASH_MODE_FOR_PARTITIONING =
+    conf("spark.rapids.sql.partitioning.hashMode.enabled")
+      .doc("When false, Only Murmur3Hash will be used for GPU hash partitioning. " +
+        "When enabled, GPU will try to infer the hash algorithm used by CPU hash " +
+        "partitioning and try to use the same one as CPU. So far only HiveHash and " +
+        "Murmur3Hash are supported on GPU.")
+      .internal()
+      .booleanConf
+      .createWithDefault(true)
+
   val TAG_LORE_ID_ENABLED = conf("spark.rapids.sql.lore.tag.enabled")
     .doc("Enable add a LORE id to each gpu plan node")
     .internal()
@@ -2462,6 +2479,14 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
       .internal()
       .bytesConf(ByteUnit.BYTE)
       .createWithDefault(2L * 1024 * 1024 * 1024)
+  val HASH_MODE = conf("spark.rapids.sql.hashMode")
+    .doc("When INSERT OVERWRITE a hive bucketed table, we can avoid some unnecessary shuffle " +
+      "operation by specifying hashMode as hive. For example, in the case of GroupBy + Insert " +
+      "on the same bucket keys, it only shuffles once. Supported modes: [murmur3, hive].")
+    .stringConf
+    .transform(_.toUpperCase(java.util.Locale.ROOT))
+    .checkValues(HashMode.values.map(_.toString))
+    .createWithDefault(HashMode.HIVE.toString)
 
   private def printSectionHeader(category: String): Unit =
     println(s"\n### $category")
@@ -2895,6 +2920,8 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val useHybridParquetReader: Boolean = get(HYBRID_PARQUET_READER)
 
+  lazy val hybridParquetPreloadBatches: Int = get(HYBRID_PARQUET_PRELOAD_CAP)
+
   lazy val loadHybridBackend: Boolean = get(LOAD_HYBRID_BACKEND)
 
   lazy val pushDownFiltersToHybrid: String = get(PUSH_DOWN_FILTERS_TO_HYBRID)
@@ -3301,6 +3328,8 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val isDeltaLowShuffleMergeEnabled: Boolean = get(ENABLE_DELTA_LOW_SHUFFLE_MERGE)
 
+  lazy val isHashModePartitioningEnabled: Boolean = get(ENABLE_HASH_MODE_FOR_PARTITIONING)
+
   lazy val isTagLoreIdEnabled: Boolean = get(TAG_LORE_ID_ENABLED)
 
   lazy val loreDumpIds: Map[LoreId, OutputLoreId] = get(LORE_DUMP_IDS)
@@ -3312,6 +3341,7 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val caseWhenFuseEnabled: Boolean = get(CASE_WHEN_FUSE)
 
   lazy val isAsyncOutputWriteEnabled: Boolean = get(ENABLE_ASYNC_OUTPUT_WRITE)
+  lazy val hashMode: HashMode.Value = HashMode.withName(get(HASH_MODE))
 
   private val optimizerDefaults = Map(
     // this is not accurate because CPU projections do have a cost due to appending values

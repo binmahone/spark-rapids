@@ -4077,21 +4077,40 @@ object GpuOverrides extends Logging {
         override val childExprs: Seq[BaseExprMeta[_]] =
           hp.expressions.map(GpuOverrides.wrapExpr(_, this.conf, Some(this)))
 
+        private lazy val hashMode = GpuHashPartitioningBase.getHashModeFromCpu(hp, conf)
+
         override def tagPartForGpu(): Unit = {
-          val arrayWithStructsHashing = hp.expressions.exists(e =>
-            TrampolineUtil.dataTypeExistsRecursively(e.dataType,
-              {
-                case ArrayType(_: StructType, _) => true
-                case _ => false
-              })
-          )
-          if (arrayWithStructsHashing) {
-            willNotWorkOnGpu("hashing arrays with structs is not supported")
+          this.hashMode match {
+            case scala.Left(mode) =>
+              if (mode == HashMode.HIVE) {
+                // Should match what GpuHiveHash supports
+                val hhExpr = HiveHash(hp.expressions)
+                val hhMeta = GpuOverrides.wrapExpr(hhExpr, conf, None)
+                hhMeta.tagForGpu()
+                if (!hhMeta.canThisBeReplaced) {
+                  willNotWorkOnGpu(s"Hash Partitioning with HiveHash can not run" +
+                    s" on GPU. Details: ${hhMeta.explain(all = false)}")
+                }
+              } else { // Murmur3
+                val arrayWithStructsHashing = hp.expressions.exists(e =>
+                  TrampolineUtil.dataTypeExistsRecursively(e.dataType,
+                    {
+                      case ArrayType(_: StructType, _) => true
+                      case _ => false
+                    })
+                )
+                if (arrayWithStructsHashing) {
+                  willNotWorkOnGpu("hashing arrays with structs is not supported")
+                }
+              }
+            case scala.Right(other) =>
+              willNotWorkOnGpu(s"Hash algorithm $other is not supported on GPU")
           }
         }
 
         override def convertToGpu(): GpuPartitioning =
-          GpuHashPartitioning(childExprs.map(_.convertToGpu()), hp.numPartitions)
+          GpuHashPartitioning(childExprs.map(_.convertToGpu()), hp.numPartitions,
+            this.hashMode.left.get)
       }),
     part[RangePartitioning](
       "Range partitioning",

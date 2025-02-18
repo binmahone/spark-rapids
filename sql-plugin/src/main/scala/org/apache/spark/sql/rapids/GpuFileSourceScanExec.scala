@@ -16,16 +16,20 @@
 
 package org.apache.spark.sql.rapids
 
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit.NANOSECONDS
 
 import scala.collection.mutable.HashMap
 
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.filecache.FileCacheLocalityManager
-import com.nvidia.spark.rapids.shims.{GpuDataSourceRDD, PartitionedFileUtilsShim, SparkShimImpl, StaticPartitionShims}
+import com.nvidia.spark.rapids.shims.{GpuDataSourceRDD, PartitionedFileUtilsShim, SparkShimImpl}
 import org.apache.hadoop.fs.Path
 
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.bucket
+import org.apache.spark.sql.bucket.BUCKET_CHECK_LOG_PREFIX
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.catalyst.expressions.{And, Ascending, Attribute, AttributeReference, BoundReference, DynamicPruningExpression, Expression, Literal, PlanExpression, Predicate, SortOrder}
@@ -33,13 +37,13 @@ import org.apache.spark.sql.catalyst.json.rapids.GpuReadJsonFileFormat
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.physical.{HashPartitioning, Partitioning, UnknownPartitioning}
 import org.apache.spark.sql.connector.read.PartitionReaderFactory
-import org.apache.spark.sql.execution.{ExecSubqueryExpression, ExplainUtils, FileSourceScanExec, SQLExecution}
+import org.apache.spark.sql.execution.{DataSourceScanExec, ExecSubqueryExpression, ExplainUtils, FileSourceScanExec, PartitionedFileUtil, SQLExecution}
+import org.apache.spark.sql.execution.TablePropertyConfig.{BUCKET_BEGIN_PARTITION_DATE_COLUMN_FORMAT, BUCKET_BEGIN_PARTITION_DATE_COLUMN_NAME, BUCKET_BEGIN_PARTITION_DATE_COLUMN_VALUE, DEFAULT_DATE_COLUMN_FORMAT, DEFAULT_DATE_COLUMN_NAME, DEFAULT_DATE_COLUMN_VALUE}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
 import org.apache.spark.sql.execution.datasources.json.JsonFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.metric.SQLMetrics
-import org.apache.spark.sql.execution.rapids.shims.FilePartitionShims
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.ColumnarBatch
@@ -74,6 +78,7 @@ case class GpuFileSourceScanExec(
     dataFilters: Seq[Expression],
     tableIdentifier: Option[TableIdentifier],
     disableBucketedScan: Boolean = false,
+    properties: Map[String, String] = Map.empty,
     queryUsesInputFile: Boolean = false,
     requiredPartitionSchema: Option[StructType] = None)(@transient val rapidsConf: RapidsConf)
     extends GpuDataSourceScanExec with GpuExec {
@@ -172,11 +177,57 @@ case class GpuFileSourceScanExec(
   private def toAttribute(colName: String): Option[Attribute] =
     output.find(_.name == colName)
 
-  // exposed for testing
+  private def isBucketingPartition(dateKey: String, dateValue: String, dateFormat: String) = {
+    if (!conf.readHistoricalPartitionsAsNonBucketing || relation.partitionSchema.isEmpty ||
+      !relation.partitionSchema.map(_.name).head.contains(dateKey)) {
+      true
+    }
+    else {
+      val queryDateValues = selectedPartitions.map(_.values.getString(0))
+      val formatter = DateTimeFormatter.ofPattern(dateFormat)
+      val turningPointDate = LocalDate.parse(dateValue, formatter)
+      !queryDateValues.exists(dateStr => {
+        try {
+          val date = LocalDate.parse(dateStr, formatter)
+          date.isBefore(turningPointDate)
+        } catch {
+          case _: Exception =>
+            logWarning(s"date partition name $dateStr does not match format of [$dateFormat]")
+            true
+        }
+      })
+    }
+  }
+
+  @transient private lazy val allBucketingPartitions = {
+    val dateKey = properties.getOrElse(
+      BUCKET_BEGIN_PARTITION_DATE_COLUMN_NAME, DEFAULT_DATE_COLUMN_NAME)
+    val dateValue = properties.getOrElse(
+      BUCKET_BEGIN_PARTITION_DATE_COLUMN_VALUE, DEFAULT_DATE_COLUMN_VALUE)
+    val dateFormat = properties.getOrElse(
+      BUCKET_BEGIN_PARTITION_DATE_COLUMN_FORMAT, DEFAULT_DATE_COLUMN_FORMAT)
+    // later remove all this code snippet
+    relation.sparkSession.sessionState.conf.isPartitionLevelBucketReadMode ||
+      isBucketingPartition(dateKey, dateValue, dateFormat)
+  }
+
   lazy val bucketedScan: Boolean = {
-    if (relation.sparkSession.sessionState.conf.bucketingEnabled
-      && relation.bucketSpec.isDefined
-      && !disableBucketedScan) {
+    val enableBucketRead = relation.sparkSession.sessionState.conf.bucketingEnabled
+    val legalBucketNum = properties.get(bucket.RECOMMEND_NUM_BUCKETS_KEY).forall(_.toInt > 0)
+    logInfo(
+      s"""$BUCKET_CHECK_LOG_PREFIX
+         | $$enableBucketRead=$enableBucketRead
+         | $$relation=${tableIdentifier}
+         | $$bucketSpec=${relation.bucketSpec}
+         | $$disableBucketScan=${disableBucketedScan}
+         | $$legalBucketNum=${legalBucketNum}
+         | """.stripMargin)
+    // TODO!! NEVER evaluate variable $allBucketingPartitions respectively, because
+    //  it will lead to failure when first partition column is not StringType. It happens
+    //  because of legacy hard-code.
+    if (enableBucketRead && relation.bucketSpec.isDefined
+      && !disableBucketedScan && allBucketingPartitions
+      && legalBucketNum) {
       val spec = relation.bucketSpec.get
       val bucketColumns = spec.bucketColumnNames.flatMap(n => toAttribute(n))
       bucketColumns.size == spec.bucketColumnNames.size
@@ -457,6 +508,11 @@ case class GpuFileSourceScanExec(
 
   override val nodeNamePrefix: String = "GpuFile"
 
+  private lazy val recommendNumBuckets = relation.bucketSpec.map(bucketSpec =>
+    properties.get(bucket.RECOMMEND_NUM_BUCKETS_KEY).map(_.toInt)
+      .orElse(optionalNumCoalescedBuckets)
+      .getOrElse(bucketSpec.numBuckets)).getOrElse(0)
+
   /**
    * Create an RDD for bucketed reads.
    * The non-bucketed variant of this function is [[createNonBucketedReadRDD]].
@@ -477,13 +533,17 @@ case class GpuFileSourceScanExec(
       fsRelation: HadoopFsRelation): RDD[InternalRow] = {
     logInfo(s"Planning with ${bucketSpec.numBuckets} buckets")
 
-    val partitionedFiles = FilePartitionShims.getPartitions(selectedPartitions)
-
-    val filesGroupedToBuckets = partitionedFiles.groupBy { f =>
-      BucketingUtils
-        .getBucketId(new Path(f.filePath.toString()).getName)
-        .getOrElse(sys.error(s"Invalid bucket file ${f.filePath}"))
-    }
+    val filesGroupedToBuckets =
+      selectedPartitions.flatMap { p =>
+        p.files.map { f =>
+          PartitionedFileUtil.getPartitionedFile(f, f.getPath, p.values)
+        }
+      }.groupBy { f =>
+        BucketingUtils
+          .getBucketId(new Path(f.filePath).getName)
+          .getOrElse(throw new IllegalStateException(
+            s"Invalid bucket file ${f.filePath}")) % bucketSpec.numBuckets
+      }
 
     val prunedFilesGroupedToBuckets = if (optionalBucketSet.isDefined) {
       val bucketSet = optionalBucketSet.get
@@ -494,19 +554,30 @@ case class GpuFileSourceScanExec(
       filesGroupedToBuckets
     }
 
-    val filePartitions = optionalNumCoalescedBuckets.map { numCoalescedBuckets =>
-      logInfo(s"Coalescing to ${numCoalescedBuckets} buckets")
-      val coalescedBuckets = prunedFilesGroupedToBuckets.groupBy(_._1 % numCoalescedBuckets)
-      Seq.tabulate(numCoalescedBuckets) { bucketId =>
-        val partitionedFiles = coalescedBuckets.get(bucketId).map {
-          _.values.flatten.toArray
-        }.getOrElse(Array.empty)
-        FilePartition(bucketId, partitionedFiles)
-      }
-    }.getOrElse {
-      Seq.tabulate(bucketSpec.numBuckets) { bucketId =>
-        FilePartition(bucketId, prunedFilesGroupedToBuckets.getOrElse(bucketId, Array.empty))
-      }
+    // recommendBucketId -> List(origin bucketId)
+    val recommendBucketIdToOriginBucketIds = if (recommendNumBuckets <= bucketSpec.numBuckets) {
+      // coalesce case
+      prunedFilesGroupedToBuckets
+        .keys
+        .map(bucketId => (bucketId % recommendNumBuckets, bucketId))
+        .groupBy(_._1)
+        .map {
+          case (recommendBucketId, originBucketIds) =>
+            (recommendBucketId, originBucketIds.map(_._2))
+        }
+    } else {
+      // hash filter case
+      Seq.tabulate(recommendNumBuckets) { recommendBucketId =>
+        (recommendBucketId, List(recommendBucketId % bucketSpec.numBuckets))
+      }.toMap
+    }
+    val filePartitions = Seq.tabulate(recommendNumBuckets) { recommendBucketId =>
+      FilePartition(recommendBucketId,
+        recommendBucketIdToOriginBucketIds.get(recommendBucketId)
+          .fold(Array.empty[PartitionedFile]) { originBucketIds =>
+            originBucketIds.flatMap(id =>
+              prunedFilesGroupedToBuckets.getOrElse(id, Array.empty)).toArray
+          })
     }
     getFinalRDD(readFile, filePartitions)
   }
@@ -522,18 +593,9 @@ case class GpuFileSourceScanExec(
   private def createNonBucketedReadRDD(
       readFile: Option[(PartitionedFile) => Iterator[InternalRow]],
       fsRelation: HadoopFsRelation): RDD[InternalRow] = {
-    val partitions = StaticPartitionShims.getStaticPartitions(fsRelation).getOrElse {
-      val openCostInBytes = fsRelation.sparkSession.sessionState.conf.filesOpenCostInBytes
-      val maxSplitBytes =
-        FilePartition.maxSplitBytes(fsRelation.sparkSession, dynamicallySelectedPartitions)
-      logInfo(s"Planning scan with bin packing, max size: $maxSplitBytes bytes, " +
-        s"open cost is considered as scanning $openCostInBytes bytes.")
-
-      val splitFiles = FilePartitionShims.splitFiles(dynamicallySelectedPartitions, relation,
-        maxSplitBytes)
-
-      FilePartition.getFilePartitions(relation.sparkSession, splitFiles, maxSplitBytes)
-    }
+    val tableName = tableIdentifier.map(_.unquotedString).getOrElse("")
+    val partitions = DataSourceScanExec.generateNonBucketedFileSplits(
+      tableName, requiredSchema, fsRelation, selectedPartitions, optionalBucketSet)
     getFinalRDD(readFile, partitions)
   }
 

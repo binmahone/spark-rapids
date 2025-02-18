@@ -1,0 +1,87 @@
+#!/usr/local/env groovy
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ *
+ * Jenkinsfile for building bd-spark-rapids
+ *
+ */
+@Library('blossom-lib') _
+
+
+def artURL = "${common.urmURL}/artifactory/sw-spark-maven/"
+
+pipeline {
+    agent {
+        kubernetes {
+            label "${BUILD_TAG}"
+            cloud "${common.CLOUD_NAME}"
+            yaml pod.getCPUYAML('alpine')
+        }
+    }
+
+    options {
+        ansiColor('xterm')
+        timeout(time: 4, unit: 'HOURS')
+        buildDiscarder(logRotator(numToKeepStr: '50'))
+    }
+
+    stages {
+        stage('Trigger test-build') {
+            steps {
+                script {
+                    def buildTest = build(job: 'spark-rapids-customer-test-build',
+                        propagate: false, wait: true,
+                        parameters: [
+                            string(name: 'RAPIDS_VELOX_REF', value:
+                                "refs/pull/${ghprbPullId}/merge"
+                            ),
+                            string(name: 'RAPIDS_VELOX_REPO_URL', value:
+                                'https://github.com/HighPerfDataAccelerator/spark-rapids.git'
+                            ),
+                            string(name: 'BD_SPARK_RAPIDS_BUILD_IMAGE', value:
+                                "${common.ARTIFACTORY_NAME}/sw-spark-docker/bd-rapids:1114"
+                            ),
+                            string(name: 'JNI_JAR_URL', value: "${artURL}/com/nvidia/" +
+                                "spark-rapids-jni/25.04.0-SNAPSHOT/" +
+                                "spark-rapids-jni-25.04.0-20250212.144238-16-cuda11.jar"
+                            ),
+                            string(name: 'BACKENDS_VELOX_JAR_URL', value: "${artURL}/io/glutenproject/" +
+                                "backends-velox-bd-gluten-nightly/1.2.1-SNAPSHOT/" +
+                                "backends-velox-bd-gluten-nightly-1.2.1-SNAPSHOT.jar"
+                            ),
+                            string(name: 'SPARK_SQL_COLUMNAR_SHIMS_SPARK32_JAR_URL', value: "${artURL}/io/glutenproject/" +
+                                "spark-sql-columnar-shims-spark32-bd-gluten-nightly/1.2.1-SNAPSHOT/" +
+                                "spark-sql-columnar-shims-spark32-bd-gluten-nightly-1.2.1-SNAPSHOT.jar"
+                            ),
+                            string(name: 'PHASE_TYPE', value: '321'),
+                            booleanParam(name: 'IS_BD_GLUTEN', value: true),
+                            booleanParam(name: 'BUILD_WITH_GLUTEN_VELOX', value: true),
+                            booleanParam(name: 'SKIP_TEST', value: true),
+                            booleanParam(name: 'SKIP_DEPLOY', value: true),
+                            string(name: 'SUFFIX', value: "-${BUILD_TAG}"),
+                        ]
+                    )
+
+                    env.BUILD_URL = buildTest.absoluteUrl
+                    if (buildTest.result != 'SUCCESS') {
+                        def testLink = "${buildTest.absoluteUrl}console"
+                        error "Check logs at downstream job: ${testLink}"
+                    }
+                }
+            }
+        } // eng of Trigger test-build
+    } // end of stages
+} // end of pipeline

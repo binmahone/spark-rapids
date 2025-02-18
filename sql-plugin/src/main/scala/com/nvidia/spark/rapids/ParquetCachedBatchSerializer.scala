@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -493,6 +493,7 @@ protected class ParquetCachedBatchSerializer extends GpuCachedBatchSerializer {
 
     val cbRdd: RDD[ColumnarBatch] = input.map {
       case parquetCB: ParquetCachedBatch if parquetCB.sizeInBytes == 0 =>
+        GpuSemaphore.acquireIfNecessary(TaskContext.get())
         // If the buffer is empty, we have cached a batch with no columns, we don't need to decode
         // it, instead just return a ColumnarBatch with only rows
         withResource(new GpuColumnarBatchBuilder(originalSelectedAttributes.toStructType,
@@ -500,6 +501,7 @@ protected class ParquetCachedBatchSerializer extends GpuCachedBatchSerializer {
           builder => builder.build(parquetCB.numRows)
         }
       case parquetCB: ParquetCachedBatch =>
+        GpuSemaphore.acquireIfNecessary(TaskContext.get())
         val parquetOptions = ParquetOptions.builder()
             .includeColumn(selectedAttributes.map(_.name).asJavaCollection).build()
         val table = try {

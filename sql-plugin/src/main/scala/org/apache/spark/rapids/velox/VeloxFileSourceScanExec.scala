@@ -74,7 +74,7 @@ case class VeloxFileSourceScanExec(originPlan: FileSourceScanExec
       "PartitionFilters" -> seqToString(originPlan.partitionFilters),
       "DataFilters" -> seqToString(originPlan.dataFilters),
       "Location" -> locationDesc,
-    ) ++ VeloxBackendApis.getNativeScanMetadata(nativePlan)
+    )
   }
 
   lazy val inputRDD: RDD[InternalRow] = {

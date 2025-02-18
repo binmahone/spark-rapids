@@ -60,9 +60,4 @@ object VeloxBackendApis {
     val pipeline = WholeStageTransformer(nativePlan, materializeInput = false)(1)
     pipeline.doExecuteColumnar()
   }
-
-  def getNativeScanMetadata(nativePlan: SparkPlan): Map[String, String] = nativePlan match {
-    case scan: FileSourceScanExecTransformer => scan.metadata
-    case _ => Map.empty
-  }
 }

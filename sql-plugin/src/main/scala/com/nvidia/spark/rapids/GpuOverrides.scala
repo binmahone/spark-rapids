@@ -32,6 +32,7 @@ import com.nvidia.spark.rapids.window.{GpuDenseRank, GpuLag, GpuLead, GpuPercent
 import org.apache.hadoop.fs.Path
 
 import org.apache.spark.internal.Logging
+import org.apache.spark.rapids.hybrid.HybridExecutionUtils
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate._
@@ -4306,7 +4307,7 @@ object GpuOverrides extends Logging {
       ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.STRUCT + TypeSig.MAP +
           TypeSig.ARRAY + TypeSig.DECIMAL_128 + TypeSig.BINARY +
           GpuTypeShims.additionalCommonOperatorSupportedTypes).nested(), TypeSig.all),
-      bd.VeloxGpuFilterExecMeta),
+      GpuFilterExecMeta),
     exec[ShuffleExchangeExec](
       "The backend for most data being exchanged between processes",
       ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128 + TypeSig.BINARY +
@@ -4805,6 +4806,7 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
       GpuOverrides.logDuration(conf.shouldExplain,
         t => f"Plan conversion to the GPU took $t%.2f ms") {
         var updatedPlan = updateForAdaptivePlan(plan, conf)
+        updatedPlan = HybridExecutionUtils.tryToApplyHybridScanRules(updatedPlan, conf)
         updatedPlan = SparkShimImpl.applyShimPlanRules(updatedPlan, conf)
         updatedPlan = applyOverrides(updatedPlan, conf)
         if (conf.logQueryTransformations) {
@@ -4817,6 +4819,7 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
     } else if (conf.isSqlEnabled && conf.isSqlExplainOnlyEnabled) {
       // this mode logs the explain output and returns the original CPU plan
       var updatedPlan = updateForAdaptivePlan(plan, conf)
+      updatedPlan = HybridExecutionUtils.tryToApplyHybridScanRules(updatedPlan, conf)
       updatedPlan = SparkShimImpl.applyShimPlanRules(updatedPlan, conf)
       GpuOverrides.explainCatalystSQLPlan(updatedPlan, conf)
       plan

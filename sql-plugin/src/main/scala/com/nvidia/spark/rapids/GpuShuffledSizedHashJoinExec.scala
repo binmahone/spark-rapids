@@ -1101,13 +1101,13 @@ sealed trait SpillableHostConcatResult extends AutoCloseable {
   def getNumRows: Long
   def getDataLen: Long
 
-  protected var buffer = {
+  protected var spillableBuffer = {
     SpillableHostBuffer(hmb, hmb.getLength, SpillPriorities.ACTIVE_BATCHING_PRIORITY)
   }
 
   override def close(): Unit = {
-    buffer.close()
-    buffer = null
+    spillableBuffer.close()
+    spillableBuffer = null
   }
 }
 
@@ -1116,7 +1116,7 @@ class CudfSpillableHostConcatResult(
     val hmb: HostMemoryBuffer) extends SpillableHostConcatResult {
 
   override def toBatch: ColumnarBatch = {
-    closeOnExcept(buffer.getHostBuffer()) { hostBuf =>
+    closeOnExcept(spillableBuffer.getHostBuffer()) { hostBuf =>
       SerializedTableColumn.from(header, hostBuf)
     }
   }
@@ -1131,14 +1131,17 @@ class KudoSpillableHostConcatResult(kudoTableHeader: KudoTableHeader,
 ) extends SpillableHostConcatResult  {
   require(kudoTableHeader != null, "KudoTableHeader cannot be null")
   require(hmb != null, "HostMemoryBuffer cannot be null")
+  val bufferLength: Long = hmb.getLength
 
-  override def toBatch: ColumnarBatch = closeOnExcept(buffer.getHostBuffer()) { hostBuf =>
+  override def toBatch: ColumnarBatch = closeOnExcept(spillableBuffer.getHostBuffer()) { hostBuf =>
     KudoSerializedTableColumn.from(new KudoTable(kudoTableHeader, hostBuf))
   }
 
   override def getNumRows: Long = kudoTableHeader.getNumRows
 
-  override def getDataLen: Long = hmb.getLength
+  // Should not reference hmb after its ownership is transferred to spillableBuffer,
+  // so we just cache the length at the time of construction
+  override def getDataLen: Long = bufferLength
 }
 
 object SpillableHostConcatResult {
@@ -1146,13 +1149,7 @@ object SpillableHostConcatResult {
     require(batch.numCols() == 1, "Batch must have exactly 1 column")
     batch.column(0) match {
       case col: KudoSerializedTableColumn => {
-        // This will be closed
-        val oldKudoTable = col.kudoTable
-        val buffer = col.kudoTable.getBuffer
-        if (buffer != null) {
-          buffer.incRefCount()
-        }
-        new KudoSpillableHostConcatResult(oldKudoTable.getHeader, buffer)
+        new KudoSpillableHostConcatResult(col.kudoTable.getHeader, col.kudoTable.getBuffer)
       }
       case col: SerializedTableColumn =>
         val buffer = col.hostBuffer

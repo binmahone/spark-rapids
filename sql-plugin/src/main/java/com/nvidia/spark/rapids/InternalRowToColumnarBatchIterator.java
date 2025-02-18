@@ -208,7 +208,7 @@ public abstract class InternalRowToColumnarBatchIterator implements Iterator<Col
     return RmmRapidsRetryIterator.withRetryNoSplit( () -> {
       // One SpillableHostBuffer is used for both data and offsets.  Slice it into the
       // two separate HostMemoryBuffers.
-      try (HostMemoryBuffer dataOffsetBuffer = spillableBuffer.getHostBuffer();
+      try (HostMemoryBuffer dataOffsetBuffer = spillableBuffer.getHostBuffer(false);
            HostMemoryBuffer dataBuffer = dataOffsetBuffer.slice(0, dataLength);
            HostMemoryBuffer offsetsBuffer = dataOffsetBuffer.slice(dataLength, offsetLength);
       ) {

@@ -25,12 +25,36 @@ import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
 import com.nvidia.spark.rapids.jni.{CpuRetryOOM, CpuSplitAndRetryOOM, GpuRetryOOM, GpuSplitAndRetryOOM, RmmSpark, RmmSparkThreadState}
-
+import com.nvidia.spark.rapids.spill.SpillFramework
 import org.apache.spark.TaskContext
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.internal.SQLConf
 
 object RmmRapidsRetryIterator extends Logging {
+  // use synchronized to avoid multiple threads to print the bookkeeping info at the same time
+  private def logMemoryBookkeeping(): Unit = synchronized {
+    logError(s"Memory Bookkeeping for thread ${Thread.currentThread().getName} " +
+      s"with thread id : ${Thread.currentThread().getId}")
+    logError(HostAlloc.getHostAllocBookkeepSummary())
+    logError(BaseDeviceMemoryBuffer.getDeviceMemoryBookkeepSummary)
+    val sb = new StringBuilder("<<Jstack Details>>\n\n")
+    // Get all threads currently running in the JVM
+    Thread.getAllStackTraces.forEach((thread: Thread, stackTrace: Array[StackTraceElement])
+    => {
+      if(!thread.getName.contains("celeborn")) {
+        // Print the thread name and its state
+        sb.append(s"Thread: ${thread.getName} - State: ${thread.getState} " +
+          s"- Thread ID: ${thread.getId}\n")
+        // Print the stack trace for this thread
+        for (element <- stackTrace) {
+          sb.append(s"\tat $element")
+        }
+        sb.append("\n\n")
+      }
+    })
+    logError(sb.toString())
+  }
 
   /**
    * withRetry for Iterator[T]. This helper calls a function `fn` as it takes
@@ -389,34 +413,20 @@ object RmmRapidsRetryIterator extends Logging {
 
     override def hasNext: Boolean = !wasCalledSuccessfully
 
+    var isInFakeSplit = false
 
-    // use synchronized to avoid multiple threads to print the bookkeeping info at the same time
-    private def logMemoryBookkeeping(): Unit = synchronized {
-      logError(s"Memory Bookkeeping for thread ${Thread.currentThread().getName} " +
-        s"with thread id : ${Thread.currentThread().getId}")
-      logError(HostAlloc.getHostAllocBookkeepSummary())
-      logError(BaseDeviceMemoryBuffer.getDeviceMemoryBookkeepSummary())
-      val sb = new StringBuilder("<<Jstack Details>>\n\n")
-      // Get all threads currently running in the JVM
-      Thread.getAllStackTraces.forEach((thread: Thread, stackTrace: Array[StackTraceElement])
-      => {
-        // Print the thread name and its state
-        sb.append(s"Thread: ${thread.getName} - State: ${thread.getState} " +
-          s"- Thread ID: ${thread.getId}\n")
-        // Print the stack trace for this thread
-        for (element <- stackTrace) {
-          sb.append(s"\tat $element")
-        }
-        sb.append("\n\n")
-      })
-      logError(sb.toString())
-    }
     override def split(isFromGpuOom: Boolean): Unit = {
-      logMemoryBookkeeping()
-      if (isFromGpuOom) {
-        throw new GpuSplitAndRetryOOM("GPU OutOfMemory: could not split inputs and retry")
+      if(isInFakeSplit) {
+        logMemoryBookkeeping()
+        //      val x = SpillFramework.stores.hostStore.spill(3000000000L)
+        //      logError(s"Spilled $x bytes after bookkeeping")
+        if (isFromGpuOom) {
+          throw new GpuSplitAndRetryOOM("GPU OutOfMemory: could not split inputs and retry")
+        } else {
+          throw new CpuSplitAndRetryOOM("CPU OutOfMemory: could not split inputs and retry")
+        }
       } else {
-        throw new CpuSplitAndRetryOOM("CPU OutOfMemory: could not split inputs and retry")
+        isInFakeSplit = true
       }
     }
 
@@ -428,6 +438,10 @@ object RmmRapidsRetryIterator extends Logging {
         RmmSpark.currentThreadEndRetryBlock()
       }
       wasCalledSuccessfully = true
+
+      if(isInFakeSplit) {
+        isInFakeSplit = false
+      }
       res
     }
 
@@ -480,17 +494,27 @@ object RmmRapidsRetryIterator extends Logging {
 
     override def hasNext: Boolean = input.hasNext || attemptStack.nonEmpty
 
+    var isInFakeSplit = false
+
     override def split(isFromGpuOom: Boolean): Unit = {
       // If `split` OOMs, we are already the last thread standing
       // there is likely not much we can do, and for now we don't handle
       // this OOM
       if (splitPolicy == null) {
-        val message = s"could not split inputs and retry. The current attempt: " +
-          s"{${attemptStack.head}}"
-        if (isFromGpuOom) {
-          throw new GpuSplitAndRetryOOM(s"GPU OutOfMemory: $message")
+        if(isInFakeSplit) {
+          val message = s"could not split inputs and retry. The current attempt: " +
+            s"{${attemptStack.head}}"
+          logMemoryBookkeeping()
+          val x = SpillFramework.stores.hostStore.spill(3000000000L)
+          logError(s"Spilled $x bytes after bookkeeping")
+          if (isFromGpuOom) {
+            throw new GpuSplitAndRetryOOM(s"GPU OutOfMemory: $message")
+          } else {
+            throw new CpuSplitAndRetryOOM(s"CPU OutOfMemory: $message")
+          }
         } else {
-          throw new CpuSplitAndRetryOOM(s"CPU OutOfMemory: $message")
+          isInFakeSplit = true
+          return
         }
       }
       val curAttempt = attemptStack.pop()
@@ -541,6 +565,10 @@ object RmmRapidsRetryIterator extends Logging {
       if (attemptStack.isEmpty && !input.hasNext) {
         // No need to call the onClose because the attemptStack is empty
         onClose.foreach(_.removeCallback())
+      }
+
+      if(isInFakeSplit) {
+        isInFakeSplit = false
       }
       res
     }
@@ -711,6 +739,7 @@ object RmmRapidsRetryIterator extends Logging {
                 throw lastException
               }
             }
+            logError("Retrying again due to exception:", lastException)
           // else another exception wrapped a retry. So we are going to try again
         }
       }

@@ -19,7 +19,10 @@ package com.nvidia.spark.rapids
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.LongAdder
 
+import scala.collection.mutable
+
 import ai.rapids.cudf.{DefaultHostMemoryAllocator, HostMemoryAllocator, HostMemoryBuffer, MemoryBuffer, PinnedMemoryPool}
+import com.nvidia.spark.rapids.HostAlloc.bookkeepHostMemoryFree
 import com.nvidia.spark.rapids.jni.{CpuRetryOOM, RmmSpark}
 import com.nvidia.spark.rapids.spill.SpillFramework
 
@@ -36,24 +39,6 @@ private class HostAlloc(nonPinnedLimit: Long) extends HostMemoryAllocator with L
   private val isUnlimited = nonPinnedLimit < 0
   private val isPinnedOnly = nonPinnedLimit == 0
 
-  private def bookkeepHostMemory(ptr: Long, amount: Long) = {
-    if (HostAlloc.BOOKEEP_MEMORY) {
-      val threadId = HostAlloc.addr2threadId.get(ptr)
-      if (threadId != null) {
-        val adder = HostAlloc.hostMemPerThread.get(threadId)
-        if (adder != null) {
-          adder.add(-amount)
-        } else {
-          logWarning(s"Could not find adder for thread $threadId from address $ptr, " +
-            s"bytes: $amount")
-        }
-        HostAlloc.addr2threadId.remove(ptr)
-      } else {
-        logWarning(s"Could not find thread id for address $ptr, bytes: $amount")
-      }
-    }
-  }
-
   /**
    * A callback class so we know when a non-pinned host buffer was released
    */
@@ -61,7 +46,7 @@ private class HostAlloc(nonPinnedLimit: Long) extends HostMemoryAllocator with L
     override def onClosed(refCount: Int): Unit = {
       if (refCount == 0) {
         releaseNonPinned(ptr, amount)
-        bookkeepHostMemory(ptr, amount)
+        bookkeepHostMemoryFree(ptr, amount)
       }
     }
   }
@@ -73,7 +58,7 @@ private class HostAlloc(nonPinnedLimit: Long) extends HostMemoryAllocator with L
     override def onClosed(refCount: Int): Unit = {
       if (refCount == 0) {
         releasePinned(ptr, amount)
-        bookkeepHostMemory(ptr, amount)
+        bookkeepHostMemoryFree(ptr, amount)
       }
     }
   }
@@ -199,6 +184,7 @@ private class HostAlloc(nonPinnedLimit: Long) extends HostMemoryAllocator with L
     var shouldRetryInternal = true
     val isRecursive = RmmSpark.preCpuAlloc(amount, blocking)
     var allocAttemptFinishedWithoutException = false
+    logError("Current thread want to allocate " + amount + " bytes, Prefer pinned: " + preferPinned)
     try {
       do {
         val firstPass = if (preferPinned) {
@@ -228,8 +214,7 @@ private class HostAlloc(nonPinnedLimit: Long) extends HostMemoryAllocator with L
         metrics.incHostBytesAllocated(amount)
         if (HostAlloc.BOOKEEP_MEMORY) {
           val threadId = Thread.currentThread().getId
-          HostAlloc.addr2threadId.put(ret.get.getAddress, threadId)
-          HostAlloc.bookkeepHostAlloc(threadId, amount)
+          HostAlloc.bookkeepHostMemoryAlloc(ret.get.getAddress, threadId, amount)
         }
         logTrace(getHostAllocMetricsLogStr(metrics))
         RmmSpark.postCpuAllocSuccess(ret.get.getAddress, amount, blocking, isRecursive)
@@ -260,7 +245,7 @@ private class HostAlloc(nonPinnedLimit: Long) extends HostMemoryAllocator with L
     checkSize(amount, preferPinned)
     var ret = Option.empty[HostMemoryBuffer]
     var count = 0
-    while (ret.isEmpty && count < 1000) {
+    while (ret.isEmpty && count < 10) {
       val (r, _) = tryAllocInternal(amount, preferPinned, blocking = true)
       ret = r
       count += 1
@@ -269,7 +254,7 @@ private class HostAlloc(nonPinnedLimit: Long) extends HostMemoryAllocator with L
       // This can happen if someone broke the rules and not all host memory is
       // spillable when doing an allocation, like if not all of the code has
       // been updated yet.
-      throw new CpuRetryOOM("Could not complete allocation after 1000 retries")
+      throw new CpuRetryOOM("Could not complete allocation after 10 retries")
     }
     ret.get
   }
@@ -284,7 +269,7 @@ private class HostAlloc(nonPinnedLimit: Long) extends HostMemoryAllocator with L
 /**
  * A new API for host memory allocation. This can be used to limit the amount of host memory.
  */
-object HostAlloc {
+object HostAlloc extends Logging {
   private var singleton: HostAlloc = new HostAlloc(-1)
 
   private def getSingleton: HostAlloc = synchronized {
@@ -398,20 +383,75 @@ object HostAlloc {
    */
   private val BOOKEEP_MEMORY: Boolean =
     java.lang.Boolean.getBoolean("ai.rapids.memory.bookkeep")
-  private val hostMemPerThread = new ConcurrentHashMap[Long, LongAdder]()
+  private val BOOKEEP_MEMORY_CALLSTACK: Boolean =
+    java.lang.Boolean.getBoolean("ai.rapids.memory.bookkeep.callstack")
+  trait PerThreadMemoryUsage {
+    def add(addr: Long, amount: Long, callstack: String): Unit
+    def remove(addr: Long, amount: Long): Unit
+  }
+  class SimplePerThreadMemoryUsage extends PerThreadMemoryUsage {
+    val totalMem: LongAdder = new LongAdder()
+    override def toString: String = s"${totalMem.sum()} bytes in total"
+    override def add(addr: Long, amount: Long, callstack: String): Unit = {
+      totalMem.add(amount)
+    }
+    override def remove(addr: Long, amount: Long): Unit = totalMem.add(-amount)
+  }
+  case class MemroyUsageDetail(addr: Long, amount: Long, callStack: String) {
+    override def toString: String = s"$amount bytes behind address $addr at $callStack"
+  }
+
+  class PerThreadMemoryUsageInDetails extends PerThreadMemoryUsage {
+    val details: mutable.Map[Long, MemroyUsageDetail] = mutable.Map()
+    override def toString: String =
+      s"Total ${details.values.map(_.amount).sum} bytes from below:\n" +
+      s"${details.values.mkString("\n")}"
+
+    override def add(addr: Long, amount: Long, callstack: String): Unit =
+      details.put(addr, MemroyUsageDetail(addr, amount, callstack))
+
+    override def remove(addr: Long, amount: Long): Unit =
+      details.remove(addr)
+  }
+  private val muPerThreads = new ConcurrentHashMap[Long, PerThreadMemoryUsage]()
   private val addr2threadId = new ConcurrentHashMap[Long, java.lang.Long]()
 
-  private def bookkeepHostAlloc(threadId: Long, amount: Long): Unit = {
-    val adder = hostMemPerThread.computeIfAbsent(threadId, _ => new LongAdder())
-    adder.add(amount)
+  private def bookkeepHostMemoryAlloc(addr: Long, threadId: Long, amount: Long): Unit = {
+    HostAlloc.addr2threadId.put(addr, threadId)
+    if (HostAlloc.BOOKEEP_MEMORY_CALLSTACK) {
+      val mu = muPerThreads.computeIfAbsent(threadId, _ => new PerThreadMemoryUsageInDetails)
+      val callstack = Thread.currentThread().getStackTrace.mkString(" at ")
+      mu.add(addr, amount, callstack)
+    } else {
+      val mu = muPerThreads.computeIfAbsent(threadId, _ => new SimplePerThreadMemoryUsage)
+      mu.add(addr, amount, null)
+    }
+  }
+
+  private def bookkeepHostMemoryFree(ptr: Long, amount: Long) = {
+    if (HostAlloc.BOOKEEP_MEMORY) {
+      val threadId = HostAlloc.addr2threadId.get(ptr)
+      if (threadId != null) {
+        val mu = HostAlloc.muPerThreads.get(threadId)
+        if (mu != null) {
+          mu.remove(ptr, amount)
+        } else {
+          logWarning(s"Could not find MemoryUsage for thread $threadId from address $ptr, " +
+            s"bytes: $amount")
+        }
+        HostAlloc.addr2threadId.remove(ptr)
+      } else {
+        logWarning(s"Could not find thread id for address $ptr, bytes: $amount")
+      }
+    }
   }
 
   def getHostAllocBookkeepSummary(): String = {
     if (BOOKEEP_MEMORY) {
       val sb = new StringBuilder
       sb.append("<<Host Memory Bookkeeping>>\n")
-      hostMemPerThread.forEach((threadId, adder) => {
-        sb.append(s"Thread with ID $threadId is accountable for ${adder.sum()} bytes\n")
+      muPerThreads.forEach((threadId, mu) => {
+        sb.append(s"Thread with ID $threadId memory usage: ${mu.toString}\n\n")
       })
       sb.toString()
     } else {

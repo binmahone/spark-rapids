@@ -474,8 +474,8 @@ class SpillableHostBuffer(handle: SpillableHostBufferHandle,
     handle.close()
   }
 
-  def getHostBuffer(): HostMemoryBuffer = {
-    handle.materialize()
+  def getHostBuffer(unspill: Boolean = false): HostMemoryBuffer = {
+    handle.materialize(unspill)
   }
 
   override def toString: String =

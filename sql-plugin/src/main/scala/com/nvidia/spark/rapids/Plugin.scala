@@ -796,14 +796,16 @@ object RapidsExecutorPlugin {
       System.err.println("<<Jstack Details>>")
       // Get all threads currently running in the JVM
       Thread.getAllStackTraces.forEach((thread: Thread, stackTrace: Array[StackTraceElement]) => {
-        // Print the thread name and its state
-        System.err.println("Thread: " + thread.getName + " - State: " + thread.getState +
-          " - ID: " + thread.getId)
-        // Print the stack trace for this thread
-        for (element <- stackTrace) {
-          System.err.println("\tat " + element)
+        if(!thread.getName.contains("celeborn")) {
+          // Print the thread name and its state
+          System.err.println("Thread: " + thread.getName + " - State: " + thread.getState +
+            " - ID: " + thread.getId)
+          // Print the stack trace for this thread
+          for (element <- stackTrace) {
+            System.err.println("\tat " + element)
+          }
+          System.err.println()
         }
-        System.err.println()
       })
     }
   })

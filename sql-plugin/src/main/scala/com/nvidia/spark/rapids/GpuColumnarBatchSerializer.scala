@@ -330,7 +330,7 @@ object SerializedTableColumn {
         case serializedTableColumn: SerializedTableColumn =>
           sum += Option(serializedTableColumn.hostBuffer).map(_.getLength).getOrElse(0L)
         case kudo: KudoSerializedTableColumn =>
-          sum += Option(kudo.kudoTable.getBuffer).map(_.getLength).getOrElse(0L)
+          sum += Option(kudo.kudoTable).map(_.getBufferLength).getOrElse(0L)
         case _ =>
           throw new IllegalStateException(s"Unexpected column type: ${cv.getClass}" )
       }
@@ -555,17 +555,18 @@ class KudoSerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric)
       nextHeader = None
       if (header.getNumColumns > 0) {
 
-        // this is not perfect, but it is the best we can do for now
-        // when retrying, current thread still hold many other host buffers
-        val ret = withRetryNoSplit[HostMemoryBuffer] (
+        // When allocation fails, will roll back to the beginning of this withRetryNoSplit,
+        // with previous batches saved in HostCoalesceIteratorBase.serializedTables.
+        // The previous batches should be able to be spilled by itself.
+        val buffer = withRetryNoSplit[HostMemoryBuffer] (
+          // This buffer will later be concatenated into another host buffer before being
+          // sent to the GPU, so no need to use pinned memory for these buffers.
           HostMemoryBuffer.allocate(header.getTotalDataLen, false)
         )
 
-        // This buffer will later be concatenated into another host buffer before being
-        // sent to the GPU, so no need to use pinned memory for these buffers.
-        closeOnExcept(ret) { hostBuffer =>
-          hostBuffer.copyFromStream(0, dIn, header.getTotalDataLen)
-          val kudoTable = new KudoTable(header, hostBuffer)
+        closeOnExcept(buffer) { _ =>
+          buffer.copyFromStream(0, dIn, header.getTotalDataLen)
+          val kudoTable = new KudoTable(header, buffer)
           KudoSerializedTableColumn.from(kudoTable)
         }
       } else {

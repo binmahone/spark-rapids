@@ -17,6 +17,9 @@
 package com.nvidia.spark.rapids.jni.kudo;
 
 import ai.rapids.cudf.HostMemoryBuffer;
+import com.nvidia.spark.rapids.SpillPriorities$;
+import com.nvidia.spark.rapids.SpillableHostBuffer;
+import com.nvidia.spark.rapids.SpillableHostBuffer$;
 import com.nvidia.spark.rapids.jni.Arms;
 
 import java.io.DataInputStream;
@@ -33,7 +36,9 @@ import static java.util.Objects.requireNonNull;
  */
 public class KudoTable implements AutoCloseable {
   private final KudoTableHeader header;
-  private final HostMemoryBuffer buffer;
+  private SpillableHostBuffer spillableHostBuffer;
+  private long bufferLength;
+  private String bufferStr;
 
   /**
    * Create a kudo table.
@@ -45,7 +50,11 @@ public class KudoTable implements AutoCloseable {
   public KudoTable(KudoTableHeader header, HostMemoryBuffer buffer) {
     requireNonNull(header, "Header must not be null");
     this.header = header;
-    this.buffer = buffer;
+    this.bufferLength = buffer.getLength();
+    this.bufferStr = buffer.toString();
+
+    this.spillableHostBuffer = SpillableHostBuffer$.MODULE$.apply(buffer, buffer.getLength(),
+        SpillPriorities$.MODULE$.ACTIVE_BATCHING_PRIORITY());
   }
 
   /**
@@ -65,37 +74,49 @@ public class KudoTable implements AutoCloseable {
         return new KudoTable(header, null);
       }
 
-      return Arms.closeIfException(HostMemoryBuffer.allocate(header.getTotalDataLen(), false), buffer -> {
-        try {
-          buffer.copyFromStream(0, din, header.getTotalDataLen());
-          return new KudoTable(header, buffer);
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-      });
+      return Arms.closeIfException(HostMemoryBuffer.allocate(header.getTotalDataLen(), false),
+          buffer -> {
+            try {
+              buffer.copyFromStream(0, din, header.getTotalDataLen());
+              return new KudoTable(header, buffer);
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          });
     });
+  }
+
+  public long getBufferLength() {
+    return bufferLength;
   }
 
   public KudoTableHeader getHeader() {
     return header;
   }
 
+  /**
+   * caller should close the buffer after use
+   */
   public HostMemoryBuffer getBuffer() {
-    return buffer;
+    return spillableHostBuffer.getHostBuffer(false);
+  }
+
+  public HostMemoryBuffer getBuffer(boolean unspill) {
+    return spillableHostBuffer.getHostBuffer(unspill);
   }
 
   @Override
   public String toString() {
     return "SerializedTable{" +
         "header=" + header +
-        ", buffer=" + buffer +
+        ", buffer=" + bufferStr +
         '}';
   }
 
   @Override
   public void close() throws Exception {
-    if (buffer != null) {
-      buffer.close();
+    if (spillableHostBuffer != null) {
+      spillableHostBuffer.close();
     }
   }
 }

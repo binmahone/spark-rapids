@@ -26,7 +26,10 @@ import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
+import static com.nvidia.spark.rapids.jni.Arms.withResource;
 import static com.nvidia.spark.rapids.jni.Preconditions.ensure;
 import static com.nvidia.spark.rapids.jni.kudo.ColumnOffsetInfo.INVALID_OFFSET;
 import static com.nvidia.spark.rapids.jni.kudo.KudoSerializer.getValidityLengthInBytes;
@@ -124,22 +127,27 @@ class KudoTableMerger extends MultiKudoTableVisitor<Void, Void, KudoHostMergeRes
       long offset = curColOffset.getValidity();
       long validityBufferSize = padFor64byteAlignment(getValidityLengthInBytes(getTotalRowCount()));
       try (HostMemoryBuffer validityBuffer = buffer.slice(offset, validityBufferSize)) {
-        int nullCountTotal = 0;
-        int startRow = 0;
+        final int[] nullCountTotal = new int[1];
+        final int[] startRow = new int[1];
         for (int tableIdx = 0; tableIdx < getTableSize(); tableIdx += 1) {
           SliceInfo sliceInfo = sliceInfoOf(tableIdx);
           long validityOffset = validifyBufferOffset(tableIdx);
           if (validityOffset != INVALID_OFFSET) {
-            nullCountTotal += copyValidityBuffer(validityBuffer, startRow,
-                memoryBufferOf(tableIdx), toIntExact(validityOffset),
-                sliceInfo);
+            withResource(
+                memoryBufferOf(tableIdx),
+                hostMemoryBuffer -> {
+                  nullCountTotal[0] += copyValidityBuffer(validityBuffer, startRow[0],
+                      hostMemoryBuffer, toIntExact(validityOffset),
+                      sliceInfo);
+                }
+            );
           } else {
-            appendAllValid(validityBuffer, startRow, sliceInfo.getRowCount());
+            appendAllValid(validityBuffer, startRow[0], sliceInfo.getRowCount());
           }
 
-          startRow += sliceInfo.getRowCount();
+          startRow[0] += sliceInfo.getRowCount();
         }
-        return nullCountTotal;
+        return nullCountTotal[0];
       }
     } else {
       return 0;

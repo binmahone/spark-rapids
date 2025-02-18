@@ -21,10 +21,14 @@ import ai.rapids.cudf.DeviceMemoryBuffer;
 import ai.rapids.cudf.HostMemoryBuffer;
 import ai.rapids.cudf.Schema;
 import ai.rapids.cudf.Table;
+import com.nvidia.spark.rapids.SpillPriorities$;
+import com.nvidia.spark.rapids.SpillableHostBuffer;
+import com.nvidia.spark.rapids.SpillableHostBuffer$;
 import com.nvidia.spark.rapids.jni.schema.Visitors;
 
 import java.util.List;
 
+import static com.nvidia.spark.rapids.jni.Arms.withResource;
 import static com.nvidia.spark.rapids.jni.Preconditions.ensure;
 import static java.util.Objects.requireNonNull;
 
@@ -34,7 +38,8 @@ import static java.util.Objects.requireNonNull;
 public class KudoHostMergeResult implements AutoCloseable {
   private final Schema schema;
   private final List<ColumnViewInfo> columnInfoList;
-  private HostMemoryBuffer hostBuf;
+  private SpillableHostBuffer spillableHostBuffer;
+  private final long bufferLength;
 
   KudoHostMergeResult(Schema schema, HostMemoryBuffer hostBuf, List<ColumnViewInfo> columnInfoList) {
     requireNonNull(schema, "schema is null");
@@ -44,13 +49,17 @@ public class KudoHostMergeResult implements AutoCloseable {
             ", flattened schema size: " + schema.getFlattenedColumnNames().length);
     this.schema = schema;
     this.columnInfoList = columnInfoList;
-    this.hostBuf = requireNonNull(hostBuf, "hostBuf is null");
+    this.bufferLength = hostBuf.getLength();
+    this.spillableHostBuffer = SpillableHostBuffer$.MODULE$.apply(hostBuf, hostBuf.getLength(),
+        SpillPriorities$.MODULE$.ACTIVE_BATCHING_PRIORITY());
   }
 
   @Override
   public void close() throws Exception {
-    hostBuf.close();
-    hostBuf = null;
+    if (spillableHostBuffer != null) {
+      spillableHostBuffer.close();
+      spillableHostBuffer = null;
+    }
   }
 
   /**
@@ -58,7 +67,7 @@ public class KudoHostMergeResult implements AutoCloseable {
    * @return the length of the data in the host buffer
    */
   public long getDataLength() {
-    return hostBuf.getLength();
+    return bufferLength;
   }
 
   /**
@@ -66,9 +75,11 @@ public class KudoHostMergeResult implements AutoCloseable {
    * @return the cudf table
    */
   public Table toTable() {
-    try (DeviceMemoryBuffer deviceMemBuf = DeviceMemoryBuffer.allocate(hostBuf.getLength())) {
-      if (hostBuf.getLength() > 0) {
-        deviceMemBuf.copyFromHostBufferAsync(hostBuf, Cuda.DEFAULT_STREAM);
+    try (DeviceMemoryBuffer deviceMemBuf = DeviceMemoryBuffer.allocate(bufferLength)) {
+      if (bufferLength > 0) {
+        withResource(spillableHostBuffer.getHostBuffer(false), hostBuf -> {
+          deviceMemBuf.copyFromHostBufferAsync(hostBuf, Cuda.DEFAULT_STREAM);
+        });
       }
 
       try (TableBuilder builder = new TableBuilder(columnInfoList, deviceMemBuf)) {
@@ -86,7 +97,7 @@ public class KudoHostMergeResult implements AutoCloseable {
   public String toString() {
     return "HostMergeResult{" +
         "columnOffsets=" + columnInfoList +
-        ", hostBuf length =" + hostBuf.getLength() +
+        ", hostBuf length =" + bufferLength +
         '}';
   }
 }

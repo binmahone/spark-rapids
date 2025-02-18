@@ -20,6 +20,7 @@ import java.io._
 import java.nio.ByteBuffer
 import java.nio.channels.{Channels, FileChannel, WritableByteChannel}
 import java.nio.file.StandardOpenOption
+
 import java.util
 import java.util.UUID
 import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
@@ -33,8 +34,8 @@ import com.nvidia.spark.rapids.RapidsPluginImplicits.AutoCloseableSeq
 import com.nvidia.spark.rapids.format.TableMeta
 import com.nvidia.spark.rapids.internal.HostByteBufferIterator
 import org.apache.commons.io.IOUtils
-
 import org.apache.spark.{SparkConf, SparkEnv, TaskContext}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.rapids.{GpuTaskMetrics, RapidsDiskBlockManager}
 import org.apache.spark.sql.rapids.execution.SerializedHostTableUtils
@@ -147,7 +148,7 @@ import org.apache.spark.storage.BlockId
 /**
  * Common interface for all handles in the spill framework.
  */
-trait StoreHandle extends AutoCloseable {
+trait StoreHandle extends AutoCloseable with Logging {
   /**
    * Approximate size of this handle, used in three scenarios:
    * - Used by callers when accumulating up to a batch size for size goals.
@@ -161,6 +162,14 @@ trait StoreHandle extends AutoCloseable {
    * This is used to resolve races between closing a handle and spilling.
    */
   private[spill] var closed: Boolean = false
+
+  def doTrackCalled(): Unit = {
+    //logError(s"doTrackCalled on $this")
+  }
+
+  def doRemoveCalled(): Unit = {
+    //logError(s"doRemoveCalled on $this")
+  }
 }
 
 trait SpillableHandle extends StoreHandle {
@@ -294,6 +303,8 @@ trait HostSpillableHandle[T <: AutoCloseable] extends SpillableHandle {
 }
 
 object SpillableHostBufferHandle extends Logging {
+
+//  val duplicateMap = new ConcurrentHashMap[(Long, Int), String]()
   def apply(hmb: HostMemoryBuffer): SpillableHostBufferHandle = {
     val handle = new SpillableHostBufferHandle(hmb.getLength, host = Some(hmb))
     SpillFramework.stores.hostStore.trackNoSpill(handle)
@@ -332,9 +343,15 @@ class SpillableHostBufferHandle private (
     val sizeInBytes: Long,
     private[spill] override var host: Option[HostMemoryBuffer] = None,
     private[spill] var disk: Option[DiskHandle] = None)
-  extends HostSpillableHandle[HostMemoryBuffer] {
+  extends HostSpillableHandle[HostMemoryBuffer] with Logging {
 
   override val approxSizeInBytes: Long = sizeInBytes
+
+
+  override def toString: String =
+    host.map(x => "HostMemoryBuffer@" + x.getAddress).getOrElse(super.toString)
+
+  private[spill] var breakSpill: Boolean = false
 
   private[spill] override def spillable: Boolean = synchronized {
     if (super.spillable) {
@@ -347,7 +364,7 @@ class SpillableHostBufferHandle private (
     }
   }
 
-  def materialize(): HostMemoryBuffer = {
+  def materialize(unspill: Boolean = false): HostMemoryBuffer = {
     var materialized: HostMemoryBuffer = null
     var diskHandle: DiskHandle = null
     synchronized {
@@ -361,6 +378,10 @@ class SpillableHostBufferHandle private (
       } else if (host.isDefined) {
         materialized = host.get
         materialized.incRefCount()
+
+        if (unspill && spilling) {
+          breakSpill = true
+        }
       } else {
         throw new IllegalStateException(
           "open handle has no underlying buffer")
@@ -371,61 +392,94 @@ class SpillableHostBufferHandle private (
         diskHandle.materializeToHostMemoryBuffer(hmb)
         hmb
       }
+      val hostStr = if (host.isDefined) host.get.getAddress else "un_defined"
+
+
+      logError(s"materialized host memory buffer ${materialized.getAddress} " +
+        s"for ${System.identityHashCode(this)} , disk defined: ${disk.isDefined}, " +
+        s"host defined: ${hostStr}, size: $sizeInBytes")
+
+//      if(duplicateMap.putIfAbsent(
+//        (materialized.getAddress, System.identityHashCode(this)), "") != null) {
+//        throw new Error(
+//          s"attempting to materialize an existing handle")
+//      }
     }
+
+    if (unspill) {
+      synchronized {
+        if (!closed && disk.isDefined) {
+          disk = None
+          host = Some(materialized)
+          materialized.incRefCount()
+          SpillFramework.stores.hostStore.trackNoSpill(this)
+          logError(s"unspilled host memory buffer ${materialized.getAddress} " +
+            s"for ${System.identityHashCode(this)}")
+        }
+      }
+    }
+
     materialized
   }
 
   override def spill(): Long = {
-    if (!spillable) {
-      0L
-    } else {
-      val thisThreadSpills = synchronized {
-        if (!closed && disk.isEmpty && host.isDefined && !spilling) {
-          spilling = true
-          // incRefCount here so that if close() is called
-          // while we are spilling, we will prevent the buffer being freed
-          host.get.incRefCount()
-          true
-        } else {
-          false
-        }
+    val thisThreadSpills = synchronized {
+      if (!spillable) {
+        return 0
       }
-      if (thisThreadSpills) {
-        withResource(host.get) { buf =>
-          withResource(DiskHandleStore.makeBuilder) { diskHandleBuilder =>
-            val outputChannel = diskHandleBuilder.getChannel
-            // the spill IO is non-blocking as it won't impact dev or host directly
-            // instead we "atomically" swap the buffers below once they are ready
-            GpuTaskMetrics.get.spillToDiskTime {
-              val iter = new HostByteBufferIterator(buf)
-              iter.foreach { bb =>
-                try {
-                  while (bb.hasRemaining) {
-                    outputChannel.write(bb)
-                  }
-                } finally {
-                  RapidsStorageUtils.dispose(bb)
+      if (!closed && disk.isEmpty && host.isDefined && !spilling) {
+        logError(s"spilling host memory buffer ${host.get.getAddress} for " +
+          s"${System.identityHashCode(this)}")
+        spilling = true
+        // incRefCount here so that if close() is called
+        // while we are spilling, we will prevent the buffer being freed
+        host.get.incRefCount()
+        true
+      } else {
+        false
+      }
+    }
+    if (thisThreadSpills) {
+      withResource(host.get) { buf =>
+        withResource(DiskHandleStore.makeBuilder) { diskHandleBuilder =>
+          val outputChannel = diskHandleBuilder.getChannel
+          // the spill IO is non-blocking as it won't impact dev or host directly
+          // instead we "atomically" swap the buffers below once they are ready
+          GpuTaskMetrics.get.spillToDiskTime {
+            val iter = new HostByteBufferIterator(buf)
+            iter.foreach { bb =>
+              try {
+                while (bb.hasRemaining) {
+                  outputChannel.write(bb)
                 }
+              } finally {
+                RapidsStorageUtils.dispose(bb)
               }
             }
-            var staging: Option[DiskHandle] = Some(diskHandleBuilder.build)
-            synchronized {
-              spilling = false
+          }
+          val staging: Option[DiskHandle] = Some(diskHandleBuilder.build)
+          synchronized {
+            spilling = false
+
+            if (!breakSpill) {
               if (closed) {
                 staging.foreach(_.close())
-                staging = None
                 doClose()
               } else {
                 disk = staging
               }
+              releaseHostResource()
+              sizeInBytes
+            } else {
+              staging.foreach(_.close())
+              breakSpill = true
+              0
             }
-            releaseHostResource()
           }
         }
-        sizeInBytes
-      } else {
-        0
       }
+    } else {
+      0
     }
   }
 
@@ -1137,10 +1191,12 @@ trait HandleStore[T <: StoreHandle] extends AutoCloseable with Logging {
   }
 
   protected def doTrack(handle: T): Boolean = {
+    handle.doTrackCalled()
     handles.put(handle, true) == null
   }
 
   protected def doRemove(handle: T): Boolean = {
+    handle.doRemoveCalled()
     handles.remove(handle) != null
   }
 
@@ -1214,6 +1270,8 @@ trait SpillableStore[T <: SpillableHandle]
         plan.add(handle)
       }
     }
+    logError(s"makeSpillPlan for $spillNeeded, handles: ${handles.size()}, " +
+      s"amountToSpill: $amountToSpill")
     plan
   }
 

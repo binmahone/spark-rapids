@@ -19,11 +19,14 @@ package com.nvidia.spark.rapids.jni.kudo;
 import ai.rapids.cudf.BufferType;
 import ai.rapids.cudf.Cuda;
 import ai.rapids.cudf.HostColumnVector;
+import ai.rapids.cudf.HostMemoryBuffer;
 import ai.rapids.cudf.JCudfSerialization;
 import ai.rapids.cudf.Schema;
 import ai.rapids.cudf.Table;
 import com.nvidia.spark.rapids.jni.Pair;
 import com.nvidia.spark.rapids.jni.schema.Visitors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
@@ -31,6 +34,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.LongConsumer;
@@ -161,6 +165,7 @@ public class KudoSerializer {
   private static final BufferType[] ALL_BUFFER_TYPES =
       new BufferType[] {BufferType.VALIDITY, BufferType.OFFSET,
           BufferType.DATA};
+  private static final Logger log = LoggerFactory.getLogger(KudoSerializer.class);
 
   static {
     Arrays.fill(PADDING, (byte) 0);
@@ -280,11 +285,30 @@ public class KudoSerializer {
   public Pair<KudoHostMergeResult, MergeMetrics> mergeOnHost(List<KudoTable> kudoTables) {
     MergeMetrics.Builder metricsBuilder = MergeMetrics.builder();
 
-    MergedInfoCalc mergedInfoCalc = withTime(() -> MergedInfoCalc.calc(schema, kudoTables),
-        metricsBuilder::calcHeaderTime);
-    KudoHostMergeResult result = withTime(() -> KudoTableMerger.merge(schema, mergedInfoCalc),
-        metricsBuilder::mergeIntoHostBufferTime);
-    return Pair.of(result, metricsBuilder.build());
+    ArrayList<HostMemoryBuffer> buffers = new ArrayList<>();
+    try {
+      // Take handle for each input kudo table memory buffer, so that when doing mering
+      // we're assured that the memory buffers are all in memory
+      for (KudoTable kudoTable : kudoTables) {
+        buffers.add(kudoTable.getBuffer(true));
+      }
+      for (int i = 0; i < buffers.size(); i++) {
+        int count = buffers.get(i).getRefCount();
+        log.error("Buffer ref count: " + count);
+      }
+
+
+      MergedInfoCalc mergedInfoCalc = withTime(() -> MergedInfoCalc.calc(schema, kudoTables),
+          metricsBuilder::calcHeaderTime);
+      KudoHostMergeResult result = withTime(() -> KudoTableMerger.merge(schema, mergedInfoCalc),
+          metricsBuilder::mergeIntoHostBufferTime);
+      return Pair.of(result, metricsBuilder.build());
+
+    } finally {
+      for (HostMemoryBuffer buffer : buffers) {
+        buffer.close();
+      }
+    }
 
   }
 

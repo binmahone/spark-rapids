@@ -26,6 +26,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Objects;
 
+import static com.nvidia.spark.rapids.jni.Arms.withResource;
 import static com.nvidia.spark.rapids.jni.Preconditions.ensure;
 import static com.nvidia.spark.rapids.jni.kudo.ColumnOffsetInfo.INVALID_OFFSET;
 import static com.nvidia.spark.rapids.jni.kudo.KudoSerializer.padForHostAlignment;
@@ -250,13 +251,18 @@ abstract class MultiKudoTableVisitor<T, P, R> implements SchemaVisitor<T, P, R> 
     return sliceInfoStack.get(tableIdx).getLast();
   }
 
+  /**
+   * caller should close the buffer after use
+   */
   protected HostMemoryBuffer memoryBufferOf(int tableIdx) {
     return tables.get(tableIdx).getBuffer();
   }
 
-  protected int offsetOf(int tableIdx, long rowIdx) {
-    long startOffset = currentOffsetOffsets[tableIdx];
-    return tables.get(tableIdx).getBuffer().getInt(startOffset + rowIdx * Integer.BYTES);
+  protected int offsetOf(final int tableIdx, final long rowIdx) {
+    final long startOffset = currentOffsetOffsets[tableIdx];
+    return withResource(tables.get(tableIdx).getBuffer(), buffer -> {
+      return buffer.getInt(startOffset + rowIdx * Integer.BYTES);
+    });
   }
 
   protected long validifyBufferOffset(int tableIdx) {
@@ -267,9 +273,15 @@ abstract class MultiKudoTableVisitor<T, P, R> implements SchemaVisitor<T, P, R> 
     }
   }
 
-  protected void copyDataBuffer(HostMemoryBuffer dst, long dstOffset, int tableIdx, int dataLen) {
-    long startOffset = currentDataOffset[tableIdx];
-    dst.copyFromHostBuffer(dstOffset, tables.get(tableIdx).getBuffer(), startOffset, dataLen);
+  protected void copyDataBuffer(
+      final HostMemoryBuffer dst,
+      final long dstOffset,
+      final int tableIdx,
+      final int dataLen) {
+    final long startOffset = currentDataOffset[tableIdx];
+    withResource(tables.get(tableIdx).getBuffer(), buffer -> {
+      dst.copyFromHostBuffer(dstOffset, buffer, startOffset, dataLen);
+    });
   }
 
   protected long getTotalStrDataLen() {

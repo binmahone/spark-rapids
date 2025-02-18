@@ -17,7 +17,6 @@
 package com.nvidia.spark.rapids
 
 import java.util
-
 import scala.reflect.ClassTag
 
 import ai.rapids.cudf.{JCudfSerialization, NvtxColor, NvtxRange}
@@ -28,8 +27,9 @@ import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
 import com.nvidia.spark.rapids.jni.kudo.{KudoHostMergeResult, KudoSerializer, KudoTable}
 import com.nvidia.spark.rapids.shims.ShimUnaryExecNode
-
 import org.apache.spark.TaskContext
+
+import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Attribute
@@ -143,12 +143,14 @@ object GpuShuffleCoalesceUtils {
   /** Get the buffer size of a serialized batch just returned by the Shuffle deserializer */
   def getSerializedBufferSize(cb: ColumnarBatch): Long = {
     assert(cb.numCols() == 1)
-    val hmb = cb.column(0) match {
-      case col: KudoSerializedTableColumn => col.kudoTable.getBuffer
-      case serCol: SerializedTableColumn => serCol.hostBuffer
+    cb.column(0) match {
+      case col: KudoSerializedTableColumn => col.kudoTable.getBufferLength
+      case serCol: SerializedTableColumn => {
+        val hmb = serCol.hostBuffer
+        if (hmb != null) hmb.getLength else 0L
+      }
       case o => throw new IllegalStateException(s"unsupported type: ${o.getClass}")
     }
-    if (hmb != null) hmb.getLength else 0L
   }
 }
 
@@ -278,7 +280,7 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
     iter: Iterator[ColumnarBatch],
     targetBatchByteSize: Long,
     metricsMap: Map[String, GpuMetric])
-  extends Iterator[CoalescedHostResult] with AutoCloseable {
+  extends Iterator[CoalescedHostResult] with AutoCloseable with Logging {
 
   private[this] val concatTimeMetric = metricsMap(GpuMetric.CONCAT_TIME)
   private[this] val inputBatchesMetric = metricsMap(GpuMetric.NUM_INPUT_BATCHES)

@@ -75,10 +75,12 @@ pipeline {
                         ]
                     )
 
-                    env.BUILD_URL = buildTest.absoluteUrl
+                    // show the truncated log of downstream job
+                    def truncatedLog = buildTest.getRawBuild().getLog(200).join('\n')
+                    echo "Truncated log from downstream job: \n${truncatedLog}\n"
                     if (buildTest.result != 'SUCCESS') {
-                        def testLink = "${buildTest.absoluteUrl}console"
-                        error "Check logs at downstream job: ${testLink}"
+                        def logLink = "${buildTest.absoluteUrl}console"
+                        error "Check full log at downstream job: \n${logLink}\n"
                     }
                 }
             }

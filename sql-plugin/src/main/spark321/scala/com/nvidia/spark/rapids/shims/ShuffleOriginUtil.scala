@@ -15,28 +15,18 @@
  */
 
 /*** spark-rapids-shim-json-lines
-{"spark": "320"}
-{"spark": "321cdh"}
-{"spark": "322"}
-{"spark": "323"}
-{"spark": "324"}
-{"spark": "330"}
-{"spark": "330cdh"}
-{"spark": "331"}
-{"spark": "332"}
-{"spark": "332cdh"}
-{"spark": "333"}
-{"spark": "334"}
+{"spark": "321"}
 spark-rapids-shim-json-lines ***/
 package com.nvidia.spark.rapids.shims
 
-// Note: Customized Spark change
-// Removed the shim 321, refer to the ShuffleOriginUtil in 321 directory
-import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, REBALANCE_PARTITIONS_BY_COL, REBALANCE_PARTITIONS_BY_NONE, REPARTITION_BY_COL, REPARTITION_BY_NUM, ShuffleOrigin}
+import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, REBALANCE_PARTITIONS_BY_COL,
+  REBALANCE_PARTITIONS_BY_NONE, REPARTITION_BY_COL, REPARTITION_FOR_BUCKET, REPARTITION_BY_NUM, ShuffleOrigin}
 
+// Note: Customized Spark change
+// REPARTITION_FOR_BUCKET is for Customized Spark.
 object ShuffleOriginUtil {
   private val knownOrigins: Set[ShuffleOrigin] = Set(ENSURE_REQUIREMENTS,
-    REPARTITION_BY_COL, REPARTITION_BY_NUM, REBALANCE_PARTITIONS_BY_NONE,
+    REPARTITION_BY_COL, REPARTITION_FOR_BUCKET, REPARTITION_BY_NUM, REBALANCE_PARTITIONS_BY_NONE,
     REBALANCE_PARTITIONS_BY_COL)
 
   def isSupported(origin: ShuffleOrigin): Boolean = knownOrigins.contains(origin)

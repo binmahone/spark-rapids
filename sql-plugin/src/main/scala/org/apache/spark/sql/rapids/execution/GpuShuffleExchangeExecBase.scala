@@ -83,12 +83,9 @@ abstract class GpuShuffleMetaBase(
     childPlans.head.availableRuntimeDataTransition
 
   override def tagPlanForGpu(): Unit = {
-    // Remove the check of shuffleOrigin to adapt ByteDance-specific origin:
-    //   `REPARTITION_FOR_BUCKET`
-    //
-    // if (!ShuffleOriginUtil.isSupported(shuffle.shuffleOrigin)) {
-    //   willNotWorkOnGpu(s"${shuffle.shuffleOrigin} not supported on GPU")
-    // }
+    if (!ShuffleOriginUtil.isSupported(shuffle.shuffleOrigin)) {
+      willNotWorkOnGpu(s"${shuffle.shuffleOrigin} not supported on GPU")
+    }
 
     shuffle.outputPartitioning match {
       case _: RoundRobinPartitioning

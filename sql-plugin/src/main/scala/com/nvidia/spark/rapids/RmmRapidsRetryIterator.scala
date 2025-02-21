@@ -26,18 +26,18 @@ import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
 import com.nvidia.spark.rapids.jni.{CpuRetryOOM, CpuSplitAndRetryOOM, GpuRetryOOM, GpuSplitAndRetryOOM, RmmSpark, RmmSparkThreadState}
 import com.nvidia.spark.rapids.spill.SpillFramework
-import org.apache.spark.TaskContext
 
+import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.internal.SQLConf
 
 object RmmRapidsRetryIterator extends Logging {
   // use synchronized to avoid multiple threads to print the bookkeeping info at the same time
   private def logMemoryBookkeeping(): Unit = synchronized {
-    logError(s"Memory Bookkeeping for thread ${Thread.currentThread().getName} " +
+    logInfo(s"Memory Bookkeeping for thread ${Thread.currentThread().getName} " +
       s"with thread id : ${Thread.currentThread().getId}")
-    logError(HostAlloc.getHostAllocBookkeepSummary())
-    logError(BaseDeviceMemoryBuffer.getDeviceMemoryBookkeepSummary)
+    logInfo(HostAlloc.getHostAllocBookkeepSummary())
+    logInfo(BaseDeviceMemoryBuffer.getDeviceMemoryBookkeepSummary)
     val sb = new StringBuilder("<<Jstack Details>>\n\n")
     // Get all threads currently running in the JVM
     Thread.getAllStackTraces.forEach((thread: Thread, stackTrace: Array[StackTraceElement])

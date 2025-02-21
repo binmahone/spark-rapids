@@ -472,7 +472,7 @@ class SpillableHostBufferHandle private (
               sizeInBytes
             } else {
               staging.foreach(_.close())
-              breakSpill = true
+              breakSpill = false
               0
             }
           }

@@ -245,6 +245,7 @@ private class HostAlloc(nonPinnedLimit: Long) extends HostMemoryAllocator with L
     checkSize(amount, preferPinned)
     var ret = Option.empty[HostMemoryBuffer]
     var count = 0
+    // TODO
     while (ret.isEmpty && count < 10) {
       val (r, _) = tryAllocInternal(amount, preferPinned, blocking = true)
       ret = r

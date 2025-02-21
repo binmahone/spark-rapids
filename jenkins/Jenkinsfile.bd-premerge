@@ -56,7 +56,7 @@ pipeline {
                             ),
                             string(name: 'JNI_JAR_URL', value: "${artURL}/com/nvidia/" +
                                 "spark-rapids-jni/25.04.0-SNAPSHOT/" +
-                                "spark-rapids-jni-25.04.0-20250212.144238-16-cuda11.jar"
+                                "spark-rapids-jni-25.04.0-20250220.151037-24-cuda11.jar"
                             ),
                             string(name: 'BACKENDS_VELOX_JAR_URL', value: "${artURL}/io/glutenproject/" +
                                 "backends-velox-bd-gluten-nightly/1.2.1-SNAPSHOT/" +

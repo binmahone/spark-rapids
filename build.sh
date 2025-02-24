@@ -25,4 +25,4 @@ mkdir output
 
 export MAVEN_OPTS="-Xmx6000m"
 mvn clean install -Drat.skip=true -Dmaven.javadoc.skip=true -Dskip -Dmaven.scalastyle.skip=true -DskipTests -Dbuildver=321 ${MVN_OPT}
-mv dist/target/rapids-4-spark_2.12-*.jar ./output/
+mv dist/target/rapids-4-spark_2.12-*.jar ./output/rapids-4-spark_2.12.jar

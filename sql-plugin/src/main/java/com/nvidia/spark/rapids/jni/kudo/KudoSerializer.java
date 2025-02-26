@@ -292,11 +292,6 @@ public class KudoSerializer {
       for (KudoTable kudoTable : kudoTables) {
         buffers.add(kudoTable.getBuffer(true));
       }
-      for (int i = 0; i < buffers.size(); i++) {
-        int count = buffers.get(i).getRefCount();
-        log.error("Buffer ref count: " + count);
-      }
-
 
       MergedInfoCalc mergedInfoCalc = withTime(() -> MergedInfoCalc.calc(schema, kudoTables),
           metricsBuilder::calcHeaderTime);

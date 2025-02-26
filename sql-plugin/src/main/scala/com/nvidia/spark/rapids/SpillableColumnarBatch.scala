@@ -474,6 +474,14 @@ class SpillableHostBuffer(handle: SpillableHostBufferHandle,
     handle.close()
   }
 
+  /**
+   * Get the buffer in host, this may incur reading from disk if the buffer was spilled before.
+   *
+   * @param unspill if set to true, an unspill step will be added after reading
+   *                from disk (if applies), so that the buffer is guaranteed to be
+   *                in host memory before the returned HostMemoryBuffer is closed.
+   * @return
+   */
   def getHostBuffer(unspill: Boolean = false): HostMemoryBuffer = {
     handle.materialize(unspill)
   }

@@ -95,12 +95,15 @@ public class KudoTable implements AutoCloseable {
   }
 
   /**
-   * caller should close the buffer after use
+   * Caller should close the buffer after use
    */
   public HostMemoryBuffer getBuffer() {
     return spillableHostBuffer.getHostBuffer(false);
   }
 
+  /**
+   * Caller should close the buffer after use
+   */
   public HostMemoryBuffer getBuffer(boolean unspill) {
     return spillableHostBuffer.getHostBuffer(unspill);
   }

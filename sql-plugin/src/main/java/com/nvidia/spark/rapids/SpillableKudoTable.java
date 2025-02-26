@@ -33,7 +33,9 @@ public class SpillableKudoTable extends KudoTable {
   // guarantee that it is spillable
   public void guaranteeSpillable() {
     if (buffer != null) {
-      // NOT GOOD: it's dangerous to close this buffer without knowing if it's being used elsewhere
+      // NOT GOOD: it's dangerous to close this buffer without knowing if it's being used elsewhere.
+      // Remember, the caller of SpillableKudoTable.getBuffer() did not inc the ref count, so it's
+      // really going to be closed!
       buffer.close();
       buffer = null;
     }

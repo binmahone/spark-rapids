@@ -25,6 +25,11 @@ mkdir output
 
 export MAVEN_OPTS="-Xmx6000m"
 
+MV_JAR=${MV_JAR:-'true'}
+
 # CUSTOM_SETTINGS should be "-s settings.xml" in bytedance scm
 mvn clean install -Drat.skip=true -Dmaven.javadoc.skip=true -Dskip -Dmaven.scalastyle.skip=true -DskipTests -Dbuildver=321 ${MVN_OPT} ${CUSTOM_SETTINGS}
-mv dist/target/rapids-4-spark_2.12-*.jar ./output/rapids-4-spark_2.12.jar
+
+if [[ "$MV_JAR" == 'true' ]]; then
+    mv dist/target/rapids-4-spark_2.12-*.jar ./output/rapids-4-spark_2.12.jar
+fi

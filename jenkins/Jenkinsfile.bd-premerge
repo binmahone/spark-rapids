@@ -21,14 +21,12 @@
 @Library('blossom-lib') _
 
 
-def artURL = "${common.urmURL}/artifactory/sw-spark-maven/"
-
 pipeline {
     agent {
         kubernetes {
             label "${BUILD_TAG}"
             cloud "${common.CLOUD_NAME}"
-            yaml pod.getCPUYAML('alpine')
+            yaml pod.getCPUYAML("${common.ARTIFACTORY_NAME}/sw-spark-docker/spark:rapids-databricks")
         }
     }
 
@@ -38,49 +36,61 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '50'))
     }
 
+    environment {
+        ART_URL = "${common.urmURL}/artifactory/sw-spark-maven"
+    }
+
     stages {
         stage('Trigger test-build') {
             steps {
                 script {
-                    def buildTest = build(job: 'spark-rapids-customer-test-build',
-                        propagate: false, wait: true,
-                        parameters: [
-                            string(name: 'RAPIDS_VELOX_REF', value:
-                                "refs/pull/${ghprbPullId}/merge"
-                            ),
-                            string(name: 'RAPIDS_VELOX_REPO_URL', value:
-                                'https://github.com/HighPerfDataAccelerator/spark-rapids.git'
-                            ),
-                            string(name: 'BD_SPARK_RAPIDS_BUILD_IMAGE', value:
-                                "${common.ARTIFACTORY_NAME}/sw-spark-docker/bd-rapids:1114"
-                            ),
-                            string(name: 'JNI_JAR_URL', value: "${artURL}/com/nvidia/" +
-                                "spark-rapids-jni/25.04.0-SNAPSHOT/" +
-                                "spark-rapids-jni-25.04.0-20250225.150310-28-cuda11.jar"
-                            ),
-                            string(name: 'BACKENDS_VELOX_JAR_URL', value: "${artURL}/io/glutenproject/" +
-                                "backends-velox-bd-gluten-nightly/1.2.1-SNAPSHOT/" +
-                                "backends-velox-bd-gluten-nightly-1.2.1-SNAPSHOT.jar"
-                            ),
-                            string(name: 'SPARK_SQL_COLUMNAR_SHIMS_SPARK32_JAR_URL', value: "${artURL}/io/glutenproject/" +
-                                "spark-sql-columnar-shims-spark32-bd-gluten-nightly/1.2.1-SNAPSHOT/" +
-                                "spark-sql-columnar-shims-spark32-bd-gluten-nightly-1.2.1-SNAPSHOT.jar"
-                            ),
-                            string(name: 'PHASE_TYPE', value: '321'),
-                            booleanParam(name: 'IS_BD_GLUTEN', value: true),
-                            booleanParam(name: 'BUILD_WITH_GLUTEN_VELOX', value: true),
-                            booleanParam(name: 'SKIP_TEST', value: true),
-                            booleanParam(name: 'SKIP_DEPLOY', value: true),
-                            string(name: 'SUFFIX', value: "-${BUILD_TAG}"),
-                        ]
-                    )
+                    container('cpu') {
+                        env.SPARK_RAPIDS_JNI_URL = sh(returnStdout: true,
+                            script: '''#!/bin/bash
+                                    . jenkins/ci-env.sh >& /dev/null
+                                    echo $SPARK_RAPIDS_JNI_URL
+                                    ''').trim()
 
-                    // show the truncated log of downstream job
-                    def truncatedLog = buildTest.getRawBuild().getLog(200).join('\n')
-                    echo "Truncated log from downstream job: \n${truncatedLog}\n"
-                    if (buildTest.result != 'SUCCESS') {
-                        def logLink = "${buildTest.absoluteUrl}console"
-                        error "Check full log at downstream job: \n${logLink}\n"
+                        echo "SPARK_RAPIDS_JNI_URL: ${env.SPARK_RAPIDS_JNI_URL}"
+
+                        def buildTest = build(job: 'spark-rapids-customer-test-build',
+                            propagate: false, wait: true,
+                            parameters: [
+                                string(name: 'RAPIDS_VELOX_REF', value:
+                                    "refs/pull/${ghprbPullId}/merge"
+                                ),
+                                string(name: 'RAPIDS_VELOX_REPO_URL', value:
+                                    'https://github.com/HighPerfDataAccelerator/spark-rapids.git'
+                                ),
+                                string(name: 'BD_SPARK_RAPIDS_BUILD_IMAGE', value:
+                                    "${common.ARTIFACTORY_NAME}/sw-spark-docker/bd-rapids:1114"
+                                ),
+                                string(name: 'JNI_JAR_URL', value: "${env.SPARK_RAPIDS_JNI_URL}"
+                                ),
+                                string(name: 'BACKENDS_VELOX_JAR_URL', value: "${env.ART_URL}/io/glutenproject/" +
+                                    "backends-velox-bd-gluten-nightly/1.2.1-SNAPSHOT/" +
+                                    "backends-velox-bd-gluten-nightly-1.2.1-SNAPSHOT.jar"
+                                ),
+                                string(name: 'SPARK_SQL_COLUMNAR_SHIMS_SPARK32_JAR_URL', value: "${env.ART_URL}/io/glutenproject/" +
+                                    "spark-sql-columnar-shims-spark32-bd-gluten-nightly/1.2.1-SNAPSHOT/" +
+                                    "spark-sql-columnar-shims-spark32-bd-gluten-nightly-1.2.1-SNAPSHOT.jar"
+                                ),
+                                string(name: 'PHASE_TYPE', value: '321'),
+                                booleanParam(name: 'IS_BD_GLUTEN', value: true),
+                                booleanParam(name: 'BUILD_WITH_GLUTEN_VELOX', value: true),
+                                booleanParam(name: 'SKIP_TEST', value: true),
+                                booleanParam(name: 'SKIP_DEPLOY', value: true),
+                                string(name: 'SUFFIX', value: "-${BUILD_TAG}"),
+                            ]
+                        )
+
+                        // show the truncated log of downstream job
+                        def truncatedLog = buildTest.getRawBuild().getLog(200).join('\n')
+                        echo "Truncated log from downstream job: \n${truncatedLog}\n"
+                        if (buildTest.result != 'SUCCESS') {
+                            def logLink = "${buildTest.absoluteUrl}console"
+                            error "Check full log at downstream job: \n${logLink}\n"
+                        }
                     }
                 }
             }

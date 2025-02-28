@@ -2403,6 +2403,16 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
     .booleanConf
     .createWithDefault(false)
 
+  val ENABLE_HASH_MODE_FOR_PARTITIONING =
+    conf("spark.rapids.sql.partitioning.hashMode.enabled")
+      .doc("When false, Only Murmur3Hash will be used for GPU hash partitioning. " +
+        "When enabled, GPU will try to infer the hash algorithm used by CPU hash " +
+        "partitioning and try to use the same one as CPU. So far only HiveHash and " +
+        "Murmur3Hash are supported on GPU.")
+      .internal()
+      .booleanConf
+      .createWithDefault(true)
+
   val TAG_LORE_ID_ENABLED = conf("spark.rapids.sql.lore.tag.enabled")
     .doc("Enable add a LORE id to each gpu plan node")
     .internal()
@@ -2469,6 +2479,14 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
       .internal()
       .bytesConf(ByteUnit.BYTE)
       .createWithDefault(2L * 1024 * 1024 * 1024)
+  val HASH_MODE = conf("spark.rapids.sql.hashMode")
+    .doc("When INSERT OVERWRITE a hive bucketed table, we can avoid some unnecessary shuffle " +
+      "operation by specifying hashMode as hive. For example, in the case of GroupBy + Insert " +
+      "on the same bucket keys, it only shuffles once. Supported modes: [murmur3, hive].")
+    .stringConf
+    .transform(_.toUpperCase(java.util.Locale.ROOT))
+    .checkValues(HashMode.values.map(_.toString))
+    .createWithDefault(HashMode.HIVE.toString)
 
   private def printSectionHeader(category: String): Unit =
     println(s"\n### $category")
@@ -3310,6 +3328,8 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val isDeltaLowShuffleMergeEnabled: Boolean = get(ENABLE_DELTA_LOW_SHUFFLE_MERGE)
 
+  lazy val isHashModePartitioningEnabled: Boolean = get(ENABLE_HASH_MODE_FOR_PARTITIONING)
+
   lazy val isTagLoreIdEnabled: Boolean = get(TAG_LORE_ID_ENABLED)
 
   lazy val loreDumpIds: Map[LoreId, OutputLoreId] = get(LORE_DUMP_IDS)
@@ -3321,6 +3341,7 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val caseWhenFuseEnabled: Boolean = get(CASE_WHEN_FUSE)
 
   lazy val isAsyncOutputWriteEnabled: Boolean = get(ENABLE_ASYNC_OUTPUT_WRITE)
+  lazy val hashMode: HashMode.Value = HashMode.withName(get(HASH_MODE))
 
   private val optimizerDefaults = Map(
     // this is not accurate because CPU projections do have a cost due to appending values

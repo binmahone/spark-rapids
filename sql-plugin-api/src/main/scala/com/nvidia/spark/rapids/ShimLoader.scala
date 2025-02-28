@@ -308,6 +308,8 @@ object ShimLoader {
     // hack for databricks, try to find something more reliable?
     if (SPARK_BUILD_USER.equals("Databricks")) {
       SPARK_VERSION + "-databricks"
+    } else if (SPARK_VERSION.endsWith("-bd1-SNAPSHOT")) {
+      SPARK_VERSION.substring(0, SPARK_VERSION.indexOf("-bd1-SNAPSHOT"))
     } else {
       SPARK_VERSION
     }

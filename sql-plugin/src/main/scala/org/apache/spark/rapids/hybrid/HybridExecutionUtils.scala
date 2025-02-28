@@ -28,7 +28,7 @@ import org.apache.spark.sql.types._
 
 object HybridExecutionUtils extends PredicateHelper {
   
-  private val HYBRID_JAR_PLUGIN_CLASS_NAME = "com.nvidia.spark.rapids.hybrid.HybridPluginWrapper"
+  private val HYBRID_JAR_PLUGIN_CLASS_NAME = "com.nvidia.spark.rapids.velox.PluginWrapper"
 
   /**
    * Check if the Hybrid jar is in the classpath,
@@ -358,10 +358,16 @@ object HybridExecutionUtils extends PredicateHelper {
           case (fsse: FileSourceScanExec, "CPU") => {
             val (supportedConditions, notSupportedConditions) = filters.partition(
                 isExprSupportedByHybridScan(_, conf.hybridExprsWhitelist))
-            val updatedFsseChild = fsse.copy(dataFilters = supportedConditions)
+            // TODO: This is the Hotfix over the outputAttr mismatch when AQE is on. Replace it.
             notSupportedConditions match {
-              case Nil => updatedFsseChild
-              case _ => FilterExec(notSupportedConditions.reduceLeft(And), updatedFsseChild)
+              case Nil =>
+                fsse.copy(
+                  dataFilters = supportedConditions,
+                  output = filter.output)
+              case _ =>
+                FilterExec(
+                  notSupportedConditions.reduceLeft(And),
+                  fsse.copy(dataFilters = supportedConditions))
             }
           }
           case _ => filter

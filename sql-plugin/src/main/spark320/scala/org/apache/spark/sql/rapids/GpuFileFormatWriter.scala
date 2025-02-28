@@ -276,7 +276,8 @@ object GpuFileFormatWriter extends Logging {
       logInfo(s"Finished processing stats for write job ${description.uuid}.")
 
       // return a set of all the partition paths that were updated during this job
-      ret.map(_.summary.updatedPartitions).reduceOption(_ ++ _).getOrElse(Set.empty)
+      ret.map(_.summary.updatedPartitionsWithRowNum.map(_._1).toSet)
+        .reduceOption(_ ++ _).getOrElse(Set.empty)
     } catch { case cause: Throwable =>
       logError(s"Aborting job ${description.uuid}.", cause)
       committer.abortJob(job)

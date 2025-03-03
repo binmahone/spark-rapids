@@ -18,7 +18,7 @@ package com.nvidia.spark.rapids.velox
 
 import scala.collection.mutable
 
-import ai.rapids.cudf.{DType, HostColumnVector, HostColumnVectorCore, HostMemoryBuffer, PinnedMemoryPool}
+import ai.rapids.cudf.{DType, HostColumnVector, HostColumnVectorCore, HostMemoryBuffer}
 import ai.rapids.cudf.DType.DTypeEnum
 import io.glutenproject.columnarbatch.IndicatorVector
 import io.glutenproject.rapids.GlutenJniWrapper
@@ -32,6 +32,12 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
 case class RapidsHostColumn(vector: HostColumnVector, usePinnedMemory: Boolean, totalBytes: Long)
 
 private[velox] case class HostBufferInfo(buffer: HostMemoryBuffer, isPinned: Boolean)
+  extends AutoCloseable {
+
+  override def close(): Unit = if (buffer != null) {
+    buffer.close()
+  }
+}
 
 /**
  * The helper class represents the pre-allocated HostColumnVector, which contains all logical
@@ -135,7 +141,8 @@ class CoalesceBatchConverter(runtime: GlutenJniWrapper,
                              nativeHandle: Long,
                              schema: StructType,
                              targetBatchSize: Long,
-                             metrics: Map[String, SQLMetric]) extends Logging {
+                             metrics: Map[String, SQLMetric],
+                             allocator: HostMemoryAllocator[HostBufferInfo]) extends Logging {
 
   private val columnBuilders = mutable.ArrayBuffer[VectorBuilder]()
 
@@ -340,13 +347,7 @@ class CoalesceBatchConverter(runtime: GlutenJniWrapper,
     val (tmpRootBuilder, totalBytes) = impl(0, rootInfo)
 
     // Allocates the united RootBuffer shared by all logical buffers.
-    // Firstly try allocate from PinnedMemoryPool. Fallback to PageableMemory if failed.
-    val bufferInfo = PinnedMemoryPool.tryAllocate(totalBytes) match {
-      case buf if buf == null =>
-        HostBufferInfo(HostMemoryBuffer.allocate(totalBytes, false), isPinned = false)
-      case buf =>
-        HostBufferInfo(buf, isPinned = true)
-    }
+    val bufferInfo = allocator.allocate(totalBytes)
 
     // Rebasing memory offsets for all (children) vectors with the memory address of shared buffer
     TargetVectorsMsg.localOffsetsToMemoryAddress(
@@ -373,6 +374,14 @@ object CoalesceBatchConverter extends Logging {
             targetBatchSize: Long,
             schema: StructType,
             metrics: Map[String, SQLMetric]): CoalesceBatchConverter = {
+    apply(firstBatch, targetBatchSize, schema, metrics, new DefaultHostMemoryAllocator())
+  }
+
+  def apply(firstBatch: ColumnarBatch,
+            targetBatchSize: Long,
+            schema: StructType,
+            metrics: Map[String, SQLMetric],
+            allocator: HostMemoryAllocator[HostBufferInfo]): CoalesceBatchConverter = {
     // Serialize Nullable Info of each field to create the backend part of converter. Nullable
     // Info is PlanTime metadata which cannot be accessed directly in the backend.
     val nullableInfo = CoalesceBatchConverter.encodeNullableInfo(schema)
@@ -384,7 +393,7 @@ object CoalesceBatchConverter extends Logging {
       throw new AssertionError("VeloxBackendApis has NOT been initialized"))
     val handle = runtime.buildCoalesceConverter(firstHandle, nullableInfo)
 
-    new CoalesceBatchConverter(runtime, handle, schema, targetBatchSize, metrics)
+    new CoalesceBatchConverter(runtime, handle, schema, targetBatchSize, metrics, allocator)
   }
 
   private def getNativeBatchHandle(cb: ColumnarBatch): Long = {

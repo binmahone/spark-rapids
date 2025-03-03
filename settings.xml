@@ -99,6 +99,14 @@
           <url>https://maven.byted.org/repository/public</url>
         </pluginRepository>
       </pluginRepositories>
+      <properties>
+        <altSnapshotDeploymentRepository>
+          bytedance-snapshots::default::file:${user.home}/.source/
+        </altSnapshotDeploymentRepository>
+        <altReleaseDeploymentRepository>
+          bytedance-releases::default::file:${user.home}/.source/
+        </altReleaseDeploymentRepository>
+      </properties>
     </profile>
   </profiles>
 

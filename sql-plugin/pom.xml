@@ -92,6 +92,11 @@
             <version>${spark-rapids-hybrid.version}</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>com.nvidia</groupId>
+            <artifactId>rapids-4-spark-velox_2.12</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
     <!-- #if scala-2.13 --><!--
     <profiles>

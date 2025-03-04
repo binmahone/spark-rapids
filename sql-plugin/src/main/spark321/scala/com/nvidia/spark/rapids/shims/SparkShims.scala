@@ -20,9 +20,28 @@
 spark-rapids-shim-json-lines ***/
 package com.nvidia.spark.rapids.shims
 
+import scala.collection.mutable
+
+import org.apache.spark.sql.util.{SQLOptTraceReporter, TraceEvent}
+
 object SparkShimImpl extends Spark321PlusShims
     with Spark320PlusNonDBShims
     with Spark31Xuntil33XShims
     with AnsiCastRuleShims {
+
+  val bdEventSet: mutable.Set[String] = mutable.Set.empty
+
   override def reproduceEmptyStringBug: Boolean = true
+
+  override def postFallbackMetrics(operationName: String, message: String): Unit = {
+    if (message.contains("cannot run on GPU") && !bdEventSet.contains(operationName)) {
+      bdEventSet.add(operationName)
+      Map (
+        "type" -> "RapidsFallback",
+        "operation" -> operationName,
+        "message" -> message
+      )
+      SQLOptTraceReporter.postImmediately(TraceEvent(Map.empty))
+    }
+  }
 }

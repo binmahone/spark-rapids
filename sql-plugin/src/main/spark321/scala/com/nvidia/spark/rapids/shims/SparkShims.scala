@@ -33,15 +33,20 @@ object SparkShimImpl extends Spark321PlusShims
 
   override def reproduceEmptyStringBug: Boolean = true
 
-  override def postFallbackMetrics(operationName: String, message: String): Unit = {
+  override def postFallbackMetrics(
+      operationName: String,
+      className: String,
+      message: String): Unit = {
     if (message.contains("cannot run on GPU") && !bdEventSet.contains(operationName)) {
       bdEventSet.add(operationName)
-      Map (
+      val data = Map (
         "type" -> "RapidsFallback",
         "operation" -> operationName,
+        "class" -> className,
         "message" -> message
       )
-      SQLOptTraceReporter.postImmediately(TraceEvent(Map.empty))
+      logInfo(s"send metrics event = $data")
+      SQLOptTraceReporter.postImmediately(TraceEvent(data))
     }
   }
 }

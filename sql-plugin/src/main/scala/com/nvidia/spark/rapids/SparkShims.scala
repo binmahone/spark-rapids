@@ -201,5 +201,5 @@ trait SparkShims {
    */
   def reproduceEmptyStringBug: Boolean
 
-  def postFallbackMetrics(operationName: String, message: String): Unit = {}
+  def postFallbackMetrics(operationName: String, className: String, message: String): Unit = {}
 }

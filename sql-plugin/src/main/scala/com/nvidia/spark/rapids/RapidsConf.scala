@@ -2487,14 +2487,6 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
       .internal()
       .bytesConf(ByteUnit.BYTE)
       .createWithDefault(2L * 1024 * 1024 * 1024)
-  val HASH_MODE = conf("spark.rapids.sql.hashMode")
-    .doc("When INSERT OVERWRITE a hive bucketed table, we can avoid some unnecessary shuffle " +
-      "operation by specifying hashMode as hive. For example, in the case of GroupBy + Insert " +
-      "on the same bucket keys, it only shuffles once. Supported modes: [murmur3, hive].")
-    .stringConf
-    .transform(_.toUpperCase(java.util.Locale.ROOT))
-    .checkValues(HashMode.values.map(_.toString))
-    .createWithDefault(HashMode.HIVE.toString)
 
   private def printSectionHeader(category: String): Unit =
     println(s"\n### $category")
@@ -3351,7 +3343,6 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val caseWhenFuseEnabled: Boolean = get(CASE_WHEN_FUSE)
 
   lazy val isAsyncOutputWriteEnabled: Boolean = get(ENABLE_ASYNC_OUTPUT_WRITE)
-  lazy val hashMode: HashMode.Value = HashMode.withName(get(HASH_MODE))
 
   private val optimizerDefaults = Map(
     // this is not accurate because CPU projections do have a cost due to appending values

@@ -36,11 +36,12 @@
 {"spark": "352"}
 {"spark": "353"}
 {"spark": "354"}
+{"spark": "355"}
 {"spark": "400"}
 spark-rapids-shim-json-lines ***/
 package com.nvidia.spark.rapids.shims
 
-import com.nvidia.spark.rapids.{HashMode, RapidsMeta}
+import com.nvidia.spark.rapids.RapidsMeta
 
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.catalyst.expressions.Attribute
@@ -65,8 +66,8 @@ object BucketingUtilsShim {
         // expression, so that we can guarantee the data distribution is same between shuffle and
         // bucketed data source, which enables us to only shuffle one side when join a bucketed
         // table and a normal one.
-        val bucketIdExpression = GpuHashPartitioning(bucketColumns, spec.numBuckets,
-          HashMode.MURMUR3).partitionIdExpression
+        val bucketIdExpression = GpuHashPartitioning(bucketColumns, spec.numBuckets)
+          .partitionIdExpression
         GpuWriterBucketSpec(bucketIdExpression, (_: Int) => "")
       }
     }

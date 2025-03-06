@@ -1339,22 +1339,22 @@ object GpuOverrides extends Logging {
       }),
     expr[IsNull](
       "Checks if a value is null",
-      ExprChecks.unaryProject(TypeSig.BOOLEAN, TypeSig.BOOLEAN,
+      ExprChecks.unaryProjectAndAst(TypeSig.astTypes, TypeSig.BOOLEAN, TypeSig.BOOLEAN,
         (TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.MAP + TypeSig.ARRAY +
             TypeSig.STRUCT + TypeSig.DECIMAL_128 + TypeSig.BINARY +
             GpuTypeShims.additionalPredicateSupportedTypes).nested(),
         TypeSig.all),
-      (a, conf, p, r) => new UnaryExprMeta[IsNull](a, conf, p, r) {
+      (a, conf, p, r) => new UnaryAstExprMeta[IsNull](a, conf, p, r) {
         override def convertToGpu(child: Expression): GpuExpression = GpuIsNull(child)
       }),
     expr[IsNotNull](
       "Checks if a value is not null",
-      ExprChecks.unaryProject(TypeSig.BOOLEAN, TypeSig.BOOLEAN,
+      ExprChecks.unaryProjectAndAst(TypeSig.astTypes, TypeSig.BOOLEAN, TypeSig.BOOLEAN,
         (TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.MAP + TypeSig.ARRAY +
             TypeSig.STRUCT + TypeSig.DECIMAL_128 + TypeSig.BINARY +
             GpuTypeShims.additionalPredicateSupportedTypes).nested(),
         TypeSig.all),
-      (a, conf, p, r) => new UnaryExprMeta[IsNotNull](a, conf, p, r) {
+      (a, conf, p, r) => new UnaryAstExprMeta[IsNotNull](a, conf, p, r) {
         override def convertToGpu(child: Expression): GpuExpression = GpuIsNotNull(child)
       }),
     expr[IsNaN](
@@ -4097,40 +4097,37 @@ object GpuOverrides extends Logging {
         override val childExprs: Seq[BaseExprMeta[_]] =
           hp.expressions.map(GpuOverrides.wrapExpr(_, this.conf, Some(this)))
 
-        private lazy val hashMode = GpuHashPartitioningBase.getHashModeFromCpu(hp, conf)
+        private lazy val hashMode = GpuHashPartitioningBase.hashModeFromCpu(hp, this.conf)
 
         override def tagPartForGpu(): Unit = {
           this.hashMode match {
-            case scala.Left(mode) =>
-              if (mode == HashMode.HIVE) {
-                // Should match what GpuHiveHash supports
-                val hhExpr = HiveHash(hp.expressions)
-                val hhMeta = GpuOverrides.wrapExpr(hhExpr, conf, None)
-                hhMeta.tagForGpu()
-                if (!hhMeta.canThisBeReplaced) {
-                  willNotWorkOnGpu(s"Hash Partitioning with HiveHash can not run" +
-                    s" on GPU. Details: ${hhMeta.explain(all = false)}")
-                }
-              } else { // Murmur3
-                val arrayWithStructsHashing = hp.expressions.exists(e =>
-                  TrampolineUtil.dataTypeExistsRecursively(e.dataType,
-                    {
-                      case ArrayType(_: StructType, _) => true
-                      case _ => false
-                    })
-                )
-                if (arrayWithStructsHashing) {
-                  willNotWorkOnGpu("hashing arrays with structs is not supported")
-                }
+            case HiveMode =>
+              val hh = HiveHash(hp.expressions)
+              val hfMeta = GpuOverrides.wrapExpr(hh, this.conf, None)
+              hfMeta.tagForGpu()
+              if (!hfMeta.canThisBeReplaced) {
+                willNotWorkOnGpu(s"the hash function: ${hh.getClass.getSimpleName}" +
+                  s" can not run on GPU. Details: ${hfMeta.explain(all = false)}")
               }
-            case scala.Right(other) =>
-              willNotWorkOnGpu(s"Hash algorithm $other is not supported on GPU")
+            case Murmur3Mode =>
+              val arrayWithStructsHashing = hp.expressions.exists(e =>
+                TrampolineUtil.dataTypeExistsRecursively(e.dataType,
+                  {
+                    case ArrayType(_: StructType, _) => true
+                    case _ => false
+                  })
+              )
+              if (arrayWithStructsHashing) {
+                willNotWorkOnGpu("hashing arrays with structs is not supported")
+              }
+            case _ =>
+              willNotWorkOnGpu(s"Hash function $hashMode is not supported on GPU")
           }
         }
 
         override def convertToGpu(): GpuPartitioning =
           GpuHashPartitioning(childExprs.map(_.convertToGpu()), hp.numPartitions,
-            this.hashMode.left.get)
+            this.hashMode)
       }),
     part[RangePartitioning](
       "Range partitioning",

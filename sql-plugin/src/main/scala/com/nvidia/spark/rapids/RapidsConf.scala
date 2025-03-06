@@ -2409,12 +2409,14 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
     .booleanConf
     .createWithDefault(false)
 
-  val ENABLE_HASH_MODE_FOR_PARTITIONING =
-    conf("spark.rapids.sql.partitioning.hashMode.enabled")
-      .doc("When false, Only Murmur3Hash will be used for GPU hash partitioning. " +
-        "When enabled, GPU will try to infer the hash algorithm used by CPU hash " +
-        "partitioning and try to use the same one as CPU. So far only HiveHash and " +
-        "Murmur3Hash are supported on GPU.")
+  val ENABLE_HASH_FUNCTION_IN_PARTITIONING =
+    conf("spark.rapids.sql.partitioning.hashFunction.enabled")
+      .doc("When false, Only Murmur3Hash is used for GPU hash partitioning to " +
+        "align with the regular Spark. When enabled, GPU will try to infer the hash " +
+        "function from the CPU hash partitioning and use the same one. This is for " +
+        "a customized Spark supporting multiple hash functions in hash partitioning. " +
+        "So far only 'HiveHash' and 'Murmur3Hash' are supported on GPU. This requires " +
+        s"'${INCOMPATIBLE_OPS.key}' to also be set to true.")
       .internal()
       .booleanConf
       .createWithDefault(true)
@@ -3336,7 +3338,7 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val isDeltaLowShuffleMergeEnabled: Boolean = get(ENABLE_DELTA_LOW_SHUFFLE_MERGE)
 
-  lazy val isHashModePartitioningEnabled: Boolean = get(ENABLE_HASH_MODE_FOR_PARTITIONING)
+  lazy val isHashFuncPartitioningEnabled: Boolean = get(ENABLE_HASH_FUNCTION_IN_PARTITIONING)
 
   lazy val isTagLoreIdEnabled: Boolean = get(TAG_LORE_ID_ENABLED)
 

@@ -41,7 +41,7 @@ class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
     metricsMap.getOrElse(SHUFFLE_ASYNC_WAIT_TIME, NoopMetric)
 
   private lazy val readExecutor =
-    TrampolineUtil.newDaemonSingleThreadScheduledExecutor("async shuffle read")
+    TrampolineUtil.newDaemonSingleThreadExecutor("async shuffle read")
 
   private lazy val readCallable = new Callable[CoalescedHostResult]() {
     // Get the task context of the task thread.
@@ -50,8 +50,9 @@ class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
     // "HostCoalesceIteratorBase.next()".
     override def call(): CoalescedHostResult = {
       // Initialize the task context for the work thread in case the upstreams require it.
-      TrampolineUtil.unsetTaskContext()
-      TrampolineUtil.setTaskContext(tc)
+      if (TaskContext.get() == null) {
+        TrampolineUtil.setTaskContext(tc)
+      }
       iter.next()
     }
   }

@@ -22,6 +22,10 @@ package com.nvidia.spark.rapids.shims
 
 import scala.collection.mutable
 
+import com.nvidia.spark.rapids._
+import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.optimizer._
+import org.apache.spark.sql.rapids._
 import org.apache.spark.sql.util.{SQLOptTraceReporter, TraceEvent}
 
 object SparkShimImpl extends Spark321PlusShims
@@ -48,5 +52,32 @@ object SparkShimImpl extends Spark321PlusShims
       logInfo(s"send metrics event = $data")
       SQLOptTraceReporter.postImmediately(TraceEvent(data))
     }
+  }
+
+  /**
+   * Get Spark 321 specific expressions
+   */
+  private def exprsFor321: Map[Class[_ <: Expression], ExprRule[_ <: Expression]] = Seq(
+    GpuOverrides.expr[ReorderMapKey](
+      "Sort map column according to keys in each map",
+      ExprChecks.unaryProject(
+        TypeSig.MAP.nested((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128 + TypeSig.BINARY +
+            TypeSig.ARRAY + TypeSig.MAP + TypeSig.STRUCT).nested()),
+        TypeSig.MAP.nested(TypeSig.all),
+        TypeSig.MAP.nested((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128 + TypeSig.BINARY +
+            TypeSig.ARRAY + TypeSig.MAP + TypeSig.STRUCT).nested()),
+        TypeSig.MAP.nested(TypeSig.all)),
+      (a, conf, p, r) => new UnaryExprMeta[ReorderMapKey](a, conf, p, r) {
+        override def convertToGpu(child: Expression): GpuExpression = {
+          GpuReorderMapKey(child)
+        }
+      })
+  ).map(r => (r.getClassFor.asSubclass(classOf[Expression]), r)).toMap
+
+  /**
+   * Get expressions from base class and append Spark 321 specific expressions
+   */
+  override def getExprs: Map[Class[_ <: Expression], ExprRule[_ <: Expression]] = {
+    super.getExprs ++ exprsFor321
   }
 }

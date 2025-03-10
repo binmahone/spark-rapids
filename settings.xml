@@ -5,7 +5,7 @@
       <repositories>
         <repository>
           <id>snapshots-repo</id>
-          <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+          <url>https://maven.byted.org/repository/sonatype-snapshots</url>
           <releases>
             <enabled>false</enabled>
           </releases>
@@ -27,7 +27,7 @@
           <id>central</id>
           <name>Maven Repository Switchboard</name>
           <layout>default</layout>
-          <url>https://repo1.maven.org/maven2</url>
+          <url>https://maven.byted.org/repository/central</url>
           <snapshots>
             <enabled>false</enabled>
           </snapshots>

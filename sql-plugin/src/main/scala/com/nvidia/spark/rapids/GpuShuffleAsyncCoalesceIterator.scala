@@ -40,8 +40,13 @@ class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
   private[this] val asyncWaitTimeMetric =
     metricsMap.getOrElse(SHUFFLE_ASYNC_WAIT_TIME, NoopMetric)
 
-  private lazy val readExecutor =
+  private val readExecutor =
     TrampolineUtil.newDaemonSingleThreadExecutor("async shuffle read")
+
+  Option(TaskContext.get()).foreach( tc =>
+    // Install a listener to to close the async read thread.
+    tc.addTaskCompletionListener[Unit](_ => readExecutor.shutdown())
+  )
 
   private lazy val readCallable = new Callable[CoalescedHostResult]() {
     // Get the task context of the task thread.

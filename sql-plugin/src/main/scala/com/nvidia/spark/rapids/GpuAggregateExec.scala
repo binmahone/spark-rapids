@@ -1175,28 +1175,11 @@ abstract class GpuBaseAggregateMeta[INPUT <: SparkPlan](
     groupingExpressions ++ aggregateExpressions ++ aggregateAttributes ++ resultExpressions
 
   override def tagPlanForGpu(): Unit = {
-    // We don't support Maps as GroupBy keys yet, even if they are nested in Structs. So,
-    // we need to run recursive type check on the structs.
-    val mapOrBinaryGroupings = agg.groupingExpressions.exists(e =>
-      TrampolineUtil.dataTypeExistsRecursively(e.dataType,
-        dt => dt.isInstanceOf[MapType] || dt.isInstanceOf[BinaryType]))
-    if (mapOrBinaryGroupings) {
-      willNotWorkOnGpu("MapType, or BinaryType " +
-        "in grouping expressions are not supported")
-    }
-
-    // We support Arrays as grouping expression but not if the child is a struct. So we need to
-    // run recursive type check on the lists of structs
-    val arrayWithStructsGroupings = agg.groupingExpressions.exists(e =>
-      TrampolineUtil.dataTypeExistsRecursively(e.dataType,
-        dt => dt match {
-          case ArrayType(_: StructType, _) => true
-          case _ => false
-        })
-    )
-    if (arrayWithStructsGroupings) {
-      willNotWorkOnGpu("ArrayTypes with Struct children in grouping expressions are not " +
-        "supported")
+    // We don't support Binary as GroupBy keys yet
+    val binaryGroupings = agg.groupingExpressions.exists(e =>
+      TrampolineUtil.dataTypeExistsRecursively(e.dataType, dt => dt.isInstanceOf[BinaryType]))
+    if (binaryGroupings) {
+      willNotWorkOnGpu("BinaryType in grouping expressions are not supported")
     }
 
     tagForReplaceMode()

@@ -25,6 +25,8 @@ import scala.collection.mutable
 import com.nvidia.spark.rapids._
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.optimizer._
+import org.apache.spark.sql.execution.aggregate.{HashAggregateExec, SortAggregateExec}
+import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.rapids._
 import org.apache.spark.sql.util.{SQLOptTraceReporter, TraceEvent}
 
@@ -79,5 +81,27 @@ object SparkShimImpl extends Spark321PlusShims
    */
   override def getExprs: Map[Class[_ <: Expression], ExprRule[_ <: Expression]] = {
     super.getExprs ++ exprsFor321
+  }
+
+  private def execsFor321: Map[Class[_ <: SparkPlan], ExecRule[_ <: SparkPlan]] = Seq(
+    GpuOverrides.exec[HashAggregateExec](
+      "The backend for hash based aggregations",
+      ExecChecks(
+        (TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128 +
+          TypeSig.MAP + TypeSig.ARRAY + TypeSig.STRUCT).nested(),
+        TypeSig.all),
+      (agg, conf, p, r) => new GpuHashAggregateMeta(agg, conf, p, r)),
+
+    GpuOverrides.exec[SortAggregateExec](
+      "The backend for sort based aggregations",
+      ExecChecks(
+        (TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128 +
+          TypeSig.MAP + TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.BINARY).nested(),
+        TypeSig.all),
+      (agg, conf, p, r) => new GpuSortAggregateExecMeta(agg, conf, p, r))
+  ).map(r => (r.getClassFor.asSubclass(classOf[SparkPlan]), r)).toMap
+
+  override def getExecs: Map[Class[_ <: SparkPlan], ExecRule[_ <: SparkPlan]] = {
+    super.getExecs ++ execsFor321
   }
 }

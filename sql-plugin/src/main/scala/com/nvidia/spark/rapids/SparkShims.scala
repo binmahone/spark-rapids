@@ -200,4 +200,6 @@ trait SparkShims {
    * Handle regexp_replace inconsistency from https://issues.apache.org/jira/browse/SPARK-39107
    */
   def reproduceEmptyStringBug: Boolean
+
+  def postFallbackMetrics(operationName: String, className: String, message: String): Unit = {}
 }

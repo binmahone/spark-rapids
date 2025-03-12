@@ -196,7 +196,7 @@ abstract class GpuFileFormatDataWriter(
       committer.commitTask(taskAttemptContext)
     }
     val summary = GpuFileFormatDataWriterShim.createWriteSummary(
-      updatedPartitions = updatedPartitions.toSet,
+      updatedPartitions = updatedPartitions.map(_ -> 0L).toMap,
       stats = statsTrackers.map(_.getFinalStats(taskCommitTime))
     )
     WriteTaskResult(taskCommitMessage, summary)

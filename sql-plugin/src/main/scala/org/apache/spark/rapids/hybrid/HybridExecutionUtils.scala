@@ -28,7 +28,7 @@ import org.apache.spark.sql.types._
 
 object HybridExecutionUtils extends PredicateHelper {
   
-  private val HYBRID_JAR_PLUGIN_CLASS_NAME = "com.nvidia.spark.rapids.hybrid.HybridPluginWrapper"
+  private val HYBRID_JAR_PLUGIN_CLASS_NAME = "com.nvidia.spark.rapids.velox.PluginWrapper"
 
   /**
    * Check if the Hybrid jar is in the classpath,
@@ -77,10 +77,8 @@ object HybridExecutionUtils extends PredicateHelper {
         case _ => false
       })
     }
-    // TODO: supports BucketedScan
-    lazy val noBucketedScan = !fsse.bucketedScan
 
-    isEnabled && isParquet && nonEmptySchema && allSupportedTypes && noBucketedScan
+    isEnabled && isParquet && nonEmptySchema && allSupportedTypes
   }
 
   /**
@@ -358,10 +356,21 @@ object HybridExecutionUtils extends PredicateHelper {
           case (fsse: FileSourceScanExec, "CPU") => {
             val (supportedConditions, notSupportedConditions) = filters.partition(
                 isExprSupportedByHybridScan(_, conf.hybridExprsWhitelist))
-            val updatedFsseChild = fsse.copy(dataFilters = supportedConditions)
             notSupportedConditions match {
-              case Nil => updatedFsseChild
-              case _ => FilterExec(notSupportedConditions.reduceLeft(And), updatedFsseChild)
+              case Nil =>
+                // NOTICE: it is essential to align the output to the filter's output. Otherwise,
+                // when AQE is enabled, an extra unwanted broadcast exchange will be injected due
+                // to the mismatch between the output of ScanNode and the input of the child plan(
+                // which was supposed to be connected to the FilterNode).
+                // For more details, please refer
+                // https://github.com/NVIDIA/spark-rapids/issues/12267
+                fsse.copy(
+                  dataFilters = supportedConditions,
+                  output = filter.output)
+              case _ =>
+                FilterExec(
+                  notSupportedConditions.reduceLeft(And),
+                  fsse.copy(dataFilters = supportedConditions))
             }
           }
           case _ => filter

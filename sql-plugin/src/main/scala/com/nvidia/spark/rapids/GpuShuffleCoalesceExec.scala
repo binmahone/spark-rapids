@@ -23,6 +23,7 @@ import scala.reflect.ClassTag
 import ai.rapids.cudf.{JCudfSerialization, NvtxColor, NvtxRange}
 import ai.rapids.cudf.JCudfSerialization.HostConcatResult
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
+import com.nvidia.spark.rapids.GpuShuffleAsyncCoalesceIterator._
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
@@ -30,6 +31,7 @@ import com.nvidia.spark.rapids.jni.kudo.{KudoHostMergeResult, KudoSerializer}
 import com.nvidia.spark.rapids.shims.ShimUnaryExecNode
 
 import org.apache.spark.TaskContext
+import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Attribute
@@ -57,6 +59,8 @@ case class GpuShuffleCoalesceExec(child: SparkPlan, targetBatchByteSize: Long)
     NUM_INPUT_ROWS -> createMetric(DEBUG_LEVEL, DESCRIPTION_NUM_INPUT_ROWS),
     NUM_INPUT_BATCHES -> createMetric(DEBUG_LEVEL, DESCRIPTION_NUM_INPUT_BATCHES),
     CONCAT_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_CONCAT_TIME),
+    SHUFFLE_ASYNC_WAIT_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+      DESCRIPTION_SHUFFLE_ASYNC_WAIT_TIME)
   )
 
   override protected val outputBatchesLevel = MODERATE_LEVEL
@@ -83,19 +87,20 @@ case class GpuShuffleCoalesceExec(child: SparkPlan, targetBatchByteSize: Long)
 }
 
 /** A case class to pack some options. Now it has only one, but may have more in the future */
-case class CoalesceReadOption private(kudoEnabled: Boolean)
+case class CoalesceReadOption private(kudoEnabled: Boolean, useAsync: Boolean)
 
 object CoalesceReadOption {
   def apply(conf: SQLConf): CoalesceReadOption = {
-    CoalesceReadOption(RapidsConf.SHUFFLE_KUDO_SERIALIZER_ENABLED.get(conf))
+    CoalesceReadOption(RapidsConf.SHUFFLE_KUDO_SERIALIZER_ENABLED.get(conf),
+      RapidsConf.SHUFFLE_ASYNC_READ_ENABLED.get(conf))
   }
 
   def apply(conf: RapidsConf): CoalesceReadOption = {
-    CoalesceReadOption(conf.shuffleKudoSerializerEnabled)
+    CoalesceReadOption(conf.shuffleKudoSerializerEnabled, conf.shuffleAsyncReadEnabled)
   }
 }
 
-object GpuShuffleCoalesceUtils {
+object GpuShuffleCoalesceUtils extends Logging {
   /**
    * Return an iterator that will pull in batches from the input iterator,
    * concatenate them up to the "targetSize" and move the concatenated result
@@ -135,7 +140,13 @@ object GpuShuffleCoalesceUtils {
     } else {
       hostIter
     }
-    new GpuShuffleCoalesceIterator(maybeBufferedIter, dataTypes, metricsMap)
+    if (readOption.useAsync) {
+      logInfo("Use async shuffle read")
+      new GpuShuffleAsyncCoalesceIterator(maybeBufferedIter, dataTypes, metricsMap)
+    } else {
+      logInfo("Use sync shuffle read")
+      new GpuShuffleCoalesceIterator(maybeBufferedIter, dataTypes, metricsMap)
+    }
   }
 
   /** Get the buffer size of a serialized batch just returned by the Shuffle deserializer */
@@ -343,14 +354,18 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
   }
 
   override def hasNext(): Boolean = {
-    bufferNextBatch()
-    numTablesInBatch > 0
+    // Don't do any heavy things here to support the async read by
+    // GpuShuffleAsyncCoalesceIterator.
+    // Suppose "iter.hasNext" reads in only a header which should be small
+    // enough to make this a very lightweight operation.
+    iter.hasNext || !serializedTables.isEmpty
   }
 
   override def next(): CoalescedHostResult = {
     if (!hasNext()) {
       throw new NoSuchElementException("No more host batches to concatenate")
     }
+    bufferNextBatch()
     concatenateTablesInHost()
   }
 

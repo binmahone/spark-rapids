@@ -16,7 +16,7 @@
 
 package org.apache.spark.sql.execution.datasources.rapids
 
-import org.apache.hadoop.hive.ql.io.sarg.SearchArgument
+import org.apache.orc.storage.ql.io.sarg.SearchArgument
 
 import org.apache.spark.sql.execution.datasources.orc.OrcFilters
 import org.apache.spark.sql.sources.Filter

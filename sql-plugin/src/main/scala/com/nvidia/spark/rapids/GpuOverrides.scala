@@ -1044,7 +1044,11 @@ object GpuOverrides extends Logging {
         }),
     expr[RowNumber](
       "Window function that returns the index for the row within the aggregation window",
-      ExprChecks.windowOnly(TypeSig.INT, TypeSig.INT),
+      ExprChecks.windowOnly(TypeSig.INT, TypeSig.INT,
+        repeatingParamCheck =
+          Some(RepeatingParamCheck("ordering",
+            TypeSig.commonCudfTypes + TypeSig.DECIMAL_128 + TypeSig.NULL,
+            TypeSig.all))),
       (rowNumber, conf, p, r) => new ExprMeta[RowNumber](rowNumber, conf, p, r) {
         override def convertToGpu(): GpuExpression = GpuRowNumber
       }),
@@ -1339,22 +1343,22 @@ object GpuOverrides extends Logging {
       }),
     expr[IsNull](
       "Checks if a value is null",
-      ExprChecks.unaryProject(TypeSig.BOOLEAN, TypeSig.BOOLEAN,
+      ExprChecks.unaryProjectAndAst(TypeSig.astTypes, TypeSig.BOOLEAN, TypeSig.BOOLEAN,
         (TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.MAP + TypeSig.ARRAY +
             TypeSig.STRUCT + TypeSig.DECIMAL_128 + TypeSig.BINARY +
             GpuTypeShims.additionalPredicateSupportedTypes).nested(),
         TypeSig.all),
-      (a, conf, p, r) => new UnaryExprMeta[IsNull](a, conf, p, r) {
+      (a, conf, p, r) => new UnaryAstExprMeta[IsNull](a, conf, p, r) {
         override def convertToGpu(child: Expression): GpuExpression = GpuIsNull(child)
       }),
     expr[IsNotNull](
       "Checks if a value is not null",
-      ExprChecks.unaryProject(TypeSig.BOOLEAN, TypeSig.BOOLEAN,
+      ExprChecks.unaryProjectAndAst(TypeSig.astTypes, TypeSig.BOOLEAN, TypeSig.BOOLEAN,
         (TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.MAP + TypeSig.ARRAY +
             TypeSig.STRUCT + TypeSig.DECIMAL_128 + TypeSig.BINARY +
             GpuTypeShims.additionalPredicateSupportedTypes).nested(),
         TypeSig.all),
-      (a, conf, p, r) => new UnaryExprMeta[IsNotNull](a, conf, p, r) {
+      (a, conf, p, r) => new UnaryAstExprMeta[IsNotNull](a, conf, p, r) {
         override def convertToGpu(child: Expression): GpuExpression = GpuIsNotNull(child)
       }),
     expr[IsNaN](
@@ -4097,21 +4101,37 @@ object GpuOverrides extends Logging {
         override val childExprs: Seq[BaseExprMeta[_]] =
           hp.expressions.map(GpuOverrides.wrapExpr(_, this.conf, Some(this)))
 
+        private lazy val hashMode = GpuHashPartitioningBase.hashModeFromCpu(hp, this.conf)
+
         override def tagPartForGpu(): Unit = {
-          val arrayWithStructsHashing = hp.expressions.exists(e =>
-            TrampolineUtil.dataTypeExistsRecursively(e.dataType,
-              {
-                case ArrayType(_: StructType, _) => true
-                case _ => false
-              })
-          )
-          if (arrayWithStructsHashing) {
-            willNotWorkOnGpu("hashing arrays with structs is not supported")
+          this.hashMode match {
+            case HiveMode =>
+              val hh = HiveHash(hp.expressions)
+              val hfMeta = GpuOverrides.wrapExpr(hh, this.conf, None)
+              hfMeta.tagForGpu()
+              if (!hfMeta.canThisBeReplaced) {
+                willNotWorkOnGpu(s"the hash function: ${hh.getClass.getSimpleName}" +
+                  s" can not run on GPU. Details: ${hfMeta.explain(all = false)}")
+              }
+            case Murmur3Mode =>
+              val arrayWithStructsHashing = hp.expressions.exists(e =>
+                TrampolineUtil.dataTypeExistsRecursively(e.dataType,
+                  {
+                    case ArrayType(_: StructType, _) => true
+                    case _ => false
+                  })
+              )
+              if (arrayWithStructsHashing) {
+                willNotWorkOnGpu("hashing arrays with structs is not supported")
+              }
+            case _ =>
+              willNotWorkOnGpu(s"Hash function $hashMode is not supported on GPU")
           }
         }
 
         override def convertToGpu(): GpuPartitioning =
-          GpuHashPartitioning(childExprs.map(_.convertToGpu()), hp.numPartitions)
+          GpuHashPartitioning(childExprs.map(_.convertToGpu()), hp.numPartitions,
+            this.hashMode)
       }),
     part[RangePartitioning](
       "Range partitioning",
@@ -4527,6 +4547,36 @@ object GpuOverrides extends Logging {
       ExecChecks((TypeSig.commonCudfTypes + TypeSig.DECIMAL_128 + TypeSig.STRUCT + TypeSig.ARRAY +
           TypeSig.MAP + GpuTypeShims.additionalCommonOperatorSupportedTypes).nested(), TypeSig.all),
       (scan, conf, p, r) => new InMemoryTableScanMeta(scan, conf, p, r)),
+    exec[BucketUnionExec](
+      "The backend for bucket union operator",
+      ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128 +
+        TypeSig.MAP + TypeSig.ARRAY + TypeSig.STRUCT).nested()
+        .withPsNote(TypeEnum.STRUCT,
+          "unionByName will not optionally impute nulls for missing struct fields " +
+            "when the column is a struct and there are non-overlapping fields"), TypeSig.all),
+      (union, conf, p, r) => new SparkPlanMeta[BucketUnionExec](union, conf, p, r) {
+        override def convertToGpu(): GpuExec =
+          GpuBucketUnionExec(childPlans.map(_.convertIfNeeded()),
+            union.requiredNumPartitions,
+            union.hashingFunctionClass,
+            union.outputIndices)
+      }
+    ),
+    exec[ParallelBucketUnionExec](
+      "The backend for parallel bucket union operator",
+      ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128 +
+        TypeSig.MAP + TypeSig.ARRAY + TypeSig.STRUCT).nested()
+        .withPsNote(TypeEnum.STRUCT,
+          "unionByName will not optionally impute nulls for missing struct fields " +
+            "when the column is a struct and there are non-overlapping fields"), TypeSig.all),
+      (union, conf, p, r) => new SparkPlanMeta[ParallelBucketUnionExec](union, conf, p, r) {
+        override def convertToGpu(): GpuExec =
+          GpuParallelBucketUnionExec(childPlans.map(_.convertIfNeeded()),
+            union.staticPartExpr)
+      }
+    ),
+
+
     neverReplaceExec[AlterNamespaceSetPropertiesExec]("Namespace metadata operation"),
     neverReplaceExec[CreateNamespaceExec]("Namespace metadata operation"),
     neverReplaceExec[DescribeNamespaceExec]("Namespace metadata operation"),

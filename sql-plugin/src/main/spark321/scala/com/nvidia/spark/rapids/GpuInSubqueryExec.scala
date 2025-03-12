@@ -15,6 +15,7 @@
  */
 
 /*** spark-rapids-shim-json-lines
+{"spark": "321"}
 {"spark": "330"}
 {"spark": "330cdh"}
 {"spark": "331"}
@@ -32,6 +33,7 @@
 {"spark": "352"}
 {"spark": "353"}
 {"spark": "354"}
+{"spark": "355"}
 {"spark": "400"}
 spark-rapids-shim-json-lines ***/
 package com.nvidia.spark.rapids
@@ -54,14 +56,13 @@ case class GpuInSubqueryExec(
     child: Expression,
     plan: BaseSubqueryExec,
     exprId: ExprId,
-    shouldBroadcast: Boolean,
-    private var resultBroadcast: Broadcast[Array[Any]],
-    private var result: Array[Any])
+    private var resultBroadcast: Broadcast[Array[Any]])
   extends ExecSubqueryExpression with Predicate with ShimExpression with GpuExpression {
 
   override def children: Seq[Expression] = Seq(child)
 
-  @transient private lazy val inSet = GpuInSet(child, result)
+  @transient private var result: Array[Any] = _
+  @transient private lazy val inSet = GpuInSet(child, resultBroadcast.value)
 
   override def nullable: Boolean = child.nullable
   override def toString: String = s"child IN ${plan.name}"
@@ -74,12 +75,8 @@ case class GpuInSubqueryExec(
     } else {
       rows.map(_.get(0, child.dataType))
     }
-    if (shouldBroadcast) {
-      resultBroadcast = plan.session.sparkContext.broadcast(result)
-      // Set the result to null, since we should only be serializing data for either
-      // result or resultBroadcast to the executor, not both.
-      result = null
-    }
+
+    resultBroadcast = plan.session.sparkContext.broadcast(result)
   }
 
   private def prepareResult(): Unit = {
@@ -99,8 +96,7 @@ case class GpuInSubqueryExec(
       child = child.canonicalized,
       plan = plan.canonicalized.asInstanceOf[BaseSubqueryExec],
       exprId = ExprId(0),
-      resultBroadcast = null,
-      result = null)
+      resultBroadcast = null)
   }
 }
 
@@ -113,9 +109,9 @@ class InSubqueryExecMeta(
 
   override def convertToGpu(): GpuExpression = {
     expr match {
-      case InSubqueryExec(_, plan, exprId, shouldBroadcast, resultBroadcast, result) =>
+      case InSubqueryExec(_, plan, exprId, resultBroadcast) =>
         val gpuChild = childExprs.head.convertToGpu()
-        GpuInSubqueryExec(gpuChild, plan, exprId, shouldBroadcast, resultBroadcast, result)
+        GpuInSubqueryExec(gpuChild, plan, exprId, resultBroadcast)
       case e => throw new IllegalStateException(s"Unexpected CPU expression $e")
     }
   }

@@ -25,7 +25,7 @@ spark-rapids-shim-json-lines ***/
 package com.nvidia.spark.rapids.shims
 
 import org.apache.parquet.schema._
-import org.apache.parquet.schema.LogicalTypeAnnotation._
+import org.apache.parquet.schema.OriginalType._
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName._
 
 import org.apache.spark.sql.internal.SQLConf
@@ -40,7 +40,7 @@ object ParquetSchemaClipShims {
   def ignoreMissingIds(conf: SQLConf): Boolean = false
 
   def checkIgnoreMissingIds(ignoreMissingIds: Boolean, parquetFileSchema: MessageType,
-      catalystRequestedSchema: StructType): Unit = {}
+                            catalystRequestedSchema: StructType): Unit = {}
 
   def hasFieldId(field: StructField): Boolean =
     throw new IllegalStateException("This shim should not invoke `hasFieldId`")
@@ -54,7 +54,7 @@ object ParquetSchemaClipShims {
   def fieldIdToFieldMap(useFieldId: Boolean, fileType: Type): Map[Int, Type] = Map.empty[Int, Type]
 
   def fieldIdToNameMap(useFieldId: Boolean,
-      fileType: Type): Map[Int, String] = Map.empty[Int, String]
+                       fileType: Type): Map[Int, String] = Map.empty[Int, String]
 
   /**
    * Convert a Parquet primitive type to a Spark type.
@@ -62,10 +62,14 @@ object ParquetSchemaClipShims {
    */
   def convertPrimitiveField(field: PrimitiveType): DataType = {
     val typeName = field.getPrimitiveTypeName
-    val typeAnnotation = field.getLogicalTypeAnnotation
+    val originalType = field.getOriginalType
 
     def typeString =
-      if (typeAnnotation == null) s"$typeName" else s"$typeName ($typeAnnotation)"
+      if (originalType == null) s"$typeName" else s"$typeName ($originalType)"
+
+    def typeNotSupported() =
+      throw RapidsErrorUtils
+        .parquetTypeUnsupportedYetError(s"Parquet type not supported: $typeString")
 
     def typeNotImplemented() =
       throw RapidsErrorUtils.parquetTypeUnsupportedYetError(typeString)
@@ -77,15 +81,13 @@ object ParquetSchemaClipShims {
     // specified in field.getDecimalMetadata.  This is useful when interpreting decimal types stored
     // as binaries with variable lengths.
     def makeDecimalType(maxPrecision: Int = -1): DecimalType = {
-      val decimalLogicalTypeAnnotation = field.getLogicalTypeAnnotation
-          .asInstanceOf[DecimalLogicalTypeAnnotation]
-      val precision = decimalLogicalTypeAnnotation.getPrecision
-      val scale = decimalLogicalTypeAnnotation.getScale
+      val precision = field.getDecimalMetadata.getPrecision
+      val scale = field.getDecimalMetadata.getScale
 
       if (!(maxPrecision == -1 || 1 <= precision && precision <= maxPrecision)) {
         throw new RapidsAnalysisException(
           s"Invalid decimal precision: $typeName " +
-              s"cannot store $precision digits (max $maxPrecision)")
+            s"cannot store $precision digits (max $maxPrecision)")
       }
 
       DecimalType(precision, scale)
@@ -99,53 +101,26 @@ object ParquetSchemaClipShims {
       case DOUBLE => DoubleType
 
       case INT32 =>
-        typeAnnotation match {
-          case intTypeAnnotation: IntLogicalTypeAnnotation if intTypeAnnotation.isSigned =>
-            intTypeAnnotation.getBitWidth match {
-              case 8 => ByteType
-              case 16 => ShortType
-              case 32 => IntegerType
-              case _ => illegalType()
-            }
-          case null => IntegerType
-          case _: DateLogicalTypeAnnotation => DateType
-          case _: DecimalLogicalTypeAnnotation => makeDecimalType(Decimal.MAX_INT_DIGITS)
-          case intTypeAnnotation: IntLogicalTypeAnnotation if !intTypeAnnotation.isSigned =>
-            intTypeAnnotation.getBitWidth match {
-              case 8 => ShortType
-              case 16 => IntegerType
-              case 32 => LongType
-              case _ => illegalType()
-            }
-          case t: TimestampLogicalTypeAnnotation if t.getUnit == TimeUnit.MILLIS =>
-            typeNotImplemented()
+        originalType match {
+          case INT_8 => ByteType
+          case INT_16 => ShortType
+          case INT_32 | null => IntegerType
+          case DATE => DateType
+          case DECIMAL => makeDecimalType(Decimal.MAX_INT_DIGITS)
+          case UINT_8 => typeNotSupported()
+          case UINT_16 => typeNotSupported()
+          case UINT_32 => typeNotSupported()
+          case TIME_MILLIS => typeNotImplemented()
           case _ => illegalType()
         }
 
       case INT64 =>
-        typeAnnotation match {
-          case intTypeAnnotation: IntLogicalTypeAnnotation if intTypeAnnotation.isSigned =>
-            intTypeAnnotation.getBitWidth match {
-              case 64 => LongType
-              case _ => illegalType()
-            }
-          case null => LongType
-          case _: DecimalLogicalTypeAnnotation => makeDecimalType(Decimal.MAX_LONG_DIGITS)
-          case intTypeAnnotation: IntLogicalTypeAnnotation if !intTypeAnnotation.isSigned =>
-            intTypeAnnotation.getBitWidth match {
-              // The precision to hold the largest unsigned long is:
-              // `java.lang.Long.toUnsignedString(-1).length` = 20
-              case 64 => DecimalType(20, 0)
-              case _ => illegalType()
-            }
-          case timestamp: TimestampLogicalTypeAnnotation if timestamp.getUnit == TimeUnit.MICROS =>
-            TimestampType
-          case timestamp: TimestampLogicalTypeAnnotation if timestamp.getUnit == TimeUnit.MILLIS =>
-            TimestampType
-          case timestamp: TimestampLogicalTypeAnnotation if timestamp.getUnit == TimeUnit.NANOS &&
-              ParquetLegacyNanoAsLongShims.legacyParquetNanosAsLong =>
-            throw new RapidsAnalysisException(
-              "GPU does not support spark.sql.legacy.parquet.nanosAsLong")
+        originalType match {
+          case INT_64 | null => LongType
+          case DECIMAL => makeDecimalType(Decimal.MAX_LONG_DIGITS)
+          case UINT_64 => typeNotSupported()
+          case TIMESTAMP_MICROS => TimestampType
+          case TIMESTAMP_MILLIS => TimestampType
           case _ => illegalType()
         }
 
@@ -158,21 +133,19 @@ object ParquetSchemaClipShims {
         TimestampType
 
       case BINARY =>
-        typeAnnotation match {
-          case _: StringLogicalTypeAnnotation | _: EnumLogicalTypeAnnotation |
-               _: JsonLogicalTypeAnnotation => StringType
+        originalType match {
+          case UTF8 | ENUM | JSON => StringType
           case null if SQLConf.get.isParquetBinaryAsString => StringType
           case null => BinaryType
-          case _: BsonLogicalTypeAnnotation => BinaryType
-          case _: DecimalLogicalTypeAnnotation => makeDecimalType()
+          case BSON => BinaryType
+          case DECIMAL => makeDecimalType()
           case _ => illegalType()
         }
 
       case FIXED_LEN_BYTE_ARRAY =>
-        typeAnnotation match {
-          case _: DecimalLogicalTypeAnnotation =>
-            makeDecimalType(Decimal.maxPrecisionForBytes(field.getTypeLength))
-          case _: IntervalLogicalTypeAnnotation => typeNotImplemented()
+        originalType match {
+          case DECIMAL => makeDecimalType(Decimal.maxPrecisionForBytes(field.getTypeLength))
+          case INTERVAL => typeNotImplemented()
           case _ => illegalType()
         }
 

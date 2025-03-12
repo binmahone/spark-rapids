@@ -1175,28 +1175,11 @@ abstract class GpuBaseAggregateMeta[INPUT <: SparkPlan](
     groupingExpressions ++ aggregateExpressions ++ aggregateAttributes ++ resultExpressions
 
   override def tagPlanForGpu(): Unit = {
-    // We don't support Maps as GroupBy keys yet, even if they are nested in Structs. So,
-    // we need to run recursive type check on the structs.
-    val mapOrBinaryGroupings = agg.groupingExpressions.exists(e =>
-      TrampolineUtil.dataTypeExistsRecursively(e.dataType,
-        dt => dt.isInstanceOf[MapType] || dt.isInstanceOf[BinaryType]))
-    if (mapOrBinaryGroupings) {
-      willNotWorkOnGpu("MapType, or BinaryType " +
-        "in grouping expressions are not supported")
-    }
-
-    // We support Arrays as grouping expression but not if the child is a struct. So we need to
-    // run recursive type check on the lists of structs
-    val arrayWithStructsGroupings = agg.groupingExpressions.exists(e =>
-      TrampolineUtil.dataTypeExistsRecursively(e.dataType,
-        dt => dt match {
-          case ArrayType(_: StructType, _) => true
-          case _ => false
-        })
-    )
-    if (arrayWithStructsGroupings) {
-      willNotWorkOnGpu("ArrayTypes with Struct children in grouping expressions are not " +
-        "supported")
+    // We don't support Binary as GroupBy keys yet
+    val binaryGroupings = agg.groupingExpressions.exists(e =>
+      TrampolineUtil.dataTypeExistsRecursively(e.dataType, dt => dt.isInstanceOf[BinaryType]))
+    if (binaryGroupings) {
+      willNotWorkOnGpu("BinaryType in grouping expressions are not supported")
     }
 
     tagForReplaceMode()
@@ -2099,18 +2082,22 @@ class DynamicGpuPartialAggregateIterator(
       helper: AggHelper): (Iterator[ColumnarBatch], Boolean) = {
     // we need to decide if we are going to sort the data or not, so the very
     // first thing we need to do is get a batch and make a choice.
-    val cb = cbIter.next()
     withResource(new NvtxWithMetrics("dynamic sort heuristic", NvtxColor.BLUE,
       metrics.opTime, metrics.heuristicTime)) { _ =>
-      lazy val estimatedGrowthAfterAgg: Double = closeOnExcept(cb) { cb =>
-        val numRows = cb.numRows()
-        val cardinality = estimateCardinality(cb)
-        val minPreGrowth = PreProjectSplitIterator.calcMinOutputSize(cb,
-          helper.preStepBound).toDouble / GpuColumnVector.getTotalDeviceMemoryUsed(cb)
-        (math.max(minPreGrowth, estimatedPreGrowth) * cardinality) / numRows
-      }
-      val wrappedIter = Seq(cb).toIterator ++ cbIter
-      (wrappedIter, estimatedGrowthAfterAgg > 1.0)
+
+        withRetryNoSplit(SpillableColumnarBatch(cbIter.next(),
+          SpillPriorities.ACTIVE_ON_DECK_PRIORITY)) { sb =>
+          withResource(sb.getColumnarBatch()) { cb =>
+            val numRows = cb.numRows()
+            val cardinality = estimateCardinality(cb)
+            val minPreGrowth = PreProjectSplitIterator.calcMinOutputSize(cb,
+              helper.preStepBound).toDouble / GpuColumnVector.getTotalDeviceMemoryUsed(cb)
+            val estimatedGrowthAfterAgg =
+              (math.max(minPreGrowth, estimatedPreGrowth) * cardinality) / numRows
+            val wrappedIter = Seq(GpuColumnVector.incRefCounts(cb)).toIterator ++ cbIter
+            (wrappedIter, estimatedGrowthAfterAgg > 1.0)
+          }
+        }
     }
   }
 

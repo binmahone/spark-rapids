@@ -83,7 +83,6 @@ abstract class GpuShuffleMetaBase(
     childPlans.head.availableRuntimeDataTransition
 
   override def tagPlanForGpu(): Unit = {
-
     if (!ShuffleOriginUtil.isSupported(shuffle.shuffleOrigin)) {
       willNotWorkOnGpu(s"${shuffle.shuffleOrigin} not supported on GPU")
     }

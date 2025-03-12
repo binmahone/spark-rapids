@@ -39,6 +39,7 @@
 {"spark": "352"}
 {"spark": "353"}
 {"spark": "354"}
+{"spark": "355"}
 {"spark": "400"}
 spark-rapids-shim-json-lines ***/
 package com.nvidia.spark.rapids.shims
@@ -46,7 +47,7 @@ package com.nvidia.spark.rapids.shims
 import org.apache.spark.sql.execution.datasources.{ExecutedWriteSummary, WriteTaskStats}
 
 object GpuFileFormatDataWriterShim {
-  def createWriteSummary(updatedPartitions: Set[String], stats: Seq[WriteTaskStats]) = {
+  def createWriteSummary(updatedPartitions: Map[String, Long], stats: Seq[WriteTaskStats]) = {
     ExecutedWriteSummary(updatedPartitions, stats)
   }
 }

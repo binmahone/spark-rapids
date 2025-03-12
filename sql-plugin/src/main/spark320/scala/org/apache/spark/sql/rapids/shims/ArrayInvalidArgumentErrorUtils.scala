@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,15 +15,24 @@
  */
 
 /*** spark-rapids-shim-json-lines
+{"spark": "320"}
+{"spark": "321"}
+{"spark": "321cdh"}
+{"spark": "322"}
+{"spark": "323"}
+{"spark": "324"}
 {"spark": "330"}
 {"spark": "330cdh"}
+{"spark": "330db"}
 {"spark": "331"}
 {"spark": "332"}
 {"spark": "332cdh"}
+{"spark": "332db"}
 {"spark": "333"}
 {"spark": "334"}
 {"spark": "340"}
 {"spark": "341"}
+{"spark": "341db"}
 {"spark": "342"}
 {"spark": "343"}
 {"spark": "344"}
@@ -32,24 +41,19 @@
 {"spark": "352"}
 {"spark": "353"}
 {"spark": "354"}
-{"spark": "400"}
+{"spark": "355"}
 spark-rapids-shim-json-lines ***/
-package com.nvidia.spark.rapids.shims
+package org.apache.spark.sql.rapids.shims
 
-import com.nvidia.spark.rapids._
+import org.apache.spark.sql.errors.QueryExecutionErrors
 
-import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.execution.InSubqueryExec
+trait ArrayInvalidArgumentErrorUtils {
+  def unexpectedValueForStartInFunctionError(prettyName: String): RuntimeException = {
+    QueryExecutionErrors.unexpectedValueForStartInFunctionError(prettyName)
+  }
 
-
-object InSubqueryShims {
-  val exprs: Map[Class[_ <: Expression], ExprRule[_ <: Expression]] = {
-    Seq(
-      GpuOverrides.expr[InSubqueryExec](
-        "Evaluates to true if values are in a subquery's result set",
-        ExprChecks.unaryProject(TypeSig.BOOLEAN, TypeSig.BOOLEAN,
-          TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128, TypeSig.comparable),
-        (a, conf, p, r) => new InSubqueryExecMeta(a, conf, p, r))
-    ).map(r => (r.getClassFor.asSubclass(classOf[Expression]), r)).toMap
+  def unexpectedValueForLengthInFunctionError(prettyName: String,
+      length: Int): RuntimeException = {
+    QueryExecutionErrors.unexpectedValueForLengthInFunctionError(prettyName)
   }
 }

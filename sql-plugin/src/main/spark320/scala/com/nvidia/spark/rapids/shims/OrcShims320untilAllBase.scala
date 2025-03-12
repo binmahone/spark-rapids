@@ -39,6 +39,7 @@
 {"spark": "352"}
 {"spark": "353"}
 {"spark": "354"}
+{"spark": "355"}
 {"spark": "400"}
 spark-rapids-shim-json-lines ***/
 package com.nvidia.spark.rapids.shims
@@ -47,15 +48,13 @@ import java.nio.ByteBuffer
 
 import scala.collection.mutable.ArrayBuffer
 
-import com.nvidia.spark.rapids.Arm.withResource
 import com.nvidia.spark.rapids.OrcOutputStripe
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import org.apache.hadoop.conf.Configuration
 import org.apache.orc.{CompressionCodec, CompressionKind, DataReader, OrcConf, OrcFile, OrcProto, PhysicalWriter, Reader, StripeInformation, TypeDescription}
-import org.apache.orc.impl.{BufferChunk, DataReaderProperties, InStream, OrcCodecPool, OutStream, ReaderImpl, SchemaEvolution}
+import org.apache.orc.impl.{BufferChunk, DataReaderProperties, InStream, OrcCodecPool, OutStream, SchemaEvolution}
 import org.apache.orc.impl.RecordReaderImpl.SargApplier
-import org.apache.orc.impl.reader.StripePlanner
-import org.apache.orc.impl.writer.StreamOptions
+import org.apache.orc.storage.common.io.DiskRange
 
 trait OrcShims320untilAllBase {
 
@@ -78,19 +77,16 @@ trait OrcShims320untilAllBase {
   // create reader properties builder
   def newDataReaderPropertiesBuilder(compressionSize: Int,
       compressionKind: CompressionKind, typeCount: Int): DataReaderProperties.Builder = {
-    val compression = new InStream.StreamOptions()
-      .withBufferSize(compressionSize).withCodec(OrcCodecPool.getCodec(compressionKind))
-    DataReaderProperties.builder().withCompression(compression)
+    DataReaderProperties.builder()
+      .withBufferSize(compressionSize)
+      .withCompression(compressionKind)
+      .withTypeCount(typeCount)
   }
 
   // create ORC out stream
   def newOrcOutStream(name: String, bufferSize: Int, codec: CompressionCodec,
       receiver: PhysicalWriter.OutputReceiver): OutStream = {
-    val options = new StreamOptions(bufferSize)
-    if (codec != null) {
-      options.withCodec(codec, codec.getDefaultOptions)
-    }
-    new OutStream(name, options, receiver)
+    new OutStream(name, bufferSize, codec, receiver)
   }
 
   // filter stripes by pushing down filter
@@ -108,16 +104,15 @@ trait OrcShims320untilAllBase {
       fileIncluded: Array[Boolean],
       columnMapping: Array[Int]): ArrayBuffer[OrcOutputStripe] = {
 
-    val orcReaderImpl = orcReader.asInstanceOf[ReaderImpl]
-    val maxDiskRangeChunkLimit = OrcConf.ORC_MAX_DISK_RANGE_CHUNK_LIMIT.getInt(conf)
-    val planner = new StripePlanner(evolution.getFileSchema, orcReaderImpl.getEncryption(),
-      dataReader, writerVersion, ignoreNonUtf8BloomFilter, maxDiskRangeChunkLimit)
-
     val result = new ArrayBuffer[OrcOutputStripe](stripes.length)
     stripes.foreach { stripe =>
       val stripeFooter = dataReader.readStripeFooter(stripe)
       val needStripe = if (sargApp != null) {
-        val orcIndex = planner.parseStripe(stripe, fileIncluded).readRowIndex(sargColumns, null)
+        // An ORC schema is a single struct type describing the schema fields
+        val orcFileSchema = evolution.getFileType(0)
+        val orcIndex = dataReader.readRowIndex(stripe, orcFileSchema, stripeFooter,
+          ignoreNonUtf8BloomFilter, fileIncluded, null, sargColumns,
+          writerVersion, null, null)
         val rowGroups = sargApp.pickRowGroups(stripe, orcIndex.getRowGroupIndex,
           orcIndex.getBloomFilterKinds, stripeFooter.getColumnsList, orcIndex.getBloomFilterIndex,
           true)
@@ -138,7 +133,7 @@ trait OrcShims320untilAllBase {
    * Compare if the two TypeDescriptions are equal by ignoring attribute
    */
   def typeDescriptionEqual(lhs: TypeDescription, rhs: TypeDescription): Boolean = {
-    lhs.equals(rhs, false)
+    lhs.equals(rhs)
   }
 
   // forcePositionalEvolution is available from Spark-3.2.
@@ -152,17 +147,22 @@ trait OrcShims320untilAllBase {
       psLen: Int): OrcProto.Footer = {
     val footerSize = ps.getFooterLength.toInt
     val footerOffset = bb.limit() - 1 - psLen - footerSize
+    val footerBuffer = bb.duplicate()
+    footerBuffer.position(footerOffset)
+    footerBuffer.limit(footerOffset + footerSize)
+    val diskRanges = new java.util.ArrayList[DiskRange]()
+    diskRanges.add(new BufferChunk(footerBuffer, 0))
     val compressionKind = CompressionKind.valueOf(ps.getCompression.name())
-    val streamOpts = new InStream.StreamOptions()
-    withResource(OrcCodecPool.getCodec(compressionKind)) { codec =>
-      if (codec != null) {
-        streamOpts.withCodec(codec).withBufferSize(ps.getCompressionBlockSize.toInt)
-      }
-      val in = InStream.createCodedInputStream(
-        InStream.create("footer", new BufferChunk(bb, 0), footerOffset, footerSize, streamOpts))
+    val codec = OrcCodecPool.getCodec(compressionKind)
+    try {
+      val in = InStream.createCodedInputStream("footer", diskRanges, footerSize, codec,
+        ps.getCompressionBlockSize.toInt)
       OrcProto.Footer.parseFrom(in)
+    } finally {
+      OrcCodecPool.returnCodec(compressionKind, codec)
     }
   }
 
-  def getStripeStatisticsLength(ps: OrcProto.PostScript): Long = ps.getStripeStatisticsLength
+  def getStripeStatisticsLength(ps: OrcProto.PostScript): Long = 0L
+
 }

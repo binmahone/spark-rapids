@@ -45,7 +45,7 @@ import org.apache.spark.sql.execution.{ExplainUtils, SortExec, SparkPlan}
 import org.apache.spark.sql.execution.aggregate.{BaseAggregateExec, HashAggregateExec, ObjectHashAggregateExec, SortAggregateExec}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.rapids.aggregate.{CpuToGpuAggregateBufferConverter, CudfAggregate, GpuAggregateExpression, GpuToCpuAggregateBufferConverter}
-import org.apache.spark.sql.rapids.execution.{GpuBatchSubPartitioner, GpuShuffleMeta, TrampolineUtil}
+import org.apache.spark.sql.rapids.execution.{GpuBatchSubPartitioner, GpuShuffleMeta}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
@@ -1175,13 +1175,6 @@ abstract class GpuBaseAggregateMeta[INPUT <: SparkPlan](
     groupingExpressions ++ aggregateExpressions ++ aggregateAttributes ++ resultExpressions
 
   override def tagPlanForGpu(): Unit = {
-    // We don't support Binary as GroupBy keys yet
-    val binaryGroupings = agg.groupingExpressions.exists(e =>
-      TrampolineUtil.dataTypeExistsRecursively(e.dataType, dt => dt.isInstanceOf[BinaryType]))
-    if (binaryGroupings) {
-      willNotWorkOnGpu("BinaryType in grouping expressions are not supported")
-    }
-
     tagForReplaceMode()
 
     if (agg.aggregateExpressions.exists(expr => expr.isDistinct)

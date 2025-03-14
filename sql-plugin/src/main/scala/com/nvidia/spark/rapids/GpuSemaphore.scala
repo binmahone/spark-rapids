@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -345,8 +345,6 @@ private final class GpuSemaphore() extends Logging {
   private val tasks = new ConcurrentHashMap[Long, SemaphoreTaskInfo]
 
   def tryAcquire(context: TaskContext): TryAcquireResult = {
-    // Make sure that the thread/task is registered before we try and block
-    TaskRegistryTracker.registerThreadForRetry()
     val taskAttemptId = context.taskAttemptId()
     val taskInfo = tasks.computeIfAbsent(taskAttemptId, _ => {
       onTaskCompletion(context, completeTask)
@@ -368,8 +366,6 @@ private final class GpuSemaphore() extends Logging {
   }
 
   def acquireIfNecessary(context: TaskContext): Unit = {
-    // Make sure that the thread/task is registered before we try and block
-    TaskRegistryTracker.registerThreadForRetry()
     GpuTaskMetrics.get.semWaitTime {
       val taskAttemptId = context.taskAttemptId()
       val taskInfo = tasks.computeIfAbsent(taskAttemptId, _ => {

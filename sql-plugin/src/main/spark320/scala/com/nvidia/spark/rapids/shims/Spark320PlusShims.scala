@@ -53,6 +53,8 @@ import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.GpuOverrides.exec
 
 import org.apache.spark.internal.Logging
+import org.apache.spark.rapids.shims.bd.GpuRoundRobingCoalesceMeta
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate.Average
@@ -313,7 +315,16 @@ trait Spark320PlusShims extends SparkShims with RebaseShims with Logging {
               childPlans.head.convertIfNeeded()
             )(winPy.partitionSpec)
           }
-        }).disabledByDefault("it only supports row based frame for now")
+        }).disabledByDefault("it only supports row based frame for now"),
+
+      // ByteDance-specific Rules
+      exec[RoundRobingCoalesceExec](
+        "Overwrite into a datasource V2 table using the V1 write interface",
+        ExecChecks((TypeSig.commonCudfTypes + TypeSig.DECIMAL_128 + TypeSig.STRUCT +
+          TypeSig.MAP + TypeSig.ARRAY + TypeSig.BINARY +
+          GpuTypeShims.additionalCommonOperatorSupportedTypes).nested(),
+          TypeSig.all),
+        (p, conf, parent, r) => new GpuRoundRobingCoalesceMeta(p, conf, parent, r)),
     ).map(r => (r.getClassFor.asSubclass(classOf[SparkPlan]), r)).toMap
     maps ++ ScanExecShims.execs
   }

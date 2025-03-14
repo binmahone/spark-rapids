@@ -20,9 +20,88 @@
 spark-rapids-shim-json-lines ***/
 package com.nvidia.spark.rapids.shims
 
+import scala.collection.mutable
+
+import com.nvidia.spark.rapids._
+import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.optimizer._
+import org.apache.spark.sql.execution.aggregate.{HashAggregateExec, SortAggregateExec}
+import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.rapids._
+import org.apache.spark.sql.util.{SQLOptTraceReporter, TraceEvent}
+
 object SparkShimImpl extends Spark321PlusShims
     with Spark320PlusNonDBShims
     with Spark31Xuntil33XShims
     with AnsiCastRuleShims {
+
+  val bdEventSet: mutable.Set[String] = mutable.Set.empty
+
   override def reproduceEmptyStringBug: Boolean = true
+
+  override def postFallbackMetrics(
+      operationName: String,
+      className: String,
+      message: String): Unit = {
+    if (message.contains("cannot run on GPU") && !bdEventSet.contains(operationName)) {
+      bdEventSet.add(operationName)
+      val data = Map (
+        "type" -> "RapidsFallback",
+        "operation" -> operationName,
+        "class" -> className,
+        "message" -> message
+      )
+      logInfo(s"send metrics event = $data")
+      SQLOptTraceReporter.postImmediately(TraceEvent(data))
+    }
+  }
+
+  /**
+   * Get Spark 321 specific expressions
+   */
+  private def exprsFor321: Map[Class[_ <: Expression], ExprRule[_ <: Expression]] = Seq(
+    GpuOverrides.expr[ReorderMapKey](
+      "Sort map column according to keys in each map",
+      ExprChecks.unaryProject(
+        TypeSig.MAP.nested((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128 + TypeSig.BINARY +
+            TypeSig.ARRAY + TypeSig.MAP + TypeSig.STRUCT).nested()),
+        TypeSig.MAP.nested(TypeSig.all),
+        TypeSig.MAP.nested((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128 + TypeSig.BINARY +
+            TypeSig.ARRAY + TypeSig.MAP + TypeSig.STRUCT).nested()),
+        TypeSig.MAP.nested(TypeSig.all)),
+      (a, conf, p, r) => new UnaryExprMeta[ReorderMapKey](a, conf, p, r) {
+        override def convertToGpu(child: Expression): GpuExpression = {
+          GpuReorderMapKey(child)
+        }
+      })
+  ).map(r => (r.getClassFor.asSubclass(classOf[Expression]), r)).toMap
+
+  /**
+   * Get expressions from base class and append Spark 321 specific expressions
+   */
+  override def getExprs: Map[Class[_ <: Expression], ExprRule[_ <: Expression]] = {
+    super.getExprs ++ exprsFor321
+  }
+
+  private def execsFor321: Map[Class[_ <: SparkPlan], ExecRule[_ <: SparkPlan]] = Seq(
+    GpuOverrides.exec[HashAggregateExec](
+      "The backend for hash based aggregations",
+      ExecChecks(
+        (TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128 +
+          TypeSig.MAP + TypeSig.ARRAY + TypeSig.STRUCT).nested(),
+        TypeSig.all),
+      (agg, conf, p, r) => new GpuHashAggregateMeta(agg, conf, p, r)),
+
+    GpuOverrides.exec[SortAggregateExec](
+      "The backend for sort based aggregations",
+      ExecChecks(
+        (TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128 +
+          TypeSig.MAP + TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.BINARY).nested(),
+        TypeSig.all),
+      (agg, conf, p, r) => new GpuSortAggregateExecMeta(agg, conf, p, r))
+  ).map(r => (r.getClassFor.asSubclass(classOf[SparkPlan]), r)).toMap
+
+  override def getExecs: Map[Class[_ <: SparkPlan], ExecRule[_ <: SparkPlan]] = {
+    super.getExecs ++ execsFor321
+  }
 }

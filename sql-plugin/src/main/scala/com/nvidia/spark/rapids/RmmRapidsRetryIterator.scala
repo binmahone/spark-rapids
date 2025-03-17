@@ -25,6 +25,7 @@ import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
 import com.nvidia.spark.rapids.jni.{CpuRetryOOM, CpuSplitAndRetryOOM, GpuRetryOOM, GpuSplitAndRetryOOM, RmmSpark, RmmSparkThreadState}
+import com.nvidia.spark.rapids.spill.SpillFramework
 
 import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
@@ -822,6 +823,10 @@ object RmmRapidsRetryIterator extends Logging {
     if (bookkeepPrinted && !BOOKKEEP_MEMORY_PRINT_ALL) {
       return
     }
+
+    // print spillable status
+    logInfo(SpillFramework.getHostStoreSpillableSummary)
+    logInfo(SpillFramework.getDeviceStoreSpillableSummary)
 
     // print host memory bookkeeping
     logInfo(HostAlloc.getHostAllocBookkeepSummary())

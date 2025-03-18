@@ -20,7 +20,6 @@ import java.util.concurrent.{Callable, Future}
 
 import ai.rapids.cudf.{NvtxColor, NvtxRange}
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
-import com.nvidia.spark.rapids.GpuShuffleAsyncCoalesceIterator._
 
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.rapids.execution.TrampolineUtil
@@ -33,12 +32,10 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
  */
 class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
     dataTypes: Array[DataType],
-    metricsMap: Map[String, GpuMetric]) extends Iterator[ColumnarBatch] {
-  private[this] val opTimeMetric = metricsMap(GpuMetric.OP_TIME)
-  private[this] val outputBatchesMetric = metricsMap(GpuMetric.NUM_OUTPUT_BATCHES)
-  private[this] val outputRowsMetric = metricsMap(GpuMetric.NUM_OUTPUT_ROWS)
-  private[this] val asyncWaitTimeMetric =
-    metricsMap.getOrElse(SHUFFLE_ASYNC_WAIT_TIME, NoopMetric)
+    outputBatchesMetric: GpuMetric = NoopMetric,
+    outputRowsMetric: GpuMetric = NoopMetric,
+    asyncReadTimeMetric: GpuMetric = NoopMetric,
+    opTimeMetric: GpuMetric = NoopMetric) extends Iterator[ColumnarBatch] {
 
   private val readExecutor =
     TrampolineUtil.newDaemonSingleThreadExecutor("async shuffle read")
@@ -64,12 +61,12 @@ class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
 
   private var readFutureOpt: Option[Future[CoalescedHostResult]] = None
 
-  override def hasNext(): Boolean = {
+  override def hasNext(): Boolean = GpuMetric.ns(asyncReadTimeMetric, opTimeMetric) {
     readFutureOpt.isDefined || {
       // No async read is running when it comes here, so no need synchronization
       // when accessing the input iterator. "iter.hasNext" should be lightweight
       // enough, since it just read in a header which is very small.
-      opTimeMetric.ns(iter.hasNext)
+      iter.hasNext
     }
   }
 
@@ -78,12 +75,11 @@ class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
       throw new NoSuchElementException("No more batches")
     }
     withResource(new NvtxRange("Concat+Load Batch", NvtxColor.RED)) { _ =>
-      val hostConcatedRet = withResource(new MetricRange(opTimeMetric)) { _ =>
+      val hostConcatedRet = GpuMetric.ns(asyncReadTimeMetric, opTimeMetric) {
         readFutureOpt.map { readFuture =>
           // An async read is running, waiting for the result
-          asyncWaitTimeMetric.ns(readFuture.get())
-        }.getOrElse {
-          // The first batch, just read it directly
+          readFuture.get()
+        }.getOrElse { // The first batch, just read it directly
           iter.next()
         }
       }
@@ -92,12 +88,13 @@ class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
         // or not, because the downstream tasks expect the `GpuShuffleCoalesceIterator`
         // to acquire the semaphore and may generate GPU data from batches that are empty.
         GpuSemaphore.acquireIfNecessary(TaskContext.get())
-        withResource(new MetricRange(opTimeMetric))(_ => hostConcatedRet.toGpuBatch(dataTypes))
+        GpuMetric.ns(opTimeMetric)(hostConcatedRet.toGpuBatch(dataTypes))
       }
       closeOnExcept(gpuCB) { _ =>
-        opTimeMetric.ns {
+        val hasNextCB = GpuMetric.ns(asyncReadTimeMetric, opTimeMetric)(iter.hasNext)
+        GpuMetric.ns(opTimeMetric) {
           // No need synchronization here since the async read is already done.
-          if (iter.hasNext) {
+          if (hasNextCB) {
             // Prefetch and concatenate the next one asynchronously.
             readFutureOpt = Some(readExecutor.submit(readCallable))
           } else {
@@ -111,10 +108,4 @@ class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
     }
   }
 
-}
-
-object GpuShuffleAsyncCoalesceIterator {
-  // For the metric on async wait time
-  val SHUFFLE_ASYNC_WAIT_TIME = "shuffleAsyncReadWaitTime"
-  val DESCRIPTION_SHUFFLE_ASYNC_WAIT_TIME = "async wait time"
 }

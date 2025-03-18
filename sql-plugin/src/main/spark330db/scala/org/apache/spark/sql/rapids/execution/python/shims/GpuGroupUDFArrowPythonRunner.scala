@@ -26,8 +26,8 @@ package org.apache.spark.sql.rapids.execution.python.shims
 import java.io.DataOutputStream
 import java.net.Socket
 
-import com.nvidia.spark.rapids.jni.RmmSpark
 import com.nvidia.spark.rapids.GpuSemaphore
+import com.nvidia.spark.rapids.jni.RmmSpark
 
 import org.apache.spark.{SparkEnv, TaskContext}
 import org.apache.spark.api.python._

@@ -26,7 +26,7 @@ import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
-import com.nvidia.spark.rapids.jni.kudo.{KudoHostMergeResult, KudoSerializer}
+import com.nvidia.spark.rapids.jni.kudo.{KudoHostMergeResultWrapper, KudoSerializer}
 import com.nvidia.spark.rapids.shims.ShimUnaryExecNode
 
 import org.apache.spark.TaskContext

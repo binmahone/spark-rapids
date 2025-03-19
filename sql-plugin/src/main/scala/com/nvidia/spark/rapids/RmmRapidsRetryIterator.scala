@@ -665,6 +665,9 @@ object RmmRapidsRetryIterator extends Logging {
               // handle a retry as the top-level exception
               val (topLevelIsRetry, topLevelIsSplit, isGpuOom) = isRetryOrSplitAndRetry(ex)
               doSplit = topLevelIsSplit
+              if (doSplit) {
+                logInfo("doSplit is set to true because topLevelIsSplit is true", ex)
+              }
               isFromGpuOom = isGpuOom
 
               // handle any retries that are wrapped in a different top-level exception
@@ -673,6 +676,10 @@ object RmmRapidsRetryIterator extends Logging {
                 val (cbRetry, cbSplit, isGpuOom) = causedByRetryOrSplit(ex)
                 causedByRetry = cbRetry
                 doSplit = doSplit || cbSplit
+                if (doSplit) {
+                  logInfo(s"doSplit is set to true because " +
+                    s"doSplit is ${doSplit} or cbSplit is ${cbSplit}", ex)
+                }
                 isFromGpuOom = isGpuOom
               }
 
@@ -688,6 +695,10 @@ object RmmRapidsRetryIterator extends Logging {
                 if (isOrCausedByColumnSizeOverflow(ex)) {
                   // CUDF column size overflow? Attempt split-retry.
                   doSplit = true
+                  if (doSplit) {
+                    logInfo(s"doSplit is set to true because " +
+                      s"isOrCausedByColumnSizeOverflow is true", ex)
+                  }
                 } else {
                   // we want to throw early here, since we got an exception
                   // we were not prepared to handle

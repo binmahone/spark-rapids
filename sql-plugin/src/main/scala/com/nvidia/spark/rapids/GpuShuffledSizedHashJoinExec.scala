@@ -825,15 +825,15 @@ object GpuShuffledAsymmetricHashJoinExec {
       val exprs = BoundJoinExprs.bind(joinType, leftKeys, leftOutput, rightKeys,
         rightOutput, condition, buildSide)
       val buildQueue = mutable.Queue.empty[T]
-      val (mayTruncateBuildRows, mayTruncateBuildSize) = closeOnExcept(buildQueue) { _ =>
+      val (mayTruncatedBuildRows, mayTruncatedBuildSize) = closeOnExcept(buildQueue) { _ =>
         fetchProbeTargetSize(probeBuildIter, buildQueue, gpuBatchSizeBytes)
       }
       val baseBuildIter = setupForJoin(buildQueue, rawBuildIter, exprs.buildTypes,
         gpuBatchSizeBytes, metrics)
-      if (mayTruncateBuildRows <= Int.MaxValue && mayTruncateBuildSize <= gpuBatchSizeBytes) {
+      if (mayTruncatedBuildRows <= Int.MaxValue && mayTruncatedBuildSize <= gpuBatchSizeBytes) {
         assert(!probeBuildIter.hasNext, "build side not exhausted")
         getJoinInfoSmallBuildSide(joinType, buildSide, condition, exprs,
-          baseBuildIter, mayTruncateBuildRows, mayTruncateBuildSize,
+          baseBuildIter, mayTruncatedBuildRows, mayTruncatedBuildSize,
           rawStreamIter, gpuBatchSizeBytes, metrics)
       } else {
         // The natural build side does not fit in a single batch, so use the stream side
@@ -860,7 +860,7 @@ object GpuShuffledAsymmetricHashJoinExec {
               truncateIfNecessary = false)
           val buildIter = addNullFilterIfNecessary(baseBuildIter, exprs.boundBuildKeys,
             exprs.buildSideNeedsNullFilter, metrics)
-          JoinInfo(joinType, buildSide, buildIter, mayTruncateBuildSize + remainingBytes
+          JoinInfo(joinType, buildSide, buildIter, mayTruncatedBuildSize + remainingBytes
             , None, streamIter, exprs)
         }
       }

@@ -697,7 +697,8 @@ object GpuFileSourceScanExec {
     }
   }
 
-  def convertFileFormat(format: FileFormat): FileFormat = {
+  def convertFileFormat(relation: HadoopFsRelation): FileFormat = {
+    val format = relation.fileFormat
     val cls = format.getClass
     if (cls == classOf[CSVFileFormat]) {
       new GpuReadCSVFileFormat
@@ -708,7 +709,7 @@ object GpuFileSourceScanExec {
     } else if (cls == classOf[JsonFileFormat]) {
       new GpuReadJsonFileFormat
     } else if (ExternalSource.isSupportedFormat(cls)) {
-      ExternalSource.getReadFileFormat(format)
+      ExternalSource.getReadFileFormat(relation)
     } else {
       throw new IllegalArgumentException(s"${cls.getCanonicalName} is not supported")
     }

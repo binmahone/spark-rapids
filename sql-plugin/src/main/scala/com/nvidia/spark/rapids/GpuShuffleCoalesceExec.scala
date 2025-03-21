@@ -108,7 +108,7 @@ object CoalesceReadOption {
 
   def apply(conf: RapidsConf): CoalesceReadOption = {
     CoalesceReadOption(conf.shuffleKudoSerializerEnabled,
-      conf.shuffleAsyncReadEnabled
+      conf.shuffleAsyncReadEnabled,
       conf.shuffleKudoSerializerDebugMode,
       conf.shuffleKudoSerializerDebugDumpPrefix)
   }

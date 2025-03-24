@@ -578,6 +578,8 @@ object RmmRapidsRetryIterator extends Logging {
    */
   class RmmRapidsRetryIterator[T, K](attemptIter: Spliterator[K])
       extends Iterator[K] {
+    // We want to be sure that retry will work in all cases
+    TaskRegistryTracker.registerThreadForRetry()
     // used to figure out if we should inject an OOM (only for tests)
     private val config = Option(SQLConf.get).map(new RapidsConf(_))
 
@@ -603,138 +605,125 @@ object RmmRapidsRetryIterator extends Logging {
     }
 
     override def next(): K = {
-      var registeredByMe = false
-
-      try {
-        // We want to be sure that retry will work in all cases
-        // For main task thread, it was already registered upon onTaskStart,
-        // we just do it again here for background threads.
-        registeredByMe = TaskRegistryTracker.registerThreadForRetry()
-
-        // this is set on the first exception, and we add suppressed if there are others
-        // during the retry attempts
-        var lastException: Throwable = null
-        var firstAttempt: Boolean = true
-        var result: Option[K] = None
-        var doSplitForStateMachineReasons = false
-        var doSplitForNonStateMachineReasons = false
-        var isFromGpuOom = true
-        while (result.isEmpty && attemptIter.hasNext) {
-          RetryStateTracker.setCurThreadRetrying(!firstAttempt)
-          if (!firstAttempt) {
-            // call thread block API
-            try {
-              RmmSpark.blockThreadUntilReady()
-            } catch {
-              case _: GpuSplitAndRetryOOM =>
-                doSplitForStateMachineReasons = true
-                isFromGpuOom = true
-              case _: CpuSplitAndRetryOOM =>
-                doSplitForStateMachineReasons = true
-                isFromGpuOom = false
-            }
-          }
-          firstAttempt = false
-          if (doSplitForStateMachineReasons || doSplitForNonStateMachineReasons) {
-            if (BOOKKEEP_MEMORY) {
-              logMemoryBookkeeping()
-            }
-            if (doSplitForStateMachineReasons) {
-              attemptIter.split(if (isFromGpuOom) {
-                SplitReason.GPU_OOM
-              } else {
-                SplitReason.CPU_OOM
-              })
-            } else if (doSplitForNonStateMachineReasons) {
-              attemptIter.split(SplitReason.OTHER)
-            }
-          }
-          doSplitForStateMachineReasons = false
-          doSplitForNonStateMachineReasons = false
+      // this is set on the first exception, and we add suppressed if there are others
+      // during the retry attempts
+      var lastException: Throwable = null
+      var firstAttempt: Boolean = true
+      var result: Option[K] = None
+      var doSplitForStateMachineReasons = false
+      var doSplitForNonStateMachineReasons = false
+      var isFromGpuOom = true
+      while (result.isEmpty && attemptIter.hasNext) {
+        RetryStateTracker.setCurThreadRetrying(!firstAttempt)
+        if (!firstAttempt) {
+          // call thread block API
           try {
-            // call the user's function
-            config.foreach {
-              case rapidsConf if !injectedOOM && rapidsConf.testRetryOOMInjectionMode.numOoms > 0 =>
-                injectedOOM = true
-                // ensure we have associated our thread with the running task, as
-                // `forceRetryOOM` requires a prior association.
-                RmmSpark.currentThreadIsDedicatedToTask(TaskContext.get().taskAttemptId())
-                val injectConf = rapidsConf.testRetryOOMInjectionMode
-                if (injectConf.withSplit) {
-                  RmmSpark.forceSplitAndRetryOOM(RmmSpark.getCurrentThreadId,
-                    injectConf.numOoms,
-                    injectConf.oomInjectionFilter.ordinal,
-                    injectConf.skipCount)
-                } else {
-                  RmmSpark.forceRetryOOM(RmmSpark.getCurrentThreadId,
-                    injectConf.numOoms,
-                    injectConf.oomInjectionFilter.ordinal,
-                    injectConf.skipCount)
-                }
-              case _ => ()
-            }
-            result = Some(attemptIter.next())
-            clearInjectedOOMIfNeeded()
+            RmmSpark.blockThreadUntilReady()
           } catch {
-            case ex: Throwable =>
-              // handle a retry as the top-level exception
-              val (topLevelIsRetry, topLevelIsSplit, isGpuOom) = isRetryOrSplitAndRetry(ex)
-              doSplitForStateMachineReasons = topLevelIsSplit
-              if (doSplitForStateMachineReasons) {
-                logInfo("doSplitForStateMachineReasons is set " +
-                  "to true because topLevelIsSplit is true", ex)
+            case _: GpuSplitAndRetryOOM =>
+              doSplitForStateMachineReasons = true
+              isFromGpuOom = true
+            case _: CpuSplitAndRetryOOM =>
+              doSplitForStateMachineReasons = true
+              isFromGpuOom = false
+          }
+        }
+        firstAttempt = false
+        if (doSplitForStateMachineReasons || doSplitForNonStateMachineReasons) {
+          if (BOOKKEEP_MEMORY) {
+            logMemoryBookkeeping()
+          }
+          if (doSplitForStateMachineReasons) {
+            attemptIter.split(if (isFromGpuOom) {
+              SplitReason.GPU_OOM
+            } else {
+              SplitReason.CPU_OOM
+            })
+          } else if (doSplitForNonStateMachineReasons) {
+            attemptIter.split(SplitReason.OTHER)
+          }
+        }
+        doSplitForStateMachineReasons = false
+        doSplitForNonStateMachineReasons = false
+        try {
+          // call the user's function
+          config.foreach {
+            case rapidsConf if !injectedOOM && rapidsConf.testRetryOOMInjectionMode.numOoms > 0 =>
+              injectedOOM = true
+              // ensure we have associated our thread with the running task, as
+              // `forceRetryOOM` requires a prior association.
+              RmmSpark.currentThreadIsDedicatedToTask(TaskContext.get().taskAttemptId())
+              val injectConf = rapidsConf.testRetryOOMInjectionMode
+              if (injectConf.withSplit) {
+                RmmSpark.forceSplitAndRetryOOM(RmmSpark.getCurrentThreadId,
+                  injectConf.numOoms,
+                  injectConf.oomInjectionFilter.ordinal,
+                  injectConf.skipCount)
+              } else {
+                RmmSpark.forceRetryOOM(RmmSpark.getCurrentThreadId,
+                  injectConf.numOoms,
+                  injectConf.oomInjectionFilter.ordinal,
+                  injectConf.skipCount)
+              }
+            case _ => ()
+          }
+          result = Some(attemptIter.next())
+          clearInjectedOOMIfNeeded()
+        } catch {
+          case ex: Throwable =>
+            // handle a retry as the top-level exception
+            val (topLevelIsRetry, topLevelIsSplit, isGpuOom) = isRetryOrSplitAndRetry(ex)
+            doSplitForStateMachineReasons = topLevelIsSplit
+            if (doSplitForStateMachineReasons) {
+              logInfo("doSplitForStateMachineReasons is set " +
+                "to true because topLevelIsSplit is true", ex)
+            }
+            isFromGpuOom = isGpuOom
+
+            // handle any retries that are wrapped in a different top-level exception
+            var causedByRetry = false
+            if (!topLevelIsRetry) {
+              val (cbRetry, cbSplit, isGpuOom) = causedByRetryOrSplit(ex)
+              causedByRetry = cbRetry
+              if (!doSplitForStateMachineReasons) {
+                doSplitForStateMachineReasons = doSplitForStateMachineReasons || cbSplit
+                if (doSplitForStateMachineReasons) {
+                  logInfo(s"doSplitForStateMachineReasons is set to true because " +
+                    s"cbSplit is ${cbSplit}", ex)
+                }
               }
               isFromGpuOom = isGpuOom
+            }
 
-              // handle any retries that are wrapped in a different top-level exception
-              var causedByRetry = false
-              if (!topLevelIsRetry) {
-                val (cbRetry, cbSplit, isGpuOom) = causedByRetryOrSplit(ex)
-                causedByRetry = cbRetry
-                if (!doSplitForStateMachineReasons) {
-                  doSplitForStateMachineReasons = doSplitForStateMachineReasons || cbSplit
-                  if (doSplitForStateMachineReasons) {
-                    logInfo(s"doSplitForStateMachineReasons is set to true because " +
-                      s"cbSplit is ${cbSplit}", ex)
-                  }
-                }
-                isFromGpuOom = isGpuOom
+            clearInjectedOOMIfNeeded()
+
+            // make sure we add any prior exceptions to this one as causes
+            if (lastException != null) {
+              ex.addSuppressed(lastException)
+            }
+            lastException = ex
+
+            if (!topLevelIsRetry && !causedByRetry) {
+              if (isOrCausedByColumnSizeOverflow(ex)) {
+                // CUDF column size overflow? Attempt split-retry.
+                doSplitForNonStateMachineReasons = true
+                logInfo(s"doSplitForNonStateMachineReasons is set to true because " +
+                  s"isOrCausedByColumnSizeOverflow", ex)
+              } else {
+                // we want to throw early here, since we got an exception
+                // we were not prepared to handle
+                throw lastException
               }
-
-              clearInjectedOOMIfNeeded()
-
-              // make sure we add any prior exceptions to this one as causes
-              if (lastException != null) {
-                ex.addSuppressed(lastException)
-              }
-              lastException = ex
-
-              if (!topLevelIsRetry && !causedByRetry) {
-                if (isOrCausedByColumnSizeOverflow(ex)) {
-                  // CUDF column size overflow? Attempt split-retry.
-                  doSplitForNonStateMachineReasons = true
-                  logInfo(s"doSplitForNonStateMachineReasons is set to true because " +
-                    s"isOrCausedByColumnSizeOverflow", ex)
-                } else {
-                  // we want to throw early here, since we got an exception
-                  // we were not prepared to handle
-                  throw lastException
-                }
-              }
-            // else another exception wrapped a retry. So we are going to try again
-          }
-        }
-        RetryStateTracker.clearCurThreadRetrying()
-        if (result.isEmpty) {
-          // then lastException must be set, throw it.
-          throw lastException
-        }
-        result.get
-      } finally {
-        if (registeredByMe) {
-          TaskRegistryTracker.unregisterThreadForRetry()
+            }
+          // else another exception wrapped a retry. So we are going to try again
         }
       }
+      RetryStateTracker.clearCurThreadRetrying()
+      if (result.isEmpty) {
+        // then lastException must be set, throw it.
+        throw lastException
+      }
+      result.get
     }
   }
 

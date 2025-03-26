@@ -1087,6 +1087,12 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
     .booleanConf
     .createWithDefault(false)
 
+  val ENABLE_UDF_AUTO_MAPPING = conf("spark.rapids.sql.udf.autoMapping.enabled")
+    .doc("When set to true, automatically maps UDFs to GPU implementations according to some " +
+      "rules.")
+    .booleanConf
+    .createWithDefault(false)
+
   val PARQUET_READER_TYPE = conf("spark.rapids.sql.format.parquet.reader.type")
     .doc("Sets the Parquet reader type. We support different types that are optimized for " +
       "different environments. The original Spark style reader can be selected by setting this " +
@@ -3371,6 +3377,8 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val getSparkGpuResourceName: String = get(SPARK_GPU_RESOURCE_NAME)
 
   lazy val isCpuBasedUDFEnabled: Boolean = get(ENABLE_CPU_BASED_UDF)
+
+  lazy val isUDFAutoMappingEnabled: Boolean = get(ENABLE_UDF_AUTO_MAPPING)
 
   lazy val isFastSampleEnabled: Boolean = get(ENABLE_FAST_SAMPLE)
 

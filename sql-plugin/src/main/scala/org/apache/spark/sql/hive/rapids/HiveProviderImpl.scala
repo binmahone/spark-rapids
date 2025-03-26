@@ -68,6 +68,13 @@ class HiveProviderImpl extends HiveProviderCmdShims {
 
           override def convertToGpu(): GpuExpression = {
             opRapidsFunc.map { _ =>
+              if(this.conf.isUDFAutoMappingEnabled){
+                // Replace the bytedance package with bytedance.rapids
+                if(a.funcWrapper.functionClassName.contains("bytedance")){
+                  a.funcWrapper.functionClassName = a.funcWrapper.functionClassName.replace(
+                    "bytedance", "bytedance.rapids")
+                }
+              }
               // We use the original HiveGenericUDF `deterministic` method as a proxy
               // for simplicity.
               GpuHiveSimpleUDF(

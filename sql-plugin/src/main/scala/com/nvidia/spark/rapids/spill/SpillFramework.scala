@@ -148,6 +148,8 @@ import org.apache.spark.storage.BlockId
  * Common interface for all handles in the spill framework.
  */
 trait StoreHandle extends AutoCloseable {
+  val priority: Long
+
   /**
    * Approximate size of this handle, used in three scenarios:
    * - Used by callers when accumulating up to a batch size for size goals.
@@ -164,6 +166,7 @@ trait StoreHandle extends AutoCloseable {
 }
 
 trait SpillableHandle extends StoreHandle {
+
   /**
    * used to gate when a spill is actively being done so that a second thread won't
    * also begin spilling, and a handle won't release the underlying buffer if it's
@@ -332,7 +335,8 @@ class SpillableHostBufferHandle private[spill] (
     val sizeInBytes: Long,
     private[spill] override var host: Option[HostMemoryBuffer] = None,
     private[spill] var disk: Option[DiskHandle] = None,
-    private[spill] var spillingInterrupted: Boolean = false
+    private[spill] var spillingInterrupted: Boolean = false,
+    override val priority : Long = TaskContext.get().taskAttemptId()
 )
   extends HostSpillableHandle[HostMemoryBuffer] with Logging {
 
@@ -526,7 +530,9 @@ object SpillableDeviceBufferHandle {
 class SpillableDeviceBufferHandle private (
     val sizeInBytes: Long,
     private[spill] override var dev: Option[DeviceMemoryBuffer],
-    private[spill] var host: Option[SpillableHostBufferHandle] = None)
+    private[spill] var host: Option[SpillableHostBufferHandle] = None,
+    override val priority : Long = TaskContext.get().taskAttemptId(),
+)
     extends DeviceSpillableHandle[DeviceMemoryBuffer] {
 
   override val approxSizeInBytes: Long = sizeInBytes
@@ -621,7 +627,9 @@ class SpillableDeviceBufferHandle private (
 class SpillableColumnarBatchHandle private (
     override val approxSizeInBytes: Long,
     private[spill] override var dev: Option[ColumnarBatch],
-    private[spill] var host: Option[SpillableHostBufferHandle] = None)
+    private[spill] var host: Option[SpillableHostBufferHandle] = None,
+    override val priority : Long = TaskContext.get().taskAttemptId()
+)
   extends DeviceSpillableHandle[ColumnarBatch] with Logging {
 
   override def spillable: Boolean = synchronized {
@@ -758,7 +766,9 @@ object SpillableColumnarBatchFromBufferHandle {
 class SpillableColumnarBatchFromBufferHandle private (
     val sizeInBytes: Long,
     private[spill] override var dev: Option[ColumnarBatch],
-    private[spill] var host: Option[SpillableHostBufferHandle] = None)
+    private[spill] var host: Option[SpillableHostBufferHandle] = None,
+    override val priority : Long = TaskContext.get().taskAttemptId()
+)
   extends DeviceSpillableHandle[ColumnarBatch] {
 
   override val approxSizeInBytes: Long = sizeInBytes
@@ -871,7 +881,9 @@ object SpillableCompressedColumnarBatchHandle {
 class SpillableCompressedColumnarBatchHandle private (
     val compressedSizeInBytes: Long,
     private[spill] override var dev: Option[ColumnarBatch],
-    private[spill] var host: Option[SpillableHostBufferHandle] = None)
+    private[spill] var host: Option[SpillableHostBufferHandle] = None,
+    override val priority : Long = TaskContext.get().taskAttemptId()
+)
   extends DeviceSpillableHandle[ColumnarBatch] {
 
   override val approxSizeInBytes: Long = compressedSizeInBytes
@@ -974,7 +986,9 @@ class SpillableHostColumnarBatchHandle private (
     override val approxSizeInBytes: Long,
     val numRows: Int,
     private[spill] override var host: Option[ColumnarBatch],
-    private[spill] var disk: Option[DiskHandle] = None)
+    private[spill] var disk: Option[DiskHandle] = None,
+    override val priority : Long = TaskContext.get().taskAttemptId(),
+)
   extends HostSpillableHandle[ColumnarBatch] {
 
   override def spillable: Boolean = synchronized {
@@ -1092,7 +1106,9 @@ object DiskHandle {
 class DiskHandle private(
     val blockId: BlockId,
     val offset: Long,
-    val sizeInBytes: Long)
+    val sizeInBytes: Long,
+    val priority: Long = TaskContext.get().taskAttemptId()
+)
   extends StoreHandle {
 
   override val approxSizeInBytes: Long = sizeInBytes
@@ -1245,11 +1261,14 @@ trait SpillableStore[T <: SpillableHandle]
   private def makeSpillPlan(spillNeeded: Long): SpillPlan = {
     val plan = new SpillPlan()
     var amountToSpill = 0L
-    val allHandles = handles.keySet().iterator()
+    val allHandles = handles.keySet().stream().sorted((o1: T, o2: T) => {
+      java.lang.Long.compare(o2.priority, o1.priority)
+    }).iterator()
+    val myPriority = TaskContext.get().taskAttemptId()
     // two threads could be here trying to spill and creating a list of spillables
     while (allHandles.hasNext && amountToSpill < spillNeeded) {
       val handle = allHandles.next()
-      if (handle.spillable) {
+      if (handle.spillable && myPriority <= handle.priority) {
         amountToSpill += handle.approxSizeInBytes
         plan.add(handle)
       }

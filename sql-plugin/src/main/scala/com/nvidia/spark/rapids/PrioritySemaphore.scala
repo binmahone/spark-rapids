@@ -91,6 +91,7 @@ class PrioritySemaphore[T](val maxPermits: Int, val priorityForNonStarted: T)
             throw e
         }
       }
+
     } finally {
       lock.unlock()
     }

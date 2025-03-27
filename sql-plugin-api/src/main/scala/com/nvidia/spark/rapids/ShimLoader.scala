@@ -376,4 +376,8 @@ object ShimLoader {
   def loadGpuColumnVector(): Class[_] = {
     ShimReflectionUtils.loadClass("com.nvidia.spark.rapids.GpuColumnVector")
   }
+
+  def newBytedanceOptimizePlanRules(): Rule[LogicalPlan] = {
+    ShimReflectionUtils.newInstanceOf("org.apache.spark.sql.hive.bytedance.OptimizePlanRules")
+  }
 }

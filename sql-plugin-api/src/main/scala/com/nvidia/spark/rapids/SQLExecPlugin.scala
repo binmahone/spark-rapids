@@ -17,6 +17,7 @@
 package com.nvidia.spark.rapids
 
 import org.apache.spark.sql.{SparkSession, SparkSessionExtensions}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.{ColumnarRule, SparkPlan, SparkStrategy}
 
@@ -27,6 +28,7 @@ class SQLExecPlugin extends (SparkSessionExtensions => Unit) {
   private val strategyRules: SparkStrategy = ShimLoader.newStrategyRules()
 
   override def apply(extensions: SparkSessionExtensions): Unit = {
+    extensions.injectOptimizerRule(bytedanceOptimizePlanRules)
     extensions.injectColumnar(columnarOverrides)
     extensions.injectQueryStagePrepRule(queryStagePrepOverrides)
     extensions.injectPlannerStrategy(_ => strategyRules)
@@ -38,5 +40,9 @@ class SQLExecPlugin extends (SparkSessionExtensions => Unit) {
 
   private def queryStagePrepOverrides(sparkSession: SparkSession): Rule[SparkPlan] = {
     ShimLoader.newGpuQueryStagePrepOverrides()
+  }
+
+  private def bytedanceOptimizePlanRules(sparkSession: SparkSession): Rule[LogicalPlan] = {
+    ShimLoader.newBytedanceOptimizePlanRules()
   }
 }

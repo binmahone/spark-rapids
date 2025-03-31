@@ -49,12 +49,15 @@
         <dependency>
             <groupId>io.glutenproject</groupId>
             <artifactId>spark-sql-columnar-shims-spark32</artifactId>
-	        <version>${gluten.version}</version>
+	    <version>${gluten.version}</version>
+            <!-- Use provided, will not package libgluten.so libvelox.so in this jar-->
+            <!-- Should provide this or gluten-velox-bundle when submitting Spark job -->
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>io.glutenproject</groupId>
             <artifactId>backends-velox</artifactId>
-	        <version>${gluten.version}</version>
+            <version>${gluten.version}</version>
             <!-- Use provided, will not package libgluten.so libvelox.so in this jar-->
             <!-- Should provide this or gluten-velox-bundle when submitting Spark job -->
             <scope>provided</scope>

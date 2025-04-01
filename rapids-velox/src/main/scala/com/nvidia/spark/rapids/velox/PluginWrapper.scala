@@ -60,7 +60,7 @@ private class DriverPluginWrapper(wrapped: DriverPlugin) extends DriverPlugin wi
     PluginWrapper.checkGlutenJarVersion(SPARK_VERSION)
 
     // Enable the Gluten to initialize GlutenPlugin and Velox as the Gluten Backend.
-    // conf.set(GlutenConfig.GLUTEN_ENABLE_KEY, "true")
+    conf.set(GlutenConfig.GLUTEN_ENABLE_KEY, "true")
     val ret = wrapped.init(sc, pluginContext)
     // Unregister GlutenSessionExtensions by removing it from spark.sql.extensions.
     conf.set(
@@ -98,7 +98,7 @@ private class ExecutorPluginWrapper(wrapped: ExecutorPlugin) extends ExecutorPlu
 
       // Firstly, enable the Gluten to initialize GlutenPlugin and Velox as the Gluten Backend.
       // Then, disable it as a plugin in case it affects the query processing unexpectedly.
-      // conf.set(GlutenConfig.GLUTEN_ENABLE_KEY, "true")
+      conf.set(GlutenConfig.GLUTEN_ENABLE_KEY, "true")
       wrapped.init(ctx, extraConf)
       conf.set(GlutenConfig.GLUTEN_ENABLE_KEY, "false")
 

@@ -55,7 +55,10 @@ class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
       if (TaskContext.get() == null) {
         TrampolineUtil.setTaskContext(tc)
       }
-      iter.next()
+      val nvRangeName = s"Task ${TaskContext.get().taskAttemptId()}-Async Read Batch"
+      withResource(new NvtxRange(nvRangeName, NvtxColor.BLUE)) { _ =>
+        iter.next()
+      }
     }
   }
 
@@ -74,7 +77,8 @@ class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
     if (!hasNext()) {
       throw new NoSuchElementException("No more batches")
     }
-    withResource(new NvtxRange("Concat+Load Batch", NvtxColor.RED)) { _ =>
+    val nvRangeName = s"Task ${TaskContext.get().taskAttemptId()}-Batch to GPU"
+    withResource(new NvtxRange(nvRangeName, NvtxColor.BLUE)) { _ =>
       val hostConcatedRet = GpuMetric.ns(asyncReadTimeMetric, opTimeMetric) {
         readFutureOpt.map { readFuture =>
           // An async read is running, waiting for the result

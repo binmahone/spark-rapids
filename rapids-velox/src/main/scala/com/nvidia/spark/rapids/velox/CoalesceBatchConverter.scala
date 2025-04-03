@@ -40,13 +40,18 @@ private[velox] case class HostBufferInfo(buffer: HostMemoryBuffer, isPinned: Boo
 }
 
 /**
- * The helper class represents the pre-allocated HostColumnVector, which contains all logical
- * buffers(dataBuffer/nullBuffer/offsetBuffer) in a shared physical buffer(HostBufferInfo).
+ * The helper class represents the metadata of ColumnVectors to be built from Velox side. It is
+ * self-recursive structure that keeps the same hierarchy as the corresponding ColumnVector.
  *
- * The rootBufferInfo is only set for the top-level VectorBuilder, since the sub-level builders
- * share the same buffer with the top-level one.
+ * All non-top-level builders share the same physical buffer with the top-level one, which means
+ * one physical buffer for one independent VectorBuilder.
+ *
+ * The actual memory allocation will not take place during the construction. Instead, the allocated
+ * buffer will be referred by `setSharedBuffer`.
  */
-case class VectorBuilder(rootBufferInfo: Option[HostBufferInfo],
+case class VectorBuilder(isTopLevel: Boolean,
+                         sizeInBytes: Long, // the child-inclusive sum of logical buffers' size
+                         numBuffers: Int, // the number of logical buffers (including children's)
                          posInSchema: Int,
                          field: StructField,
                          nullBufOffset: Option[Long],
@@ -54,15 +59,31 @@ case class VectorBuilder(rootBufferInfo: Option[HostBufferInfo],
                          offsetBufOffset: Option[Long],
                          children: Seq[VectorBuilder]) {
 
+  private var rootBufferInfo: HostBufferInfo = _
+
+  def getBuffer: HostBufferInfo = {
+    require(rootBufferInfo != null, "rootBufferInfo is not set yet")
+    rootBufferInfo
+  }
+
+  def setSharedBuffer(buffer: HostBufferInfo): Unit = {
+    if (isTopLevel) {
+      require(buffer.buffer.getLength == sizeInBytes,
+        "shared buffer size should equal to required size of top-level VectorBuilder")
+    }
+    require(rootBufferInfo == null, "rootBufferInfo is already initialized")
+    rootBufferInfo = buffer
+    children.foreach(_.setSharedBuffer(buffer))
+  }
+
   // Builds HostColumnVector (with its children) recursively. After clipping the vectors, returns
   // the total sizeInBytes of the clipped vectors (including children's size).
-  def build(tailInfo: Array[Long],
-            sharedBuffer: HostMemoryBuffer): (HostColumnVectorCore, Long) = {
+  def build(tailInfo: Array[Long]): (HostColumnVectorCore, Long) = {
 
     var finalTotalBytes = 0L
     var childVecs = new java.util.ArrayList[HostColumnVectorCore]()
     children.foreach { b =>
-      val (childVec, childTotalSize)  = b.build(tailInfo, sharedBuffer)
+      val (childVec, childTotalSize)  = b.build(tailInfo)
       childVecs.add(childVec)
       finalTotalBytes += childTotalSize
     }
@@ -72,6 +93,7 @@ case class VectorBuilder(rootBufferInfo: Option[HostBufferInfo],
     val nullCount = java.util.Optional.of(java.lang.Long.valueOf(
       tailInfo(TailInfo.flattenedPos(posInSchema, 3))))
     // Clips the pre-allocated buffers with the actual used sizes
+    val sharedBuffer = getBuffer.buffer
     val dataBuffer = dataBufOffset.map { offset =>
       val finalLength = tailInfo(TailInfo.flattenedPos(posInSchema, 0))
       finalTotalBytes += finalLength
@@ -97,7 +119,7 @@ case class VectorBuilder(rootBufferInfo: Option[HostBufferInfo],
       childVecs.add(structCol)
     }
 
-    val vector: HostColumnVectorCore = if (rootBufferInfo.nonEmpty) {
+    val vector: HostColumnVectorCore = if (isTopLevel) {
       new HostColumnVector(dType, rowCount, nullCount,
         dataBuffer.orNull, nullBuffer.orNull, offsetBuffer.orNull,
         childVecs)
@@ -114,11 +136,10 @@ object VectorBuilder {
   // Builds RapidsHostColumn for each top-level field from corresponding top-level VectorBuilders
   def buildRapidsHostColumn(tailInfo: Array[Long],
                             rootBuilder: VectorBuilder): RapidsHostColumn = {
-    require(rootBuilder.rootBufferInfo.nonEmpty, "NOT a root builder")
-
-    val rootBuf = rootBuilder.rootBufferInfo.get
+    require(rootBuilder.isTopLevel, "NOT a root builder")
+    val rootBuf = rootBuilder.getBuffer
     try {
-      val (vector, actualTotalBytes) = rootBuilder.build(tailInfo, rootBuf.buffer)
+      val (vector, actualTotalBytes) = rootBuilder.build(tailInfo)
       RapidsHostColumn(vector.asInstanceOf[HostColumnVector], rootBuf.isPinned, actualTotalBytes)
     } finally {
       // Close the shared root buffer after all child buffers have been built
@@ -142,7 +163,7 @@ class CoalesceBatchConverter(runtime: GlutenJniWrapper,
                              schema: StructType,
                              targetBatchSize: Long,
                              metrics: Map[String, SQLMetric],
-                             allocator: HostMemoryAllocator[HostBufferInfo]) extends Logging {
+                             memAllocator: HostMemoryAllocator[HostBufferInfo]) extends Logging {
 
   private val columnBuilders = mutable.ArrayBuffer[VectorBuilder]()
 
@@ -229,10 +250,29 @@ class CoalesceBatchConverter(runtime: GlutenJniWrapper,
       columnBuilders += createVectorBuilder(
         bufferPtrs,
         estimatedBatchNum,
-        topLevelInfo
-      )
+        topLevelInfo)
     }
     bufferPtrs(0) = bufferPtrs.length
+
+    // Allocates shared buffers for each top-level field through the OOM Retry compatible
+    // interface. (The allocation process could be entirely Retryable)
+    val buffers = memAllocator.allocate(columnBuilders.map(_.sizeInBytes).toList)
+
+    // Post-process after the actual allocation
+    var bufColOffset = 1
+    buffers.indices.foreach { i =>
+      // Setup the allocated shared buffer to each ColumnBuilder
+      columnBuilders(i).setSharedBuffer(buffers(i))
+      // Rebasing memory offsets for all (children) vectors with the memory address of shared buffer
+      TargetVectorsMsg.localOffsetsToMemoryAddress(
+        buffers(i).buffer.getAddress,
+        bufferPtrs,
+        bufColOffset,
+        columnBuilders(i).numBuffers)
+      bufColOffset += columnBuilders(i).numBuffers
+    }
+    require(bufColOffset == bufferPtrs.length,
+      "bufColOffset does not align with the size of bufferPtrs")
 
     // reset the native reference of target Buffers.
     // NOTE: The method will consume the sample batch on the deck. So, the caller can
@@ -284,20 +324,23 @@ class CoalesceBatchConverter(runtime: GlutenJniWrapper,
                                   estimatedBatchNum: Double,
                                   rootInfo: SampleColumnInfo): VectorBuilder = {
     // This method is used to compute the local offsets for each logical buffer recursively.
-    def impl(localOffset: Long, info: SampleColumnInfo): (VectorBuilder, Long) = {
+    def impl(localSizeOffset: Long,
+             info: SampleColumnInfo,
+             isTopLevel: Boolean): (VectorBuilder, Long) = {
       require(info.veloxType.canConvert(info.readType.dataType),
         s"can NOT convert ${info.veloxType} to ${info.readType.dataType}")
 
-      var offset = localOffset
+      val bufColOffset = bufferPtrs.size
+      var sizeOffset = localSizeOffset
 
       // 1. push the TypeIndex into the fieldDeck
       TargetVectorsMsg.setDataType(info)
       // 2. figure out the offset and length for dataBuffer
       val dataOffset: Option[Long] = if (info.dataSize > 0) {
         val estDataSize = (info.dataSize * estimatedBatchNum).toLong
-        TargetVectorsMsg.setDataBuffer(offset, estDataSize)
-        offset += estDataSize
-        Some(offset - estDataSize)
+        TargetVectorsMsg.setDataBuffer(sizeOffset, estDataSize)
+        sizeOffset += estDataSize
+        Some(sizeOffset - estDataSize)
       } else {
         TargetVectorsMsg.setMissingDataBuffer()
         None
@@ -306,9 +349,9 @@ class CoalesceBatchConverter(runtime: GlutenJniWrapper,
       val nullOffset: Option[Long] = if (info.readType.nullable) {
         val estimatedRows = (info.numRows * estimatedBatchNum).toInt
         val estNullMaskBytes = CoalesceBatchConverter.sizeOfNullMask(estimatedRows).toLong
-        TargetVectorsMsg.setNullBuffer(offset, estNullMaskBytes)
-        offset += estNullMaskBytes
-        Some(offset - estNullMaskBytes)
+        TargetVectorsMsg.setNullBuffer(sizeOffset, estNullMaskBytes)
+        sizeOffset += estNullMaskBytes
+        Some(sizeOffset - estNullMaskBytes)
       } else {
         TargetVectorsMsg.setMissingNullBuffer()
         None
@@ -316,9 +359,9 @@ class CoalesceBatchConverter(runtime: GlutenJniWrapper,
       // 4. figure out the offset and length for offsetsBuffer
       val offsetOffset: Option[Long] = if (info.offsetsSize > 0) {
         val estOffsetSize = (info.offsetsSize * estimatedBatchNum).toLong
-        TargetVectorsMsg.setOffsetsBuffer(offset, estOffsetSize)
-        offset += estOffsetSize
-        Some(offset - estOffsetSize)
+        TargetVectorsMsg.setOffsetsBuffer(sizeOffset, estOffsetSize)
+        sizeOffset += estOffsetSize
+        Some(sizeOffset - estOffsetSize)
       } else {
         TargetVectorsMsg.setMissingOffsetsBuffer()
         None
@@ -328,43 +371,28 @@ class CoalesceBatchConverter(runtime: GlutenJniWrapper,
 
       // recursively traverses children in the manner of preorder
       val childBuilders = info.children.map { ch =>
-        val (builder, newOffset) = impl(offset, ch)
-        offset = newOffset
+        val (builder, newOffset) = impl(sizeOffset, ch, isTopLevel = false)
+        sizeOffset = newOffset
         builder
       }
 
-      // Constructs the VectorBuilder with all local offsets regarding to the shared rootBuffer
-      // to be allocated afterwards.
-      val curBuilder = VectorBuilder(None, info.posInSchema, info.readType,
-        nullOffset, dataOffset, offsetOffset, childBuilders
-      )
-      (curBuilder, offset)
+      // Constructs the VectorBuilder with all local offsets regarding the shared rootBuffer to be
+      // allocated afterward.
+      val curBuilder = VectorBuilder(isTopLevel = isTopLevel,
+        sizeInBytes = sizeOffset - localSizeOffset,
+        numBuffers = bufferPtrs.length - bufColOffset,
+        posInSchema = info.posInSchema,
+        field = info.readType,
+        nullBufOffset = nullOffset,
+        dataBufOffset = dataOffset,
+        offsetBufOffset = offsetOffset,
+        children = childBuilders)
+
+      (curBuilder, sizeOffset)
     }
 
-    // Record the start point of bufferPtrs
-    val bufferPtrsStart = bufferPtrs.length
-    // Create non-root builders while computing the total size
-    val (tmpRootBuilder, totalBytes) = impl(0, rootInfo)
-
-    // Allocates the united RootBuffer shared by all logical buffers.
-    val bufferInfo = allocator.allocate(totalBytes)
-
-    // Rebasing memory offsets for all (children) vectors with the memory address of shared buffer
-    TargetVectorsMsg.localOffsetsToMemoryAddress(
-      bufferInfo.buffer.getAddress,
-      bufferPtrs,
-      bufferPtrsStart,
-      bufferPtrs.length
-    )
-
-    VectorBuilder(Some(bufferInfo),
-      tmpRootBuilder.posInSchema,
-      tmpRootBuilder.field,
-      tmpRootBuilder.nullBufOffset,
-      tmpRootBuilder.dataBufOffset,
-      tmpRootBuilder.offsetBufOffset,
-      tmpRootBuilder.children
-    )
+    val (rootBuilder, _) = impl(0, rootInfo, isTopLevel = true)
+    rootBuilder
   }
 }
 

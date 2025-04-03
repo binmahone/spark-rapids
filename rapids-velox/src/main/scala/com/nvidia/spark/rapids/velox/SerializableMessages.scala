@@ -307,8 +307,10 @@ object TargetVectorsMsg extends SerializableMessage {
   def localOffsetsToMemoryAddress(baseMemoryAddr: Long,
                                   buffer: mutable.ArrayBuffer[Long],
                                   start: Int,
-                                  end: Int): Unit = {
-    (start until end by perFieldLength).foreach { i =>
+                                  length: Int): Unit = {
+    require(length % perFieldLength == 0,
+      s"length($length) is not a multiple of Field Width($perFieldLength)")
+    (start until start + length by perFieldLength).foreach { i =>
       // dataOffset -> dataAddr
       buffer(i + 1) = buffer(i + 1) match {
         case -1L => 0L

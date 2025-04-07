@@ -43,7 +43,13 @@ object SparkShimImpl extends Spark321PlusShims
       operationName: String,
       className: String,
       message: String): Unit = {
-    if (message.contains("cannot run on GPU") && !bdEventSet.contains(operationName)) {
+    val shouldNotSupportOp = Set(
+      "com.bytedance.tqs.datasource.CustomCSVFileFormat",
+      "org.apache.spark.sql.execution.LocalTableScanExec",
+      "cannot run on GPU because not all data writing commands can be replaced"
+    )
+    if (message.contains("cannot run on GPU") && !bdEventSet.contains(operationName) &&
+        !shouldNotSupportOp.exists(msg => message.contains(msg))) {
       bdEventSet.add(operationName)
       val data = Map (
         "type" -> "RapidsFallback",

@@ -393,7 +393,7 @@ class SpillableHostBufferHandle private[spill] (
 
     if (unspill) {
       synchronized {
-        if (!closed && disk.isDefined) {
+        if (!closed && !host.isDefined) {
           host = Some(materialized)
           materialized.incRefCount()
           SpillFramework.stores.hostStore.trackNoSpill(this)

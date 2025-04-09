@@ -30,6 +30,7 @@ import scala.util.Try
 import ai.rapids.cudf.{Cuda, CudaException, CudaFatalException, CudfException, MemoryCleaner, NvtxColor, NvtxRange}
 import com.nvidia.spark.DFUDFPlugin
 import com.nvidia.spark.rapids.RapidsConf.AllowMultipleJars
+import com.nvidia.spark.rapids.RapidsExecutorPlugin.activeTaskAttempIds
 import com.nvidia.spark.rapids.RapidsPluginUtils.buildInfoEvent
 import com.nvidia.spark.rapids.filecache.{FileCache, FileCacheLocalityManager, FileCacheLocalityMsg}
 import com.nvidia.spark.rapids.io.async.TrafficController
@@ -715,9 +716,12 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
     }
     extraExecutorPlugins.foreach(_.onTaskFailed(failureReason))
     endTaskNvtx()
+    activeTaskAttempIds.remove(TaskContext.get().taskAttemptId())
+    println(s"size of activeTaskAttempIds: ${activeTaskAttempIds.size()}")
   }
 
   override def onTaskStart(): Unit = {
+    activeTaskAttempIds.put(TaskContext.get.taskAttemptId(), ())
     startTaskNvtx(TaskContext.get)
     extraExecutorPlugins.foreach(_.onTaskStart())
     ProfilerOnExecutor.onTaskStart()
@@ -730,6 +734,9 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
   override def onTaskSucceeded(): Unit = {
     extraExecutorPlugins.foreach(_.onTaskSucceeded())
     endTaskNvtx()
+    //TODO: NPE
+    activeTaskAttempIds.remove(TaskContext.get().taskAttemptId())
+    println(s"size of activeTaskAttempIds: ${activeTaskAttempIds.size()}")
   }
 
   private def startTaskNvtx(taskCtx: TaskContext): Unit = {
@@ -749,6 +756,8 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
 }
 
 object RapidsExecutorPlugin {
+  val activeTaskAttempIds = new ConcurrentHashMap[Long, Unit]
+
   /**
    * Return true if the expected cudf version is satisfied by the actual version found.
    * The version is satisfied if the major and minor versions match exactly. If there is a requested

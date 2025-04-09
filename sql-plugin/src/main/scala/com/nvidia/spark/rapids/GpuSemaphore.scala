@@ -109,6 +109,7 @@ object GpuSemaphore {
   def releaseIfNecessary(context: TaskContext): Unit = {
     if (context != null) {
       getInstance.releaseIfNecessary(context)
+      RapidsExecutorPlugin.activeTaskAttempIds.remove(context.taskAttemptId())
     }
   }
 

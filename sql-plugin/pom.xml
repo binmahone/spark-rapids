@@ -99,7 +99,7 @@
         <dependency>
             <groupId>com.nvidia</groupId>
             <artifactId>rapids-4-spark-velox_2.12</artifactId>
-            <version>${project.version}</version>
+            <version>1.0</version>
         </dependency>
     </dependencies>
     <!-- #if scala-2.13 --><!--

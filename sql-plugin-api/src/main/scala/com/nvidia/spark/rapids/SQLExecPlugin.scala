@@ -45,6 +45,7 @@ class SQLExecPlugin extends (SparkSessionExtensions => Unit) {
 
   private def postHocResolutionOverrides(sparkSession: SparkSession): Rule[LogicalPlan] = {
     ShimLoader.newGpuPostHocResolutionOverrides(sparkSession)
+  }
 
   private def bytedanceOptimizePlanRules(sparkSession: SparkSession): Rule[LogicalPlan] = {
     ShimLoader.newBytedanceOptimizePlanRules()

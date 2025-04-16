@@ -311,7 +311,9 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
     targetBatchByteSize: Long,
     concatTimeMetric: GpuMetric,
     inputBatchesMetric: GpuMetric,
-    inputRowsMetric: GpuMetric) extends Iterator[CoalescedHostResult] with AutoCloseable {
+    inputRowsMetric: GpuMetric,
+    asyncBuffering: Boolean = false
+) extends Iterator[CoalescedHostResult] with AutoCloseable {
   private[this] val serializedTables = new util.ArrayDeque[T]
   private[this] var numTablesInBatch: Int = 0
   private[this] var numRowsInBatch: Int = 0
@@ -352,11 +354,13 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
           numRowsInBatch = tableOperator.getNumRows(firstTable)
         }
 
-        bufferingFuture = bufferExecutor.submit(new Runnable {
-          override def run(): Unit = {
-            bufferNextBatch()
-          }
-        })
+        if (asyncBuffering) {
+          bufferingFuture = bufferExecutor.submit(new Runnable {
+            override def run(): Unit = {
+              bufferNextBatch()
+            }
+          })
+        }
       }
 
       withRetryNoSplit(input) { tables =>
@@ -446,7 +450,7 @@ class KudoHostShuffleCoalesceIterator(
     inputRowsMetric: GpuMetric = NoopMetric,
     readOption: CoalesceReadOption)
   extends HostCoalesceIteratorBase[KudoSerializedTableColumn](iter, targetBatchSize,
-    concatTimeMetric, inputBatchesMetric, inputRowsMetric) {
+    concatTimeMetric, inputBatchesMetric, inputRowsMetric, readOption.useAsync) {
   override protected def tableOperator = {
     val kudoSer = if (dataTypes.nonEmpty) {
       Some(new KudoSerializer(GpuColumnVector.from(dataTypes)))

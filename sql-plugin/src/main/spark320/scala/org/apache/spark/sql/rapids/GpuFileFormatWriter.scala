@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -226,13 +226,14 @@ object GpuFileFormatWriter extends Logging {
           }
           // TODO: Using a GPU ordering as a CPU ordering here. Should be OK for now since we do not
           //       support bucket expressions yet and the rest should be simple attributes.
+          val sortTrackers = statsTrackers.filter(_.isInstanceOf[GpuWriteJobStatsTracker])
           val sort = GpuSortExec(
             orderingExpr,
             global = false,
             child = empty2NullPlan,
             sortType = sortType
-          )(orderingExpr).executeColumnar()
-          (sort, None)
+          )(orderingExpr, Some(sortTrackers.asInstanceOf[Seq[GpuWriteJobStatsTracker]]))
+          (sort.executeColumnar(), None)
         }
       }
 
@@ -276,7 +277,8 @@ object GpuFileFormatWriter extends Logging {
       logInfo(s"Finished processing stats for write job ${description.uuid}.")
 
       // return a set of all the partition paths that were updated during this job
-      ret.map(_.summary.updatedPartitions).reduceOption(_ ++ _).getOrElse(Set.empty)
+      ret.map(_.summary.updatedPartitionsWithRowNum.map(_._1).toSet)
+        .reduceOption(_ ++ _).getOrElse(Set.empty)
     } catch { case cause: Throwable =>
       logError(s"Aborting job ${description.uuid}.", cause)
       committer.abortJob(job)

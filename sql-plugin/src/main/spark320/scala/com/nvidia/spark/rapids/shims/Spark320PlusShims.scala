@@ -55,6 +55,7 @@ import com.nvidia.spark.rapids.GpuOverrides.exec
 import org.apache.spark.internal.Logging
 import org.apache.spark.rapids.shims.bd.GpuRoundRobingCoalesceMeta
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.bucket.BucketFilterExec
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate.Average
@@ -322,6 +323,20 @@ trait Spark320PlusShims extends SparkShims with RebaseShims with Logging {
           GpuTypeShims.additionalCommonOperatorSupportedTypes).nested(),
           TypeSig.all),
         (p, conf, parent, r) => new GpuRoundRobingCoalesceMeta(p, conf, parent, r)),
+      exec[BucketFilterExec](
+        "The backend for bucket filter operator",
+        ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.STRUCT + TypeSig.MAP +
+          TypeSig.ARRAY + TypeSig.DECIMAL_128 + TypeSig.BINARY +
+          GpuTypeShims.additionalCommonOperatorSupportedTypes).nested(), TypeSig.all),
+        (bucketFilter, conf, p, r) =>
+          new SparkPlanMeta[BucketFilterExec](bucketFilter, conf, p, r) {
+            override def convertToGpu(): GpuExec =
+              GpuBucketFilterExec(
+                bucketFilter.bucketKeys,
+                bucketFilter.numShufflePartitions,
+                childPlans.head.convertIfNeeded())
+          }
+      ),
     ).map(r => (r.getClassFor.asSubclass(classOf[SparkPlan]), r)).toMap
     maps ++ ScanExecShims.execs
   }

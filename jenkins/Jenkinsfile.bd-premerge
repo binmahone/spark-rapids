@@ -20,7 +20,6 @@
  */
 @Library('blossom-lib') _
 
-
 pipeline {
     agent {
         kubernetes {
@@ -37,6 +36,7 @@ pipeline {
     }
 
     environment {
+        ARTIFACTORY_NAME = "${common.ARTIFACTORY_NAME}"
         ART_URL = "${common.urmURL}/artifactory/sw-spark-maven"
     }
 
@@ -45,13 +45,8 @@ pipeline {
             steps {
                 script {
                     container('cpu') {
-                        env.SPARK_RAPIDS_JNI_URL = sh(returnStdout: true,
-                            script: '''#!/bin/bash
-                                    . jenkins/ci-env.sh >& /dev/null
-                                    echo $SPARK_RAPIDS_JNI_URL
-                                    ''').trim()
-
-                        echo "SPARK_RAPIDS_JNI_URL: ${env.SPARK_RAPIDS_JNI_URL}"
+                        // Load environment variables from ci-env.sh
+                        def buildParams = common.getEnvsFromFile(this, 'jenkins/ci-env.sh')
 
                         def buildTest = build(job: 'spark-rapids-customer-test-build',
                             propagate: false, wait: true,
@@ -62,11 +57,8 @@ pipeline {
                                 string(name: 'RAPIDS_VELOX_REPO_URL', value:
                                     'https://github.com/HighPerfDataAccelerator/spark-rapids.git'
                                 ),
-                                string(name: 'BD_SPARK_RAPIDS_BUILD_IMAGE', value:
-                                    "${common.ARTIFACTORY_NAME}/sw-spark-docker/bd-rapids:1114"
-                                ),
-                                string(name: 'JNI_JAR_URL', value: "${env.SPARK_RAPIDS_JNI_URL}"
-                                ),
+                                string(name: 'BD_SPARK_RAPIDS_BUILD_IMAGE', value: "${buildParams['SPARK_RAPIDS_BUILD_IMAGE']}"),
+                                string(name: 'JNI_JAR_URL', value: "${buildParams['SPARK_RAPIDS_JNI_URL']}"),
                                 string(name: 'BACKENDS_VELOX_JAR_URL', value: "${env.ART_URL}/io/glutenproject/" +
                                     "backends-velox-bd-gluten-nightly/1.2.1-SNAPSHOT/" +
                                     "backends-velox-bd-gluten-nightly-1.2.1-SNAPSHOT.jar"

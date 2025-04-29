@@ -19,7 +19,7 @@ package com.nvidia.spark.rapids
 import java.util.PriorityQueue
 import java.util.concurrent.locks.{Condition, ReentrantLock}
 
-import scala.collection.JavaConverters.{asScalaIteratorConverter, asScalaSetConverter}
+import scala.collection.JavaConverters.asScalaIteratorConverter
 
 import org.apache.spark.sql.rapids.GpuTaskMetrics
 
@@ -67,12 +67,12 @@ class PrioritySemaphore[T](val maxPermits: Int, val priorityForNonStarted: T)
   }
 
   def acquire(numPermits: Int, priority: T, taskAttemptId: Long): Unit = {
-    val activeTasks = RapidsExecutorPlugin.activeTaskAttempIds.keySet().asScala
-    while (activeTasks.count(_ < taskAttemptId) >= 3) {
-      Thread.sleep(1000)
-      println(s"Sleeping for 1 second to allow other tasks to acquire semaphore first, " +
-        s"my task id is $taskAttemptId")
-    }
+//    val activeTasks = RapidsExecutorPlugin.activeTaskAttempIds.keySet().asScala
+//    while (activeTasks.count(_ < taskAttemptId) >= 3) {
+//      Thread.sleep(1000)
+//      println(s"Sleeping for 1 second to allow other tasks to acquire semaphore first, " +
+//        s"my task id is $taskAttemptId")
+//    }
     lock.lock()
     try {
       if (!tryAcquire(numPermits, priority, taskAttemptId)) {

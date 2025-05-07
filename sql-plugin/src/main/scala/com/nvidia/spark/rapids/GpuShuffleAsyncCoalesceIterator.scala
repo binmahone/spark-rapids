@@ -46,15 +46,9 @@ class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
   )
 
   private lazy val readCallable = new Callable[CoalescedHostResult]() {
-    // Get the task context of the task thread.
-    private val tc = TaskContext.get()
     // The actual async read, including the host batches read and concatenation in
     // "HostCoalesceIteratorBase.next()".
     override def call(): CoalescedHostResult = {
-      // Initialize the task context for the work thread in case the upstreams require it.
-      if (TaskContext.get() == null) {
-        TrampolineUtil.setTaskContext(tc)
-      }
       val nvRangeName = s"Task ${TaskContext.get().taskAttemptId()}-Async Read Batch"
       withResource(new NvtxRange(nvRangeName, NvtxColor.BLUE)) { _ =>
         iter.next()

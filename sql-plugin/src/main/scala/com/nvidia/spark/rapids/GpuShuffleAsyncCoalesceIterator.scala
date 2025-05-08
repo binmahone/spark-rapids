@@ -49,7 +49,7 @@ class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
     // The actual async read, including the host batches read and concatenation in
     // "HostCoalesceIteratorBase.next()".
     override def call(): CoalescedHostResult = {
-      val nvRangeName = s"Task ${TaskContext.get().taskAttemptId()}-Async Read Batch"
+      val nvRangeName = s"Async Read Batch"
       withResource(new NvtxRange(nvRangeName, NvtxColor.BLUE)) { _ =>
         iter.next()
       }

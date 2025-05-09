@@ -357,7 +357,7 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
           numRowsInBatch = tableOperator.getNumRows(firstTable)
         }
 
-        if (asyncBuffering) {
+        if (asyncBuffering && iter.hasNext) {
           bufferingFuture = bufferExecutor.submit(new Runnable {
             override def run(): Unit = {
               bufferNextBatch()
@@ -405,7 +405,7 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
     // GpuShuffleAsyncCoalesceIterator.
     // Suppose "iter.hasNext" reads in only a header which should be small
     // enough to make this a very lightweight operation.
-    !serializedTables.isEmpty || iter.hasNext
+    bufferingFuture != null || !serializedTables.isEmpty || iter.hasNext
   }
 
   override def next(): CoalescedHostResult = {

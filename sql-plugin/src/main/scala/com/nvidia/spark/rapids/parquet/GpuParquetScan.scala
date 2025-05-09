@@ -1429,18 +1429,14 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
 
   protected def calculateParquetOutputSize(
       currentChunkedBlocks: Seq[BlockMetaData],
-      schema: MessageType,
-      handleCoalesceFiles: Boolean): Long = {
+      schema: MessageType): Long = {
     // start with the size of Parquet magic (at start+end) and footer length values
     val headerSize: Long = PARQUET_META_SIZE
     val blocksSize = ParquetPartitionReader.computeOutputSize(currentChunkedBlocks, compressCfg)
     val footerSize = calculateParquetFooterSize(currentChunkedBlocks, schema)
-    val extraMemory = if (handleCoalesceFiles) {
-      val numCols = currentChunkedBlocks.head.getColumns().size()
-      calculateExtraMemoryForParquetFooter(numCols, currentChunkedBlocks.size)
-    } else {
-      0
-    }
+    // There are always cases where the size of the offsets might change.
+    val numCols = currentChunkedBlocks.head.getColumns().size()
+    val extraMemory = calculateExtraMemoryForParquetFooter(numCols, currentChunkedBlocks.size)
     headerSize + blocksSize + footerSize + extraMemory
   }
 
@@ -1928,7 +1924,7 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       clippedSchema: MessageType,
       filePath: Path): (SpillableHostBuffer, Seq[BlockMetaData]) = {
     withResource(new NvtxRange("Parquet buffer file split", NvtxColor.YELLOW)) { _ =>
-      val estTotalSize = calculateParquetOutputSize(blocks, clippedSchema, false)
+      val estTotalSize = calculateParquetOutputSize(blocks, clippedSchema)
       val outHostBuf = withRetryNoSplit[HostMemoryBuffer] {
         HostMemoryBuffer.allocate(estTotalSize)
       }
@@ -1946,7 +1942,7 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
         // check we didn't go over memory
         if (out.getPos > estTotalSize) {
-          throw new QueryExecutionException(s"Calculated buffer size $estTotalSize is to " +
+          throw new QueryExecutionException(s"Calculated buffer size $estTotalSize is too " +
               s"small, actual written: ${out.getPos}")
         }
         (SpillableHostBuffer(hmb, out.getPos, SpillPriorities.ACTIVE_BATCHING_PRIORITY),
@@ -2235,7 +2231,7 @@ class MultiFileParquetPartitionReader(
     // multiple files they will not pass the checks as they are.
     val blockStartOffset = ParquetPartitionReader.PARQUET_MAGIC.length
     val updatedBlocks = computeBlockMetaData(allBlocks, blockStartOffset)
-    calculateParquetOutputSize(updatedBlocks, batchContext.schema, true)
+    calculateParquetOutputSize(updatedBlocks, batchContext.schema)
   }
 
   override def getBatchRunner(

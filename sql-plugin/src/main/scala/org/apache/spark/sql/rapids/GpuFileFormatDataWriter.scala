@@ -187,6 +187,16 @@ abstract class GpuFileFormatDataWriter(
   /** Writes a columnar batch of records */
   def write(batch: ColumnarBatch): Unit
 
+  protected val reportSingleWriter = true
+
+  private def updateWritersNumber(): Unit = {
+    if (currentWriterStatus.writer != null && reportSingleWriter) {
+      // By default, only one writer is opened for write.
+      // And concurrent writer will do this by itself.
+      statsTrackers.foreach(_.writersNumber(1))
+    }
+  }
+
   /**
    * Returns the summary of relative information which
    * includes the list of partition strings written out. The list of partitions is sent back
@@ -194,6 +204,7 @@ abstract class GpuFileFormatDataWriter(
    * driver too and used to e.g. update the metrics in UI.
    */
   override def commit(): WriteTaskResult = {
+    updateWritersNumber()
     releaseResources()
     val (taskCommitMessage, taskCommitTime) = TimingUtils.timeTakenMs {
       committer.commitTask(taskAttemptContext)
@@ -207,6 +218,7 @@ abstract class GpuFileFormatDataWriter(
 
   override def abort(): Unit = {
     try {
+      updateWritersNumber()
       releaseResources()
     } finally {
       committer.abortTask(taskAttemptContext)
@@ -723,6 +735,8 @@ class GpuDynamicPartitionDataConcurrentWriter(
     }
   }
 
+  override protected val reportSingleWriter: Boolean = false
+
   // Keep all the unclosed writers, key is a partition path and(or) bucket id.
   // Note: if fall back to sort-based mode, also use the opened writers in the map.
   private val concurrentWriters = mutable.HashMap[WriterIndex, WriterStatusWithBatches]()
@@ -817,6 +831,8 @@ class GpuDynamicPartitionDataConcurrentWriter(
 
     // Split the batch and cache the result, along with opening the writers.
     splitBatchToCacheAndClose(cb)
+    // Update the maxWriterNumber metric since the writers are already opened and cached.
+    statsTrackers.foreach(_.writersNumber(concurrentWriters.size))
     // Write the cached batches
     val writeFunc: (WriterIndex, WriterStatusWithBatches) => Unit =
       if (pendingBatches.nonEmpty) {

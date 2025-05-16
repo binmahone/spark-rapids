@@ -420,6 +420,7 @@ abstract class RapidsMeta[INPUT <: BASE, BASE, OUTPUT <: BASE](
 
       strBuilder.append(willWorkOnGpuInfo).
         append(willBeRemovedInfo)
+      SparkShimImpl.postFallbackMetrics(operationName, String.valueOf(wrapped), willWorkOnGpuInfo)
 
       typeConversionInfo match {
         case info if info.isEmpty =>

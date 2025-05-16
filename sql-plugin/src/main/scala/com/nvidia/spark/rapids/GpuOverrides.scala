@@ -4627,6 +4627,36 @@ object GpuOverrides extends Logging {
       ExecChecks((TypeSig.commonCudfTypes + TypeSig.DECIMAL_128 + TypeSig.STRUCT + TypeSig.ARRAY +
           TypeSig.MAP + GpuTypeShims.additionalCommonOperatorSupportedTypes).nested(), TypeSig.all),
       (scan, conf, p, r) => new InMemoryTableScanMeta(scan, conf, p, r)),
+    exec[BucketUnionExec](
+      "The backend for bucket union operator",
+      ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128 +
+        TypeSig.MAP + TypeSig.ARRAY + TypeSig.STRUCT).nested()
+        .withPsNote(TypeEnum.STRUCT,
+          "unionByName will not optionally impute nulls for missing struct fields " +
+            "when the column is a struct and there are non-overlapping fields"), TypeSig.all),
+      (union, conf, p, r) => new SparkPlanMeta[BucketUnionExec](union, conf, p, r) {
+        override def convertToGpu(): GpuExec =
+          GpuBucketUnionExec(childPlans.map(_.convertIfNeeded()),
+            union.requiredNumPartitions,
+            union.hashingFunctionClass,
+            union.outputIndices)
+      }
+    ),
+    exec[ParallelBucketUnionExec](
+      "The backend for parallel bucket union operator",
+      ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128 +
+        TypeSig.MAP + TypeSig.ARRAY + TypeSig.STRUCT).nested()
+        .withPsNote(TypeEnum.STRUCT,
+          "unionByName will not optionally impute nulls for missing struct fields " +
+            "when the column is a struct and there are non-overlapping fields"), TypeSig.all),
+      (union, conf, p, r) => new SparkPlanMeta[ParallelBucketUnionExec](union, conf, p, r) {
+        override def convertToGpu(): GpuExec =
+          GpuParallelBucketUnionExec(childPlans.map(_.convertIfNeeded()),
+            union.staticPartExpr)
+      }
+    ),
+
+
     neverReplaceExec[AlterNamespaceSetPropertiesExec]("Namespace metadata operation"),
     neverReplaceExec[CreateNamespaceExec]("Namespace metadata operation"),
     neverReplaceExec[DescribeNamespaceExec]("Namespace metadata operation"),

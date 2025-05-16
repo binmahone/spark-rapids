@@ -187,7 +187,7 @@ case class GpuInsertIntoHadoopFsRelationCommand(
           concurrentWriterPartitionFlushSize = concurrentWriterPartitionFlushSize,
           forceHiveHashForBucketing = forceHiveHashForBucketing,
           numStaticPartitionCols = staticPartitions.size,
-          baseDebugOutputPath = baseDebugOutputPath)
+          baseDebugOutputPath = baseDebugOutputPath).partitionRows.keySet
 
 
       // update metastore partition metadata

@@ -101,7 +101,7 @@ object RapidsPluginUtils extends Logging {
       s"private revision ${privateRev}")
   }
 
-  val extraPlugins = getExtraPlugins
+  val extraPlugins = getExtraPlugins ++ Seq(new com.nvidia.spark.rapids.velox.PluginWrapper())
 
   def logPluginMode(conf: RapidsConf): Unit = {
     if (conf.isSqlEnabled && conf.isSqlExecuteOnGPU) {

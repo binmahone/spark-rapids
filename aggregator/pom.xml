@@ -71,6 +71,11 @@
             <version>${spark-rapids-private.version}</version>
             <classifier>${spark.version.classifier}</classifier>
         </dependency>
+        <dependency>
+            <groupId>com.nvidia</groupId>
+            <artifactId>rapids-4-spark-velox_2.12</artifactId>
+            <version>1.0</version>
+        </dependency>
         <!--
             Placeholders for the maximum number of delta-lake shims per Spark shim:
             If a Shim needs only N it uses rapids.delta.artifactIdN+1 = rapids.delta.artifactIdN

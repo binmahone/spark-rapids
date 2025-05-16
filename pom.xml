@@ -69,8 +69,6 @@
         <module>shuffle-plugin</module>
         <module>sql-plugin</module>
         <module>sql-plugin-api</module>
-        <module>tests</module>
-        <module>tools</module>
         <module>udf-compiler</module>
 
         <!--
@@ -100,6 +98,7 @@
             </properties>
             <modules>
                 <module>delta-lake/delta-20x</module>
+                <module>rapids-velox</module>
             </modules>
         </profile>
         <!-- #endif scala-2.12 -->
@@ -121,6 +120,7 @@
             </properties>
             <modules>
                 <module>delta-lake/delta-20x</module>
+                <module>rapids-velox</module>
             </modules>
         </profile>
         <!-- #endif scala-2.12 -->
@@ -170,6 +170,7 @@
             </properties>
             <modules>
                 <module>delta-lake/delta-20x</module>
+                <module>rapids-velox</module>
             </modules>
         </profile>
         <!-- #endif scala-2.12 -->
@@ -191,6 +192,7 @@
             </properties>
             <modules>
                 <module>delta-lake/delta-20x</module>
+                <module>rapids-velox</module>
             </modules>
         </profile>
         <!-- #endif scala-2.12 -->
@@ -212,6 +214,7 @@
             </properties>
             <modules>
                 <module>delta-lake/delta-20x</module>
+                <module>rapids-velox</module>
             </modules>
         </profile>
         <!-- #endif scala-2.12 -->
@@ -910,8 +913,12 @@
         <!--
          If you update a dependency version so it is no longer a SNAPSHOT
          please update the snapshot-shims profile as well so it is accurate -->
-        <spark320.version>3.2.0</spark320.version>
-        <spark321.version>3.2.1</spark321.version>
+
+        <spark311.version>3.2.1-bd1-SNAPSHOT</spark311.version>
+        <spark312.version>3.2.1-bd1-SNAPSHOT</spark312.version>
+        <spark313.version>3.2.1-bd1-SNAPSHOT</spark313.version>
+        <spark320.version>3.2.1-bd1-SNAPSHOT</spark320.version>
+        <spark321.version>3.2.1-bd1-SNAPSHOT</spark321.version>
         <spark321cdh.version>3.2.1.3.2.7171000.0-3</spark321cdh.version>
         <spark322.version>3.2.2</spark322.version>
         <spark323.version>3.2.3</spark323.version>

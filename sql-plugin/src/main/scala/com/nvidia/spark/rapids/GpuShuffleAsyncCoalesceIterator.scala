@@ -32,9 +32,9 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
  */
 class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
     dataTypes: Array[DataType],
-    outputBatchesMetric: GpuMetric = NoopMetric,
-    outputRowsMetric: GpuMetric = NoopMetric,
-    asyncReadTimeMetric: GpuMetric = NoopMetric,
+    readTimeMetric: GpuMetric = NoopMetric,
+    semReadTimeMetric: GpuMetric = NoopMetric,
+    readLaunchTime: GpuMetric = NoopMetric,
     opTimeMetric: GpuMetric = NoopMetric) extends Iterator[ColumnarBatch] {
 
   private val readExecutor =
@@ -49,26 +49,35 @@ class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
   private val taskAttemptID = Option(TaskContext.get()).
     map(_.taskAttemptId().toString).getOrElse("unknown")
 
-  private lazy val readCallable = new Callable[CoalescedHostResult]() {
+  private type ReadResult = (CoalescedHostResult, Long)
+
+  private class ReadCallable extends Callable[ReadResult]() {
+    private val start = System.nanoTime()
+
     // The actual async read, including the host batches read and concatenation in
     // "HostCoalesceIteratorBase.next()".
-    override def call(): CoalescedHostResult = {
+    override def call(): ReadResult = {
+      val end = System.nanoTime()
       val nvRangeName = s"Task ${taskAttemptID}-Async Read Batch"
       withResource(new NvtxRange(nvRangeName, NvtxColor.BLUE)) { _ =>
-        iter.next()
+        (iter.next(), end - start)
       }
     }
   }
 
-  private var readFutureOpt: Option[Future[CoalescedHostResult]] = None
+  private var readFutureOpt: Option[Future[ReadResult]] = None
 
-  override def hasNext(): Boolean = GpuMetric.ns(asyncReadTimeMetric, opTimeMetric) {
-    readFutureOpt.isDefined || {
-      // No async read is running when it comes here, so no need synchronization
-      // when accessing the input iterator. "iter.hasNext" should be lightweight
-      // enough, since it just read in a header which is very small.
-      iter.hasNext
+  private def withMetrics[R](f: => R): R = opTimeMetric.ns {
+    GpuMetric.withSemaphoreTime(readTimeMetric, semReadTimeMetric, TaskContext.get()) {
+      f
     }
+  }
+
+  override def hasNext(): Boolean = readFutureOpt.isDefined || {
+    // No async read is running when it comes here, so no need synchronization
+    // when accessing the input iterator. "iter.hasNext" should be lightweight
+    // enough, since it just read in a header which is very small.
+    withMetrics(iter.hasNext)
   }
 
   override def next(): ColumnarBatch = {
@@ -77,10 +86,12 @@ class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
     }
     val nvRangeName = s"Task ${taskAttemptID}-Batch to GPU"
     withResource(new NvtxRange(nvRangeName, NvtxColor.BLUE)) { _ =>
-      val hostConcatedRet = GpuMetric.ns(asyncReadTimeMetric, opTimeMetric) {
+      val hostConcatedRet = withMetrics {
         readFutureOpt.map { readFuture =>
           // An async read is running, waiting for the result
-          readFuture.get()
+          val (ret, launchTime) = readFuture.get()
+          readLaunchTime.add(launchTime)
+          ret
         }.getOrElse { // The first batch, just read it directly
           iter.next()
         }
@@ -93,17 +104,15 @@ class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
         GpuMetric.ns(opTimeMetric)(hostConcatedRet.toGpuBatch(dataTypes))
       }
       closeOnExcept(gpuCB) { _ =>
-        val hasNextCB = GpuMetric.ns(asyncReadTimeMetric, opTimeMetric)(iter.hasNext)
+        val hasNextCB = withMetrics(iter.hasNext)
         GpuMetric.ns(opTimeMetric) {
           // No need synchronization here since the async read is already done.
           if (hasNextCB) {
             // Prefetch and concatenate the next one asynchronously.
-            readFutureOpt = Some(readExecutor.submit(readCallable))
+            readFutureOpt = Some(readExecutor.submit(new ReadCallable()))
           } else {
             readFutureOpt = None
           }
-          outputBatchesMetric += 1
-          outputRowsMetric += gpuCB.numRows()
           gpuCB
         }
       }

@@ -63,15 +63,8 @@ case class GpuShuffleCoalesceExec(child: SparkPlan, targetBatchByteSize: Long)
     OP_TIME -> createNanoTimingMetric(MODERATE_LEVEL, DESCRIPTION_OP_TIME),
     NUM_INPUT_ROWS -> createMetric(DEBUG_LEVEL, DESCRIPTION_NUM_INPUT_ROWS),
     NUM_INPUT_BATCHES -> createMetric(DEBUG_LEVEL, DESCRIPTION_NUM_INPUT_BATCHES),
-    CONCAT_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_CONCAT_TIME),
-    SYNC_READ_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESC_SYNC_READ_TIME),
-    ASYNC_READ_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESC_ASYNC_READ_TIME),
-    SYNC_READ_WITH_SEM_TIME ->
-      createNanoTimingMetric(DEBUG_LEVEL, DESC_SYNC_READ_WITH_SEM_TIME),
-    ASYNC_READ_WITH_SEM_TIME ->
-      createNanoTimingMetric(DEBUG_LEVEL, DESC_ASYNC_READ_WITH_SEM_TIME),
-    BG_JOB_LAUNCH_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESC_BG_JOB_LAUNCH_TIME),
-  )
+    CONCAT_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_CONCAT_TIME)
+  ) ++ ShuffleCoalReadMetrics.createAsMap(this)
 
   override protected val outputBatchesLevel = MODERATE_LEVEL
 
@@ -123,6 +116,73 @@ object CoalesceReadOption {
   }
 }
 
+class ShuffleCoalReadMetrics private(
+    val readTimeMetric: GpuMetric,
+    val semReadTimeMetric: GpuMetric,
+    val asyncReadTimeMetric: GpuMetric,
+    val semAsyncReadTimeMetric: GpuMetric,
+    val bgJobLaunchMetric: GpuMetric)
+
+object ShuffleCoalReadMetrics {
+  import GpuMetric.DEBUG_LEVEL
+
+  private val SYNC_READ_TIME = "shuffleSyncReadTime"
+  private val SYNC_READ_WITH_SEM_TIME = "shuffleSyncReadTimeWithSem"
+  private val ASYNC_READ_TIME = "shuffleAsyncReadTime"
+  private val ASYNC_READ_WITH_SEM_TIME = "shuffleAsyncReadTimeWithSem"
+  private val BG_JOB_LAUNCH_TIME = "bgJobLaunchTime"
+  private val DESC_SYNC_READ_TIME = "read batch time(sync)"
+  private val DESC_SYNC_READ_WITH_SEM_TIME = "read batch with Sem. time(sync)"
+  private val DESC_ASYNC_READ_TIME = "read batch time(async)"
+  private val DESC_ASYNC_READ_WITH_SEM_TIME = "read batch with Sem. time(async)"
+  private val DESC_BG_JOB_LAUNCH_TIME = "bg job launch time"
+
+  private val keys = Seq(
+    SYNC_READ_TIME,
+    SYNC_READ_WITH_SEM_TIME,
+    ASYNC_READ_TIME,
+    ASYNC_READ_WITH_SEM_TIME,
+    BG_JOB_LAUNCH_TIME)
+
+  private val names = Seq(
+    DESC_SYNC_READ_TIME,
+    DESC_SYNC_READ_WITH_SEM_TIME,
+    DESC_ASYNC_READ_TIME,
+    DESC_ASYNC_READ_WITH_SEM_TIME,
+    DESC_BG_JOB_LAUNCH_TIME)
+
+  /**
+   * Create from the given metric map, a NoopMetric is used for the one does not exist.
+   */
+  def apply(metrics: Map[String, GpuMetric], prefix: String): ShuffleCoalReadMetrics = {
+    val Seq(read, semRead, aRead, semARead, jobLaunch) = keys.map { k =>
+      metrics.getOrElse(s"$prefix$k", NoopMetric)
+    }
+    new ShuffleCoalReadMetrics(read, semRead, aRead, semARead, jobLaunch)
+  }
+
+  /**
+   * Create the coalesce read relevant metrics as a Map.
+   * The "prefix" will be added to the beginning of each metric name. This is for
+   * the join case, where there are two separate iterators owning separate metric set.
+   */
+  def createAsMap(exec: GpuExec, prefix: String = ""): Map[String, GpuMetric] = {
+    keys.zip(names).map { case (k, v) =>
+      s"$prefix$k" -> exec.createNanoTimingMetric(DEBUG_LEVEL, s"$prefix $v".trim)
+    }.toMap
+  }
+
+  def filter(metrics: Map[String, GpuMetric]): Map[String, GpuMetric] = {
+    metrics.filter { case (k, _) =>
+      // If the given key contains the raw key string, it is treated as a coalesce
+      // read metric.
+      // e.g. in the join case, the given key would be 'buildshuffleSyncReadTime',
+      // while the raw key is still 'shuffleSyncReadTime'.
+      keys.exists(rawKey => k.contains(rawKey))
+    }
+  }
+}
+
 object GpuShuffleCoalesceUtils {
 
   val bufferExecutor: ThreadPoolExecutor =
@@ -151,14 +211,20 @@ object GpuShuffleCoalesceUtils {
       dataTypes: Array[DataType],
       readOption: CoalesceReadOption,
       metricsMap: Map[String, GpuMetric],
-      prefetchFirstBatch: Boolean = false): Iterator[ColumnarBatch] = {
+      prefetchFirstBatch: Boolean = false,
+      prefix: String = ""): Iterator[ColumnarBatch] = {
     val concatTimeMetric = metricsMap(GpuMetric.CONCAT_TIME)
     val inBatchesMetric = metricsMap(GpuMetric.NUM_INPUT_BATCHES)
     val inRowsMetric = metricsMap(GpuMetric.NUM_INPUT_ROWS)
     val outBatchesMetric = metricsMap(GpuMetric.NUM_OUTPUT_BATCHES)
     val outRowsMetric = metricsMap(GpuMetric.NUM_OUTPUT_ROWS)
     val opTimeMetric = metricsMap(GpuMetric.OP_TIME)
-    val bgJobLaunchMetric = metricsMap(BG_JOB_LAUNCH_TIME)
+    val coalMetrics = ShuffleCoalReadMetrics(metricsMap, prefix)
+    val (readTimeMetric, semReadTimeMetric) = if (readOption.useAsync) {
+      (coalMetrics.asyncReadTimeMetric, coalMetrics.semAsyncReadTimeMetric)
+    } else {
+      (coalMetrics.readTimeMetric, coalMetrics.semReadTimeMetric)
+    }
     val inIter = iter.map { cb =>
       inBatchesMetric += 1
       inRowsMetric += cb.numRows()
@@ -166,15 +232,18 @@ object GpuShuffleCoalesceUtils {
     }
     val hostIter = if (readOption.kudoEnabled) {
       new KudoHostShuffleCoalesceIterator(inIter, targetSize, dataTypes, concatTimeMetric,
-        bgJobLaunchMetric, readOption)
+        coalMetrics.bgJobLaunchMetric, readOption)
     } else {
-      new HostShuffleCoalesceIterator(inIter, targetSize, concatTimeMetric, bgJobLaunchMetric)
+      new HostShuffleCoalesceIterator(inIter, targetSize, concatTimeMetric,
+        coalMetrics.bgJobLaunchMetric)
     }
     val maybeBufferedIter = if (prefetchFirstBatch) {
       val bufferedIter = new CloseableBufferedIterator(hostIter)
       withResource(new NvtxRange("fetch first batch", NvtxColor.YELLOW)) { _ =>
         // Force a coalesce of the first batch before we grab the GPU semaphore
-        bufferedIter.headOption
+        GpuMetric.withSemaphoreTime(readTimeMetric, semReadTimeMetric, TaskContext.get()) {
+          bufferedIter.headOption
+        }
       }
       bufferedIter
     } else {
@@ -183,11 +252,10 @@ object GpuShuffleCoalesceUtils {
 
     (if (readOption.useAsync) {
       new GpuShuffleAsyncCoalesceIterator(maybeBufferedIter, dataTypes,
-        metricsMap(ASYNC_READ_TIME), metricsMap(ASYNC_READ_WITH_SEM_TIME),
-        bgJobLaunchMetric, opTimeMetric)
+        readTimeMetric, semReadTimeMetric, coalMetrics.bgJobLaunchMetric, opTimeMetric)
     } else {
       new GpuShuffleCoalesceIterator(maybeBufferedIter, dataTypes,
-        metricsMap(SYNC_READ_TIME), metricsMap(SYNC_READ_WITH_SEM_TIME), opTimeMetric)
+        readTimeMetric, semReadTimeMetric, opTimeMetric)
     }).map { cb =>
       outBatchesMetric += 1
       outRowsMetric += cb.numRows()
@@ -207,17 +275,6 @@ object GpuShuffleCoalesceUtils {
       case o => throw new IllegalStateException(s"unsupported type: ${o.getClass}")
     }
   }
-
-  val SYNC_READ_TIME = "shuffleSyncReadTime"
-  val ASYNC_READ_TIME = "shuffleAsyncReadTime"
-  val SYNC_READ_WITH_SEM_TIME = "shuffleSyncReadTimeWithSem"
-  val ASYNC_READ_WITH_SEM_TIME = "shuffleAsyncReadTimeWithSem"
-  val DESC_SYNC_READ_TIME = "read batch time(sync)"
-  val DESC_ASYNC_READ_TIME = "read batch time(async)"
-  val DESC_SYNC_READ_WITH_SEM_TIME = "read batch with Sem. time(sync)"
-  val DESC_ASYNC_READ_WITH_SEM_TIME = "read batch with Sem. time(async)"
-  val BG_JOB_LAUNCH_TIME = "bgJobLaunchTime"
-  val DESC_BG_JOB_LAUNCH_TIME = "bg job launch time"
 }
 
 /**

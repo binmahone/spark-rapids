@@ -28,6 +28,7 @@ class SQLExecPlugin extends (SparkSessionExtensions => Unit) {
   private val strategyRules: SparkStrategy = ShimLoader.newStrategyRules()
 
   override def apply(extensions: SparkSessionExtensions): Unit = {
+    extensions.injectOptimizerRule(bytedanceOptimizePlanRules)
     extensions.injectColumnar(columnarOverrides)
     extensions.injectQueryStagePrepRule(queryStagePrepOverrides)
     extensions.injectPlannerStrategy(_ => strategyRules)
@@ -44,5 +45,9 @@ class SQLExecPlugin extends (SparkSessionExtensions => Unit) {
 
   private def postHocResolutionOverrides(sparkSession: SparkSession): Rule[LogicalPlan] = {
     ShimLoader.newGpuPostHocResolutionOverrides(sparkSession)
+  }
+
+  private def bytedanceOptimizePlanRules(sparkSession: SparkSession): Rule[LogicalPlan] = {
+    ShimLoader.newBytedanceOptimizePlanRules()
   }
 }

@@ -25,6 +25,7 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.datasources.FileFormatWriter
+import org.apache.spark.sql.execution.datasources.FileFormatWriter.WriteResult
 import org.apache.spark.sql.hive.execution.SaveAsHiveFile
 import org.apache.spark.sql.rapids.GpuFileFormatWriter
 import org.apache.spark.sql.rapids.shims.TrampolineConnectShims.SparkSession
@@ -47,7 +48,7 @@ private[hive] trait GpuSaveAsHiveFile extends GpuDataWritingCommand with SaveAsH
       customPartitionLocations: Map[TablePartitionSpec,String] = Map.empty,
       partitionAttributes: Seq[Attribute] = Nil,
       bucketSpec: Option[BucketSpec] = None,
-      options: Map[String, String] = Map.empty): Set[String] = {
+      options: Map[String, String] = Map.empty): WriteResult = {
 
     val committer = FileCommitProtocol.instantiate(
       sparkSession.sessionState.conf.fileCommitProtocolClass,

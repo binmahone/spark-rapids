@@ -54,8 +54,9 @@ import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hive.HiveShim.{ShimFileSinkDesc => FileSinkDesc}
 import org.apache.spark.sql.hive.client.HiveClientImpl
 import org.apache.spark.sql.hive.client.hive._
-import org.apache.spark.sql.hive.execution.InsertIntoHiveTable
+import org.apache.spark.sql.hive.execution.{FragPartitionUtils, InsertIntoHiveTable}
 import org.apache.spark.sql.hive.rapids.{GpuHiveFileFormat, GpuSaveAsHiveFile, RapidsHiveErrors}
+import org.apache.spark.sql.hive.rapids.shims.bd.GpuInsertHiveTableHelper
 import org.apache.spark.sql.rapids.shims.RapidsErrorUtils
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
@@ -98,7 +99,9 @@ case class GpuInsertIntoHiveTable(
     overwrite: Boolean,
     ifPartitionNotExists: Boolean,
     outputColumnNames: Seq[String],
-    baseOutputDebugPath: Option[String]) extends GpuSaveAsHiveFile {
+    baseOutputDebugPath: Option[String])
+  extends GpuSaveAsHiveFile
+  with GpuInsertHiveTableHelper {
 
   /**
    * Inserts all the rows in the table into Hive.  Row objects are properly serialized with the
@@ -143,6 +146,9 @@ case class GpuInsertIntoHiveTable(
     sparkSession.sessionState.catalog.refreshTable(table.identifier)
 
     CommandUtils.updateTableStats(sparkSession, table)
+
+    // Invoke Bytedance's internal Spark api send metrics after InsertHiveTable is done
+    postEvent(table, partition, overwrite, sparkSession, hadoopConf, metrics)
 
     // It would be nice to just return the childRdd unchanged so insert operations could be chained,
     // however for now we return an empty list to simplify compatibility checks with hive, which
@@ -212,7 +218,7 @@ case class GpuInsertIntoHiveTable(
     val forceHiveHashForBucketing =
       RapidsConf.FORCE_HIVE_HASH_FOR_BUCKETED_WRITE.get(sparkSession.sessionState.conf)
 
-    val writtenParts = gpuSaveAsHiveFile(
+    val writeResult = gpuSaveAsHiveFile(
       sparkSession = sparkSession,
       plan = child,
       hadoopConf = hadoopConf,
@@ -224,9 +230,22 @@ case class GpuInsertIntoHiveTable(
       options = BucketingUtilsShim.getOptionsWithHiveBucketWrite(table.bucketSpec),
       baseDebugOutputPath = baseOutputDebugPath)
 
+    // validate bucketing based on number of files before loading to metastore
+    validateBucketNum(table, numDynamicPartitions, hadoopConf, tmpLocation, partition)
+    // do frag partition compaction if enabled
+    FragPartitionUtils.tryCompact(
+      InsertIntoHiveTable(
+        table, partition, query, overwrite, ifPartitionNotExists, outputColumnNames),
+      sparkSession,
+      HiveClientImpl.toHiveTable(table).getDataLocation,
+      tmpLocation,
+      tableDesc,
+      writeResult)
+
     if (partition.nonEmpty) {
       if (numDynamicPartitions > 0) {
         if (overwrite && table.tableType == CatalogTableType.EXTERNAL) {
+          val writtenParts = writeResult.partitionRows.keySet
           val numWrittenParts = writtenParts.size
           val maxDynamicPartitionsKey = HiveConf.ConfVars.DYNAMICPARTITIONMAXPARTS.varname
           val maxDynamicPartitions = hadoopConf.getInt(maxDynamicPartitionsKey,
@@ -273,13 +292,20 @@ case class GpuInsertIntoHiveTable(
           }
         }
 
-        externalCatalog.loadDynamicPartitions(
-          db = table.database,
-          table = table.identifier.table,
-          tmpLocation.toString,
+
+        // Use loadAndGetDynamicPartitions here to update affected partitions
+        // and its row counts to hive metastore/
+        loadAndGetDynamicPartitions(
+          table,
+          tmpLocation,
           partitionSpec,
           overwrite,
-          numDynamicPartitions)
+          numDynamicPartitions,
+          writeResult,
+          externalCatalog,
+          partition,
+          sparkSession.sessionState.conf
+        )
       } else {
         // scalastyle:off
         // ifNotExists is only valid with static partition, refer to
@@ -345,16 +371,23 @@ case class GpuInsertIntoHiveTable(
           // inheritTableSpecs is set to true. It should be set to false for an IMPORT query
           // which is currently considered as a Hive native command.
           val inheritTableSpecs = true
-          externalCatalog.loadPartition(
-            table.database,
-            table.identifier.table,
-            tmpLocation.toString,
+
+          // Add partitions and update row count counter
+          loadAndGetStaticPartitions(
+            table,
+            tmpLocation,
             partitionSpec,
-            isOverwrite = doHiveOverwrite,
-            inheritTableSpecs = inheritTableSpecs,
-            isSrcLocal = false)
+            doHiveOverwrite,
+            inheritTableSpecs,
+            oldPart,
+            externalCatalog,
+            metrics,
+            conf)
         }
       }
+
+      // update affected partitions and its row counts to hive metastore
+      updatePartitionStats(sparkSession, table, externalCatalog)
     } else {
       externalCatalog.loadTable(
         table.database,

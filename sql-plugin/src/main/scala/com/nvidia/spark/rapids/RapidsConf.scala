@@ -1096,6 +1096,17 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
       .checkValues(ParquetFooterReaderType.values.map(_.toString))
       .createWithDefault(ParquetFooterReaderType.AUTO.toString)
 
+  // This is an experimental feature for reading small files from remote HDFS clusters from which
+  // seekable reads of small data are quite inefficient.
+  val PARQUET_READER_PRECACHE_THRESHOLD =
+    conf("spark.rapids.sql.format.parquet.precache.threshold")
+      .doc("The threshold in bytes for the parquet reader to pre-cache the entire file in " +
+          "memory. This is used to avoid opening the fileInputStream for multiple times during " +
+          "the I/O workflow. The default value is 0, which means no pre-caching.")
+      .internal()
+      .longConf
+      .createWithDefault(0L)
+
   // This is an experimental feature now. And eventually, should be enabled or disabled depending
   // on something that we don't know yet but would try to figure out.
   val ENABLE_CPU_BASED_UDF = conf("spark.rapids.sql.rowBasedUDF.enabled")
@@ -3086,6 +3097,8 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
             s"${PARQUET_READER_FOOTER_TYPE.key}")
     }
   }
+
+  lazy val parquetReaderPrecacheThreshold: Long = get(PARQUET_READER_PRECACHE_THRESHOLD)
 
   lazy val isParquetPerFileReadEnabled: Boolean =
     RapidsReaderType.withName(get(PARQUET_READER_TYPE)) == RapidsReaderType.PERFILE

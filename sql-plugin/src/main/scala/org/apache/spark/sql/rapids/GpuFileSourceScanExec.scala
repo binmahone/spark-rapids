@@ -450,6 +450,12 @@ case class GpuFileSourceScanExec(
     DELETION_VECTOR_SIZE -> createSizeMetric(MODERATE_LEVEL, DESCRIPTION_DELETION_VECTOR_SIZE)
   ) ++ fileCacheMetrics ++ {
     relation.fileFormat match {
+      case _: GpuReadParquetFileFormat if rapidsConf.parquetReaderPrecacheThreshold > 0 =>
+        Map(READ_FS_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_READ_FS_TIME),
+          WRITE_BUFFER_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_WRITE_BUFFER_TIME),
+          "precacheTime" -> createNanoTimingMetric(DEBUG_LEVEL, "precache file time"),
+          "precacheWithSem" ->
+            createNanoTimingMetric(DEBUG_LEVEL, "precache file time with semaphore"))
       case _: GpuReadParquetFileFormat | _: GpuOrcFileFormat =>
         Map(READ_FS_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_READ_FS_TIME),
           WRITE_BUFFER_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_WRITE_BUFFER_TIME))

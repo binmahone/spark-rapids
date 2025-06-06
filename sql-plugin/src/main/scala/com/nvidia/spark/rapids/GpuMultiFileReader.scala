@@ -19,6 +19,7 @@ package com.nvidia.spark.rapids
 import java.io.{File, IOException}
 import java.net.{URI, URISyntaxException}
 import java.util.concurrent.{Callable, ConcurrentLinkedQueue, ExecutorCompletionService, Future, ThreadPoolExecutor, TimeUnit}
+import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
@@ -130,6 +131,7 @@ trait MultiFileReaderFunctions {
 // Singleton thread pool used across all tasks for multifile reading.
 // Please note that the TaskContext is not set in these threads and should not be used.
 object MultiFileReaderThreadPool extends Logging {
+  @volatile
   private var threadPool: Option[ThreadPoolExecutor] = None
 
   private def initThreadPool(
@@ -354,7 +356,7 @@ abstract class MultiFileCloudPartitionReaderBase(
   private var filesToRead = 0
   protected var currentFileHostBuffers: Option[HostMemoryBuffersWithMetaDataBase] = None
   protected var combineLeftOverFiles: Option[Array[HostMemoryBuffersWithMetaDataBase]] = None
-  private var isInitted = false
+  private val isInit: AtomicBoolean = new AtomicBoolean(false)
   private val tasks = new ConcurrentLinkedQueue[Future[HostMemoryBuffersWithMetaDataBase]]()
   private val tasksToRun = new Queue[Callable[HostMemoryBuffersWithMetaDataBase]]()
   private[this] val inputMetrics = Option(TaskContext.get).map(_.taskMetrics().inputMetrics)
@@ -364,7 +366,22 @@ abstract class MultiFileCloudPartitionReaderBase(
   // like in the case of a limit call and we don't read all files
   private var fcs: ExecutorCompletionService[HostMemoryBuffersWithMetaDataBase] = null
 
-  private def initAndStartReaders(): Unit = {
+  // If I/O eager prefetch is enabled, submit async reading tasks eagerly instead of triggering
+  // async reading tasks when the first batch is requested.
+  // TODO: manage the priority of the read tasks, on-demand tasks should have the highest priority
+  def eagerPrefetchInit(): Unit = {
+    val ctx = TaskContext.get()
+    require(ctx != null, "MultiFileCloudPartitionReader should work as a part of Spark task")
+    val numTasks = initAndStartReaders()
+    logInfo(s"[${ctx.taskAttemptId()}] submit $numTasks async tasks eagerly for prefetch")
+  }
+
+  private def initAndStartReaders(): Int = {
+    // apply CAS to make sure we only init once
+    if (!isInit.compareAndSet(false, true)) {
+      return 0
+    }
+
     // limit the number we submit at once according to the config if set
     val limit = math.min(maxNumFileProcessed, inputFiles.length)
     val tc = TaskContext.get
@@ -402,8 +419,8 @@ abstract class MultiFileCloudPartitionReaderBase(
       val file = inputFiles(i)
       tasksToRun.enqueue(getBatchRunner(tc, file, conf, filters))
     }
-    isInitted = true
     filesToRead = inputFiles.length
+    limit
   }
 
   // Each format should implement combineHMBs and canUseCombine if they support combining
@@ -607,9 +624,9 @@ abstract class MultiFileCloudPartitionReaderBase(
 
   override def next(): Boolean = {
     withResource(new NvtxRange(getFileFormatShortName + " readBatch", NvtxColor.GREEN)) { _ =>
-      if (!isInitted) {
-        initAndStartReaders()
-      }
+      // submit async tasks if it is not done
+      initAndStartReaders()
+
       if (batchIter.hasNext) {
         // leave early we have something more to be read
         return true

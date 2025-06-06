@@ -456,6 +456,12 @@ object GpuParquetUtils extends Logging {
     val fileMeta = new FileMetaData(schema, Collections.emptyMap[String, String],
       PARQUET_CREATOR)
     val metadataConverter = new ParquetMetadataConverter
+    blocks.foreach(block => {
+      block.getColumns().forEach({ column =>
+        column.setTokenBloomFilterOffset(new java.util.ArrayList[java.lang.Long]())
+        column.setTokenBloomFilterLength(new java.util.ArrayList[java.lang.Long]())
+      })
+    })
     val footer = new ParquetMetadata(fileMeta, blocks.asJava)
     val meta = metadataConverter.toParquetMetadata(PARQUET_VERSION, footer)
     org.apache.parquet.format.Util.writeFileMetaData(meta, out)

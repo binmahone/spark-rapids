@@ -97,11 +97,12 @@ class GpuShuffleAsyncCoalesceIterator(iter: Iterator[CoalescedHostResult],
         }
       }
       val gpuCB = withResource(hostConcatedRet) { _ =>
-        // We acquire the GPU regardless of whether the concatenated batch is an empty batch
-        // or not, because the downstream tasks expect the `GpuShuffleCoalesceIterator`
-        // to acquire the semaphore and may generate GPU data from batches that are empty.
-        GpuSemaphore.acquireIfNecessary(TaskContext.get())
-        GpuMetric.ns(opTimeMetric)(hostConcatedRet.toGpuBatch(dataTypes))
+        GpuMetric.ns(opTimeMetric)(
+          // We acquire the GPU regardless of whether the concatenated batch is an empty batch
+          // or not, because the downstream tasks expect the `GpuShuffleCoalesceIterator`
+          // to acquire the semaphore and may generate GPU data from batches that are empty.
+          GpuSemaphore.acquireIfNecessary(TaskContext.get())
+          hostConcatedRet.toGpuBatch(dataTypes))
       }
       closeOnExcept(gpuCB) { _ =>
         val hasNextCB = withMetrics(iter.hasNext)

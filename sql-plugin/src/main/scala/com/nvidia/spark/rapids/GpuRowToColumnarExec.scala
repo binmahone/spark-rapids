@@ -646,16 +646,14 @@ class RowToColumnarIterator(
 
         streamTime += System.nanoTime() - streamStart
 
-
+        // About to place data back on the GPU
+        // note that TaskContext.get() can return null during unit testing so we wrap it in an
+        // option here
+        Option(TaskContext.get())
+            .foreach(ctx => GpuSemaphore.acquireIfNecessary(ctx))
 
         val ret = withResource(new NvtxWithMetrics("RowToColumnar", NvtxColor.GREEN,
             opTime)) { _ =>
-
-          // About to place data back on the GPU
-          // note that TaskContext.get() can return null during unit testing so we wrap it in an
-          // option here
-          Option(TaskContext.get())
-            .foreach(ctx => GpuSemaphore.acquireIfNecessary(ctx))
           RmmRapidsRetryIterator.withRetryNoSplit[ColumnarBatch] {
             builders.tryBuild(rowCount)
           }

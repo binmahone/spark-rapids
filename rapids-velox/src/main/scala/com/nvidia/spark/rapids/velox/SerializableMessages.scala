@@ -106,13 +106,14 @@ object ConverterMetrics extends SerializableMessage {
  * Data class holds the decoded sample information of a specific field.
  * posInSchema means the position of this field in the preorder flattened schema.
  */
-case class SampleColumnInfo(posInSchema: Int,
-                            veloxType: VeloxDataType,
-                            readType: StructField,
-                            numRows: Int,
-                            offsetsSize: Int,
-                            dataSize: Int,
-                            children: Seq[SampleColumnInfo])
+case class SampleColumnInfo(
+    posInSchema: Int,
+    veloxType: VeloxDataType,
+    readType: StructField,
+    numRows: Long,
+    offsetsSize: Long,
+    dataSize: Long,
+    children: Seq[SampleColumnInfo])
 
 /**
  * The message serialized by the backend method `encodeSampleInfo`, which carries buffer sizes
@@ -158,11 +159,10 @@ object SampleColumnMsg extends SerializableMessage {
         posInSchema = helper.head,
         veloxType = VeloxDataType.decodeVeloxType(msg(offset + 1).toInt),
         readType = helper.targetType,
-        numRows = msg(offset + 2).toInt,
-        offsetsSize = msg(offset + 3).toInt,
-        dataSize = msg(offset + 4).toInt,
-        children = children
-      )
+        numRows = msg(offset + 2),
+        offsetsSize = msg(offset + 3),
+        dataSize = msg(offset + 4),
+        children = children)
     }
 
     val stack = mutable.Stack[DecodeHelper]()

@@ -565,12 +565,14 @@ class GpuShuffleCoalesceIterator(iter: Iterator[CoalescedHostResult],
         iter.next()
       }
       withResource(hostCoalescedResult) { _ =>
-        // We acquire the GPU regardless of whether `hostConcatResult`
-        // is an empty batch or not, because the downstream tasks expect
-        // the `GpuShuffleCoalesceIterator` to acquire the semaphore and may
-        // generate GPU data from batches that are empty.
-        GpuSemaphore.acquireIfNecessary(TaskContext.get())
-        GpuMetric.ns(opTimeMetric)(hostCoalescedResult.toGpuBatch(dataTypes))
+        GpuMetric.ns(opTimeMetric)(
+          // We acquire the GPU regardless of whether `hostConcatResult`
+          // is an empty batch or not, because the downstream tasks expect
+          // the `GpuShuffleCoalesceIterator` to acquire the semaphore and may
+          // generate GPU data from batches that are empty.
+          GpuSemaphore.acquireIfNecessary(TaskContext.get())
+          hostCoalescedResult.toGpuBatch(dataTypes)
+        )
       }
     }
   }

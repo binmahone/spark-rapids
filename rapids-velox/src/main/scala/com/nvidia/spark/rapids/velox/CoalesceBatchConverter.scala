@@ -238,19 +238,20 @@ class CoalesceBatchConverter(runtime: GlutenJniWrapper,
 
     // Collect the size distribution of buffers from the sample batch
     val sampleMsg = runtime.encodeSampleInfo(nativeHandle)
-    // Estimate the capacity of targetBatchSize in the number of source batch
-    val estimatedBatchNum: Double = targetBatchSize.toDouble / sampleMsg(1)
     // Deserialize the message of sample distribution, getting SampleInfo for each top-level fields
     val sampleInfo = SampleColumnMsg.deserialize(sampleMsg, schema)
+    // Resize the accumulated size of certain root buffer to its target size
+    val resizer: Long => Long = (size: Long) => {
+      // Accumulated batch size of all the processed batch
+      val statsBatchSize = sampleMsg(1).toDouble
+      (size / statsBatchSize * targetBatchSize).toLong
+    }
 
     // Create ColumnBuilders in the meantime encoding the bufferPtrs
     val bufferPtrs = mutable.ArrayBuffer[Long]()
     bufferPtrs.append(0L)
     sampleInfo.foreach { topLevelInfo: SampleColumnInfo =>
-      columnBuilders += createVectorBuilder(
-        bufferPtrs,
-        estimatedBatchNum,
-        topLevelInfo)
+      columnBuilders += createVectorBuilder(bufferPtrs, resizer, topLevelInfo)
     }
     bufferPtrs(0) = bufferPtrs.length
 
@@ -320,9 +321,10 @@ class CoalesceBatchConverter(runtime: GlutenJniWrapper,
    * easily distinguish if a (top-level) field based on PinnedMemory or PageableMemory. And setup
    * different metrics specialized for PinnedMemory_H2D and PageableMemory_H2D.
    */
-  private def createVectorBuilder(bufferPtrs: mutable.ArrayBuffer[Long],
-                                  estimatedBatchNum: Double,
-                                  rootInfo: SampleColumnInfo): VectorBuilder = {
+  private def createVectorBuilder(
+      bufferPtrs: mutable.ArrayBuffer[Long],
+      resizer: Long => Long,
+      rootInfo: SampleColumnInfo): VectorBuilder = {
     // This method is used to compute the local offsets for each logical buffer recursively.
     def impl(localSizeOffset: Long,
              info: SampleColumnInfo,
@@ -337,7 +339,7 @@ class CoalesceBatchConverter(runtime: GlutenJniWrapper,
       TargetVectorsMsg.setDataType(info)
       // 2. figure out the offset and length for dataBuffer
       val dataOffset: Option[Long] = if (info.dataSize > 0) {
-        val estDataSize = (info.dataSize * estimatedBatchNum).toLong
+        val estDataSize = resizer(info.dataSize)
         TargetVectorsMsg.setDataBuffer(sizeOffset, estDataSize)
         sizeOffset += estDataSize
         Some(sizeOffset - estDataSize)
@@ -347,7 +349,7 @@ class CoalesceBatchConverter(runtime: GlutenJniWrapper,
       }
       // 3. figure out the offset and length for nullBuffer
       val nullOffset: Option[Long] = if (info.readType.nullable) {
-        val estimatedRows = (info.numRows * estimatedBatchNum).toInt
+        val estimatedRows = resizer(info.numRows).toInt
         val estNullMaskBytes = CoalesceBatchConverter.sizeOfNullMask(estimatedRows).toLong
         TargetVectorsMsg.setNullBuffer(sizeOffset, estNullMaskBytes)
         sizeOffset += estNullMaskBytes
@@ -358,7 +360,7 @@ class CoalesceBatchConverter(runtime: GlutenJniWrapper,
       }
       // 4. figure out the offset and length for offsetsBuffer
       val offsetOffset: Option[Long] = if (info.offsetsSize > 0) {
-        val estOffsetSize = (info.offsetsSize * estimatedBatchNum).toLong
+        val estOffsetSize = resizer(info.offsetsSize)
         TargetVectorsMsg.setOffsetsBuffer(sizeOffset, estOffsetSize)
         sizeOffset += estOffsetSize
         Some(sizeOffset - estOffsetSize)

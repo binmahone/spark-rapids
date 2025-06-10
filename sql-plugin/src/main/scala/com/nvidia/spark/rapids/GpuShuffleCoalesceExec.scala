@@ -334,7 +334,8 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
 
   private var bufferingFuture : Option[Future[_]] = None
 
-  protected def tableOperator: SerializedTableOperator[T]
+  // This will be touched millions of times in canAddToBatch()
+  protected val tableOperator: SerializedTableOperator[T]
 
   override def close(): Unit = {
     serializedTables.forEach(_.close())
@@ -470,7 +471,7 @@ class HostShuffleCoalesceIterator(
     inputRowsMetric: GpuMetric = NoopMetric)
   extends HostCoalesceIteratorBase[SerializedTableColumn](iter, targetBatchSize,
     concatTimeMetric, inputBatchesMetric, inputRowsMetric) {
-  override protected def tableOperator = new JCudfTableOperator
+  override protected val tableOperator = new JCudfTableOperator
 }
 
 class KudoHostShuffleCoalesceIterator(
@@ -484,7 +485,7 @@ class KudoHostShuffleCoalesceIterator(
     )
   extends HostCoalesceIteratorBase[KudoSerializedTableColumn](iter, targetBatchSize,
     concatTimeMetric, inputBatchesMetric, inputRowsMetric, readOption.useAsync) {
-  override protected def tableOperator = {
+  override protected val tableOperator = {
     val kudoSer = if (dataTypes.nonEmpty) {
       Some(new KudoSerializer(GpuColumnVector.from(dataTypes)))
     } else {

@@ -405,8 +405,8 @@ abstract class GpuShuffledSizedHashJoinExec[HOST_BATCH_TYPE <: AutoCloseable] ex
     BUILD_TIME -> createNanoTimingMetric(ESSENTIAL_LEVEL, DESCRIPTION_BUILD_TIME),
     STREAM_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_STREAM_TIME),
     JOIN_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_JOIN_TIME)
-  ) ++ ShuffleCoalReadMetrics.createAsMap(this, LEFT_PREFIX
-  ) ++ ShuffleCoalReadMetrics.createAsMap(this, RIGHT_PREFIX)
+  ) ++ ShuffleCoalReadMetrics.createAsMap(this, readOption.useAsync, LEFT_PREFIX
+  ) ++ ShuffleCoalReadMetrics.createAsMap(this, readOption.useAsync, RIGHT_PREFIX)
 
   override def requiredChildDistribution: Seq[Distribution] =
     Seq(GpuHashPartitioning.getDistribution(cpuLeftKeys),

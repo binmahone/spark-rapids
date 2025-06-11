@@ -1121,6 +1121,17 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
       .checkValues(ParquetFooterReaderType.values.map(_.toString))
       .createWithDefault(ParquetFooterReaderType.AUTO.toString)
 
+  // This is an experimental feature for reading small files from remote HDFS clusters from which
+  // seekable reads of small data are quite inefficient.
+  val PARQUET_READER_PRECACHE_THRESHOLD =
+    conf("spark.rapids.sql.format.parquet.precache.threshold")
+      .doc("The threshold in bytes for the parquet reader to pre-cache the entire file in " +
+          "memory. This is used to avoid opening the fileInputStream for multiple times during " +
+          "the I/O workflow. The default value is 0, which means no pre-caching.")
+      .internal()
+      .longConf
+      .createWithDefault(0L)
+
   // This is an experimental feature now. And eventually, should be enabled or disabled depending
   // on something that we don't know yet but would try to figure out.
   val ENABLE_CPU_BASED_UDF = conf("spark.rapids.sql.rowBasedUDF.enabled")
@@ -1128,6 +1139,12 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
       "only the data it needs between GPU and CPU inside a query operation, instead of falling " +
       "this operation back to CPU. This is an experimental feature, and this config might be " +
       "removed in the future.")
+    .booleanConf
+    .createWithDefault(false)
+
+  val ENABLE_UDF_AUTO_MAPPING = conf("spark.rapids.sql.udf.autoMapping.enabled")
+    .doc("When set to true, automatically maps UDFs to GPU implementations according to some " +
+      "rules.")
     .booleanConf
     .createWithDefault(false)
 
@@ -2140,6 +2157,13 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
     .stringConf
     .createOptional
 
+  val SHUFFLE_ASYNC_READ_ENABLED = conf("spark.rapids.shuffle.asyncRead.enabled")
+    .doc("Enable or disable the asynchronous read for Shuffle.")
+    .internal()
+    .startupOnly()
+    .booleanConf
+    .createWithDefault(true)
+
   // USER FACING DEBUG CONFIGS
 
   val SHUFFLE_COMPRESSION_MAX_BATCH_MEMORY =
@@ -3105,6 +3129,8 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
     }
   }
 
+  lazy val parquetReaderPrecacheThreshold: Long = get(PARQUET_READER_PRECACHE_THRESHOLD)
+
   lazy val isParquetPerFileReadEnabled: Boolean =
     RapidsReaderType.withName(get(PARQUET_READER_TYPE)) == RapidsReaderType.PERFILE
 
@@ -3326,6 +3352,8 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
     }
   }
 
+  lazy val shuffleAsyncReadEnabled: Boolean = get(SHUFFLE_ASYNC_READ_ENABLED)
+
   def isUCXShuffleManagerMode: Boolean =
     RapidsShuffleManagerMode
       .withName(get(SHUFFLE_MANAGER_MODE)) == RapidsShuffleManagerMode.UCX
@@ -3429,6 +3457,8 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val getSparkGpuResourceName: String = get(SPARK_GPU_RESOURCE_NAME)
 
   lazy val isCpuBasedUDFEnabled: Boolean = get(ENABLE_CPU_BASED_UDF)
+
+  lazy val isUDFAutoMappingEnabled: Boolean = get(ENABLE_UDF_AUTO_MAPPING)
 
   lazy val isFastSampleEnabled: Boolean = get(ENABLE_FAST_SAMPLE)
 

@@ -151,7 +151,10 @@ abstract class GpuFileFormatDataWriter(
    * settings, e.g. maxRecordsPerFile = 1.
    */
   protected val MAX_FILE_COUNTER: Int = 1000 * 1000
-  protected val updatedPartitions: mutable.Set[String] = mutable.Set[String]()
+  /**
+   * The affected partitions and associated row count in this write task.
+   */
+  protected val updatedPartitionsWithRowNum: mutable.Map[String, Long] = mutable.HashMap.empty
   protected var currentWriterStatus: WriterAndStatus = new WriterAndStatus()
 
   /** Trackers for computing various statistics on the data as it's being written out. */
@@ -207,7 +210,7 @@ abstract class GpuFileFormatDataWriter(
       committer.commitTask(taskAttemptContext)
     }
     val summary = GpuFileFormatDataWriterShim.createWriteSummary(
-      updatedPartitions = updatedPartitions.toSet,
+      updatedPartitions = updatedPartitionsWithRowNum.toMap,
       stats = statsTrackers.map(_.getFinalStats(taskCommitTime))
     )
     WriteTaskResult(taskCommitMessage, summary)
@@ -580,7 +583,7 @@ class GpuDynamicPartitionDataSingleWriter(
   def newWriter(partValues: Option[InternalRow], bucketId: Option[Int],
       fileCounter: Int): ColumnarOutputWriter = {
     val partDir = partValues.map(getPartitionPath(_))
-    partDir.foreach(updatedPartitions.add)
+    partDir.foreach(updatedPartitionsWithRowNum.getOrElseUpdate(_, 0L))
     // Currently will be empty
     val bucketIdStr = bucketId.map(BucketingUtils.bucketIdToString).getOrElse("")
 
@@ -627,6 +630,7 @@ class GpuDynamicPartitionDataSingleWriter(
 
     if (!shouldSplitToFitMaxRecordsPerFile(maxRecordsPerFile, recordsInFile, scb.numRows())) {
       writeUpdateMetricsAndClose(scb, writerStatus)
+      updatePartitionsWithRowNum(writerId, scb.numRows())
     } else {
       val splits = splitToFitMaxRecordsAndCloseWithRetry(scb, maxRecordsPerFile, recordsInFile)
       withResource(splits) { _ =>
@@ -642,6 +646,7 @@ class GpuDynamicPartitionDataSingleWriter(
           splits(partIx) = null
           writeUpdateMetricsAndClose(part, writerStatus)
         }
+        updatePartitionsWithRowNum(writerId, scb.numRows())
       }
     }
   }
@@ -676,6 +681,14 @@ class GpuDynamicPartitionDataSingleWriter(
         splitPacks(i) = null
         writeBatchPerMaxRecordsAndClose(sp, currentWriterId, currentWriterStatus)
       }
+    }
+  }
+
+  protected def updatePartitionsWithRowNum(writerId: WriterIndex, writeBatchSize: Long): Unit = {
+    writerId.partitionValues.foreach { partVal =>
+      val part = getPartitionPath(partVal)
+      updatedPartitionsWithRowNum(part) =
+        updatedPartitionsWithRowNum.getOrElse(part, 0L) + writeBatchSize
     }
   }
 }
@@ -763,9 +776,15 @@ class GpuDynamicPartitionDataConcurrentWriter(
           withResource(pendingBatches.dequeue())(_.getColumnarBatch())
         }
       }
+      val (sortMetric, sortOpTime) =
+        statsTrackers.find(_.isInstanceOf[GpuWriteTaskStatsTracker]).map { tc =>
+          val tt = tc.asInstanceOf[GpuWriteTaskStatsTracker]
+          (tt.sortTime, tt.sortOpTime)
+        }.getOrElse((NoopMetric, NoopMetric))
+
       val sortIter = GpuOutOfCoreSortIterator(pendingCbsIter ++ iterator,
         new GpuSorter(spec.sortOrder, spec.output), GpuSortExec.targetSize(spec.batchSize),
-        NoopMetric, NoopMetric, NoopMetric, NoopMetric)
+        sortOpTime, sortMetric, NoopMetric, NoopMetric)
       while (sortIter.hasNext) {
         // write with sort-based sequential writer
         super.write(sortIter.next())

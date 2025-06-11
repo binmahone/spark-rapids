@@ -235,7 +235,7 @@ case class GpuShuffledHashJoinExec(
         GpuMetric.NUM_INPUT_BATCHES -> NoopMetric,
         GpuMetric.NUM_OUTPUT_BATCHES -> NoopMetric,
         GpuMetric.NUM_OUTPUT_ROWS -> NoopMetric
-      ) ++ ShuffleCoalReadMetrics.createAsMap(this, BUILD_PREFIX)
+      ) ++ ShuffleCoalReadMetrics.createAsMap(this, false, BUILD_PREFIX)
     ).withDefaultValue(NoopMetric)
 
     val realTarget = realTargetBatchSize()

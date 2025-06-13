@@ -1657,3 +1657,27 @@ def test_parquet_partition_batch_row_count_only_splitting(spark_tmp_path):
     with_cpu_session(lambda spark: setup_table(spark))
     assert_gpu_and_cpu_are_equal_collect(lambda spark: spark.read.parquet(data_path).select("p"),
                                          conf={"spark.rapids.sql.columnSizeBytes": "100"})
+
+precache_reader_conf = [
+    native_multithreaded_parquet_file_reader_conf,
+    multithreaded_parquet_file_reader_conf,
+    combining_multithreaded_parquet_file_reader_conf_ordered,
+]
+
+@pytest.mark.parametrize('parquet_gens', parquet_gens_list, ids=idfn)
+@pytest.mark.parametrize('reader_confs', precache_reader_conf, ids=idfn)
+@pytest.mark.parametrize('precache_threshold', [0, 1024, 1024 * 1024, 256 * 1024 * 1024], ids=idfn)
+@tz_sensitive_test
+@allow_non_gpu(*non_utc_allow)
+def test_parquet_precache_round_trip(spark_tmp_path, parquet_gens, reader_confs, precache_threshold):
+    gen_list = [('_c' + str(i), gen) for i, gen in enumerate(parquet_gens)]
+    data_path = spark_tmp_path + '/PARQUET_DATA'
+    with_cpu_session(
+        lambda spark : gen_df(spark, gen_list).write.parquet(data_path),
+        conf=rebase_write_corrected_conf)
+    all_confs = copy_and_update(reader_confs, {
+        'spark.sql.sources.useV1SourceList': "parquet",
+        'spark.rapids.sql.format.parquet.precache.threshold': precache_threshold,
+        int96RebaseModeInReadKey : 'CORRECTED',
+        datetimeRebaseModeInReadKey : 'CORRECTED'})
+    assert_gpu_and_cpu_are_equal_collect(read_parquet_df(data_path), conf=all_confs)

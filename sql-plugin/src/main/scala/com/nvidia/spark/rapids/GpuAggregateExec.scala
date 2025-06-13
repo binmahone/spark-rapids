@@ -45,7 +45,7 @@ import org.apache.spark.sql.execution.{ExplainUtils, SortExec, SparkPlan}
 import org.apache.spark.sql.execution.aggregate.{BaseAggregateExec, HashAggregateExec, ObjectHashAggregateExec, SortAggregateExec}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.rapids.aggregate.{CpuToGpuAggregateBufferConverter, CudfAggregate, GpuAggregateExpression, GpuToCpuAggregateBufferConverter}
-import org.apache.spark.sql.rapids.execution.{GpuBatchSubPartitioner, GpuShuffleMeta, TrampolineUtil}
+import org.apache.spark.sql.rapids.execution.{GpuBatchSubPartitioner, GpuShuffleMeta}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
@@ -1175,28 +1175,6 @@ abstract class GpuBaseAggregateMeta[INPUT <: SparkPlan](
     groupingExpressions ++ aggregateExpressions ++ aggregateAttributes ++ resultExpressions
 
   override def tagPlanForGpu(): Unit = {
-    // We don't support Maps as GroupBy keys yet, even if they are nested in Structs. So,
-    // we need to run recursive type check on the structs.
-    val mapGroupings = agg.groupingExpressions.exists(e =>
-      TrampolineUtil.dataTypeExistsRecursively(e.dataType, dt => dt.isInstanceOf[MapType]))
-    if (mapGroupings) {
-      willNotWorkOnGpu("MapType in grouping expressions are not supported")
-    }
-
-    // We support Arrays as grouping expression but not if the child is a struct. So we need to
-    // run recursive type check on the lists of structs
-    val arrayWithStructsGroupings = agg.groupingExpressions.exists(e =>
-      TrampolineUtil.dataTypeExistsRecursively(e.dataType,
-        dt => dt match {
-          case ArrayType(_: StructType, _) => true
-          case _ => false
-        })
-    )
-    if (arrayWithStructsGroupings) {
-      willNotWorkOnGpu("ArrayTypes with Struct children in grouping expressions are not " +
-        "supported")
-    }
-
     tagForReplaceMode()
 
     if (agg.aggregateExpressions.exists(expr => expr.isDistinct)

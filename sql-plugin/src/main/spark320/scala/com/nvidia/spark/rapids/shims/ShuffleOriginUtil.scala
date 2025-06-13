@@ -16,7 +16,6 @@
 
 /*** spark-rapids-shim-json-lines
 {"spark": "320"}
-{"spark": "321"}
 {"spark": "321cdh"}
 {"spark": "322"}
 {"spark": "323"}
@@ -31,6 +30,8 @@
 spark-rapids-shim-json-lines ***/
 package com.nvidia.spark.rapids.shims
 
+// Note: Customized Spark change
+// Removed the shim 321, refer to the ShuffleOriginUtil in 321 directory
 import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, REBALANCE_PARTITIONS_BY_COL, REBALANCE_PARTITIONS_BY_NONE, REPARTITION_BY_COL, REPARTITION_BY_NUM, ShuffleOrigin}
 
 object ShuffleOriginUtil {

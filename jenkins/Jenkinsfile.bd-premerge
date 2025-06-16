@@ -18,7 +18,15 @@
  * Jenkinsfile for building bd-spark-rapids
  *
  */
+import hudson.model.Result
+import hudson.model.Run
+import jenkins.model.CauseOfInterruption.UserInterruption
+
 @Library('blossom-lib') _
+
+def skipTest = false
+def buildTest
+def buildParams
 
 pipeline {
     agent {
@@ -41,14 +49,35 @@ pipeline {
     }
 
     stages {
+        stage("Init") {
+            steps {
+                script {
+                    currentBuild.description = params.ghprbPullLink
+                    try {
+                        // quiet period here in case the first build of two close dup triggers has not set desc
+                        sleep(time: 30, unit: "SECONDS")
+                        // abort duplicate running builds of the same PR (based on build desc)
+                        abortDupBuilds()
+                    } catch (e) { // do not block following build if abort failure
+                        echo "failed to try abort duplicate builds: " + e.toString()
+                    }
+
+                    def title = params.ghprbPullTitle
+                    if (title ==~ /.*\[skip test\].*/) {
+                        skipTest = true
+                    }
+                }
+            }
+        } // end of Init githubHelper
+
         stage('Trigger test-build') {
             steps {
                 script {
                     container('cpu') {
                         // Load environment variables from ci-env.sh
-                        def buildParams = common.getEnvsFromFile(this, 'jenkins/ci-env.sh')
+                        buildParams = common.getEnvsFromFile(this, 'jenkins/ci-env.sh')
 
-                        def buildTest = build(job: 'spark-rapids-customer-test-build',
+                        buildTest = build(job: 'spark-rapids-customer-test-build',
                             propagate: false, wait: true,
                             parameters: [
                                 string(name: 'RAPIDS_VELOX_REF', value:
@@ -87,5 +116,78 @@ pipeline {
                 }
             }
         } // eng of Trigger test-build
+
+        stage("Trigger Integration Test") {
+            when {
+                expression { !skipTest }
+            }
+            steps {
+                script {
+                    container('cpu') {
+                        def buildTestTag = buildTest.getRawBuild().getEnvironment().get('BUILD_TAG')
+                        echo "buildTestTag: ${buildTestTag}"
+
+                        def itBuild = build(job: 'spark-rapids-customer-test-it',
+                            propagate: false, wait: true,
+                            parameters: [
+                                string(name: 'RAPIDS_VELOX_REF', value:
+                                    "refs/pull/${ghprbPullId}/merge"
+                                ),
+                                string(name: 'RAPIDS_VELOX_REPO_URL', value:
+                                    'https://github.com/HighPerfDataAccelerator/spark-rapids.git'
+                                ),
+                                string(name: 'PLUGIN_JAR_URL', value: ''),
+                                string(name: 'PLUGIN_JAR_PVC_PATH', value: 
+                                    "workspace/$buildTestTag/dist/target/" +
+                                    "rapids-4-spark_2.12-${buildParams['SPARK_RAPIDS_VERSION']}-${buildParams['DEFAULT_CUDA_CLASSIFIER']}.jar"
+                                ),
+                                string(name: 'SPARK_VER', value: '3.2.1'),
+                                string(name: 'PLUGIN_SUFFIX', value: "-${BUILD_TAG}"),
+                                booleanParam(name: 'TEST_WITH_GLUTEN_VELOX', value: true),
+                                booleanParam(name: 'IS_BD_SPARK', value: true),
+                                string(name: 'BD_SPARK_RUNTIME_IMAGE', value: "${buildParams['SPARK_RAPIDS_IT_IMAGE']}"),
+                                string(name: 'GLUTEN_VELOX_BUNDLE_JAR_URL', value: "${env.ART_URL}/io/glutenproject/" +
+                                    "gluten-velox-bundle-bd-gluten-nightly/1.2.1-SNAPSHOT/" +
+                                    "gluten-velox-bundle-bd-gluten-nightly-1.2.1-SNAPSHOT.jar"
+                                ),
+                                string(name: 'GLUTEN_THIRDPARTY_LIB_JAR_URL', value: "${env.ART_URL}/io/glutenproject/" +
+                                    "gluten-thirdparty-lib-bd-gluten/1.2.0-SNAPSHOT/" +
+                                    "gluten-thirdparty-lib-bd-gluten-1.2.0-20240814.014441-1.jar"
+                                ),
+                                string(name: 'TEST_MODE', value: 'DEFAULT'),
+                                string(name: 'RUN_PYSPARK_PARAMS', value: ''),
+                                booleanParam(name: 'MUTE_SLACK', value: true),
+                            ]
+                        )
+
+                        // show the truncated log of downstream job
+                        def truncatedLog = itBuild.getRawBuild().getLog(200).join('\n')
+                        echo "Truncated log from downstream job: \n${truncatedLog}\n"
+                        if (itBuild.result != 'SUCCESS') {
+                            def logLink = "${itBuild.absoluteUrl}console"
+                            error "Check full log at downstream job: \n${logLink}\n"
+                        }
+                    }
+                }
+            }
+        }
     } // end of stages
 } // end of pipeline
+
+void abortDupBuilds() {
+    Run prevBuild = currentBuild.rawBuild.getPreviousBuildInProgress()
+    while (prevBuild != null) {
+        if (prevBuild.isInProgress()) {
+            def prevDesc = prevBuild.description?.trim()
+            if (prevDesc && prevDesc == currentBuild.description?.trim()) {
+                def prevExecutor = prevBuild.getExecutor()
+                if (prevExecutor != null) {
+                    echo "...Aborting duplicate Build #${prevBuild.number}"
+                    prevExecutor.interrupt(Result.ABORTED,
+                            new UserInterruption("Build #${currentBuild.number}"))
+                }
+            }
+        }
+        prevBuild = prevBuild.getPreviousBuildInProgress()
+    }
+}

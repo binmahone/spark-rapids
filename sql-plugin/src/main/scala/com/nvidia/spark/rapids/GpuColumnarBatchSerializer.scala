@@ -18,6 +18,7 @@ package com.nvidia.spark.rapids
 
 import java.io._
 import java.nio.ByteBuffer
+import java.util.concurrent.Future
 
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
@@ -28,11 +29,14 @@ import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.RmmRapidsRetryIterator.{withRetryNoSplit, SizeProvider}
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
+import com.nvidia.spark.rapids.jni.MemoryUtils
 import com.nvidia.spark.rapids.jni.kudo.{KudoSerializer, KudoTableHeader, WriteInput}
-
+// import com.nvidia.spark.rapids.KudoSerializedBatchIterator.preFaultExecutor
 import org.apache.spark.TaskContext
+
 import org.apache.spark.serializer.{DeserializationStream, SerializationStream, Serializer, SerializerInstance}
 import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{METRIC_DATA_SIZE, METRIC_SHUFFLE_DESER_STREAM_TIME, METRIC_SHUFFLE_SER_COPY_BUFFER_TIME, METRIC_SHUFFLE_SER_STREAM_TIME}
+import org.apache.spark.sql.rapids.execution.TrampolineUtil
 import org.apache.spark.sql.types.{DataType, NullType}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
@@ -533,6 +537,10 @@ object KudoSerializedTableColumn {
   }
 }
 
+object KudoSerializedBatchIterator {
+  val preFaultExecutor =  TrampolineUtil.newDaemonCachedThreadPool("pre-fault exec", 20)
+}
+
 class KudoSerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric)
   extends BaseSerializedTableIterator {
   private[this] var nextHeader: Option[KudoTableHeader] = None
@@ -546,8 +554,9 @@ class KudoSerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric)
   // and decide if to use a shared HostMemoryBuffer or not.
   private[this] val firstTenBatchesSizes = new ArrayBuffer[Long](10)
   private[this] var sharedBuffer: Option[HostMemoryBuffer] = None
+  private[this] var nextSharedBuffer: Option[Future[HostMemoryBuffer]] = None
   private[this] val sharedBufferTriggerSize: Int = 1 << 20 // 1MB
-  private[this] val sharedBufferTotalSize: Int = 20 << 20 // 20MB
+  private[this] val sharedBufferTotalSize: Int = 10 << 20 // 10MB
   private[this] var sharedBufferCurrentUse: Int = 0
 
   // Don't install the callback if in a unit test
@@ -555,7 +564,8 @@ class KudoSerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric)
     onTaskCompletion(tc) {
       dIn.close()
       streamClosed = true
-      sharedBuffer.map(_.close())
+      sharedBuffer.foreach(_.close())
+      nextSharedBuffer.map(_.get()).map(_.close())
     }
   }
 
@@ -625,11 +635,27 @@ class KudoSerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric)
                 // If not enough room left, we need to allocate a new shared buffer.
                 sharedBuffer.get.close()
                 sharedBufferCurrentUse = 0
-                sharedBuffer = Some(allocateWithRetry(sharedBufferTotalSize))
+                if (nextSharedBuffer.isDefined) {
+                  sharedBuffer = nextSharedBuffer.map(_.get())
+                } else {
+                  sharedBuffer = Some(allocateWithRetry(sharedBufferTotalSize))
+                  MemoryUtils.prefetchWrite(sharedBuffer.get.getAddress, sharedBufferTotalSize)
+                }
+//                nextSharedBuffer = Some(preFaultExecutor.submit(
+//                  () => {
+//                    val mem = allocateWithRetry(sharedBufferTotalSize)
+//                    MemoryUtils.prefetchWrite(mem.getAddress, sharedBufferTotalSize)
+//                    mem
+//                  }
+//                ))
               }
               val ret = sharedBuffer.get.slice(sharedBufferCurrentUse,
                 header.getTotalDataLen)
               sharedBufferCurrentUse += header.getTotalDataLen
+
+//              MemoryUtils.prefetchWrite(ret.getAddress + header.getTotalDataLen,
+//                Math.min(header.getTotalDataLen, sharedBufferTotalSize - sharedBufferCurrentUse))
+//              MemoryUtils.prefetchWrite(ret.getAddress, header.getTotalDataLen)
               ret
             }
           }

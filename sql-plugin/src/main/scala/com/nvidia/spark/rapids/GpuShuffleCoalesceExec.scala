@@ -392,6 +392,8 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
     onTaskCompletion(tc)(close())
   }
 
+  protected val tableOperator: SerializedTableOperator[T]
+
   private var bufferingFuture : Future[Long] = null
 
   private class BufferingCallable extends Callable[Long] {
@@ -403,8 +405,6 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
       end - start
     }
   }
-
-  protected def tableOperator: SerializedTableOperator[T]
 
   override def close(): Unit = {
     serializedTables.forEach(_.close())
@@ -507,7 +507,7 @@ class HostShuffleCoalesceIterator(
     bufferJobLaunchMetric: GpuMetric = NoopMetric)
   extends HostCoalesceIteratorBase[SerializedTableColumn](iter, targetBatchSize,
     concatTimeMetric, bufferJobLaunchMetric) {
-  override protected def tableOperator = new JCudfTableOperator
+  override protected val tableOperator = new JCudfTableOperator
 }
 
 class KudoHostShuffleCoalesceIterator(
@@ -526,7 +526,7 @@ class KudoHostShuffleCoalesceIterator(
     case None => java.util.UUID.randomUUID().toString
   }
 
-  override protected def tableOperator = {
+  override protected val tableOperator = {
     val kudoSer = if (dataTypes.nonEmpty) {
       Some(new KudoSerializer(GpuColumnVector.from(dataTypes)))
     } else {

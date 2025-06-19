@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,8 +53,8 @@ import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.catalyst.expressions.{Ascending, Attribute, AttributeSet, SortOrder}
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, DateTimeUtils}
 import org.apache.spark.sql.execution.{SparkPlan, SQLExecution}
-import org.apache.spark.sql.execution.datasources.{WriteTaskResult, WriteTaskStats}
-import org.apache.spark.sql.execution.datasources.FileFormatWriter.OutputSpec
+import org.apache.spark.sql.execution.datasources.{WriteTaskResult, WriteTaskResultV2, WriteTaskStats}
+import org.apache.spark.sql.execution.datasources.FileFormatWriter.{OutputSpec, WriteResult}
 import org.apache.spark.sql.rapids.shims.RapidsHadoopWriterUtils
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.ColumnarBatch
@@ -105,7 +105,7 @@ object GpuFileFormatWriter extends Logging {
       concurrentWriterPartitionFlushSize: Long,
       forceHiveHashForBucketing: Boolean = false,
       numStaticPartitionCols: Int = 0,
-      baseDebugOutputPath: Option[String]): Set[String] = {
+      baseDebugOutputPath: Option[String]): WriteResult = {
     require(partitionColumns.size >= numStaticPartitionCols)
 
     val job = Job.getInstance(hadoopConf)
@@ -226,13 +226,14 @@ object GpuFileFormatWriter extends Logging {
           }
           // TODO: Using a GPU ordering as a CPU ordering here. Should be OK for now since we do not
           //       support bucket expressions yet and the rest should be simple attributes.
+          val sortTrackers = statsTrackers.filter(_.isInstanceOf[GpuWriteJobStatsTracker])
           val sort = GpuSortExec(
             orderingExpr,
             global = false,
             child = empty2NullPlan,
             sortType = sortType
-          )(orderingExpr).executeColumnar()
-          (sort, None)
+          )(orderingExpr, Some(sortTrackers.asInstanceOf[Seq[GpuWriteJobStatsTracker]]))
+          (sort.executeColumnar(), None)
         }
       }
 
@@ -246,7 +247,7 @@ object GpuFileFormatWriter extends Logging {
 
       // SPARK-41448 map reduce job IDs need to consistent across attempts for correctness
       val jobTrackerId = SparkHadoopWriterUtils.createJobTrackerID(new Date)
-      val ret = new Array[WriteTaskResult](rddWithNonEmptyPartitions.partitions.length)
+      val ret = new Array[WriteTaskResultV2](rddWithNonEmptyPartitions.partitions.length)
       sparkSession.sparkContext.runJob(
         rddWithNonEmptyPartitions,
         (taskContext: TaskContext, iter: Iterator[ColumnarBatch]) => {
@@ -264,7 +265,7 @@ object GpuFileFormatWriter extends Logging {
         rddWithNonEmptyPartitions.partitions.indices,
         (index, res: WriteTaskResult) => {
           committer.onTaskCommit(res.commitMsg)
-          ret(index) = res
+          ret(index) = new WriteTaskResultV2(res)
         })
 
       val commitMsgs = ret.map(_.commitMsg)
@@ -272,11 +273,15 @@ object GpuFileFormatWriter extends Logging {
       val (_, duration) = TimingUtils.timeTakenMs { committer.commitJob(job, commitMsgs) }
       logInfo(s"Write Job ${description.uuid} committed. Elapsed time: $duration ms.")
 
-      processStats(description.statsTrackers, ret.map(_.summary.stats), duration)
+      processStats(description.statsTrackers, ret.map(_.stats), duration)
       logInfo(s"Finished processing stats for write job ${description.uuid}.")
 
-      // return a set of all the partition paths that were updated during this job
-      ret.map(_.summary.updatedPartitions).reduceOption(_ ++ _).getOrElse(Set.empty)
+      // return a map of all the partition paths that were updated during this job
+      WriteResult(
+        ret.map(_.updatedPartitionsWithRowNum).reduceOption((x, y) => {
+          x ++ y.map(t => t._1 -> (t._2 + x.getOrElse(t._1, 0L)))
+        }).getOrElse(Map.empty)
+      )
     } catch { case cause: Throwable =>
       logError(s"Aborting job ${description.uuid}.", cause)
       committer.abortJob(job)

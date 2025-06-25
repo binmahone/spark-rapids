@@ -26,7 +26,7 @@ import ai.rapids.cudf
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.jni.{CastStrings, DecimalUtils, GpuTimeZoneDB}
-import com.nvidia.spark.rapids.shims.{AnsiUtil, GpuCastShims, GpuIntervalUtils, GpuTypeShims, NullIntolerantShim, SparkShimImpl}
+import com.nvidia.spark.rapids.shims.{AnsiUtil, CastTimeToIntShim, GpuCastShims, GpuIntervalUtils, GpuTypeShims, NullIntolerantShim, SparkShimImpl}
 import org.apache.commons.text.StringEscapeUtils
 
 import org.apache.spark.sql.catalyst.analysis.TypeCheckResult
@@ -212,6 +212,8 @@ object CastOptions {
  * @param legacyCastComplexTypesToString If we should use legacy casting method
  * @param ansiMode                       Whether the cast should be ANSI compliant
  * @param stringToDateAnsiMode           Whether to cast String to Date using ANSI compliance
+ * @param nullifyOverflows               Whether to set overflow rows to nulls during casting
+ *                                       timestamps to integrals
  * @param castToJsonString               Whether to use JSON format when casting to String
  * @param ignoreNullFieldsInStructs      Whether to omit null values when converting to JSON
  * @param timeZoneId                     If cast is timezone aware, the timezone needed
@@ -220,6 +222,7 @@ class CastOptions(
     legacyCastComplexTypesToString: Boolean,
     ansiMode: Boolean,
     stringToDateAnsiMode: Boolean,
+    val nullifyOverflows: Boolean = CastTimeToIntShim.ifNullifyOverflows,
     val castToJsonString: Boolean = false,
     val ignoreNullFieldsInStructs: Boolean = true,
     val timeZoneId: Option[String] = Option.empty[String]) extends Serializable {
@@ -327,25 +330,41 @@ object GpuCast {
       case (TimestampType, ByteType | ShortType | IntegerType) =>
         // normally we would just do a floordiv here, but cudf downcasts the operands to
         // the output type before the divide.  https://github.com/rapidsai/cudf/issues/2574
-        withResource(input.castTo(DType.INT64)) { asLongs =>
+        val toCudfType = GpuColumnVector.getNonNestedRapidsType(toDataType)
+        val cv = withResource(input.bitCastTo(DType.INT64)) { asLongs =>
           withResource(Scalar.fromInt(1000000)) { microsPerSec =>
-            withResource(asLongs.floorDiv(microsPerSec, DType.INT64)) { cv =>
-              if (ansiMode) {
-                toDataType match {
-                  case IntegerType =>
-                    assertValuesInRange[Long](cv, Int.MinValue.toLong,
-                      Int.MaxValue.toLong, errorMsg = OVERFLOW_MESSAGE)
-                  case ShortType =>
-                    assertValuesInRange[Long](cv, Short.MinValue.toLong,
-                      Short.MaxValue.toLong, errorMsg = OVERFLOW_MESSAGE)
-                  case ByteType =>
-                    assertValuesInRange[Long](cv, Byte.MinValue.toLong,
-                      Byte.MaxValue.toLong, errorMsg = OVERFLOW_MESSAGE)
-                }
-              }
-              cv.castTo(GpuColumnVector.getNonNestedRapidsType(toDataType))
+            asLongs.floorDiv(microsPerSec, DType.INT64)
+          }
+        }
+        val ret = closeOnExcept(cv) { _ =>
+          if (ansiMode) {
+            toDataType match {
+              case IntegerType =>
+                assertValuesInRange[Long](cv, Int.MinValue.toLong,
+                  Int.MaxValue.toLong, errorMsg = OVERFLOW_MESSAGE)
+              case ShortType =>
+                assertValuesInRange[Long](cv, Short.MinValue.toLong,
+                  Short.MaxValue.toLong, errorMsg = OVERFLOW_MESSAGE)
+              case ByteType =>
+                assertValuesInRange[Long](cv, Byte.MinValue.toLong,
+                  Byte.MaxValue.toLong, errorMsg = OVERFLOW_MESSAGE)
             }
           }
+          cv.castTo(toCudfType)
+        }
+        if (!ansiMode && options.nullifyOverflows) {
+          // Need to set rows out of range to nulls
+          withResource(ret) { _ =>
+            val equals = withResource(cv)(_ => ret.equalTo(cv))
+            withResource(equals) { _ =>
+              withResource(Scalar.fromNull(toCudfType)) { nullScalar =>
+                equals.ifElse(ret, nullScalar)
+              }
+            }
+          }
+        } else {
+          cv.close()
+          ret
         }
       case (TimestampType, _: LongType) =>
         withResource(input.castTo(DType.INT64)) { asLongs =>
@@ -540,11 +559,7 @@ object GpuCast {
         // no need to strip, kernel will strip
         castStringToTimestamp(input, ansiMode, options.timeZoneId)
       case (StringType, DateType) =>
-        if (options.useAnsiStringToDateMode) {
-          castStringToDateAnsi(input, ansiMode)
-        } else {
-          castStringToDate(input)
-        }
+        castStringToDate(input, options.useAnsiStringToDateMode && ansiMode)
       case (StringType, dt: DecimalType) =>
         CastStrings.toDecimal(input, ansiMode, dt.precision, -dt.scale)
 
@@ -1270,21 +1285,6 @@ object GpuCast {
   /**
    * Trims and parses UTF8 date strings to a date column.
    * Refer to Spark code: SparkDateTimeUtils.stringToDate
-   * Allowed date string formats:
-   * `[+-]yyyy[y][y][y]`
-   * `[+-]yyyy[y][y][y]-[m]m`
-   * `[+-]yyyy[y][y][y]-[m]m-[d]d`
-   * `[+-]yyyy[y][y][y]-[m]m-[d]d `
-   * `[+-]yyyy[y][y][y]-[m]m-[d]d *`
-   * `[+-]yyyy[y][y][y]-[m]m-[d]dT*`
-   */
-  def castStringToDate(input: ColumnView): ColumnVector = {
-    CastStrings.toDate(input, /* Ansi */ false)
-  }
-
-  /**
-   * Trims and parses UTF8 date strings to a date column.
-   * Refer to Spark code: SparkDateTimeUtils.stringToDate
    * If it's Ansi mode and has any invalid value, throws exception.
    * Allowed date string formats:
    * `[+-]yyyy[y][y][y]`
@@ -1294,7 +1294,7 @@ object GpuCast {
    * `[+-]yyyy[y][y][y]-[m]m-[d]d *`
    * `[+-]yyyy[y][y][y]-[m]m-[d]dT*`
    */
-  def castStringToDateAnsi(input: ColumnView, ansiMode: Boolean): ColumnVector = {
+  def castStringToDate(input: ColumnView, ansiMode: Boolean): ColumnVector = {
     val result = CastStrings.toDate(input, ansiMode)
     if (ansiMode && result == null) {
       // All the errors of Spark 32x, 33x, 34x, 35x contains "DateTimeException"

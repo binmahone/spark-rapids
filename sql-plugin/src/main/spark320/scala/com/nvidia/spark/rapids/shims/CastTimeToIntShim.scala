@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@
 {"spark": "334"}
 {"spark": "340"}
 {"spark": "341"}
+{"spark": "341db"}
 {"spark": "342"}
 {"spark": "343"}
 {"spark": "344"}
@@ -45,27 +46,7 @@
 spark-rapids-shim-json-lines ***/
 package com.nvidia.spark.rapids.shims
 
-import com.nvidia.spark.rapids.{GpuAlias, PlanShims}
-
-import org.apache.spark.sql.catalyst.expressions.{Alias, Expression}
-import org.apache.spark.sql.execution.{CommandResultExec, SparkPlan}
-import org.apache.spark.sql.types.DataType
-
-class PlanShimsImpl extends PlanShims {
-  def extractExecutedPlan(plan: SparkPlan): SparkPlan = plan match {
-    case p: CommandResultExec => p.commandPhysicalPlan
-    case _ => plan
-  }
-
-  def isAnsiCast(e: Expression): Boolean = AnsiCastShim.isAnsiCast(e)
-
-  def isAnsiCastOptionallyAliased(e: Expression): Boolean = e match {
-    case Alias(e, _) => isAnsiCast(e)
-    case GpuAlias(e, _) => isAnsiCast(e)
-    case e => isAnsiCast(e)
-  }
-
-  def extractAnsiCastTypes(e: Expression): (DataType, DataType) = {
-    AnsiCastShim.extractAnsiCastTypes(e)
-  }
+object CastTimeToIntShim {
+  // Whether to set overflow rows to nulls when casting timestamps to integrals.
+  def ifNullifyOverflows: Boolean = false
 }

@@ -227,7 +227,7 @@ case class GpuCeil(child: Expression, outputType: DataType)
             withResource(outOfBounds.any()) { isAny =>
               if (isAny.isValid && isAny.getBoolean) {
                 throw RoundingErrorUtil.cannotChangeDecimalPrecisionError(
-                  input, outOfBounds, dt, outputType
+                  input.getBase, outOfBounds, dt, outputType
                 )
               }
             }
@@ -303,7 +303,7 @@ case class GpuFloor(child: Expression, outputType: DataType)
             withResource(outOfBounds.any()) { isAny =>
               if (isAny.isValid && isAny.getBoolean) {
                 throw RoundingErrorUtil.cannotChangeDecimalPrecisionError(
-                  input, outOfBounds, dt, outputType
+                  input.getBase, outOfBounds, dt, outputType
                 )
               }
             }
@@ -831,7 +831,7 @@ case class GpuRint(child: Expression) extends CudfUnaryMathExpression("ROUND") {
   override def outputTypeOverride: DType = DType.FLOAT64
 }
 
-private object RoundingErrorUtil {
+object RoundingErrorUtil {
   /**
    * Wrapper of the `cannotChangeDecimalPrecisionError` of RapidsErrorUtils.
    *
@@ -843,19 +843,20 @@ private object RoundingErrorUtil {
    * @param context The error context, default value is "".
    */
   def cannotChangeDecimalPrecisionError(
-      values: GpuColumnVector,
-      outOfBounds: ColumnVector,
+      values: ColumnView,
+      outOfBounds: ColumnView,
       fromType: DecimalType,
       toType: DecimalType,
       context: String = ""): ArithmeticException = {
     val row_id = withResource(outOfBounds.copyToHost()) {hcv =>
-      (0.toLong until outOfBounds.getRowCount())
+      (0.toLong until outOfBounds.getRowCount)
         .find(i => !hcv.isNull(i) && hcv.getBoolean(i))
         .get
     }
     val value = withResource(values.copyToHost()){hcv =>
-      hcv.getDecimal(row_id.toInt, fromType.precision, fromType.scale)
+      hcv.getBigDecimal(row_id)
     }
-    RapidsErrorUtils.cannotChangeDecimalPrecisionError(value, toType)
+    RapidsErrorUtils.cannotChangeDecimalPrecisionError(
+      Decimal(value, fromType.precision, fromType.scale), toType)
   }
 }

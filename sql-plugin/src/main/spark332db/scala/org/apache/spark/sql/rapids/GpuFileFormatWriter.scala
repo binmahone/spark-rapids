@@ -247,7 +247,8 @@ trait GpuFileFormatWriterBase extends Serializable with Logging {
           (empty2NullPlan.executeColumnar(), concurrentOutputWriterSpec)
         } else {
           // sort, then write
-          val sortPlan = createSortPlan(empty2NullPlan, orderingExpr, useStableSort, statsTrackers)
+          val sortPlan = createSortPlan(empty2NullPlan, orderingExpr, useStableSort,
+            description.statsTrackers)
           val sort = sortPlan.executeColumnar()
           (sort, concurrentOutputWriterSpec) // concurrentOutputWriterSpec is None
         }

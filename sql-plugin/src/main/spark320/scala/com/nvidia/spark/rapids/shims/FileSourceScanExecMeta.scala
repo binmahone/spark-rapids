@@ -116,6 +116,7 @@ class FileSourceScanExecMeta(plan: FileSourceScanExec,
       wrapped.dataFilters,
       wrapped.tableIdentifier,
       wrapped.disableBucketedScan,
+      wrapped.properties,
       queryUsesInputFile = false)(conf)
   }
 }

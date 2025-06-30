@@ -138,3 +138,4 @@ case object HiveMode extends HashMode
 case class UnsupportedMode(modeName: String) extends HashMode {
   override def toString: String = modeName
 }
+

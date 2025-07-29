@@ -35,7 +35,7 @@ import org.apache.spark.util.SerializableConfiguration
 trait GpuReadFileFormatWithMetrics extends FileFormat {
   final override def supportBatch(spark: SparkSession, dataSchema: StructType): Boolean = true
 
-  final override def buildReaderWithPartitionValues(
+  final def buildReaderWithPartitionValues(
       sparkSession: SparkSession,
       dataSchema: StructType,
       partitionSchema: StructType,

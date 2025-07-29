@@ -18,6 +18,8 @@ package org.apache.spark.sql.rapids
 
 import java.io.Serializable
 
+import scala.collection.immutable.HashSet
+
 import ai.rapids.cudf._
 import ai.rapids.cudf.ast.BinaryOperator
 import com.nvidia.spark.rapids._
@@ -795,6 +797,33 @@ case class GpuPow(left: Expression, right: Expression)
   override def binaryOp: BinaryOp = BinaryOp.POW
   override def astOperator: Option[BinaryOperator] = Some(ast.BinaryOperator.POW)
   override def outputTypeOverride: DType = DType.FLOAT64
+
+  /**
+   * Due to https://github.com/NVIDIA/spark-rapids/issues/12685, this WAR replaces
+   * "pow" with "mul" when the input exponent is a scalar and one of [1.0, 2.0].
+   *  1.0 is here for the shortcut by returning the input data as it is.
+   */
+  private val expsForMul = HashSet(1.0, 2.0, 3.0)
+
+  override def doColumnar(lhs: GpuColumnVector, rhs: GpuScalar): ColumnVector = {
+    if (rhs.isValid) {
+      val exp = rhs.getValue.asInstanceOf[Double]
+      if (expsForMul.contains(exp)) {
+        var cnt = exp.toLong
+        var tmpCol = lhs.getBase.incRefCount()
+        while (cnt > 1) { // Times of multiply == exponent - 1
+          tmpCol = withResource(tmpCol) { _ =>
+            tmpCol.mul(lhs.getBase)
+          }
+          cnt -= 1
+        }
+        return tmpCol
+      }
+    }
+    // fallback to the pow
+    super.doColumnar(lhs, rhs)
+  }
+
 }
 
 case class GpuRint(child: Expression) extends CudfUnaryMathExpression("ROUND") {

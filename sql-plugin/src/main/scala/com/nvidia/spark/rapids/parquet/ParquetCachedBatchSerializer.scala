@@ -130,6 +130,10 @@ class ByteArrayInputFile(buff: Array[Byte]) extends InputFile {
         }
         byteBuffer.position(newPos.toInt)
       }
+
+      override def readFully(l: Long, bytes: Array[Byte], i: Int, i1: Int): Unit = {
+        throw new RuntimeException("有大病整这么多接口")
+      }
     }
   }
 }
@@ -168,6 +172,8 @@ private class ByteArrayOutputFile(stream: ByteArrayOutputStream) extends OutputF
   override def supportsBlockSize(): Boolean = true
 
   override def defaultBlockSize(): Long = ByteArrayOutputFile.BLOCK_SIZE
+
+  override def getPath: String = ""
 }
 
 private class ParquetBufferConsumer(val numRows: Int) extends HostBufferConsumer with

@@ -282,8 +282,11 @@ object GpuShuffleExchangeExecBase {
   val METRIC_SHUFFLE_DESERIALIZATION_TIME = "rapidsShuffleDeserializationTime"
   val METRIC_DESC_SHUFFLE_DESERIALIZATION_TIME = "RAPIDS shuffle deserialization time"
   val METRIC_SHUFFLE_DESER_STREAM_TIME = "rapidsShuffleDeserializationStreamTime"
+  val METRIC_SHUFFLE_READ_STREAM_TIME = "rapidsShuffleReadStreamTime"
   val METRIC_DESC_SHUFFLE_DESER_STREAM_TIME =
     "RAPIDS shuffle deserialization from input stream time"
+  val METRIC_DESC_SHUFFLE_READ_STREAM_TIME =
+    "RAPIDS shuffle read from input stream time"
   val METRIC_SHUFFLE_PARTITION_TIME = "rapidsShufflePartitionTime"
   val METRIC_DESC_SHUFFLE_PARTITION_TIME = "RAPIDS shuffle partition time"
   val METRIC_SHUFFLE_WRITE_TIME = "rapidsShuffleWriteTime"
@@ -309,6 +312,8 @@ object GpuShuffleExchangeExecBase {
         gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_DESERIALIZATION_TIME),
     METRIC_SHUFFLE_DESER_STREAM_TIME ->
         gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_DESER_STREAM_TIME),
+    METRIC_SHUFFLE_READ_STREAM_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_READ_STREAM_TIME),
     METRIC_SHUFFLE_PARTITION_TIME ->
         gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_PARTITION_TIME),
     METRIC_SHUFFLE_WRITE_TIME ->

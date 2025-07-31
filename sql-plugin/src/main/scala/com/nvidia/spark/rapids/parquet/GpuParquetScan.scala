@@ -53,7 +53,6 @@ import org.apache.parquet.format.converter.ParquetMetadataConverter
 import org.apache.parquet.hadoop.{ParquetFileReader, ParquetInputFormat}
 import org.apache.parquet.hadoop.ParquetFileWriter.MAGIC
 import org.apache.parquet.hadoop.metadata._
-import org.apache.parquet.io.{InputFile, SeekableInputStream}
 import org.apache.parquet.schema.{DecimalMetadata, GroupType, MessageType, OriginalType, PrimitiveType, Type}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.xerial.snappy.Snappy

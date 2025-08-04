@@ -528,7 +528,6 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
     withResource(new NvtxRange(nvRangeName, NvtxColor.PURPLE)) { _ =>
       concatenateTablesInHost()
     }
-    concatenateTablesInHost()
   }
 
   private def canAddToBatch(nextTable: T): Boolean = {

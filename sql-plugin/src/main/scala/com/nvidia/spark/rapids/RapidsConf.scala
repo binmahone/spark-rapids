@@ -2153,7 +2153,7 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
     .internal()
     .startupOnly()
     .booleanConf
-    .createWithDefault(false)
+    .createWithDefault(true) // This is different from upsteam!!
 
   // ["NEVER", "ALWAYS", "ONFAILURE"]
   private val KudoDebugModes = 
@@ -2178,13 +2178,6 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
     .startupOnly()
     .stringConf
     .createOptional
-
-  val SHUFFLE_ASYNC_READ_ENABLED = conf("spark.rapids.shuffle.asyncRead.enabled")
-    .doc("Enable or disable the asynchronous read for Shuffle.")
-    .internal()
-    .startupOnly()
-    .booleanConf
-    .createWithDefault(true)
 
   // USER FACING DEBUG CONFIGS
 
@@ -3438,8 +3431,6 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
       }
     }
   }
-
-  lazy val shuffleAsyncReadEnabled: Boolean = get(SHUFFLE_ASYNC_READ_ENABLED)
 
   def isUCXShuffleManagerMode: Boolean =
     RapidsShuffleManagerMode

@@ -17,13 +17,12 @@
 package com.nvidia.spark.rapids
 
 import java.util
-import java.util.concurrent.{Callable, Future, ThreadPoolExecutor}
+import java.util.concurrent.{Callable, Future}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
 import ai.rapids.cudf.{JCudfSerialization, NvtxColor, NvtxRange}
-import ai.rapids.cudf.HostColumnVector.DataType
 import ai.rapids.cudf.JCudfSerialization.HostConcatResult
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.FileUtils.createTempFile
@@ -34,8 +33,8 @@ import com.nvidia.spark.rapids.io.async.{ThrottlingExecutor, TrafficController}
 import com.nvidia.spark.rapids.jni.kudo.{DumpOption, KudoHostMergeResultWrapper, KudoSerializer, MergeOptions}
 import com.nvidia.spark.rapids.shims.ShimUnaryExecNode
 import org.apache.hadoop.conf.Configuration
-import org.apache.spark.TaskContext
 
+import org.apache.spark.TaskContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Attribute

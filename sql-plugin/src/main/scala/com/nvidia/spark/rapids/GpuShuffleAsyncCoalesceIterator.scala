@@ -19,7 +19,6 @@ package com.nvidia.spark.rapids
 import java.util.concurrent.{Callable, Future}
 
 import ai.rapids.cudf.{NvtxColor, NvtxRange}
-import ai.rapids.cudf.HostColumnVector.DataType
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.io.async.{ThrottlingExecutor, TrafficController}
 

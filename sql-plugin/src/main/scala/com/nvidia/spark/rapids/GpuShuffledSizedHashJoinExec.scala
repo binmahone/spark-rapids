@@ -159,9 +159,6 @@ object GpuShuffledSizedHashJoinExec {
 
     /**
      * Build an iterator in preparation for using it for sub-joins.
-     * Implementations should consider the case where the queue is modified after this
-     * call. That said, implementations should not make a snapshot of the input queue,
-     * or directly save a iterator from the queue at the time of this call.
      *
      * @param queue a possibly empty queue of data that has already been fetched from the underlying
      *              iterator as part of probing sizes of the join inputs
@@ -280,16 +277,7 @@ object GpuShuffledSizedHashJoinExec {
         isLeftSide: Boolean): Iterator[ColumnarBatch] = {
       val concatMetrics = getConcatMetrics(metrics)
       GpuShuffleCoalesceUtils.getGpuShuffleCoalesceIterator(
-        new Iterator[ColumnarBatch]() {
-          override def hasNext: Boolean = queue.nonEmpty || remainingIter.hasNext
-          override def next(): ColumnarBatch = {
-            if (queue.nonEmpty) {
-              queue.dequeue()
-            } else {
-              remainingIter.next()
-            }
-          }
-        },
+        queue.iterator ++ remainingIter,
         gpuBatchSizeBytes,
         batchTypes,
         readOption,
@@ -849,44 +837,35 @@ object GpuShuffledAsymmetricHashJoinExec {
       val exprs = BoundJoinExprs.bind(joinType, leftKeys, leftOutput, rightKeys,
         rightOutput, condition, buildSide)
       val buildQueue = mutable.Queue.empty[T]
-      val (mayTruncatedBuildRows, mayTruncatedBuildSize) = closeOnExcept(buildQueue) { _ =>
+      val (buildRows, buildSize) = closeOnExcept(buildQueue) { _ =>
         fetchProbeTargetSize(probeBuildIter, buildQueue, gpuBatchSizeBytes)
       }
       val baseBuildIter = setupForJoin(buildQueue, rawBuildIter, exprs.buildTypes,
         gpuBatchSizeBytes, metrics, buildSide == GpuBuildLeft)
-      if (mayTruncatedBuildRows <= Int.MaxValue && mayTruncatedBuildSize <= gpuBatchSizeBytes) {
+      if (buildRows <= Int.MaxValue && buildSize <= gpuBatchSizeBytes) {
         assert(!probeBuildIter.hasNext, "build side not exhausted")
         getJoinInfoSmallBuildSide(joinType, buildSide, condition, exprs,
-          baseBuildIter, mayTruncatedBuildRows, mayTruncatedBuildSize,
+          baseBuildIter, buildRows, buildSize,
           rawStreamIter, gpuBatchSizeBytes, metrics)
       } else {
         // The natural build side does not fit in a single batch, so use the stream side
         // as the hash table if we can fit it in a single batch.
         val streamQueue = mutable.Queue.empty[T]
-        val (mayTruncatedStreamRows, mayTruncatedStreamSize) = closeOnExcept(streamQueue) { _ =>
+        val (streamRows, streamSize) = closeOnExcept(streamQueue) { _ =>
           fetchProbeTargetSize(probeStreamIter, streamQueue, gpuBatchSizeBytes)
         }
         val streamIter = setupForJoin(streamQueue, rawStreamIter, exprs.streamTypes,
           gpuBatchSizeBytes, metrics, buildSide == GpuBuildRight)
-        if (mayTruncatedStreamRows <= Int.MaxValue && mayTruncatedStreamSize <= gpuBatchSizeBytes) {
+        if (streamRows <= Int.MaxValue && streamSize <= gpuBatchSizeBytes) {
           assert(!probeStreamIter.hasNext, "stream side not exhausted")
-          metrics(BUILD_DATA_SIZE).set(mayTruncatedStreamSize)
+          metrics(BUILD_DATA_SIZE).set(streamSize)
           val flippedSide = flipped(buildSide)
-          JoinInfo(joinType, flippedSide, streamIter, mayTruncatedStreamSize, None, baseBuildIter,
+          JoinInfo(joinType, flippedSide, streamIter, streamSize, None, baseBuildIter,
             exprs.flipped(joinType, flippedSide, condition))
         } else {
-          // Here buildSize provided to JoinInfo is important for deciding the partition number.
-          // We should provide the actual buildSize instead of the truncated one.
-          // By calling fetchProbeTargetSize again, we'll move all batches to the queue, and
-          // at the same time we'll get the actual buildSize.
-          val (_, remainingBytes) = closeOnExcept(buildQueue) { _ =>
-            fetchProbeTargetSize(probeBuildIter, buildQueue, gpuBatchSizeBytes,
-              truncateIfNecessary = false)
-          }
           val buildIter = addNullFilterIfNecessary(baseBuildIter, exprs.boundBuildKeys,
             exprs.buildSideNeedsNullFilter, metrics)
-          JoinInfo(joinType, buildSide, buildIter, mayTruncatedBuildSize + remainingBytes
-            , None, streamIter, exprs)
+          JoinInfo(joinType, buildSide, buildIter, buildSize, None, streamIter, exprs)
         }
       }
     }
@@ -987,20 +966,16 @@ object GpuShuffledAsymmetricHashJoinExec {
      * @param iter probe iterator to fetch from
      * @param queue queue to place fetched batches into
      * @param targetSize target size to limit fetching
-     * @param truncateIfNecessary whether to truncate the probe side if the target size is exceeded
      * @return the total rows and total bytes fetched into the queue
      */
     private def fetchProbeTargetSize(
         iter: Iterator[T],
         queue: mutable.Queue[T],
-        targetSize: Long,
-        truncateIfNecessary: Boolean = true): (Long, Long) = {
+        targetSize: Long): (Long, Long) = {
       withResource(new NvtxRange("asymmetric join probe fetch", NvtxColor.YELLOW)) { _ =>
         var totalRows: Long = 0
         var totalSize: Long = 0L
-        while ((!truncateIfNecessary ||
-          (totalRows <= Integer.MAX_VALUE && totalSize <= targetSize)) &&
-          iter.hasNext) {
+        while (totalRows <= Integer.MAX_VALUE && totalSize <= targetSize && iter.hasNext) {
           val batch = iter.next()
           val rowCount = getProbeBatchRowCount(batch)
           if (rowCount > 0) {

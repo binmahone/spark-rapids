@@ -694,7 +694,7 @@ class KudoSerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric,
       if (nextHeader.isEmpty) {
         withResource(new NvtxRange("Read Header", NvtxColor.YELLOW)) { _ =>
           val header = Option(
-            readTime.ns(KudoTableHeader.readFrom(dIn)).orElse(null))
+            readTime4.ns(KudoTableHeader.readFrom(dIn)).orElse(null))
           if (header.isDefined) {
             nextHeader = header
           } else {
@@ -766,9 +766,10 @@ class KudoSerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric,
         }
 
         closeOnExcept(buffer) { _ =>
-          readTime.ns(
-            buffer.copyFromStream(0, dIn, header.getTotalDataLen)
-          )
+          val x = buffer.copyFromStream(0, dIn, header.getTotalDataLen)
+          readTime1 += x.apply(0)
+          readTime2 += x.apply(1)
+          readTime3 += x.apply(2)
           KudoSerializedTableColumn.from(header, buffer)
         }
       } else {

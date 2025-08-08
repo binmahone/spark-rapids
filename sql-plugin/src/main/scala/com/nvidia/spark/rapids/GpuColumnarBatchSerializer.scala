@@ -679,14 +679,14 @@ class KudoSerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric, re
     }
   }
 
-  override def peekNextBatchSize(): Option[Long] = deserTime.ns {
+  override def peekNextBatchSize(): Option[Long] = {
     if (streamClosed) {
       None
     } else {
       if (nextHeader.isEmpty) {
         withResource(new NvtxRange("Read Header", NvtxColor.YELLOW)) { _ =>
           val header = Option(
-            readTime.ns(KudoTableHeader.readFrom(dIn)).orElse(null))
+            (KudoTableHeader.readFrom(dIn)).orElse(null))
           if (header.isDefined) {
             nextHeader = header
           } else {
@@ -758,9 +758,8 @@ class KudoSerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric, re
         }
 
         closeOnExcept(buffer) { _ =>
-          readTime.ns(
-            buffer.copyFromStream(0, dIn, header.getTotalDataLen)
-          )
+          val x = buffer.copyFromStream(0, dIn, header.getTotalDataLen).apply(0)
+          readTime += x
           KudoSerializedTableColumn.from(header, buffer)
         }
       } else {

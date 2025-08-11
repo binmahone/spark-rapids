@@ -512,7 +512,7 @@ object GpuShuffledHashJoinExec extends Logging {
       iter.head.column(0) match {
         case _: KudoSerializedTableColumn =>
           retIter = Some(new KudoHostShuffleCoalesceIterator(iter, targetSize, dataTypes,
-            concatTime, coalMcs.bgJobLaunchMetric, readOption))
+            concatTime, coalMcs.bgJobLaunchMetric, readOption = readOption))
         case _: SerializedTableColumn =>
           retIter = Some(new HostShuffleCoalesceIterator(iter, targetSize,
             concatTimeMetric = concatTime, bufferJobLaunchMetric = coalMcs.bgJobLaunchMetric))

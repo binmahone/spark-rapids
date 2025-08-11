@@ -17,7 +17,7 @@
 package com.nvidia.spark.rapids
 
 import java.util
-import java.util.concurrent.Future
+import java.util.concurrent.{Callable, Future, TimeUnit}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag

@@ -17,7 +17,7 @@
 package com.nvidia.spark.rapids
 
 import java.util
-import java.util.concurrent.{Callable, Future}
+import java.util.concurrent.{Callable, Future, TimeUnit}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
@@ -218,10 +218,10 @@ object GpuShuffleCoalesceUtils {
     }
     val hostIter = if (readOption.kudoEnabled) {
       new KudoHostShuffleCoalesceIterator(inIter, targetSize, dataTypes, concatTimeMetric,
-        coalMetrics.bgJobLaunchMetric, readOption)
+        coalMetrics.bgJobLaunchMetric, readThrottlingMetric, readOption)
     } else {
       new HostShuffleCoalesceIterator(inIter, targetSize, concatTimeMetric,
-        coalMetrics.bgJobLaunchMetric)
+        coalMetrics.bgJobLaunchMetric, readThrottlingMetric)
     }
     val maybeBufferedIter = if (prefetchFirstBatch) {
       val bufferedIter = new CloseableBufferedIterator(hostIter)
@@ -385,6 +385,7 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
     targetBatchByteSize: Long,
     concatTimeMetric: GpuMetric,
     bufferJobLaunchMetric: GpuMetric,
+    readThrottlingMetric: GpuMetric,
     useAsync: Boolean = false
 ) extends Iterator[CoalescedHostResult] with AutoCloseable {
   private[this] val serializedTables = new util.ArrayDeque[T]
@@ -423,13 +424,15 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
   override def close(): Unit = {
     serializedTables.forEach(_.close())
     serializedTables.clear()
+    executor.foreach { e =>
+      e.shutdownNow(10, TimeUnit.SECONDS)
+    }
   }
 
   private def concatenateTablesInHost(): CoalescedHostResult = {
-    val result = withResource(new MetricRange(concatTimeMetric)) { _ =>
-      val input = new ArrayBuffer[T]()
-      for (_ <- 0 until numTablesInBatch)
-        input += serializedTables.removeFirst()
+    val input = new ArrayBuffer[T]()
+    for (_ <- 0 until numTablesInBatch)
+      input += serializedTables.removeFirst()
 
       {
         // update the stats for the next batch in progress
@@ -454,8 +457,8 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
                 TrampolineUtil.newDaemonCachedThreadPool(
                   "async buffer thread for " + Thread.currentThread().getName, 1, 1),
                 TrafficController.getReadInstance,
-                _ => {
-                  // This is a no-op for now, but we can add stats collection here in the future.
+            stat => {
+              readThrottlingMetric.add(stat.accumulatedThrottleTimeNs)
                 }
               ))
           }
@@ -466,12 +469,11 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
         }
       }
 
+    withResource(new MetricRange(concatTimeMetric)) { _ =>
       withRetryNoSplit(input.toSeq) { tables =>
         tableOperator.concatOnHost(tables.toArray)
       }
     }
-
-    result
   }
 
   private def bufferNextBatch(): Unit = {
@@ -545,9 +547,10 @@ class HostShuffleCoalesceIterator(
     iter: Iterator[ColumnarBatch],
     targetBatchSize: Long,
     concatTimeMetric: GpuMetric = NoopMetric,
-    bufferJobLaunchMetric: GpuMetric = NoopMetric)
+    bufferJobLaunchMetric: GpuMetric = NoopMetric,
+    readThrottlingMetric: GpuMetric = NoopMetric)
   extends HostCoalesceIteratorBase[SerializedTableColumn](iter, targetBatchSize,
-    concatTimeMetric, bufferJobLaunchMetric) {
+    concatTimeMetric, bufferJobLaunchMetric, readThrottlingMetric) {
   override protected val tableOperator = new JCudfTableOperator
 }
 
@@ -557,9 +560,11 @@ class KudoHostShuffleCoalesceIterator(
     dataTypes: Array[DataType],
     concatTimeMetric: GpuMetric = NoopMetric,
     bufferJobLaunchMetric: GpuMetric = NoopMetric,
+    readThrottlingMetric: GpuMetric = NoopMetric,
     readOption: CoalesceReadOption)
   extends HostCoalesceIteratorBase[KudoSerializedTableColumn](iter, targetBatchSize,
-    concatTimeMetric, bufferJobLaunchMetric, readOption.useAsync) {
+    concatTimeMetric, bufferJobLaunchMetric, readThrottlingMetric,
+    readOption.useAsync) {
 
   // Capture TaskContext info during RDD execution when it's available
   private val taskIdentifier = Option(TaskContext.get()) match {

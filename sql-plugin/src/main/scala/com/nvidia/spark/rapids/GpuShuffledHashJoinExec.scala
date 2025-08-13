@@ -20,6 +20,7 @@ import scala.collection.mutable
 
 import ai.rapids.cudf.{NvtxColor, NvtxRange}
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
+import com.nvidia.spark.rapids.GpuShuffledHashJoinExec.BUILD_PREFIX
 import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
 import com.nvidia.spark.rapids.shims.{GpuHashPartitioning, ShimBinaryExecNode}
 
@@ -229,11 +230,13 @@ case class GpuShuffledHashJoinExec(
     // iterators, setting as noop certain metrics that the coalesce iterators
     // normally update, but that in the case of the join they would produce
     // the wrong statistics (since there are conflicts)
-    val coalesceMetrics = allMetrics ++
-      Map(GpuMetric.NUM_INPUT_ROWS -> NoopMetric,
-          GpuMetric.NUM_INPUT_BATCHES -> NoopMetric,
-          GpuMetric.NUM_OUTPUT_BATCHES -> NoopMetric,
-          GpuMetric.NUM_OUTPUT_ROWS -> NoopMetric)
+    val coalesceMetrics = (allMetrics ++ Map(
+        GpuMetric.NUM_INPUT_ROWS -> NoopMetric,
+        GpuMetric.NUM_INPUT_BATCHES -> NoopMetric,
+        GpuMetric.NUM_OUTPUT_BATCHES -> NoopMetric,
+        GpuMetric.NUM_OUTPUT_ROWS -> NoopMetric
+      ) ++ ShuffleCoalReadMetrics.createAsMap(this, false, BUILD_PREFIX)
+    ).withDefaultValue(NoopMetric)
 
     val realTarget = realTargetBatchSize()
 
@@ -351,9 +354,10 @@ object GpuShuffledHashJoinExec extends Logging {
           val safeIter = GpuSubPartitionHashJoin.safeIteratorFromSeq(Seq(firstBuildBatch)) ++
             coalesceBuiltIter
           val gpuBuildIter = if (isBuildSerialized) {
+            val coalMcs = ShuffleCoalReadMetrics(coalesceMetrics, BUILD_PREFIX)
             // batches on host, move them to GPU
             new GpuShuffleCoalesceIterator(safeIter.asInstanceOf[Iterator[CoalescedHostResult]],
-              buildDataType)
+              buildDataType, coalMcs.readTimeMetric, coalMcs.semReadTimeMetric)
           } else { // batches already on GPU
             safeIter.asInstanceOf[Iterator[ColumnarBatch]]
           }
@@ -493,6 +497,8 @@ object GpuShuffledHashJoinExec extends Logging {
     ConcatAndConsumeAll.getSingleBatchWithVerification(singleBatchIter, inputAttrs)
   }
 
+  private val BUILD_PREFIX = "build"
+
   private def getHostShuffleCoalesceIterator(
       iter: BufferedIterator[ColumnarBatch],
       dataTypes: Array[DataType],
@@ -502,13 +508,14 @@ object GpuShuffledHashJoinExec extends Logging {
     var retIter: Option[Iterator[CoalescedHostResult]] = None
     if (iter.hasNext && iter.head.numCols() == 1) {
       val concatTime = coalesceMetrics(GpuMetric.CONCAT_TIME)
+      val coalMcs = ShuffleCoalReadMetrics(coalesceMetrics, BUILD_PREFIX)
       iter.head.column(0) match {
         case _: KudoSerializedTableColumn =>
           retIter = Some(new KudoHostShuffleCoalesceIterator(iter, targetSize, dataTypes,
-            concatTimeMetric = concatTime, readOption = readOption))
+            concatTime, coalMcs.bgJobLaunchMetric, readOption = readOption))
         case _: SerializedTableColumn =>
           retIter = Some(new HostShuffleCoalesceIterator(iter, targetSize,
-            concatTimeMetric = concatTime))
+            concatTimeMetric = concatTime, bufferJobLaunchMetric = coalMcs.bgJobLaunchMetric))
         case _ => // should be gpu batches
       }
     }

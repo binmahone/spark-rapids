@@ -17,7 +17,7 @@
 package com.nvidia.spark.rapids
 
 import java.util
-import java.util.concurrent.{Future, TimeUnit}
+import java.util.concurrent.{Callable, Future, TimeUnit}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
@@ -26,7 +26,6 @@ import ai.rapids.cudf.{JCudfSerialization, NvtxColor, NvtxRange}
 import ai.rapids.cudf.JCudfSerialization.HostConcatResult
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.FileUtils.createTempFile
-import com.nvidia.spark.rapids.GpuMetric.{ASYNC_READ_TIME, SYNC_READ_TIME}
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
@@ -60,15 +59,15 @@ case class GpuShuffleCoalesceExec(child: SparkPlan, targetBatchByteSize: Long)
   import GpuMetric._
   import GpuShuffleCoalesceUtils._
 
+  private val coalReadOption = CoalesceReadOption(conf)
+
   override lazy val additionalMetrics: Map[String, GpuMetric] = Map(
     OP_TIME -> createNanoTimingMetric(MODERATE_LEVEL, DESCRIPTION_OP_TIME),
     NUM_INPUT_ROWS -> createMetric(DEBUG_LEVEL, DESCRIPTION_NUM_INPUT_ROWS),
     NUM_INPUT_BATCHES -> createMetric(DEBUG_LEVEL, DESCRIPTION_NUM_INPUT_BATCHES),
     CONCAT_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_CONCAT_TIME),
-    SYNC_READ_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_SYNC_READ_TIME),
-    ASYNC_READ_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_ASYNC_READ_TIME),
-    READ_THROTTLING_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_READ_THROTTLING_TIME),
-  )
+    READ_THROTTLING_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_READ_THROTTLING_TIME)
+  ) ++ ShuffleCoalReadMetrics.createAsMap(this, coalReadOption.useAsync, "")
 
   override protected val outputBatchesLevel = MODERATE_LEVEL
 
@@ -84,19 +83,20 @@ case class GpuShuffleCoalesceExec(child: SparkPlan, targetBatchByteSize: Long)
     val metricsMap = allMetrics
     val targetSize = targetBatchByteSize
     val dataTypes = GpuColumnVector.extractTypes(schema)
-    val readOption = CoalesceReadOption(conf)
+    val readOption = coalReadOption
 
     child.executeColumnar().mapPartitions { iter =>
-      getGpuShuffleCoalesceIterator(iter, targetSize, dataTypes,
-        readOption, metricsMap)
+      getGpuShuffleCoalesceIterator(iter, targetSize, dataTypes, readOption, metricsMap)
     }
   }
 }
 
 /** A case class to pack some options. */
 case class CoalesceReadOption private(
-    kudoEnabled: Boolean, kudoDebugMode: DumpOption, kudoDebugDumpPrefix: Option[String],
-    useAsync: Boolean)
+    kudoEnabled: Boolean,
+    useAsync: Boolean,
+    kudoDebugMode: DumpOption,
+    kudoDebugDumpPrefix: Option[String])
 
 object CoalesceReadOption {
   def apply(conf: SQLConf): CoalesceReadOption = {
@@ -106,20 +106,77 @@ object CoalesceReadOption {
       case "ONFAILURE" => DumpOption.OnFailure
     }
     CoalesceReadOption(RapidsConf.SHUFFLE_KUDO_SERIALIZER_ENABLED.get(conf),
+      RapidsConf.SHUFFLE_ASYNC_READ_ENABLED.get(conf),
       dumpOption,
-      RapidsConf.SHUFFLE_KUDO_SERIALIZER_DEBUG_DUMP_PREFIX.get(conf),
-      RapidsConf.SHUFFLE_ASYNC_READ_ENABLED.get(conf))
+      RapidsConf.SHUFFLE_KUDO_SERIALIZER_DEBUG_DUMP_PREFIX.get(conf))
   }
 
   def apply(conf: RapidsConf): CoalesceReadOption = {
     CoalesceReadOption(conf.shuffleKudoSerializerEnabled,
+      conf.shuffleAsyncReadEnabled,
       conf.shuffleKudoSerializerDebugMode,
-      conf.shuffleKudoSerializerDebugDumpPrefix,
-      conf.shuffleAsyncReadEnabled)
+      conf.shuffleKudoSerializerDebugDumpPrefix)
+  }
+}
+
+class ShuffleCoalReadMetrics private(
+    val readTimeMetric: GpuMetric,
+    val semReadTimeMetric: GpuMetric,
+    val bgJobLaunchMetric: GpuMetric)
+
+object ShuffleCoalReadMetrics {
+  import GpuMetric.DEBUG_LEVEL
+
+  private val READ_BATCH_TIME = "rapidsShuffleReadTime"
+  private val READ_BATCH_WITH_SEM_TIME = "rapidsShuffleReadTimeWithSem"
+  private val BG_JOB_LAUNCH_TIME = "rapidsBGJobLaunchTime"
+  private val DESC_READ_BATCH_TIME = "read batch time"
+  private val DESC_READ_BATCH_WITH_SEM_TIME = "read batch with Sem. time"
+  private val DESC_BG_JOB_LAUNCH_TIME = "bg job launch time"
+
+  private val keys = Seq(READ_BATCH_TIME, READ_BATCH_WITH_SEM_TIME, BG_JOB_LAUNCH_TIME)
+
+  /**
+   * Create from the given metric map, a NoopMetric is used for the one does not exist.
+   */
+  def apply(metrics: Map[String, GpuMetric], prefix: String): ShuffleCoalReadMetrics = {
+    val getOrNoop: String => GpuMetric = k => metrics.getOrElse(s"$prefix$k", NoopMetric)
+    new ShuffleCoalReadMetrics(
+      getOrNoop(READ_BATCH_TIME),
+      getOrNoop(READ_BATCH_WITH_SEM_TIME),
+      getOrNoop(BG_JOB_LAUNCH_TIME))
+  }
+
+  /**
+   * Create the coalesce read relevant metrics as a Map.
+   * The "prefix" will be added to the beginning of each metric name. This is for
+   * the join case, where there are two separate iterators owning separate metric set.
+   */
+  def createAsMap(exec: GpuExec, isAsync: Boolean, prefix: String): Map[String, GpuMetric] = {
+    val oneEntry: (String, String) => (String, GpuMetric) = (k, v) => {
+      s"$prefix$k" -> exec.createNanoTimingMetric(DEBUG_LEVEL, s"$prefix $v".trim)
+    }
+    val suffix = if (isAsync) "async" else "sync"
+    Map(
+      oneEntry(READ_BATCH_TIME, s"$DESC_READ_BATCH_TIME($suffix)"),
+      oneEntry(READ_BATCH_WITH_SEM_TIME, s"$DESC_READ_BATCH_WITH_SEM_TIME($suffix)"),
+      oneEntry(BG_JOB_LAUNCH_TIME, DESC_BG_JOB_LAUNCH_TIME))
+  }
+
+  def filter(metrics: Map[String, GpuMetric]): Map[String, GpuMetric] = {
+    metrics.filter { case (k, _) =>
+      // If the given key contains the raw key string, it is treated as a coalesce
+      // read metric.
+      // e.g. in the join case, the given key would be 'buildrapidsShuffleReadTime',
+      // while the raw key is still 'rapidsShuffleReadTime'.
+      keys.exists(rawKey => k.contains(rawKey))
+    }
   }
 }
 
 object GpuShuffleCoalesceUtils {
+
+
   /**
    * Return an iterator that will pull in batches from the input iterator,
    * concatenate them up to the "targetSize" and move the concatenated result
@@ -143,38 +200,58 @@ object GpuShuffleCoalesceUtils {
       dataTypes: Array[DataType],
       readOption: CoalesceReadOption,
       metricsMap: Map[String, GpuMetric],
-      prefetchFirstBatch: Boolean = false): Iterator[ColumnarBatch] = {
+      prefetchFirstBatch: Boolean = false,
+      prefix: String = ""): Iterator[ColumnarBatch] = {
     val concatTimeMetric = metricsMap(GpuMetric.CONCAT_TIME)
     val inBatchesMetric = metricsMap(GpuMetric.NUM_INPUT_BATCHES)
     val inRowsMetric = metricsMap(GpuMetric.NUM_INPUT_ROWS)
     val outBatchesMetric = metricsMap(GpuMetric.NUM_OUTPUT_BATCHES)
     val outRowsMetric = metricsMap(GpuMetric.NUM_OUTPUT_ROWS)
     val opTimeMetric = metricsMap(GpuMetric.OP_TIME)
+    val coalMetrics = ShuffleCoalReadMetrics(metricsMap, prefix)
     val readThrottlingMetric = metricsMap(GpuMetric.READ_THROTTLING_TIME)
+
+    val inIter = iter.map { cb =>
+      inBatchesMetric += 1
+      inRowsMetric += cb.numRows()
+      cb
+    }
     val hostIter = if (readOption.kudoEnabled) {
-      new KudoHostShuffleCoalesceIterator(iter, targetSize, dataTypes, concatTimeMetric,
-        inBatchesMetric, inRowsMetric, readThrottlingMetric, readOption)
+      new KudoHostShuffleCoalesceIterator(inIter, targetSize, dataTypes, concatTimeMetric,
+        coalMetrics.bgJobLaunchMetric, readThrottlingMetric, readOption)
     } else {
-      new HostShuffleCoalesceIterator(iter, targetSize, concatTimeMetric, inBatchesMetric,
-        inRowsMetric, readThrottlingMetric)
+      new HostShuffleCoalesceIterator(inIter, targetSize, concatTimeMetric,
+        coalMetrics.bgJobLaunchMetric, readThrottlingMetric)
     }
     val maybeBufferedIter = if (prefetchFirstBatch) {
       val bufferedIter = new CloseableBufferedIterator(hostIter)
       withResource(new NvtxRange("fetch first batch", NvtxColor.YELLOW)) { _ =>
         // Force a coalesce of the first batch before we grab the GPU semaphore
-        bufferedIter.headOption
+        GpuMetric.withSemaphoreTime(coalMetrics.readTimeMetric, coalMetrics.semReadTimeMetric,
+          TaskContext.get()) {
+          bufferedIter.headOption
+        }
       }
       bufferedIter
     } else {
       hostIter
     }
-    if (readOption.useAsync) {
+
+    (if (readOption.useAsync) {
       new GpuShuffleAsyncCoalesceIterator(maybeBufferedIter, dataTypes, targetSize,
-        outBatchesMetric, outRowsMetric, metricsMap(ASYNC_READ_TIME), opTimeMetric,
-        readThrottlingMetric)
+        coalMetrics.readTimeMetric,
+        coalMetrics.semReadTimeMetric,
+        coalMetrics.bgJobLaunchMetric,
+        opTimeMetric,
+        readThrottlingMetric
+      )
     } else {
-      new GpuShuffleCoalesceIterator(maybeBufferedIter, dataTypes, outBatchesMetric,
-        outRowsMetric, metricsMap(SYNC_READ_TIME), opTimeMetric)
+      new GpuShuffleCoalesceIterator(maybeBufferedIter, dataTypes,
+        coalMetrics.readTimeMetric, coalMetrics.semReadTimeMetric, opTimeMetric)
+    }).map { cb =>
+      outBatchesMetric += 1
+      outRowsMetric += cb.numRows()
+      cb
     }
   }
 
@@ -263,11 +340,11 @@ class KudoTableOperator(kudo: Option[KudoSerializer], readOption: CoalesceReadOp
 
   override def getDataLen(column: KudoSerializedTableColumn): Long =
     column.spillableKudoTable.header
-    .getTotalDataLen
+      .getTotalDataLen
 
   override def getNumRows(column: KudoSerializedTableColumn): Int =
     column.spillableKudoTable.header
-    .getNumRows
+      .getNumRows
 
   private def buildMergeOptions(): MergeOptions = {
     val dumpOption = readOption.kudoDebugMode
@@ -307,15 +384,14 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
     iter: Iterator[ColumnarBatch],
     targetBatchByteSize: Long,
     concatTimeMetric: GpuMetric,
-    inputBatchesMetric: GpuMetric,
-    inputRowsMetric: GpuMetric,
+    bufferJobLaunchMetric: GpuMetric,
     readThrottlingMetric: GpuMetric,
     useAsync: Boolean = false
 ) extends Iterator[CoalescedHostResult] with AutoCloseable {
   private[this] val serializedTables = new util.ArrayDeque[T]
-  @volatile private[this] var numTablesInBatch: Int = 0
-  @volatile private[this] var numRowsInBatch: Int = 0
-  @volatile private[this] var batchByteSize: Long = 0L
+  private[this] var numTablesInBatch: Int = 0
+  private[this] var numRowsInBatch: Int = 0
+  private[this] var batchByteSize: Long = 0L
 
   private var executor: Option[ThrottlingExecutor] = None
 
@@ -332,6 +408,19 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
 
   protected val tableOperator: SerializedTableOperator[T]
 
+  private class BufferingCallable extends Callable[Long] {
+    private val start = System.nanoTime()
+
+    override def call(): Long = {
+      val end = System.nanoTime()
+      val nvRangeName = s"Task ${taskAttemptID}-Async Buffer Next (Backend)"
+      withResource(new NvtxRange(nvRangeName, NvtxColor.ORANGE)) { _ =>
+        bufferNextBatch()
+      }
+      end - start
+    }
+  }
+
   override def close(): Unit = {
     serializedTables.forEach(_.close())
     serializedTables.clear()
@@ -345,43 +434,40 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
     for (_ <- 0 until numTablesInBatch)
       input += serializedTables.removeFirst()
 
-    // Update the stats for the next batch in progress.
-    // Note that the modification of these variables will happen before
-    // the modifications in async bufferNextBatch(), we just need to ensure
-    // their visibility to the next thread.
-    numTablesInBatch = serializedTables.size
-    batchByteSize = 0
-    numRowsInBatch = 0
-    if (numTablesInBatch > 0) {
-      require(numTablesInBatch == 1,
-        "should only track at most one buffer that is not in a batch")
-      val firstTable = serializedTables.peekFirst()
-      batchByteSize = tableOperator.getDataLen(firstTable)
-      numRowsInBatch = tableOperator.getNumRows(firstTable)
-    }
+      {
+        // update the stats for the next batch in progress
+        // Note that the modification of these variables will happen before
+        // the modifications in async bufferNextBatch(), we just need to ensure
+        // their visibility to the next thread.
+        numTablesInBatch = serializedTables.size
+        batchByteSize = 0
+        numRowsInBatch = 0
+        if (numTablesInBatch > 0) {
+          require(numTablesInBatch == 1,
+            "should only track at most one buffer that is not in a batch")
+          val firstTable = serializedTables.peekFirst()
+          batchByteSize = tableOperator.getDataLen(firstTable)
+          numRowsInBatch = tableOperator.getNumRows(firstTable)
+        }
 
-    if (useAsync && iter.hasNext) {
-      if (executor.isEmpty) {
-        executor =
-          Some(new ThrottlingExecutor(
-            TrampolineUtil.newDaemonCachedThreadPool(
-              "async buffer thread for " + Thread.currentThread().getName, 1, 1),
-            TrafficController.getReadInstance,
+        if (useAsync && iter.hasNext) {
+          if (executor.isEmpty) {
+            executor =
+              Some(new ThrottlingExecutor(
+                TrampolineUtil.newDaemonCachedThreadPool(
+                  "async buffer thread for " + Thread.currentThread().getName, 1, 1),
+                TrafficController.getReadInstance,
             stat => {
               readThrottlingMetric.add(stat.accumulatedThrottleTimeNs)
-            }
-          ))
-      }
-      bufferingFuture = Option(executor.get.submit(
-        () => {
-          val nvRangeName = s"Task ${taskAttemptID}-Async Buffer Next (Backend)"
-          withResource(new NvtxRange(nvRangeName, NvtxColor.ORANGE)) { _ =>
-            bufferNextBatch()
+                }
+              ))
           }
-        },
-        targetBatchByteSize // This is just a estimation, may overestimate.
-      ))
-    }
+          bufferingFuture = Option(executor.get.submit(
+            new BufferingCallable(),
+            targetBatchByteSize // This is just a estimation, may overestimate.
+          ))
+        }
+      }
 
     withResource(new MetricRange(concatTimeMetric)) { _ =>
       withRetryNoSplit(input.toSeq) { tables =>
@@ -395,10 +481,8 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
       var batchCanGrow = batchByteSize < targetBatchByteSize
       while (batchCanGrow && iter.hasNext) {
         closeOnExcept(iter.next()) { batch =>
-          inputBatchesMetric += 1
           // don't bother tracking empty tables
           if (batch.numRows > 0) {
-            inputRowsMetric += batch.numRows()
             val tableColumn = batch.column(0).asInstanceOf[T]
             batchCanGrow = canAddToBatch(tableColumn)
             serializedTables.addLast(tableColumn)
@@ -430,9 +514,9 @@ abstract class HostCoalesceIteratorBase[T <: AutoCloseable : ClassTag](
     }
     bufferingFuture.map(f => {
       val nvRangeName = s"Task ${taskAttemptID} - Async Buffer Next (Frontend)"
-      withResource(new NvtxRange(nvRangeName, NvtxColor.ORANGE)) { _ =>
-        f.get()
-      }
+      bufferJobLaunchMetric.add(withResource(new NvtxRange(nvRangeName, NvtxColor.ORANGE)) { _ =>
+        f.get().asInstanceOf[Long]
+      })
     }).getOrElse({
       val nvRangeName = s"Task ${taskAttemptID} - Sync Buffer Next (Frontend)"
       withResource(new NvtxRange(nvRangeName, NvtxColor.ORANGE)) { _ =>
@@ -463,11 +547,10 @@ class HostShuffleCoalesceIterator(
     iter: Iterator[ColumnarBatch],
     targetBatchSize: Long,
     concatTimeMetric: GpuMetric = NoopMetric,
-    inputBatchesMetric: GpuMetric = NoopMetric,
-    inputRowsMetric: GpuMetric = NoopMetric,
+    bufferJobLaunchMetric: GpuMetric = NoopMetric,
     readThrottlingMetric: GpuMetric = NoopMetric)
   extends HostCoalesceIteratorBase[SerializedTableColumn](iter, targetBatchSize,
-    concatTimeMetric, inputBatchesMetric, inputRowsMetric, readThrottlingMetric) {
+    concatTimeMetric, bufferJobLaunchMetric, readThrottlingMetric) {
   override protected val tableOperator = new JCudfTableOperator
 }
 
@@ -476,13 +559,11 @@ class KudoHostShuffleCoalesceIterator(
     targetBatchSize: Long,
     dataTypes: Array[DataType],
     concatTimeMetric: GpuMetric = NoopMetric,
-    inputBatchesMetric: GpuMetric = NoopMetric,
-    inputRowsMetric: GpuMetric = NoopMetric,
+    bufferJobLaunchMetric: GpuMetric = NoopMetric,
     readThrottlingMetric: GpuMetric = NoopMetric,
-    readOption: CoalesceReadOption
-    )
+    readOption: CoalesceReadOption)
   extends HostCoalesceIteratorBase[KudoSerializedTableColumn](iter, targetBatchSize,
-    concatTimeMetric, inputBatchesMetric, inputRowsMetric, readThrottlingMetric,
+    concatTimeMetric, bufferJobLaunchMetric, readThrottlingMetric,
     readOption.useAsync) {
 
   // Capture TaskContext info during RDD execution when it's available
@@ -508,35 +589,35 @@ class KudoHostShuffleCoalesceIterator(
  */
 class GpuShuffleCoalesceIterator(iter: Iterator[CoalescedHostResult],
     dataTypes: Array[DataType],
-    outputBatchesMetric: GpuMetric = NoopMetric,
-    outputRowsMetric: GpuMetric = NoopMetric,
     readTimeMetric: GpuMetric = NoopMetric,
+    semReadTimeMetric: GpuMetric = NoopMetric,
     opTimeMetric: GpuMetric = NoopMetric) extends Iterator[ColumnarBatch] {
 
-  override def hasNext: Boolean = GpuMetric.ns(readTimeMetric, opTimeMetric) {
-    iter.hasNext
+  private def withMetrics[R](f: => R): R = opTimeMetric.ns {
+    GpuMetric.withSemaphoreTime(readTimeMetric, semReadTimeMetric, TaskContext.get()) {
+      f
+    }
   }
+
+  override def hasNext: Boolean = withMetrics(iter.hasNext)
 
   override def next(): ColumnarBatch = {
     if (!hasNext) {
       throw new NoSuchElementException("No more columnar batches")
     }
     withResource(new NvtxRange("Concat+Load Batch", NvtxColor.YELLOW)) { _ =>
-      val hostCoalescedResult = GpuMetric.ns(readTimeMetric, opTimeMetric) {
+      val hostCoalescedResult = withMetrics {
         // It covers the time of i/o, deser and concat
         iter.next()
       }
       withResource(hostCoalescedResult) { _ =>
-        // We acquire the GPU regardless of whether `hostConcatResult`
-        // is an empty batch or not, because the downstream tasks expect
-        // the `GpuShuffleCoalesceIterator` to acquire the semaphore and may
-        // generate GPU data from batches that are empty.
-        GpuSemaphore.acquireIfNecessary(TaskContext.get())
         GpuMetric.ns(opTimeMetric) {
-          val batch = hostCoalescedResult.toGpuBatch(dataTypes)
-          outputBatchesMetric += 1
-          outputRowsMetric += batch.numRows()
-          batch
+          // We acquire the GPU regardless of whether `hostConcatResult`
+          // is an empty batch or not, because the downstream tasks expect
+          // the `GpuShuffleCoalesceIterator` to acquire the semaphore and may
+          // generate GPU data from batches that are empty.
+          GpuSemaphore.acquireIfNecessary(TaskContext.get())
+          hostCoalescedResult.toGpuBatch(dataTypes)
         }
       }
     }

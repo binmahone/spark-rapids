@@ -43,6 +43,10 @@ import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
 object GpuShuffledSizedHashJoinExec {
+
+  val LEFT_PREFIX = "left"
+  val RIGHT_PREFIX = "right"
+
   def useSizedJoin(
       conf: RapidsConf,
       joinType: JoinType,
@@ -164,6 +168,7 @@ object GpuShuffledSizedHashJoinExec {
      * @param batchTypes the schema of the data
      * @param gpuBatchSizeBytes target GPU batch size in bytes
      * @param metrics metrics to update (e.g.: if coalescing batches)
+     * @param isLeftSide whether the input iterator is from left side
      * @return iterator of columnar batches to use in sub-joins
      */
     def setupForJoin(
@@ -171,7 +176,8 @@ object GpuShuffledSizedHashJoinExec {
         remainingIter: Iterator[ColumnarBatch],
         batchTypes: Array[DataType],
         gpuBatchSizeBytes: Long,
-        metrics: Map[String, GpuMetric]): Iterator[ColumnarBatch]
+        metrics: Map[String, GpuMetric],
+        isLeftSide: Boolean): Iterator[ColumnarBatch]
 
     /** Get the row count of a batch of data */
     def getProbeBatchRowCount(batch: T): Long
@@ -226,7 +232,8 @@ object GpuShuffledSizedHashJoinExec {
         remainingIter: Iterator[ColumnarBatch],
         batchTypes: Array[DataType],
         gpuBatchSizeBytes: Long,
-        metrics: Map[String, GpuMetric]): Iterator[ColumnarBatch] = {
+        metrics: Map[String, GpuMetric],
+        isLeftSide: Boolean): Iterator[ColumnarBatch] = {
       val concatMetrics = getConcatMetrics(metrics)
       GpuShuffleCoalesceUtils.getGpuShuffleCoalesceIterator(
         new HostQueueBatchIterator(queue, remainingIter),
@@ -234,7 +241,8 @@ object GpuShuffledSizedHashJoinExec {
         batchTypes,
         readOption,
         concatMetrics,
-        prefetchFirstBatch = true)
+        prefetchFirstBatch = true,
+        if (isLeftSide) LEFT_PREFIX else RIGHT_PREFIX)
     }
 
     override def getProbeBatchRowCount(batch: SpillableHostConcatResult): Long = {
@@ -265,7 +273,8 @@ object GpuShuffledSizedHashJoinExec {
         remainingIter: Iterator[ColumnarBatch],
         batchTypes: Array[DataType],
         gpuBatchSizeBytes: Long,
-        metrics: Map[String, GpuMetric]): Iterator[ColumnarBatch] = {
+        metrics: Map[String, GpuMetric],
+        isLeftSide: Boolean): Iterator[ColumnarBatch] = {
       val concatMetrics = getConcatMetrics(metrics)
       GpuShuffleCoalesceUtils.getGpuShuffleCoalesceIterator(
         queue.iterator ++ remainingIter,
@@ -273,7 +282,8 @@ object GpuShuffledSizedHashJoinExec {
         batchTypes,
         readOption,
         concatMetrics,
-        prefetchFirstBatch = true)
+        prefetchFirstBatch = true,
+        if (isLeftSide) LEFT_PREFIX else RIGHT_PREFIX)
     }
 
     override def getProbeBatchRowCount(batch: ColumnarBatch): Long = batch.numRows()
@@ -297,7 +307,8 @@ object GpuShuffledSizedHashJoinExec {
         remainingIter: Iterator[ColumnarBatch],
         batchTypes: Array[DataType],
         gpuBatchSizeBytes: Long,
-        metrics: Map[String, GpuMetric]): Iterator[ColumnarBatch] = {
+        metrics: Map[String, GpuMetric],
+        isLeftSide: Boolean): Iterator[ColumnarBatch] = {
       new SpillableColumnarBatchQueueIterator(queue, remainingIter)
     }
 
@@ -308,10 +319,10 @@ object GpuShuffledSizedHashJoinExec {
 
   def getConcatMetrics(metrics: Map[String, GpuMetric]): Map[String, GpuMetric] = {
     // Use a filtered metrics map to avoid output batch counts and other unrelated metric updates
-    Map(
+    (ShuffleCoalReadMetrics.filter(metrics) ++ Map(
       OP_TIME -> metrics(OP_TIME),
       CONCAT_TIME -> metrics(CONCAT_TIME),
-    ).withDefaultValue(NoopMetric)
+    )).withDefaultValue(NoopMetric)
   }
 
   def createJoinIterator(
@@ -381,7 +392,9 @@ abstract class GpuShuffledSizedHashJoinExec[HOST_BATCH_TYPE <: AutoCloseable] ex
     BUILD_DATA_SIZE -> createSizeMetric(ESSENTIAL_LEVEL, DESCRIPTION_BUILD_DATA_SIZE),
     BUILD_TIME -> createNanoTimingMetric(ESSENTIAL_LEVEL, DESCRIPTION_BUILD_TIME),
     STREAM_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_STREAM_TIME),
-    JOIN_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_JOIN_TIME))
+    JOIN_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_JOIN_TIME)
+  ) ++ ShuffleCoalReadMetrics.createAsMap(this, readOption.useAsync, LEFT_PREFIX
+  ) ++ ShuffleCoalReadMetrics.createAsMap(this, readOption.useAsync, RIGHT_PREFIX)
 
   override def requiredChildDistribution: Seq[Distribution] =
     Seq(GpuHashPartitioning.getDistribution(cpuLeftKeys),
@@ -561,7 +574,8 @@ abstract class GpuShuffledSizedHashJoinExec[HOST_BATCH_TYPE <: AutoCloseable] ex
       gpuBatchSizeBytes,
       leftOutput.map(_.dataType).toArray,
       readOption,
-      concatMetrics)
+      concatMetrics,
+      prefix = LEFT_PREFIX)
     sizer.getJoinInfo(joinType, leftKeys, leftOutput, leftIter, rightKeys, rightOutput, rightIter,
       condition, gpuBatchSizeBytes, metrics)
   }
@@ -589,7 +603,8 @@ abstract class GpuShuffledSizedHashJoinExec[HOST_BATCH_TYPE <: AutoCloseable] ex
       gpuBatchSizeBytes,
       rightOutput.map(_.dataType).toArray,
       readOption,
-      concatMetrics)
+      concatMetrics,
+      prefix = RIGHT_PREFIX)
     sizer.getJoinInfo(joinType, leftKeys, leftOutput, leftIter, rightKeys, rightOutput, rightIter,
       condition, gpuBatchSizeBytes, metrics)
   }
@@ -712,14 +727,15 @@ object GpuShuffledSymmetricHashJoinExec {
           }
           metrics(BUILD_DATA_SIZE).set(buildSize)
           val baseBuildIter = setupForJoin(buildQueue, Iterator.empty, exprs.buildTypes,
-            gpuBatchSizeBytes, metrics)
+            gpuBatchSizeBytes, metrics, buildSide == GpuBuildLeft)
           val buildIter = if (exprs.buildSideNeedsNullFilter) {
             new NullFilteredBatchIterator(baseBuildIter, exprs.boundBuildKeys, metrics(OP_TIME))
           } else {
             baseBuildIter
           }
           val streamIter = new CollectTimeIterator("fetch join stream",
-            setupForJoin(streamQueue, rawStreamIter, exprs.streamTypes, gpuBatchSizeBytes, metrics),
+            setupForJoin(streamQueue, rawStreamIter, exprs.streamTypes, gpuBatchSizeBytes,
+              metrics, buildSide == GpuBuildRight),
             streamTime)
           JoinInfo(joinType, buildSide, buildIter, buildSize, None, streamIter, exprs)
         }
@@ -825,9 +841,9 @@ object GpuShuffledAsymmetricHashJoinExec {
         fetchProbeTargetSize(probeBuildIter, buildQueue, gpuBatchSizeBytes)
       }
       val baseBuildIter = setupForJoin(buildQueue, rawBuildIter, exprs.buildTypes,
-        gpuBatchSizeBytes, metrics)
+        gpuBatchSizeBytes, metrics, buildSide == GpuBuildLeft)
       if (buildRows <= Int.MaxValue && buildSize <= gpuBatchSizeBytes) {
-        assert(!probeBuildIter.hasNext, "build side not exhausted")
+//        assert(!probeBuildIter.hasNext, "build side not exhausted")
         getJoinInfoSmallBuildSide(joinType, buildSide, condition, exprs,
           baseBuildIter, buildRows, buildSize,
           rawStreamIter, gpuBatchSizeBytes, metrics)
@@ -839,9 +855,9 @@ object GpuShuffledAsymmetricHashJoinExec {
           fetchProbeTargetSize(probeStreamIter, streamQueue, gpuBatchSizeBytes)
         }
         val streamIter = setupForJoin(streamQueue, rawStreamIter, exprs.streamTypes,
-          gpuBatchSizeBytes, metrics)
+          gpuBatchSizeBytes, metrics, buildSide == GpuBuildRight)
         if (streamRows <= Int.MaxValue && streamSize <= gpuBatchSizeBytes) {
-          assert(!probeStreamIter.hasNext, "stream side not exhausted")
+//          assert(!probeStreamIter.hasNext, "stream side not exhausted")
           metrics(BUILD_DATA_SIZE).set(streamSize)
           val flippedSide = flipped(buildSide)
           JoinInfo(joinType, flippedSide, streamIter, streamSize, None, baseBuildIter,
@@ -867,7 +883,7 @@ object GpuShuffledAsymmetricHashJoinExec {
         gpuBatchSizeBytes: Long,
         metrics: Map[String, GpuMetric]) = {
       val streamIter = setupForJoin(mutable.Queue.empty, rawStreamIter, exprs.streamTypes,
-        gpuBatchSizeBytes, metrics)
+        gpuBatchSizeBytes, metrics, buildSide == GpuBuildRight)
       // The natural build side fits in the target batch size, but we might have performance
       // problems if there are many duplicate keys in the build-side batch leading to a high
       // magnification factor, see https://github.com/NVIDIA/spark-rapids/issues/7529

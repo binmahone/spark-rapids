@@ -41,7 +41,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap}
 import org.apache.spark.sql.catalyst.plans.logical.Statistics
 import org.apache.spark.sql.catalyst.plans.physical.{BroadcastMode, BroadcastPartitioning, Partitioning}
 import org.apache.spark.sql.execution.{SparkPlan, SQLExecution}
@@ -520,7 +520,9 @@ abstract class GpuBroadcastExchangeExecBase(
   override def runtimeStatistics: Statistics = {
     Statistics(
       sizeInBytes = metrics("dataSize").value,
-      rowCount = Some(metrics(GpuMetric.NUM_OUTPUT_ROWS).value))
+      rowCount = Some(metrics(GpuMetric.NUM_OUTPUT_ROWS).value),
+      attributeStats = AttributeMap(Nil),
+      isRuntime = false)
   }
 
   override protected def internalDoExecuteColumnar(): RDD[ColumnarBatch] = {

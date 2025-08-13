@@ -76,7 +76,7 @@ case class GpuRangePartitioning(
           //   `OrderedDistribution(a, b)`.
           val minSize = Seq(requiredOrdering.size, gpuOrdering.size).min
           requiredOrdering.take(minSize) == gpuOrdering.take(minSize)
-        case ClusteredDistribution(requiredClustering, _) =>
+        case ClusteredDistribution(requiredClustering, _, _) =>
           gpuOrdering.map(_.child).forall(x => requiredClustering.exists(_.semanticEquals(x)))
         case _ => false
       }

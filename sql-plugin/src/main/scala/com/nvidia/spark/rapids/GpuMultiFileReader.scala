@@ -56,7 +56,8 @@ import org.apache.spark.util.SerializableConfiguration
  * for combining the buffers before sending to GPU.
  */
 case class SingleHMBAndMeta(hmbs: Array[SpillableHostBuffer], bytes: Long, numRows: Long,
-    blockMeta: Seq[DataBlockBase])
+    blockMeta: Seq[DataBlockBase],
+    footerOffset: Option[Long] = None)
 
 object SingleHMBAndMeta {
   // Contains no data but could have number of rows for things like count().
@@ -80,6 +81,8 @@ trait HostMemoryBuffersWithMetaDataBase {
   private var _filterTime: Long = 0L
   // Time spent on buffering
   private var _bufferTime: Long = 0L
+  // Time spent on precaching
+  private var _precacheTime: Long = 0L
 
   // The partition values which are needed if combining host memory buffers
   // after read by the multithreaded reader but before sending to GPU.
@@ -87,22 +90,31 @@ trait HostMemoryBuffersWithMetaDataBase {
 
   // Called by parquet/orc/avro scanners to set the amount of time (in nanoseconds)
   // that filtering and buffering incurred in one of the scan runners.
-  def setMetrics(filterTime: Long, bufferTime: Long): Unit = {
+  def setMetrics(filterTime: Long, bufferTime: Long, precacheTime: Option[Long] = None): Unit = {
     _bufferTime = bufferTime
     _filterTime = filterTime
+    precacheTime.foreach {
+      _precacheTime = _
+    }
   }
 
   def getBufferTime: Long = _bufferTime
   def getFilterTime: Long = _filterTime
+  def getPrecacheTime: Long = _precacheTime
 
   def getBufferTimePct: Double = {
-    val totalTime = _filterTime + _bufferTime
+    val totalTime = _filterTime + _bufferTime + _precacheTime
     _bufferTime.toDouble / totalTime
   }
 
   def getFilterTimePct: Double = {
-    val totalTime = _filterTime + _bufferTime
+    val totalTime = _filterTime + _bufferTime + _precacheTime
     _filterTime.toDouble / totalTime
+  }
+
+  def getPrecacheTimePct: Double = {
+    val totalTime = _filterTime + _bufferTime + _precacheTime
+    _precacheTime.toDouble / totalTime
   }
 }
 
@@ -658,12 +670,16 @@ abstract class MultiFileCloudPartitionReaderBase(
           // clock as we can get right now without further work.
           val bufTime = metrics.getOrElse(BUFFER_TIME, NoopMetric)
           val filterTime = metrics.getOrElse(FILTER_TIME, NoopMetric)
+          val precacheTime = metrics.getOrElse("precacheTime", NoopMetric)
           val bufWithSem = metrics.getOrElse(BUFFER_TIME_WITH_SEM, NoopMetric)
           val filterWithSem = metrics.getOrElse(FILTER_TIME_WITH_SEM, NoopMetric)
+          val precacheWithSem = metrics.getOrElse("precacheTimeWithSem", NoopMetric)
 
           val fileBufsAndMeta = {
             if (GpuMetric.isTimeMetric(bufTime) && GpuMetric.isTimeMetric(filterTime) &&
-              GpuMetric.isTimeMetric(bufWithSem) && GpuMetric.isTimeMetric(filterWithSem)) {
+              GpuMetric.isTimeMetric(precacheTime) &&
+              GpuMetric.isTimeMetric(bufWithSem) && GpuMetric.isTimeMetric(filterWithSem) &&
+              GpuMetric.isTimeMetric(precacheWithSem)) {
               // Collect wall clock time and semaphore time
               val taskContext = TaskContext.get()
               require(taskContext != null, "TaskContext should not be null")
@@ -675,10 +691,13 @@ abstract class MultiFileCloudPartitionReaderBase(
               }
               val filterPct = ret.getFilterTimePct
               val bufferPct = ret.getBufferTimePct
+              val precachePct = ret.getPrecacheTimePct
               filterTime += (wallClockInc.value * filterPct).toLong
               bufTime += (wallClockInc.value * bufferPct).toLong
+              precacheTime += (wallClockInc.value * precachePct).toLong
               filterWithSem += (semInc.value * filterPct).toLong
               bufWithSem += (semInc.value * bufferPct).toLong
+              precacheTime += (semInc.value * precachePct).toLong
               ret
             } else {
               // Collect wall clock time only
@@ -687,6 +706,7 @@ abstract class MultiFileCloudPartitionReaderBase(
               val blockedTime = System.nanoTime() - startTime
               filterTime += (blockedTime * ret.getFilterTimePct).toLong
               bufTime += (blockedTime * ret.getBufferTimePct).toLong
+              precacheTime += (blockedTime * ret.getPrecacheTimePct).toLong
               ret
             }
           }

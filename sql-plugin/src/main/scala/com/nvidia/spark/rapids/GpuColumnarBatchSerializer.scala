@@ -86,10 +86,13 @@ class SerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric)
       val header = nextHeader.get
       nextHeader = None
       if (header.getNumColumns > 0) {
-        // This buffer will later be concatenated into another host buffer before being
-        // sent to the GPU, so no need to use pinned memory for these buffers.
+        // Even if this buffer will later be concatenated into another host buffer before being
+        // sent to the GPU, and seems there's no need to use pinned memory for these buffers, we
+        // want to leverage the nature of pinned memory won't be returned to OS to save to cost
+        // of minor page faults. This is a short term workaround to solve the issue of
+        // https://github.com/NVIDIA/spark-rapids/issues/13298
         closeOnExcept(
-          HostMemoryBuffer.allocate(header.getDataLen, false)) { hostBuffer =>
+          HostMemoryBuffer.allocate(header.getDataLen, true)) { hostBuffer =>
           JCudfSerialization.readTableIntoBuffer(dIn, header, hostBuffer)
           SerializedTableColumn.from(header, hostBuffer)
         }

@@ -23,7 +23,7 @@ import scala.collection.JavaConverters.asScalaIteratorConverter
 
 import org.apache.spark.sql.rapids.GpuTaskMetrics
 
-class PrioritySemaphore[T](val maxPermits: Long)
+class PrioritySemaphore[T](val maxPermits: Long, val maxConcurrentGpuTasksLimit: Int)
   (implicit ordering: Ordering[T]) {
   // This lock is used to generate condition variables, which affords us the flexibility to notify
   // specific threads at a time. If we use the regular synchronized pattern, we have to either
@@ -31,6 +31,8 @@ class PrioritySemaphore[T](val maxPermits: Long)
   // won't work together properly, and we see things like deadlocks.
   private val lock = new ReentrantLock()
   private var occupiedSlots: Long = 0
+  private var currentConcurrentGpuTasksNum: Long = 0
+  private var maxConcurrentGpuTasks: Long = 0
 
   private case class ThreadInfo(priority: T,
                                 condition: Condition,
@@ -110,12 +112,20 @@ class PrioritySemaphore[T](val maxPermits: Long)
 
   private def commitAcquire(numPermits: Long): Unit = {
     occupiedSlots += numPermits
+    currentConcurrentGpuTasksNum += 1
+    // Update max concurrent tasks if current thread count is higher
+    if (currentConcurrentGpuTasksNum > maxConcurrentGpuTasks) {
+      maxConcurrentGpuTasks = currentConcurrentGpuTasksNum
+      // Report to GpuTaskMetrics
+      GpuTaskMetrics.get.recordMaxConcurrentGpuTasks(maxConcurrentGpuTasks)
+    }
   }
 
   def release(numPermits: Long): Unit = {
     lock.lock()
     try {
       occupiedSlots -= numPermits
+      currentConcurrentGpuTasksNum -= 1
       // acquire and wakeup for all threads that now have enough permits
       var done = false
       while (!done && waitingQueue.size() > 0) {
@@ -138,6 +148,9 @@ class PrioritySemaphore[T](val maxPermits: Long)
   }
 
   private def canAcquire(numPermits: Long): Boolean = {
-    occupiedSlots + numPermits <= maxPermits
+    val hasPermits = occupiedSlots + numPermits <= maxPermits
+    val withinTaskLimit = maxConcurrentGpuTasksLimit < 0 || 
+      currentConcurrentGpuTasksNum < maxConcurrentGpuTasksLimit
+    hasPermits && withinTaskLimit
   }
 }

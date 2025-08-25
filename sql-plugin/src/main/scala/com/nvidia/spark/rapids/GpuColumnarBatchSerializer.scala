@@ -126,7 +126,7 @@ class SerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric)
         // This buffer will later be concatenated into another host buffer before being
         // sent to the GPU, so no need to use pinned memory for these buffers.
         closeOnExcept(
-          HostMemoryBuffer.allocate(header.getDataLen, false)) { hostBuffer =>
+          HostMemoryBuffer.allocate(header.getDataLen, true)) { hostBuffer =>
           JCudfSerialization.readTableIntoBuffer(dIn, header, hostBuffer)
           SerializedTableColumn.from(header, hostBuffer)
         }
@@ -753,7 +753,7 @@ class KudoSerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric)
     withRetryNoSplit[HostMemoryBuffer] {
       // This buffer will later be concatenated into another host buffer before being
       // sent to the GPU, so no need to use pinned memory for these buffers.
-      HostMemoryBuffer.allocate(size, false)
+      HostMemoryBuffer.allocate(size, true)
     }
   }
 

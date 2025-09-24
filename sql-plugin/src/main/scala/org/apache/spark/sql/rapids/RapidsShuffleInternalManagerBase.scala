@@ -424,7 +424,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
             try {
               // Get or create buffer for this partition
               val buffer = partitionBuffers.computeIfAbsent(reducePartitionId,
-                _ => new ByteArrayOutputStream())
+                _ => new ByteArrayOutputStream(recordSize.toInt))
 
               // Serialize + compress to memory buffer
               val compressedOutputStream = blockManager.serializerManager.wrapStream(

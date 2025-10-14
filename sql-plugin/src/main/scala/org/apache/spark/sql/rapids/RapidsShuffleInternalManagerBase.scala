@@ -331,42 +331,289 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
   }
 
   /**
-   * Optimized write path for single batch tasks that leverages streaming parallel processing
-   * with pipelined partition writing.
-   * 
-   * Main thread processes all records without blocking, while a dedicated background writer thread
-   * waits for each partition to complete and writes them in order (0,1,2,3...).
+   * Helper class to hold the state for single batch direct write optimization.
+   */
+  private class SingleBatchWriteState(
+      val partitionBuffers: ConcurrentHashMap[Int, OpenByteArrayOutputStream],
+      val partitionFutures:
+        ConcurrentHashMap[Int, java.util.concurrent.CopyOnWriteArrayList[Future[(Long, Long)]]],
+      val partitionBytesProgress: ConcurrentHashMap[Int, Long],
+      val partitionFuturesProgress: ConcurrentHashMap[Int, Int],
+      val maxPartitionSeen: AtomicInteger,
+      val processingComplete: AtomicBoolean,
+      val writerCondition: Object,
+      val totalDataSize: AtomicLong,
+      var unfinishedStream: Option[OutputStream] = None)
+
+  /**
+   * Write a single partition buffer to the map output writer.
+   */
+  private def writePartitionBufferDirect(
+      partitionId: Int,
+      start: Long,
+      end: Long,
+      doCleanUp: Boolean,
+      state: SingleBatchWriteState,
+      mapOutputWriter: ShuffleMapOutputWriter): Unit = {
+
+    // Write partition buffer to mapOutputWriter
+    Option(state.partitionBuffers.get(partitionId)) match {
+      case Some(buffer) =>
+        if (state.unfinishedStream.isEmpty) {
+          state.unfinishedStream = Some(
+            mapOutputWriter.getPartitionWriter(partitionId).openStream())
+        }
+
+        if (end - start > 0) {
+          state.unfinishedStream.get.write(buffer.getBuf, start.toInt, (end - start).toInt)
+        }
+
+        if (doCleanUp) {
+          // Clean up buffer after use
+          buffer.close()
+          state.partitionBuffers.remove(partitionId)
+          state.unfinishedStream.get.close()
+          state.unfinishedStream = None
+
+          state.partitionFutures.remove(partitionId)
+          state.partitionFuturesProgress.remove(partitionId)
+          state.partitionBytesProgress.remove(partitionId)
+        }
+      case None =>
+        throw new IllegalStateException(s"No buffer found for partition $partitionId, " +
+          s"start=$start, end=$end, isLast=$doCleanUp")
+    }
+  }
+
+  /**
+   * Create the writer task that processes partitions in order.
+   * The writer waits for compression tasks to complete and writes partition data to disk.
+   */
+  private def createWriterTask(
+      state: SingleBatchWriteState,
+      mapOutputWriter: ShuffleMapOutputWriter): Runnable = {
+    new Runnable {
+      override def run(): Unit = {
+        var currentPartitionToWrite = 0
+        while (!state.processingComplete.get() ||
+          currentPartitionToWrite != state.maxPartitionSeen.get()) {
+          if (currentPartitionToWrite <= state.maxPartitionSeen.get()) {
+            processPartition(currentPartitionToWrite, state, mapOutputWriter)
+          } else {
+            // Wait for new partitions to be available
+            state.writerCondition.synchronized {
+              state.writerCondition.wait(1)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Process a single partition: wait for compression futures and write to disk.
+   */
+  private def processPartition(
+      partitionId: Int,
+      state: SingleBatchWriteState,
+      mapOutputWriter: ShuffleMapOutputWriter): Unit = {
+    // Wait for this partition's compression futures to complete
+    var containsLastForThisPartition = false
+    var futures: java.util.concurrent.CopyOnWriteArrayList[Future[(Long, Long)]] = null
+    state.maxPartitionSeen.synchronized {
+      futures = state.partitionFutures.get(partitionId)
+      if (partitionId < state.maxPartitionSeen.get()) {
+        containsLastForThisPartition = true
+      }
+    }
+
+    if (futures != null) {
+      processPartitionFutures(partitionId, futures, containsLastForThisPartition,
+        state, mapOutputWriter)
+    } else {
+      // Empty partition, still need to call getPartitionWriter for ordering
+      val partWriter = mapOutputWriter.getPartitionWriter(partitionId)
+      partWriter.openStream().close() // Empty partition
+    }
+  }
+
+  /**
+   * Process compression futures for a partition and write results to disk.
+   */
+  private def processPartitionFutures(
+      partitionId: Int,
+      futures: java.util.concurrent.CopyOnWriteArrayList[Future[(Long, Long)]],
+      containsLastForThisPartition: Boolean,
+      state: SingleBatchWriteState,
+      mapOutputWriter: ShuffleMapOutputWriter): Unit = {
+    // Wait for all compression tasks to complete for this partition and collect record sizes
+    import scala.collection.JavaConverters._
+    var newFutureTouched = false
+    val futuresProgress = state.partitionFuturesProgress.getOrDefault(partitionId, 0)
+    futures.asScala.zipWithIndex.filter(pair => {
+      pair._2 >= futuresProgress
+    }).foreach { future =>
+      newFutureTouched = true
+      val (recordSize, compressedSize) = future._1.get()
+
+      // Write this partition
+      val bytesProgress = state.partitionBytesProgress.getOrDefault(partitionId, 0L)
+      writePartitionBufferDirect(partitionId,
+        bytesProgress,
+        bytesProgress + compressedSize,
+        doCleanUp = false,
+        state,
+        mapOutputWriter)
+
+      // Update progress
+      state.partitionBytesProgress.put(partitionId, bytesProgress + compressedSize)
+      state.partitionFuturesProgress.compute(partitionId, (key, value) => {
+        if (value == null) {
+          1
+        } else {
+          value + 1
+        }
+      })
+
+      // Release limiter for all records in this partition after processing is complete
+      limiter.release(recordSize)
+    }
+
+    if (containsLastForThisPartition) {
+      // Trigger cleanup for this partition
+      writePartitionBufferDirect(partitionId, 0, 0,
+        doCleanUp = true,
+        state, mapOutputWriter)
+    } else {
+      if (!newFutureTouched) {
+        // Wait for new data or completion signal
+        state.writerCondition.synchronized {
+          state.writerCondition.wait(1)
+        }
+      }
+    }
+  }
+
+  /**
+   * Create a compression task for a single record.
+   * The task serializes and compresses the record into the partition buffer.
+   */
+  private def createCompressionTask(
+      key: Any,
+      value: Any,
+      reducePartitionId: Int,
+      cb: ColumnarBatch,
+      recordSize: Long,
+      state: SingleBatchWriteState,
+      serializerInstance: SerializerInstance): Callable[(Long, Long)] = {
+    () => {
+      try {
+        withResource(cb) { _ =>
+          // Get or create buffer for this partition
+          val buffer = state.partitionBuffers.computeIfAbsent(reducePartitionId,
+            _ => new OpenByteArrayOutputStream())
+          val originLength = buffer.getCount
+
+          // Serialize + compress to memory buffer
+          val compressedOutputStream = blockManager.serializerManager.wrapStream(
+            ShuffleBlockId(shuffleId, mapId, reducePartitionId), buffer)
+
+          val serializationStream = serializerInstance.serializeStream(compressedOutputStream)
+          withResource(serializationStream) { serializer =>
+            serializer.writeKey(key.asInstanceOf[Any])
+            serializer.writeValue(value.asInstanceOf[Any])
+          }
+
+          // Track total data size
+          state.totalDataSize.addAndGet(recordSize)
+          // return (original size, compressed size)
+          (recordSize, (buffer.getCount - originLength).toLong)
+        }
+      } catch {
+        case e: Exception =>
+          logError(s"Exception in compression task for shuffle $shuffleId", e)
+          throw e
+      }
+    }
+  }
+
+  /**
+   * Clean up resources used by the single batch direct write.
+   */
+  private def cleanupSingleBatchWrite(
+      writerExecutor: java.util.concurrent.ExecutorService,
+      writerFuture: Future[_],
+      state: SingleBatchWriteState): Unit = {
+    // Shutdown writer thread pool gracefully
+    try {
+      writerExecutor.shutdown()
+      if (!writerExecutor.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS)) {
+        writerExecutor.shutdownNow()
+      }
+    } catch {
+      case _: InterruptedException =>
+        writerExecutor.shutdownNow()
+        Thread.currentThread().interrupt()
+    }
+
+    // Cancel any pending compression futures
+    import scala.collection.JavaConverters._
+    state.partitionFutures.values().asScala.foreach { futuresQueue =>
+      futuresQueue.asScala.foreach(_.cancel(true))
+      futuresQueue.clear()
+    }
+    state.partitionFutures.clear()
+
+    // Clean up any remaining buffers
+    val iter = state.partitionBuffers.values().iterator()
+    while (iter.hasNext()) {
+      try {
+        iter.next().close()
+      } catch {
+        case _: Exception => // ignore
+      }
+    }
+    state.partitionBuffers.clear()
+
+    // Cancel writer future if still running
+    writerFuture.cancel(true)
+  }
+
+  /**
+   * Optimized write path for single batch tasks that leverages streaming parallel
+   * processing with pipelined partition writing.
+   *
+   * Main thread processes all records without blocking, while a dedicated background
+   * writer thread waits for each partition to complete and writes them in order.
    */
   private def writeSingleBatchDirect(
       records: Iterator[Product2[Any, Any]],
       mapOutputWriter: ShuffleMapOutputWriter): Array[Long] = {
-    
+
     import java.util.concurrent.atomic.{AtomicInteger, AtomicLong, AtomicBoolean}
     import java.util.concurrent.{ConcurrentHashMap, Executors, ThreadFactory}
-    
+
     val serializerInstance = serializer
     var recordsWritten: Long = 0L
-    
+
     // Track timing for metrics
     val writeStartTime = System.nanoTime()
-    val totalDataSize = new AtomicLong(0L)
     var waitTimeOnLimiterNs: Long = 0L
 
-    // Collect compressed buffers from parallel tasks
-    val partitionBuffers = new ConcurrentHashMap[Int, OpenByteArrayOutputStream]()
+    // Initialize state
+    val state = new SingleBatchWriteState(
+      partitionBuffers = new ConcurrentHashMap[Int, OpenByteArrayOutputStream](),
+      partitionFutures = new ConcurrentHashMap[Int,
+        java.util.concurrent.CopyOnWriteArrayList[Future[(Long, Long)]]](),
+      partitionBytesProgress = new ConcurrentHashMap[Int, Long](),
+      partitionFuturesProgress = new ConcurrentHashMap[Int, Int](),
+      maxPartitionSeen = new AtomicInteger(-1),
+      processingComplete = new AtomicBoolean(false),
+      writerCondition = new Object(),
+      totalDataSize = new AtomicLong(0L)
+    )
 
-    // Finish writing to memory (include compression)
-    val partitionFutures =
-      new ConcurrentHashMap[Int, java.util.concurrent.CopyOnWriteArrayList[Future[(Long, Long)]]]()
-    // WriterTask writing to disk
-    val partitionBytesProgress = new ConcurrentHashMap[Int, Long]()
-    val partitionFuturesProgress = new ConcurrentHashMap[Int, Int]()
-
-    val maxPartitionSeen = new AtomicInteger(-1)
-    val processingComplete = new AtomicBoolean(false)
-    val writerCondition = new Object() // Condition variable to wake up writer thread
-
-    // Create dedicated writer thread (not using queueWriteTask)
+    // Create dedicated writer thread
     val writerThreadFactory = new ThreadFactory {
       override def newThread(r: Runnable): Thread = {
         val thread = new Thread(r, s"rapids-shuffle-dedicated-writer-${shuffleId}-${mapId}")
@@ -375,135 +622,11 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
       }
     }
     val writerExecutor = Executors.newSingleThreadExecutor(writerThreadFactory)
-
-    var unfinishedStream: Option[OutputStream] = None
-    // Helper method to write a single partition buffer
-    def writePartitionBuffer(
-        partitionId: Int,
-        start: Long,
-        end: Long,
-        doCleanUp: Boolean,
-        partitionBuffers: ConcurrentHashMap[Int, OpenByteArrayOutputStream],
-        mapOutputWriter: ShuffleMapOutputWriter): Unit = {
-
-      // Write partition buffer to mapOutputWriter
-      Option(partitionBuffers.get(partitionId)) match {
-        case Some(buffer) =>
-          if (unfinishedStream.isEmpty) {
-            unfinishedStream = Some(
-              mapOutputWriter.getPartitionWriter(partitionId).openStream())
-          }
-
-          if (end - start > 0) {
-            unfinishedStream.get.write(buffer.getBuf, start.toInt, (end - start).toInt)
-          }
-
-          if (doCleanUp) {
-            // Clean up buffer after use
-            buffer.close()
-            partitionBuffers.remove(partitionId)
-            unfinishedStream.get.close()
-            unfinishedStream = None
-
-            partitionFutures.remove(partitionId)
-            partitionFuturesProgress.remove(partitionId)
-            partitionBytesProgress.remove(partitionId)
-          }
-        case None =>
-          throw new IllegalStateException(s"No buffer found for partition $partitionId, " +
-            s"start=$start, end=$end, isLast=$doCleanUp")
-      }
-    }
-
-    // Writer task that processes partitions in order
-    val writerTask = new Runnable {
-      override def run(): Unit = {
-        var currentPartitionToWrite = 0
-        while (!processingComplete.get() || currentPartitionToWrite != maxPartitionSeen.get()) {
-          if (currentPartitionToWrite <= maxPartitionSeen.get()) {
-            // Wait for this partition's compression futures to complete
-            var containsLastForThisPartition = false
-            var futures: java.util.concurrent.CopyOnWriteArrayList[Future[(Long, Long)]] = null
-            maxPartitionSeen.synchronized {
-              futures = partitionFutures.get(currentPartitionToWrite)
-              if (currentPartitionToWrite < maxPartitionSeen.get()) {
-                containsLastForThisPartition = true
-              }
-            }
-
-            if (futures != null) {
-              // Wait for all compression tasks to complete for this partition
-              // and collect record sizes
-              import scala.collection.JavaConverters._
-              var newFutureTouched = false // True means that the writer thread is ahead of the submitting thread
-              val futuresProgress = partitionFuturesProgress.getOrDefault(currentPartitionToWrite, 0)
-              futures.asScala.zipWithIndex.filter(pair => {
-                pair._2 >= futuresProgress
-              }).foreach { future =>
-                newFutureTouched = true
-                val (recordSize, compressedSize) = future._1.get()
-
-                // Write this partition
-                val bytesProgress = partitionBytesProgress.getOrDefault(currentPartitionToWrite, 0L)
-                writePartitionBuffer(currentPartitionToWrite,
-                  bytesProgress,
-                  bytesProgress + compressedSize,
-                  doCleanUp = false,
-                  partitionBuffers,
-                  mapOutputWriter)
-
-                // Update progress
-                partitionBytesProgress.put(currentPartitionToWrite, bytesProgress + compressedSize)
-                partitionFuturesProgress.compute(currentPartitionToWrite, (key, value) => {
-                  if (value == null) {
-                    1
-                  } else {
-                    value + 1
-                  }
-                })
-
-                // Release limiter for all records in this partition after processing is complete
-                limiter.release(recordSize)
-              }
-
-              if (containsLastForThisPartition) {
-                // just to trigger clean up
-                writePartitionBuffer(currentPartitionToWrite, 0, 0,
-                  doCleanUp = true,
-                  partitionBuffers, mapOutputWriter)
-
-                currentPartitionToWrite += 1
-              } else {
-                if (!newFutureTouched) {
-                  // Wait for new data or completion signal
-                  writerCondition.synchronized {
-                    writerCondition.wait(1)
-                  }
-                }
-              }
-            } else {
-              // Empty partition, still need to call getPartitionWriter for ordering
-              val partWriter = mapOutputWriter.getPartitionWriter(currentPartitionToWrite)
-              partWriter.openStream().close() // Empty partition
-
-              // no data for this partition
-              currentPartitionToWrite += 1
-
-            }
-          } else {
-            // Wait for new partitions to be available
-            writerCondition.synchronized {
-              writerCondition.wait(1)
-            }
-          }
-        }
-      }
-    }
-    
+    val writerTask = createWriterTask(state, mapOutputWriter)
     val writerFuture = writerExecutor.submit(writerTask)
 
     try {
-      
+      // Process all records
       while (records.hasNext) {
         val record = records.next()
         val key = record._1
@@ -512,9 +635,8 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
         recordsWritten += 1
 
         // Get or create futures queue for this partition
-        val futures = partitionFutures.computeIfAbsent(reducePartitionId, 
+        val futures = state.partitionFutures.computeIfAbsent(reducePartitionId,
           _ => new java.util.concurrent.CopyOnWriteArrayList[Future[(Long, Long)]]())
-
 
         val (cb, recordSize) = incRefCountAndGetSize(value)
 
@@ -523,62 +645,37 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
         limiter.acquireOrBlock(recordSize)
         waitTimeOnLimiterNs += System.nanoTime() - waitOnLimiterStart
 
-        // Submit compression task using queueWriteTask to
-        // ensure same partition tasks run serially
+        // Submit compression task using queueWriteTask to ensure same partition
+        // tasks run serially
         val slotNum = RapidsShuffleInternalManagerBase.getNextWriterSlot
-        val future = RapidsShuffleInternalManagerBase.queueWriteTask(slotNum, () => {
-          try {
-            withResource(cb) { _ =>
-              // Get or create buffer for this partition
-              val buffer = partitionBuffers.computeIfAbsent(reducePartitionId,
-                _ => new OpenByteArrayOutputStream())
-              val originLength = buffer.getCount
+        val future = RapidsShuffleInternalManagerBase.queueWriteTask(slotNum,
+          createCompressionTask(key, value, reducePartitionId, cb, recordSize,
+            state, serializerInstance))
 
-              // Serialize + compress to memory buffer
-              val compressedOutputStream = blockManager.serializerManager.wrapStream(
-                ShuffleBlockId(shuffleId, mapId, reducePartitionId), buffer)
-
-              val serializationStream = serializerInstance.serializeStream(compressedOutputStream)
-              withResource(serializationStream) { serializer =>
-                serializer.writeKey(key.asInstanceOf[Any])
-                serializer.writeValue(value.asInstanceOf[Any])
-              }
-
-              // Track total data size
-              totalDataSize.addAndGet(recordSize)
-              // return (original size, compressed size)
-              (recordSize, (buffer.getCount - originLength).toLong)
-            }
-          } catch {
-            case e: Exception => {
-              logError(s"Exception in compression task for shuffle $shuffleId", e)
-              throw e
-            }
-          }
-        })
-        
-        maxPartitionSeen.synchronized {
+        state.maxPartitionSeen.synchronized {
           // Add future to partition's queue
           futures.add(future)
           // Track the maximum partition seen for writer thread
-          maxPartitionSeen.set(math.max(maxPartitionSeen.get(), reducePartitionId))
+          state.maxPartitionSeen.set(
+            math.max(state.maxPartitionSeen.get(), reducePartitionId))
         }
+
         // Wake up writer thread when new data is available
         // Note: This is called for each record to ensure writer can proceed
         // immediately. The cost is low since notifyAll on an unwaited condition
         // is very cheap, and it eliminates potential 1ms delays.
-        writerCondition.synchronized {
-          writerCondition.notifyAll()
+        state.writerCondition.synchronized {
+          state.writerCondition.notifyAll()
         }
       }
 
-      maxPartitionSeen.set(maxPartitionSeen.get() + 1) // mark end of partitions
+      // Mark end of partitions
+      state.maxPartitionSeen.set(state.maxPartitionSeen.get() + 1)
 
       // Signal that main thread is done processing
-      processingComplete.set(true)
-      // Wake up writer thread to check completion status
-      writerCondition.synchronized {
-        writerCondition.notifyAll()
+      state.processingComplete.set(true)
+      state.writerCondition.synchronized {
+        state.writerCondition.notifyAll()
       }
 
       // Wait for writer thread to complete all partitions
@@ -591,42 +688,12 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
 
       // Update write metrics
       val totalWriteTime = System.nanoTime() - writeStartTime
-      
-      // Subtract limiter wait time from write time for more accurate compression time measurement
       writeMetrics.incWriteTime(totalWriteTime - waitTimeOnLimiterNs)
       writeMetrics.incRecordsWritten(recordsWritten)
-      writeMetrics.incBytesWritten(totalDataSize.get())
+      writeMetrics.incBytesWritten(state.totalDataSize.get())
 
     } finally {
-      // Shutdown writer thread pool gracefully
-      try {
-        writerExecutor.shutdown()
-        if (!writerExecutor.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS)) {
-          writerExecutor.shutdownNow()
-        }
-      } catch {
-        case _: InterruptedException =>
-          writerExecutor.shutdownNow()
-          Thread.currentThread().interrupt()
-      }
-      
-      // Cancel any pending compression futures
-      import scala.collection.JavaConverters._
-      partitionFutures.values().asScala.foreach { futuresQueue =>
-        futuresQueue.asScala.foreach(_.cancel(true))
-        futuresQueue.clear()
-      }
-      partitionFutures.clear()
-      
-      // Clean up any remaining buffers
-      val iter = partitionBuffers.values().iterator()
-      while (iter.hasNext()) {
-        try { iter.next().close() } catch { case _: Exception => /* ignore */ }
-      }
-      partitionBuffers.clear()
-      
-      // Cancel writer future if still running
-      writerFuture.cancel(true)
+      cleanupSingleBatchWrite(writerExecutor, writerFuture, state)
     }
 
     // Commit all partitions and return partition lengths

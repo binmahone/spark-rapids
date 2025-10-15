@@ -1102,8 +1102,8 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
       if (fallbackIter != null) {
         fallbackIter.hasNext
       } else {
-        pendingIts.nonEmpty ||
-          fetcherIterator.hasNext || futures.nonEmpty || queued.size() > 0
+        pendingIts.nonEmpty || futures.nonEmpty || queued.size() > 0 ||
+          fetcherIterator.hasNext
       }
     }
 

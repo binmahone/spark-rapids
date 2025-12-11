@@ -1322,14 +1322,20 @@ abstract class MultiFileCoalescingPartitionReaderBase(
       val batchContext = createBatchContext(filesAndBlocks, clippedSchema)
       // First, estimate the output file size for the initial allocating.
       //   the estimated size should be >= size of HEAD + Blocks + FOOTER
+      val allocStartTime = System.nanoTime()
       val initTotalSize = calculateEstimatedBlocksOutputSize(batchContext)
       val initBuf = withRetryNoSplit[HostMemoryBuffer] {
         HostMemoryBuffer.allocate(initTotalSize)
       }
+      metrics.getOrElse(BUFFER_ALLOC_TIME, NoopMetric) +=
+        (System.nanoTime() - allocStartTime)
       val (buffer, bufferSize, footerOffset, outBlocks) =
         closeOnExcept(initBuf) { hmb =>
           // Second, write header
+          val headerStartTime = System.nanoTime()
           var offset = writeFileHeader(hmb, batchContext)
+          metrics.getOrElse(BUFFER_HEADER_TIME, NoopMetric) +=
+            (System.nanoTime() - headerStartTime)
 
           val allOutputBlocks = scala.collection.mutable.ArrayBuffer[DataBlockBase]()
           val tc = TaskContext.get
@@ -1344,11 +1350,14 @@ abstract class MultiFileCoalescingPartitionReaderBase(
             offset += fileBlockSize
           }
 
+          val copyStartTime = System.nanoTime()
           for (future <- tasks.asScala) {
             val (blocks, bytesRead) = future.get().data
             allOutputBlocks ++= blocks
             TrampolineUtil.incBytesRead(inputMetrics, bytesRead)
           }
+          metrics.getOrElse(BUFFER_COPY_TIME, NoopMetric) +=
+            (System.nanoTime() - copyStartTime)
 
           // Fourth, calculate the final buffer size
           val finalBufferSize = calculateFinalBlocksOutputSize(offset, allOutputBlocks.toSeq,
@@ -1363,6 +1372,7 @@ abstract class MultiFileCoalescingPartitionReaderBase(
       // written size comes out > then the estimated size.
       var buf: HostMemoryBuffer = buffer
       val totalBufferSize = if (bufferSize > initTotalSize) {
+        val reallocStartTime = System.nanoTime()
         // Just ensure to close buffer when there is an exception
         closeOnExcept(buffer) { _ =>
           logWarning(s"The original estimated size $initTotalSize is too small, " +
@@ -1383,6 +1393,8 @@ abstract class MultiFileCoalescingPartitionReaderBase(
             }
           }
         }
+        metrics.getOrElse(BUFFER_REALLOC_TIME, NoopMetric) +=
+          (System.nanoTime() - reallocStartTime)
         bufferSize
       } else {
         initTotalSize
@@ -1393,8 +1405,11 @@ abstract class MultiFileCoalescingPartitionReaderBase(
       // Closing the original buf and returning a new allocated buffer is allowed, but there is no
       // reason to do that.
       // If you have to do this, please think about to add other abstract methods first.
+      val footerStartTime = System.nanoTime()
       val (finalBuffer, finalBufferSize) = writeFileFooter(buf, totalBufferSize, footerOffset,
         outBlocks, batchContext)
+      metrics.getOrElse(BUFFER_FOOTER_TIME, NoopMetric) +=
+        (System.nanoTime() - footerStartTime)
 
       closeOnExcept(finalBuffer) { _ =>
         // triple check we didn't go over memory

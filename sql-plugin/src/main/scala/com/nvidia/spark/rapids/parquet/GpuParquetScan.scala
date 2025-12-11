@@ -1270,6 +1270,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
 
     metrics.getOrElse(FILTER_TIME, NoopMetric).ns {
       metrics.getOrElse(SCAN_TIME, NoopMetric).ns {
+        val filterParallelStartTime = System.nanoTime()
         val metaAndFilesArr = if (numFilesFilterParallel > 0) {
           val tc = TaskContext.get()
           val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(poolConf)
@@ -1293,6 +1294,8 @@ case class GpuParquetMultiFilePartitionReaderFactory(
               hadoopConf, filters, readDataSchema)
           }
         }
+        metrics.getOrElse(FILTER_PARALLEL_TIME, NoopMetric) +=
+          (System.nanoTime() - filterParallelStartTime)
         metaAndFilesArr.foreach { metaAndFile =>
           val singleFileInfo = metaAndFile.meta
           clippedBlocks ++= singleFileInfo.blocks.map(block =>

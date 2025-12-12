@@ -1242,6 +1242,25 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
         .createWithDefault(false)
   }
 
+  val MULTITHREAD_READ_PRIORITY_SCHEDULING_STRATEGY = {
+    conf("spark.rapids.sql.multiThreadedRead.priorityScheduling.strategy")
+        .doc("Priority-aware scheduling strategy for multi-threaded file reading. " +
+            "NONE (default): Disable priority scheduling, use standard FIFO scheduling. " +
+            "MEDIAN: Classify tasks into high/low based on median priority. Tasks with " +
+            "priority >= median are high, others are low. Tasks already served once are " +
+            "always high. This provides a balance between fairness and optimization. " +
+            "STRICT: Strictly order by task priority value. Higher priority values are " +
+            "scheduled first. This maximizes high-priority task throughput but may cause " +
+            "starvation for low-priority tasks. " +
+            "NOTE: Priority scheduling is MUTUALLY EXCLUSIVE with memoryLimit.enabled. " +
+            "If memory-bounded pool is enabled, this setting is ignored.")
+        .startupOnly()
+        .stringConf
+        .transform(_.toUpperCase(java.util.Locale.ROOT))
+        .checkValues(Set("NONE", "MEDIAN", "STRICT"))
+        .createWithDefault("NONE")
+  }
+
   val ENABLE_PARQUET = conf("spark.rapids.sql.format.parquet.enabled")
     .doc("When set to false disables all parquet input and output acceleration")
     .booleanConf
@@ -3393,6 +3412,9 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val multiThreadReadStageLevelPool: Boolean =
     get(MULTITHREAD_READ_MEMORY_LIMIT_TEST_PER_STAGE_POOL)
+
+  lazy val multiThreadReadPrioritySchedulingStrategy: String =
+    get(MULTITHREAD_READ_PRIORITY_SCHEDULING_STRATEGY)
 
   lazy val isParquetEnabled: Boolean = get(ENABLE_PARQUET)
 

@@ -402,25 +402,37 @@ trait ThreadPoolConf {
    * Whether to create pools for each Spark stage, only for testing for now
    */
   def stageLevelPool: Boolean
+  
+  /**
+   * Priority scheduling strategy: NONE, MEDIAN, or STRICT
+   * NONE means priority scheduling is disabled
+   */
+  def priorityStrategy: String
 }
 
 case class DefaultThreadPoolConf(
     maxThreadNumber: Int,
-    stageLevelPool: Boolean) extends ThreadPoolConf
+    stageLevelPool: Boolean,
+    priorityStrategy: String = "NONE") extends ThreadPoolConf
 
 case class MemoryBoundedPoolConf(
     maxThreadNumber: Int,
     stageLevelPool: Boolean,
     memoryCapacity: Long, // The maximum host memory being used in bytes, must be > 0
     waitMemTimeoutMs: Long // The timeout for acquiring host memory in milliseconds
-) extends ThreadPoolConf
+) extends ThreadPoolConf {
+  // TODO: this is very confusing
+  // Memory-bounded pool does not support priority scheduling (mutually exclusive)
+  override val priorityStrategy: String = "NONE"
+}
 
 class ThreadPoolConfBuilder(
     private val maxThreadNumber: Int,
     private val isMemoryBounded: Boolean,
     private val memoryCapacityFromDriver: Long,
     private val timeoutMs: Long,
-    private val stageLevelPool: Boolean
+    private val stageLevelPool: Boolean,
+    private val priorityStrategy: String
 ) extends Logging with Serializable {
 
   // Finalize the ThreadPoolConf, which mainly determines the memory capacity of the
@@ -432,8 +444,19 @@ class ThreadPoolConfBuilder(
   // executor via `initializePinnedPoolAndOffHeapLimits`
   // 3. if still not set, use the default value `DEFAULT_MEMORY_CAPACITY`.
   def build(): ThreadPoolConf = {
+    // Priority scheduling and memory-bounded pool are MUTUALLY EXCLUSIVE
+    // If both are enabled, memory-bounded takes precedence
+    val effectivePriorityStrategy = if (isMemoryBounded && priorityStrategy != "NONE") {
+      logWarning(s"Priority scheduling strategy '$priorityStrategy' is set, but " +
+        "memory-bounded pool is also enabled. These are mutually exclusive. " +
+        "Using memory-bounded pool, priority scheduling will be disabled.")
+      "NONE"
+    } else {
+      priorityStrategy
+    }
+    
     if (!isMemoryBounded) {
-      DefaultThreadPoolConf(maxThreadNumber, stageLevelPool)
+      DefaultThreadPoolConf(maxThreadNumber, stageLevelPool, effectivePriorityStrategy)
     } else {
       val memCap: Long = if (memoryCapacityFromDriver > 0) {
         memoryCapacityFromDriver
@@ -466,7 +489,8 @@ object ThreadPoolConfBuilder {
       conf.enableMultiThreadReadMemoryLimit,
       conf.multiThreadReadMemoryLimit,
       conf.multiThreadReadMemoryAcquireTimeout,
-      conf.multiThreadReadStageLevelPool)
+      conf.multiThreadReadStageLevelPool,
+      conf.multiThreadReadPrioritySchedulingStrategy)
   }
 
   // Set an extremely large memory capacity by default, so that the thread pool can be used
@@ -578,6 +602,9 @@ abstract class MultiFileCloudPartitionReaderBase(
       runner
     }
 
+    // Priority-aware scheduling and memory-bounded pool are MUTUALLY EXCLUSIVE
+    val usePriorityScheduling = poolConf.priorityStrategy != "NONE"
+    
     // Currently just add the files in order, we may consider doing something with the size of
     // the files in the future. ie try to start some of the larger files but we may not want
     // them all to be large
@@ -585,13 +612,38 @@ abstract class MultiFileCloudPartitionReaderBase(
       val file = inputFiles(i)
       logDebug(s"MultiFile reader using file $file")
       if (!keepReadsInOrder) {
-        val futureRunner = fcs.submit(newTaskRunner(file))
+        val futureRunner = if (usePriorityScheduling) {
+          // Use priority-aware thread pool
+          val priorityPool = PriorityAwareFileReaderThreadPool.getOrCreate(
+            poolConf.maxThreadNumber,
+            "multithreaded cloud file reader",
+            poolConf.stageLevelPool,
+            poolConf.priorityStrategy)
+          val runner = newTaskRunner(file)
+          priorityPool.submitRunner(runner)
+        } else {
+          // Use standard or memory-bounded thread pool
+          fcs.submit(newTaskRunner(file))
+        }
         tasks.add(futureRunner)
       } else {
         // Add these in the order as we got them so that we can make sure
         // we process them in the same order as CPU would.
-        val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(poolConf)
-        tasks.add(threadPool.submit(newTaskRunner(file)))
+        val future = if (usePriorityScheduling) {
+          // Use priority-aware thread pool
+          val priorityPool = PriorityAwareFileReaderThreadPool.getOrCreate(
+            poolConf.maxThreadNumber,
+            "multithreaded cloud file reader",
+            poolConf.stageLevelPool,
+            poolConf.priorityStrategy)
+          val runner = newTaskRunner(file)
+          priorityPool.submitRunner(runner)
+        } else {
+          // Use standard or memory-bounded thread pool
+          val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(poolConf)
+          threadPool.submit(newTaskRunner(file))
+        }
+        tasks.add(future)
       }
     }
     // queue up any left to add once others finish
@@ -1339,15 +1391,36 @@ abstract class MultiFileCoalescingPartitionReaderBase(
 
           val allOutputBlocks = scala.collection.mutable.ArrayBuffer[DataBlockBase]()
           val tc = TaskContext.get
-          val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(poolConf)
-          filesAndBlocks.foreach { case (file, blocks) =>
-            val fileBlockSize = blocks.map(_.getBlockSize).sum
-            // use a single buffer and slice it up for different files if we need
-            val outLocal = hmb.slice(offset, fileBlockSize)
-            // Third, copy the blocks for each file in parallel using background threads
-            tasks.add(threadPool.submit(
-              getBatchRunner(tc, file, outLocal, blocks, offset, batchContext)))
-            offset += fileBlockSize
+          
+          // Priority-aware scheduling and memory-bounded pool are MUTUALLY EXCLUSIVE
+          val usePriorityScheduling = poolConf.priorityStrategy != "NONE"
+          
+          if (usePriorityScheduling) {
+            // Use priority-aware thread pool
+            val priorityPool = PriorityAwareFileReaderThreadPool.getOrCreate(
+              poolConf.maxThreadNumber,
+              "multithreaded file reader worker",
+              poolConf.stageLevelPool,
+              poolConf.priorityStrategy)
+            
+            filesAndBlocks.foreach { case (file, blocks) =>
+              val fileBlockSize = blocks.map(_.getBlockSize).sum
+              val outLocal = hmb.slice(offset, fileBlockSize)
+              val runner = getBatchRunner(tc, file, outLocal, blocks, offset, batchContext)
+              tasks.add(priorityPool.submitRunner(runner))
+              offset += fileBlockSize
+            }
+          } else {
+            // Use standard or memory-bounded thread pool
+            val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(poolConf)
+            
+            filesAndBlocks.foreach { case (file, blocks) =>
+              val fileBlockSize = blocks.map(_.getBlockSize).sum
+              val outLocal = hmb.slice(offset, fileBlockSize)
+              val runner = getBatchRunner(tc, file, outLocal, blocks, offset, batchContext)
+              tasks.add(threadPool.submit(runner))
+              offset += fileBlockSize
+            }
           }
 
           val copyStartTime = System.nanoTime()

@@ -2004,22 +2004,39 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
         }
       }
 
+      val allocStartTime = System.nanoTime()
       val estTotalSize = calculateParquetOutputSize(blocks, clippedSchema)
       val outHostBuf = withRetryNoSplit[HostMemoryBuffer] {
         HostMemoryBuffer.allocate(estTotalSize)
       }
+      metrics.getOrElse(BUFFER_ALLOC_TIME, NoopMetric) +=
+        (System.nanoTime() - allocStartTime)
+      
       closeOnExcept(outHostBuf) { hmb =>
         val out = new HostMemoryOutputStream(hmb)
+        
+        val headerStartTime = System.nanoTime()
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
+        metrics.getOrElse(BUFFER_HEADER_TIME, NoopMetric) +=
+          (System.nanoTime() - headerStartTime)
+        
+        val copyStartTime = System.nanoTime()
         val outputBlocks = if (compressCfg.decompressAnyCpu) {
           copyAndUncompressBlocksData(filePath, out, blocks, out.getPos, metrics, compressCfg)
         } else {
           copyBlocksData(filePath, out, blocks, out.getPos, metrics)
         }
+        metrics.getOrElse(BUFFER_COPY_TIME, NoopMetric) +=
+          (System.nanoTime() - copyStartTime)
+        
+        val footerStartTime = System.nanoTime()
         val footerPos = out.getPos
         writeFooter(out, outputBlocks, clippedSchema)
         BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
+        metrics.getOrElse(BUFFER_FOOTER_TIME, NoopMetric) +=
+          (System.nanoTime() - footerStartTime)
+        
         // check we didn't go over memory
         if (out.getPos > estTotalSize) {
           throw new QueryExecutionException(s"Calculated buffer size $estTotalSize is too " +

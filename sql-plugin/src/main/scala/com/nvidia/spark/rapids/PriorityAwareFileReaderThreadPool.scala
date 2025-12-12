@@ -19,7 +19,7 @@ package com.nvidia.spark.rapids
 import java.util.Comparator
 import java.util.concurrent._
 
-import com.nvidia.spark.rapids.io.async.{AsyncResult, AsyncRunner, RapidsFutureTask}
+import com.nvidia.spark.rapids.io.async.{AsyncResult, AsyncRunner, Cancelled, Init, RapidsFutureTask, Running, ScheduleFailed}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.TaskContext
@@ -83,6 +83,17 @@ private class BandwidthAwareRapidsFutureTaskComparator[T](
     servedTasks: ConcurrentHashMap.KeySetView[Long, java.lang.Boolean])
   extends Comparator[Runnable] with Logging {
   
+  // Metrics for performance analysis
+  private val compareCount = new java.util.concurrent.atomic.AtomicLong(0)
+  private val compareTotalNanos = new java.util.concurrent.atomic.AtomicLong(0)
+  
+  def getCompareCount: Long = compareCount.get()
+  def getCompareTotalNanos: Long = compareTotalNanos.get()
+  def getCompareAvgNanos: Double = {
+    val count = compareCount.get()
+    if (count > 0) compareTotalNanos.get().toDouble / count else 0.0
+  }
+  
   // Median priority threshold (only used by MEDIAN strategy)
   @volatile private var medianPriority: Long = Long.MinValue
   
@@ -114,34 +125,40 @@ private class BandwidthAwareRapidsFutureTaskComparator[T](
   }
   
   override def compare(r1: Runnable, r2: Runnable): Int = {
-    (r1, r2) match {
-      case (t1: RapidsFutureTask[_], t2: RapidsFutureTask[_]) =>
-        strategy match {
-          case NoneStrategy =>
-            // Should not reach here, but for safety use FIFO
-            0
-          
-          case MedianStrategy =>
-            val high1 = isHighPriorityMedian(t1)
-            val high2 = isHighPriorityMedian(t2)
+    val startNanos = System.nanoTime()
+    try {
+      (r1, r2) match {
+        case (t1: RapidsFutureTask[_], t2: RapidsFutureTask[_]) =>
+          strategy match {
+            case NoneStrategy =>
+              // Should not reach here, but for safety use FIFO
+              0
             
-            if (high1 && !high2) {
-              -1  // t1 scheduled first
-            } else if (!high1 && high2) {
-              1   // t2 scheduled first
-            } else {
-              // Both same class (HIGH or LOW), order by priority value
-              // Higher priority value = schedule first
+            case MedianStrategy =>
+              val high1 = isHighPriorityMedian(t1)
+              val high2 = isHighPriorityMedian(t2)
+              
+              if (high1 && !high2) {
+                -1  // t1 scheduled first
+              } else if (!high1 && high2) {
+                1   // t2 scheduled first
+              } else {
+                // Both same class (HIGH or LOW), order by priority value
+                // Higher priority value = schedule first
+                java.lang.Long.compare(t2.runner.priority, t1.runner.priority)
+              }
+            
+            case StrictStrategy =>
+              // Strictly order by priority value (higher = earlier)
+              // Same as standard RapidsFutureTaskComparator
               java.lang.Long.compare(t2.runner.priority, t1.runner.priority)
-            }
-          
-          case StrictStrategy =>
-            // Strictly order by priority value (higher = earlier)
-            // Same as standard RapidsFutureTaskComparator
-            java.lang.Long.compare(t2.runner.priority, t1.runner.priority)
-        }
-      case _ =>
-        0  // Not RapidsFutureTasks, treat as equal
+          }
+        case _ =>
+          0  // Not RapidsFutureTasks, treat as equal
+      }
+    } finally {
+      compareCount.incrementAndGet()
+      compareTotalNanos.addAndGet(System.nanoTime() - startNanos)
     }
   }
 }
@@ -180,6 +197,14 @@ class PriorityAwareFileReaderThreadPool private(
   private val submissionCount = new java.util.concurrent.atomic.AtomicInteger(0)
   private val MEDIAN_UPDATE_INTERVAL = 20  // Update every 20 submissions
   
+  // Metrics for performance analysis
+  private val submitRunnerCount = new java.util.concurrent.atomic.AtomicLong(0)
+  private val submitRunnerTotalNanos = new java.util.concurrent.atomic.AtomicLong(0)
+  private val beforeExecuteCount = new java.util.concurrent.atomic.AtomicLong(0)
+  private val beforeExecuteTotalNanos = new java.util.concurrent.atomic.AtomicLong(0)
+  private val afterExecuteCount = new java.util.concurrent.atomic.AtomicLong(0)
+  private val afterExecuteTotalNanos = new java.util.concurrent.atomic.AtomicLong(0)
+  
   logInfo(s"Created priority-aware file reader thread pool with strategy: $strategy")
   
   /**
@@ -187,40 +212,90 @@ class PriorityAwareFileReaderThreadPool private(
    * This is the primary method to use.
    */
   def submitRunner[T](runner: AsyncRunner[T]): Future[AsyncResult[T]] = {
-    // Track priority if task context is available
-    runner.sparkTaskContext.foreach { ctx =>
-      val taskAttemptId = ctx.taskAttemptId()
-      val taskPriority = runner.priority
-      
-      allPriorities.put(taskAttemptId, taskPriority)
-      
-      // Periodically recalculate median (for MEDIAN strategy)
-      if (strategy == MedianStrategy &&
-          submissionCount.incrementAndGet() % MEDIAN_UPDATE_INTERVAL == 0) {
-        val priorities = allPriorities.values().toArray(new Array[java.lang.Long](0))
-          .map(_.longValue())
-        comparator.updateMedian(priorities)
+    val startNanos = System.nanoTime()
+    try {
+      // Track priority if task context is available
+      runner.sparkTaskContext.foreach { ctx =>
+        val taskAttemptId = ctx.taskAttemptId()
+        val taskPriority = runner.priority
+        
+        allPriorities.put(taskAttemptId, taskPriority)
+        
+        // Periodically recalculate median (for MEDIAN strategy)
+        if (strategy == MedianStrategy &&
+            submissionCount.incrementAndGet() % MEDIAN_UPDATE_INTERVAL == 0) {
+          val priorities = allPriorities.values().toArray(new Array[java.lang.Long](0))
+            .map(_.longValue())
+          comparator.updateMedian(priorities)
+        }
       }
+      
+      // Create RapidsFutureTask and submit
+      val task = new RapidsFutureTask[T](runner)
+      execute(task)
+      task
+    } finally {
+      submitRunnerCount.incrementAndGet()
+      submitRunnerTotalNanos.addAndGet(System.nanoTime() - startNanos)
     }
-    
-    // Create RapidsFutureTask and submit
-    val task = new RapidsFutureTask[T](runner)
-    execute(task)
-    task
+  }
+  
+  override def beforeExecute(t: Thread, r: Runnable): Unit = {
+    val startNanos = System.nanoTime()
+    try {
+      super.beforeExecute(t, r)
+      
+      r match {
+        case task: RapidsFutureTask[_] =>
+          task.runner.withStateLock { rr =>
+            // Check if the Spark task has been interrupted before execution
+            rr.sparkTaskContext.foreach {
+              case ctx if ctx.isInterrupted() => rr.setState(Cancelled)
+              case _ => // do nothing
+            }
+            
+            // Handle state transition
+            rr.getState match {
+              case Cancelled =>
+                rr.setState(ScheduleFailed(new IllegalStateException("cancelled")))
+                logWarning(s"Runner being cancelled ahead of execution: $rr")
+                
+              case _: Init =>
+                // For priority-aware pool without resource management,
+                // directly transition to Running state
+                rr.setState(Running)
+                
+              case _ =>
+                rr.setState(ScheduleFailed(new IllegalStateException("Unexpected state")))
+                logError(s"Unexpected state before schedule: $rr")
+            }
+          }
+        case _ =>
+      }
+    } finally {
+      beforeExecuteCount.incrementAndGet()
+      beforeExecuteTotalNanos.addAndGet(System.nanoTime() - startNanos)
+    }
   }
   
   override def afterExecute(r: Runnable, t: Throwable): Unit = {
-    super.afterExecute(r, t)
-    
-    // Mark task as served after execution
-    r match {
-      case task: RapidsFutureTask[_] =>
-        task.runner.sparkTaskContext.foreach { ctx =>
-          val taskAttemptId = ctx.taskAttemptId()
-          servedTasks.add(taskAttemptId)
-          logDebug(s"Task $taskAttemptId completed, marked as served")
-        }
-      case _ =>
+    val startNanos = System.nanoTime()
+    try {
+      super.afterExecute(r, t)
+      
+      // Mark task as served after execution
+      r match {
+        case task: RapidsFutureTask[_] =>
+          task.runner.sparkTaskContext.foreach { ctx =>
+            val taskAttemptId = ctx.taskAttemptId()
+            servedTasks.add(taskAttemptId)
+            logDebug(s"Task $taskAttemptId completed, marked as served")
+          }
+        case _ =>
+      }
+    } finally {
+      afterExecuteCount.incrementAndGet()
+      afterExecuteTotalNanos.addAndGet(System.nanoTime() - startNanos)
     }
   }
   
@@ -230,6 +305,43 @@ class PriorityAwareFileReaderThreadPool private(
   def taskCompleted(taskAttemptId: Long): Unit = {
     allPriorities.remove(taskAttemptId)
     servedTasks.remove(taskAttemptId)
+  }
+  
+  /**
+   * Get metrics summary for performance analysis.
+   */
+  def getMetricsSummary: String = {
+    val submitCount = submitRunnerCount.get()
+    val submitAvgUs = if (submitCount > 0) {
+      submitRunnerTotalNanos.get() / 1000.0 / submitCount
+    } else 0.0
+    
+    val beforeCount = beforeExecuteCount.get()
+    val beforeAvgUs = if (beforeCount > 0) {
+      beforeExecuteTotalNanos.get() / 1000.0 / beforeCount
+    } else 0.0
+    
+    val afterCount = afterExecuteCount.get()
+    val afterAvgUs = if (afterCount > 0) {
+      afterExecuteTotalNanos.get() / 1000.0 / afterCount
+    } else 0.0
+    
+    val compareCount = comparator.getCompareCount
+    val compareAvgNs = comparator.getCompareAvgNanos
+    
+    s"""PriorityAwareFileReaderThreadPool Metrics (strategy=$strategy):
+       |  submitRunner: count=$submitCount, totalMs=${submitRunnerTotalNanos.get()/1e6}ms, avgUs=${"%.2f".format(submitAvgUs)}us
+       |  beforeExecute: count=$beforeCount, totalMs=${beforeExecuteTotalNanos.get()/1e6}ms, avgUs=${"%.2f".format(beforeAvgUs)}us
+       |  afterExecute: count=$afterCount, totalMs=${afterExecuteTotalNanos.get()/1e6}ms, avgUs=${"%.2f".format(afterAvgUs)}us
+       |  comparator: count=$compareCount, totalMs=${comparator.getCompareTotalNanos/1e6}ms, avgNs=${"%.2f".format(compareAvgNs)}ns
+       |  Total overhead: ${"%.2f".format((submitRunnerTotalNanos.get() + beforeExecuteTotalNanos.get() + afterExecuteTotalNanos.get() + comparator.getCompareTotalNanos) / 1e6)}ms""".stripMargin
+  }
+  
+  /**
+   * Log metrics summary.
+   */
+  def logMetrics(): Unit = {
+    logInfo(getMetricsSummary)
   }
 }
 
@@ -242,6 +354,23 @@ object PriorityAwareFileReaderThreadPool extends Logging {
   
   // Global served tasks tracking (shared across all pools)
   private val globalServedTasks = ConcurrentHashMap.newKeySet[Long]()
+  
+  // Register shutdown hook to log metrics on JVM exit
+  Runtime.getRuntime.addShutdownHook(new Thread() {
+    override def run(): Unit = {
+      logMetricsOnShutdown()
+    }
+  })
+  
+  private def logMetricsOnShutdown(): Unit = {
+    globalPool.foreach { pool =>
+      logInfo("=== PriorityAwareFileReaderThreadPool Shutdown Metrics ===")
+      pool.logMetrics()
+    }
+    stagePools.values().forEach { pool =>
+      pool.logMetrics()
+    }
+  }
   
   def getOrCreate(
       numThreads: Int,
@@ -296,6 +425,8 @@ object PriorityAwareFileReaderThreadPool extends Logging {
   
   def shutdown(): Unit = synchronized {
     globalPool.foreach { pool =>
+      // Log metrics before shutdown
+      pool.logMetrics()
       pool.shutdown()
       if (!pool.awaitTermination(10, TimeUnit.SECONDS)) {
         pool.shutdownNow()
@@ -304,6 +435,8 @@ object PriorityAwareFileReaderThreadPool extends Logging {
     globalPool = None
     
     stagePools.values().forEach { pool =>
+      // Log metrics before shutdown
+      pool.logMetrics()
       pool.shutdown()
       if (!pool.awaitTermination(5, TimeUnit.SECONDS)) {
         pool.shutdownNow()
@@ -314,5 +447,10 @@ object PriorityAwareFileReaderThreadPool extends Logging {
     // Clear served tasks tracking
     globalServedTasks.clear()
   }
+  
+  /**
+   * Get global pool metrics (for testing).
+   */
+  def getGlobalPoolMetrics: Option[String] = globalPool.map(_.getMetricsSummary)
 }
 

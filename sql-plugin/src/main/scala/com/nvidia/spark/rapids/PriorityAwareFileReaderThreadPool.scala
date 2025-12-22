@@ -19,7 +19,7 @@ package com.nvidia.spark.rapids
 import java.util.Comparator
 import java.util.concurrent._
 
-import com.nvidia.spark.rapids.io.async.{AsyncResult, AsyncRunner, Cancelled, Init, RapidsFutureTask, Running, ScheduleFailed}
+import com.nvidia.spark.rapids.io.async._
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.TaskContext
@@ -173,7 +173,7 @@ private class BandwidthAwareRapidsFutureTaskComparator[T](
  * - Prevents low-priority tasks from consuming I/O bandwidth prematurely
  */
 class PriorityAwareFileReaderThreadPool private(
-    numThreads: Int,
+    val numThreads: Int,
     name: String,
     servedTasks: ConcurrentHashMap.KeySetView[Long, java.lang.Boolean],
     strategy: PrioritySchedulingStrategy)
@@ -230,7 +230,6 @@ class PriorityAwareFileReaderThreadPool private(
         }
       }
       
-      // Create RapidsFutureTask and submit
       val task = new RapidsFutureTask[T](runner)
       execute(task)
       task
@@ -453,4 +452,3 @@ object PriorityAwareFileReaderThreadPool extends Logging {
    */
   def getGlobalPoolMetrics: Option[String] = globalPool.map(_.getMetricsSummary)
 }
-

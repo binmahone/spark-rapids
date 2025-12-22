@@ -125,6 +125,14 @@ object GpuMetric extends Logging {
   val BIG_JOIN_COUNT = "sizedBigJoin"
   val SYNC_READ_TIME = "shuffleSyncReadTime"
   val ASYNC_READ_TIME = "shuffleAsyncReadTime"
+  
+  // ASIO (Adaptive Saturation I/O) metrics
+  val ASIO_PARALLEL_READS = "asioParallelReads"
+  val ASIO_SEQUENTIAL_READS = "asioSequentialReads"
+  val ASIO_TOTAL_BYTES_PARALLEL = "asioTotalBytesParallel"
+  val ASIO_TOTAL_SPLITS = "asioTotalSplits"
+  val ASIO_POOL_ACTIVE_THREADS = "asioPoolActiveThreads"
+  val ASIO_POOL_QUEUE_SIZE = "asioPoolQueueSize"
 
   // Metric Descriptions.
   val DESCRIPTION_BUFFER_TIME = "buffer time"
@@ -185,6 +193,14 @@ object GpuMetric extends Logging {
   val DESCRIPTION_BIG_JOIN_COUNT = "big joins"
   val DESCRIPTION_SYNC_READ_TIME = "sync read time"
   val DESCRIPTION_ASYNC_READ_TIME = "async read time"
+  
+  // ASIO metric descriptions
+  val DESCRIPTION_ASIO_PARALLEL_READS = "ASIO parallel read operations"
+  val DESCRIPTION_ASIO_SEQUENTIAL_READS = "ASIO sequential read fallbacks"
+  val DESCRIPTION_ASIO_TOTAL_BYTES_PARALLEL = "ASIO total bytes read in parallel"
+  val DESCRIPTION_ASIO_TOTAL_SPLITS = "ASIO total split tasks"
+  val DESCRIPTION_ASIO_POOL_ACTIVE_THREADS = "ASIO pool active threads (sampled)"
+  val DESCRIPTION_ASIO_POOL_QUEUE_SIZE = "ASIO pool queue size (sampled)"
 
   /**
    * Determine if a GpuMetric wraps a TimingMetric or NanoTimingMetric.

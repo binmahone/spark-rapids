@@ -1432,6 +1432,12 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
 
   def compressCfg: CpuCompressionConfig
 
+  /**
+   * Whether to enable parallel I/O for cloud storage reads.
+   * Default is false. Cloud readers should override this to true.
+   */
+  def enableParallelIO: Boolean = false
+
   val copyBufferSize = conf.getInt("parquet.read.allocation.size", 8 * 1024 * 1024)
 
   def checkIfNeedToSplitBlocks(currentDateRebaseMode: DateTimeRebaseMode,
@@ -1517,6 +1523,8 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
     org.apache.parquet.format.Util.writeFileMetaData(meta, out)
   }
 
+  // Keep this method for potential future use or fallback
+  @scala.annotation.nowarn("msg=never used")
   private def copyDataRange(
       range: CopyRange,
       in: SeekableInputStream,
@@ -1915,20 +1923,12 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
         conf, out.buffer, filePath.toUri,
         coalescedRanges.map(r => IntRangeWithOffset(r.offset, r.length, r.outputOffset))
       ).getOrElse {
-        withResource(fileIO.newInputFile(filePath).open()) { in =>
-          val copyBuffer: Array[Byte] = new Array[Byte](copyBufferSize)
-          coalescedRanges.foldLeft(0L) { (acc, blockCopy) =>
-            acc + copyDataRange(blockCopy, in, out, copyBuffer)
-          }
-        }
+        // Try parallel I/O for better throughput on cloud storage
+        copyRemoteBlocksDataWithParallelIO(coalescedRanges, filePath, out)
       }
     } else {
-      withResource(fileIO.newInputFile(filePath).open()) { in =>
-        val copyBuffer: Array[Byte] = new Array[Byte](copyBufferSize)
-        coalescedRanges.foldLeft(0L) { (acc, blockCopy) =>
-          acc + copyDataRange(blockCopy, in, out, copyBuffer)
-        }
-      }
+      // Try parallel I/O for better throughput on cloud storage
+      copyRemoteBlocksDataWithParallelIO(coalescedRanges, filePath, out)
     }
 
     // try to cache the remote ranges that were copied
@@ -1944,6 +1944,22 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       }
     }
     totalBytesCopied
+  }
+
+  /**
+   * Copy remote blocks data with parallel I/O support.
+   * Uses ParallelFileIO to maximize cloud storage throughput when idle threads are available.
+   * Parallel I/O is only enabled for cloud readers (enableParallelIO=true).
+   */
+  private def copyRemoteBlocksDataWithParallelIO(
+      coalescedRanges: Seq[CopyRange],
+      filePath: Path,
+      out: HostMemoryOutputStream): Long = {
+    // Convert CopyRange to (fileOffset, bufferOffset, length) tuples
+    val ranges = coalescedRanges.map(r => (r.offset, r.outputOffset, r.length))
+    
+    // Try parallel I/O if enabled (cloud reader) and beneficial
+    ParallelFileIO.readRangesParallel(filePath, ranges, out.buffer, conf, enableParallelIO)
   }
 
   private def coalesceReads(ranges: Seq[CopyRange]): Seq[CopyRange] = {
@@ -2477,10 +2493,30 @@ class MultiFileCloudParquetPartitionReader(
     keepReadsInOrder, combineConf)
   with ParquetPartitionReaderBase {
 
+  // Enable parallel I/O for cloud reader to maximize throughput
+  // Controlled by ASIO (Adaptive Saturation I/O) configuration
+  override def enableParallelIO: Boolean = ParallelFileIO.isAsioEnabled
+
   // TODO: replace the config maxNumFileProcessed with the dynamic resource bounded controller,
   // after the ResourceBoundedThreadPool are supported for all readers.
   require(files.length <= maxNumFileProcessed,
     "maxNumFileProcessed should be NOT applied for MultiFileCloudParquetPartitionReader")
+  
+  override def close(): Unit = {
+    // Update ASIO metrics before closing
+    updateAsioMetrics()
+    super.close()
+  }
+  
+  private def updateAsioMetrics(): Unit = {
+    val stats = ParallelFileIO.getStatistics
+    execMetrics.get(GpuMetric.ASIO_PARALLEL_READS).foreach(_.set(stats.parallelReads))
+    execMetrics.get(GpuMetric.ASIO_SEQUENTIAL_READS).foreach(_.set(stats.sequentialReads))
+    execMetrics.get(GpuMetric.ASIO_TOTAL_BYTES_PARALLEL).foreach(_.set(stats.totalBytesParallel))
+    execMetrics.get(GpuMetric.ASIO_TOTAL_SPLITS).foreach(_.set(stats.totalSplits))
+    execMetrics.get(GpuMetric.ASIO_POOL_ACTIVE_THREADS).foreach(_.set(stats.poolActiveThreads))
+    execMetrics.get(GpuMetric.ASIO_POOL_QUEUE_SIZE).foreach(_.set(stats.poolQueueSize))
+  }
 
   def checkIfNeedToSplit(current: HostMemoryBuffersWithMetaData,
       next: HostMemoryBuffersWithMetaData): Boolean = {

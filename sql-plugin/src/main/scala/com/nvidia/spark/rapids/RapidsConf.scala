@@ -1261,6 +1261,19 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
         .createWithDefault("NONE")
   }
 
+  val MULTITHREAD_READ_ASIO_ENABLED = {
+    conf("spark.rapids.sql.multiThreadedRead.asio.enabled")
+        .doc("Enable ASIO (Adaptive Saturation I/O) for cloud storage reads. " +
+            "When enabled, ASIO dynamically splits large read tasks into parallel byte-range " +
+            "requests to maximize cloud storage throughput (e.g., GCS can achieve ~2.2GB/s " +
+            "with 30+ parallel connections vs ~100MB/s single-threaded). " +
+            "ASIO uses EMA-based load prediction to adaptively saturate the thread pool " +
+            "while preventing over-subscription. Only affects cloud reader " +
+            "(spark.rapids.sql.format.parquet.reader.type=MULTITHREADED).")
+        .booleanConf
+        .createWithDefault(true)
+  }
+
   val ENABLE_PARQUET = conf("spark.rapids.sql.format.parquet.enabled")
     .doc("When set to false disables all parquet input and output acceleration")
     .booleanConf
@@ -3415,6 +3428,8 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val multiThreadReadPrioritySchedulingStrategy: String =
     get(MULTITHREAD_READ_PRIORITY_SCHEDULING_STRATEGY)
+
+  lazy val isAsioEnabled: Boolean = get(MULTITHREAD_READ_ASIO_ENABLED)
 
   lazy val isParquetEnabled: Boolean = get(ENABLE_PARQUET)
 

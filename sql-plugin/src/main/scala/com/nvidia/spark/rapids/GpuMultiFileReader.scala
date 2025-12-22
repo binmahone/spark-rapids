@@ -567,15 +567,29 @@ abstract class MultiFileCloudPartitionReaderBase(
     // limit the number we submit at once according to the config if set
     val limit = math.min(maxNumFileProcessed, inputFiles.length)
     val tc = TaskContext.get
+
+    // Priority-aware scheduling and memory-bounded pool are MUTUALLY EXCLUSIVE
+    val usePriorityScheduling = poolConf.priorityStrategy != "NONE"
+
     if (!keepReadsInOrder) {
       logDebug("Not keeping reads in order")
       synchronized {
         if (fcs == null) {
-          fcs = MultiFileReaderThreadPool.getOrCreateThreadPool(poolConf) match {
-            case pool: ResourceBoundedThreadExecutor =>
-              new BoundedCompletionService[BufferInfo](pool)
-            case pool: ThreadPoolExecutor =>
-              new ExecutorCompletionService[RunnerResult](pool)
+          fcs = if (usePriorityScheduling) {
+            // Use priority-aware completion service
+            val priorityPool = PriorityAwareFileReaderThreadPool.getOrCreate(
+              poolConf.maxThreadNumber,
+              "multithreaded cloud file reader",
+              poolConf.stageLevelPool,
+              poolConf.priorityStrategy)
+            new PriorityAwareCompletionService[BufferInfo](priorityPool)
+          } else {
+            MultiFileReaderThreadPool.getOrCreateThreadPool(poolConf) match {
+              case pool: ResourceBoundedThreadExecutor =>
+                new BoundedCompletionService[BufferInfo](pool)
+              case pool: ThreadPoolExecutor =>
+                new ExecutorCompletionService[RunnerResult](pool)
+            }
           }
         }
       }
@@ -602,9 +616,6 @@ abstract class MultiFileCloudPartitionReaderBase(
       runner
     }
 
-    // Priority-aware scheduling and memory-bounded pool are MUTUALLY EXCLUSIVE
-    val usePriorityScheduling = poolConf.priorityStrategy != "NONE"
-    
     // Currently just add the files in order, we may consider doing something with the size of
     // the files in the future. ie try to start some of the larger files but we may not want
     // them all to be large
@@ -612,19 +623,8 @@ abstract class MultiFileCloudPartitionReaderBase(
       val file = inputFiles(i)
       logDebug(s"MultiFile reader using file $file")
       if (!keepReadsInOrder) {
-        val futureRunner = if (usePriorityScheduling) {
-          // Use priority-aware thread pool
-          val priorityPool = PriorityAwareFileReaderThreadPool.getOrCreate(
-            poolConf.maxThreadNumber,
-            "multithreaded cloud file reader",
-            poolConf.stageLevelPool,
-            poolConf.priorityStrategy)
-          val runner = newTaskRunner(file)
-          priorityPool.submitRunner(runner)
-        } else {
-          // Use standard or memory-bounded thread pool
-          fcs.submit(newTaskRunner(file))
-        }
+        // Use CompletionService for out-of-order result retrieval
+        val futureRunner = fcs.submit(newTaskRunner(file))
         tasks.add(futureRunner)
       } else {
         // Add these in the order as we got them so that we can make sure
@@ -983,11 +983,24 @@ abstract class MultiFileCloudPartitionReaderBase(
     if (tasksToRun.nonEmpty && !isDone) {
       val runner = tasksToRun.dequeue()
       if (!keepReadsInOrder) {
+        // Use CompletionService for out-of-order result retrieval
         val futureRunner = fcs.submit(runner)
         tasks.add(futureRunner)
       } else {
-        val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(poolConf)
-        tasks.add(threadPool.submit(runner))
+        // keepReadsInOrder=true: use direct thread pool submission
+        val usePriorityScheduling = poolConf.priorityStrategy != "NONE"
+        val future = if (usePriorityScheduling) {
+          val priorityPool = PriorityAwareFileReaderThreadPool.getOrCreate(
+            poolConf.maxThreadNumber,
+            "multithreaded cloud file reader",
+            poolConf.stageLevelPool,
+            poolConf.priorityStrategy)
+          priorityPool.submitRunner(runner)
+        } else {
+          val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(poolConf)
+          threadPool.submit(runner)
+        }
+        tasks.add(future)
       }
     }
   }

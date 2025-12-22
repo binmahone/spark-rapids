@@ -46,7 +46,7 @@ trait GpuBatchScanExecMetrics extends GpuExec {
     SCHEDULE_TIME_BUBBLE -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_SCHEDULE_TIME_BUBBLE),
     OP_TIME_LEGACY -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_OP_TIME_LEGACY),
     JOIN_TIME -> createNanoTimingMetric(MODERATE_LEVEL, DESCRIPTION_JOIN_TIME),
-  ) ++ fileCacheMetrics ++ scanCustomMetrics
+  ) ++ fileCacheMetrics ++ asioMetrics ++ scanCustomMetrics
 
   lazy val fileCacheMetrics: Map[String, GpuMetric] = {
     // File cache only supported on Parquet files for now.
@@ -55,6 +55,23 @@ trait GpuBatchScanExecMetrics extends GpuExec {
       case _ => Map.empty
     }
   }
+  
+  lazy val asioMetrics: Map[String, GpuMetric] = {
+    // ASIO metrics only for Parquet multi-threaded/cloud reader
+    scan match {
+      case _: GpuParquetScan => createAsioMetrics()
+      case _ => Map.empty
+    }
+  }
+  
+  private def createAsioMetrics(): Map[String, GpuMetric] = Map(
+    ASIO_PARALLEL_READS -> createMetric(DEBUG_LEVEL, DESCRIPTION_ASIO_PARALLEL_READS),
+    ASIO_SEQUENTIAL_READS -> createMetric(DEBUG_LEVEL, DESCRIPTION_ASIO_SEQUENTIAL_READS),
+    ASIO_TOTAL_BYTES_PARALLEL -> createSizeMetric(DEBUG_LEVEL, DESCRIPTION_ASIO_TOTAL_BYTES_PARALLEL),
+    ASIO_TOTAL_SPLITS -> createMetric(DEBUG_LEVEL, DESCRIPTION_ASIO_TOTAL_SPLITS),
+    ASIO_POOL_ACTIVE_THREADS -> createMetric(DEBUG_LEVEL, DESCRIPTION_ASIO_POOL_ACTIVE_THREADS),
+    ASIO_POOL_QUEUE_SIZE -> createMetric(DEBUG_LEVEL, DESCRIPTION_ASIO_POOL_QUEUE_SIZE)
+  )
 
   private lazy val scanCustomMetrics: Map[String, GpuMetric] = {
     scan.supportedCustomMetrics().map { metric =>

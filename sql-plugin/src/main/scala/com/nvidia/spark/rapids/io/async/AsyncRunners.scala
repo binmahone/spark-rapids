@@ -239,7 +239,8 @@ trait AsyncRunner[T] extends Callable[AsyncResult[T]] {
 
   protected[async] var releaseResourceCallback: () => Unit = () => {}
 
-  private[async] lazy val metricsBuilder = new AsyncMetricsBuilder
+  // Exposed for pool tracing in GpuMultiFileReader
+  lazy val metricsBuilder = new AsyncMetricsBuilder
 
   /**
    * AsyncRunner is not necessarily tied to a Spark task, despite it is usually the case.
@@ -292,7 +293,7 @@ trait AsyncRunner[T] extends Callable[AsyncResult[T]] {
   private val stateLock = new ReentrantLock()
 
   // Unique ID for the runner, mainly for logging and tracking purpose.
-  private[async] val runnerId: Long = AsyncRunner.nextRunnerId()
+  val runnerId: Long = AsyncRunner.nextRunnerId()
 
   override def toString: String = {
     val tid = sparkTaskContext.map(_.taskAttemptId()).getOrElse(-1L)

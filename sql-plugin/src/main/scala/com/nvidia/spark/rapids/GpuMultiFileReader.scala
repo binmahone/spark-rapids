@@ -564,14 +564,57 @@ abstract class MultiFileCloudPartitionReaderBase(
       val runner = getBatchRunner(tc, file, conf, filters)
       val metrics = GpuTaskMetrics.get
       val taskId = tc.taskAttemptId()
+      val runnerId = runner.runnerId
+      val filePathStr = file.filePath.toString.replace("\"", "\\\"")
+      val fileOffset = file.start
+      val fileLength = file.length
+
+      // Log SUBMIT event for pool tracing
+      logInfo(s"""[POOL_TRACE] {"event":"SUBMIT","ts":${System.currentTimeMillis()}""" +
+        s""","sparkTaskId":$taskId,"runnerId":$runnerId""" +
+        s""","file":"$filePathStr","offset":$fileOffset,"length":$fileLength}""")
+
+      // Track start time for execution time calculation
+      var execStartTimeNs = 0L
+
       runner.addPreHook(() => {
         val onFlightTasks = MultiFileReaderThreadPool.runningTaskNum.incrementAndGet()
         metrics.updateMultithreadReaderMaxParallelism(onFlightTasks)
+        val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(poolConf)
+        val activeCount = threadPool.getActiveCount
+        val poolSize = threadPool.getPoolSize
+        val threadName = Thread.currentThread().getName
+        val threadId = Thread.currentThread().getId
+
+        // Record start time for execution time calculation
+        execStartTimeNs = System.nanoTime()
+
+        // Get schedule time from the runner (set before preHook is called)
+        val schedTimeMs = runner.metricsBuilder.build().scheduleTimeMs / 1000000L
+
+        // Log START event for pool tracing with thread info
+        logInfo(s"""[POOL_TRACE] {"event":"START","ts":${System.currentTimeMillis()}""" +
+          s""","sparkTaskId":$taskId,"runnerId":$runnerId""" +
+          s""","threadId":$threadId,"threadName":"$threadName"""" +
+          s""","activeThreads":$activeCount,"poolSize":$poolSize""" +
+          s""","schedTimeMs":$schedTimeMs""" +
+          s""","file":"$filePathStr","offset":$fileOffset,"length":$fileLength}""")
+
         logDebug(s"[$taskId] Starting a new task for file ${file.filePath} " +
           s"with $onFlightTasks tasks running in parallel")
       })
       runner.addPostHook(() => {
         val onFlightTasks = MultiFileReaderThreadPool.runningTaskNum.decrementAndGet()
+        val threadId = Thread.currentThread().getId
+
+        // Calculate execution time manually since postHook runs before setExecutionTimeMs
+        val execTimeMs = (System.nanoTime() - execStartTimeNs) / 1000000L
+
+        // Log END event for pool tracing with thread info
+        logInfo(s"""[POOL_TRACE] {"event":"END","ts":${System.currentTimeMillis()}""" +
+          s""","sparkTaskId":$taskId,"runnerId":$runnerId""" +
+          s""","threadId":$threadId,"execTimeMs":$execTimeMs}""")
+
         logDebug(s"[$taskId] Finished a task for file ${file.filePath} " +
           s"with $onFlightTasks tasks running in parallel")
       })

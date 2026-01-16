@@ -162,7 +162,7 @@ trait GpuExec extends SparkPlan with Logging {
 
   protected def createFileCacheMetrics(): Map[String, GpuMetric] = {
     if (FileCacheConf.FILECACHE_ENABLED.get(conf)) {
-      Map(
+      val baseMetrics = Map(
         FILECACHE_FOOTER_HITS -> createMetric(MODERATE_LEVEL, DESCRIPTION_FILECACHE_FOOTER_HITS),
         FILECACHE_FOOTER_HITS_SIZE -> createSizeMetric(MODERATE_LEVEL,
           DESCRIPTION_FILECACHE_FOOTER_HITS_SIZE),
@@ -182,6 +182,27 @@ trait GpuExec extends SparkPlan with Logging {
           DESCRIPTION_FILECACHE_FOOTER_READ_TIME),
         FILECACHE_DATA_RANGE_READ_TIME -> createNanoTimingMetric(MODERATE_LEVEL,
           DESCRIPTION_FILECACHE_DATA_RANGE_READ_TIME))
+      // Add P2P cache sharing metrics if enabled
+      val p2pMetrics = if (FileCacheConf.FILECACHE_P2P_ENABLED.get(conf)) {
+        Map(
+          FILECACHE_P2P_FOOTER_HITS -> createMetric(MODERATE_LEVEL,
+            DESCRIPTION_FILECACHE_P2P_FOOTER_HITS),
+          FILECACHE_P2P_FOOTER_HITS_SIZE -> createSizeMetric(MODERATE_LEVEL,
+            DESCRIPTION_FILECACHE_P2P_FOOTER_HITS_SIZE),
+          FILECACHE_P2P_FOOTER_MISSES -> createMetric(MODERATE_LEVEL,
+            DESCRIPTION_FILECACHE_P2P_FOOTER_MISSES),
+          FILECACHE_P2P_DATA_RANGE_HITS -> createMetric(MODERATE_LEVEL,
+            DESCRIPTION_FILECACHE_P2P_DATA_RANGE_HITS),
+          FILECACHE_P2P_DATA_RANGE_HITS_SIZE -> createSizeMetric(MODERATE_LEVEL,
+            DESCRIPTION_FILECACHE_P2P_DATA_RANGE_HITS_SIZE),
+          FILECACHE_P2P_DATA_RANGE_MISSES -> createMetric(MODERATE_LEVEL,
+            DESCRIPTION_FILECACHE_P2P_DATA_RANGE_MISSES),
+          FILECACHE_P2P_TRANSFER_TIME -> createNanoTimingMetric(MODERATE_LEVEL,
+            DESCRIPTION_FILECACHE_P2P_TRANSFER_TIME))
+      } else {
+        Map.empty[String, GpuMetric]
+      }
+      baseMetrics ++ p2pMetrics
     } else {
       Map.empty
     }

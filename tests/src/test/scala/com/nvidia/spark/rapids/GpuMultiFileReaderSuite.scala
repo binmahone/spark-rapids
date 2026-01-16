@@ -43,7 +43,9 @@ class GpuMultiFileReaderSuite extends AnyFunSuite with RmmSparkRetrySuiteBase {
       isMemoryBounded = true,
       memoryCapacityFromDriver =  1L << 20,
       timeoutMs = 10 * 1000L, // 10 seconds
-      stageLevelPool = false
+      stageLevelPool = false,
+      schedulingStrategy = "DISABLED",
+      fuzzyTopPercentile = 50
     ).build()
     val multiFileReader = new MultiFileCloudPartitionReaderBase(
       conf,

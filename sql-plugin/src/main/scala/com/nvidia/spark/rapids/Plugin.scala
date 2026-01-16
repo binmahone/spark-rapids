@@ -33,7 +33,7 @@ import com.nvidia.spark.rapids.RapidsConf.AllowMultipleJars
 import com.nvidia.spark.rapids.RapidsPluginUtils.buildInfoEvent
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
 import com.nvidia.spark.rapids.filecache.{FileCache, FileCacheLocalityManager, FileCacheLocalityMsg}
-import com.nvidia.spark.rapids.io.async.TrafficController
+import com.nvidia.spark.rapids.io.async.{CloudReaderSchedulingStrategy, ShuffleFetchPriorityScheduler, TaskOverridePriority, TrafficController}
 import com.nvidia.spark.rapids.jni.{GpuTimeZoneDB, RmmSpark, TaskPriority}
 import com.nvidia.spark.rapids.python.PythonWorkerSemaphore
 import org.apache.commons.lang3.exception.ExceptionUtils
@@ -681,6 +681,20 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
       GpuSemaphore.initialize(conf.maxConcurrentGpuTasks)
       FileCache.init(pluginContext)
       TrafficController.initialize(conf)
+
+      // Initialize shuffle fetch priority scheduler
+      // Global capacity = per-task maxBytesInFlight * numCores (executor cores)
+      val schedulingStrategy = CloudReaderSchedulingStrategy.withName(
+        conf.multiThreadReadSchedulingStrategy)
+      // spark.reducer.maxSizeInFlight defaults to 48m
+      val maxBytesPerTask = sparkConf.getSizeAsMb("spark.reducer.maxSizeInFlight", "48m") *
+          1024 * 1024
+      ShuffleFetchPriorityScheduler.init(
+        conf.shuffleFetchPrioritySchedulingEnabled,
+        maxBytesPerTask,
+        numCores,  // Use executor cores, not GPU concurrent tasks
+        schedulingStrategy,
+        conf.multiThreadReadFuzzyTopPercentile)
     } catch {
       // Exceptions in executor plugin can cause a single thread to die but the executor process
       // sticks around without any useful info until it hearbeat times out. Print what happened
@@ -824,6 +838,8 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
     TaskPriority.getTaskPriority(tc.taskAttemptId())
     onTaskCompletion(tc, tc => {
       TaskPriority.taskDone(tc.taskAttemptId())
+      // Clean up override priority for cloud reader scheduling
+      TaskOverridePriority.taskDone(tc.taskAttemptId())
     })
     extraExecutorPlugins.foreach(_.onTaskStart())
     ProfilerOnExecutor.onTaskStart()

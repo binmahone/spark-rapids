@@ -32,7 +32,7 @@ import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.RapidsPluginImplicits.AutoCloseableSeq
 import com.nvidia.spark.rapids.format.TableMeta
 import com.nvidia.spark.rapids.internal.HostByteBufferIterator
-import com.nvidia.spark.rapids.jni.TaskPriority
+import com.nvidia.spark.rapids.io.async.TaskOverridePriority
 import org.apache.commons.io.IOUtils
 
 import org.apache.spark.{SparkConf, SparkEnv, TaskContext}
@@ -168,8 +168,10 @@ trait StoreHandle extends AutoCloseable {
   /**
    * Be very careful that you set this before it is added into the Store, or that
    * the store knows to update the priority internally after this is set.
+   * Note: Now uses TaskOverridePriority to support cloud reader scheduling priority.
    */
-  var taskPriority: Long = taskId.map(TaskPriority.getTaskPriority).getOrElse(Long.MaxValue)
+  var taskPriority: Long =
+    taskId.map(TaskOverridePriority.getEffectivePriority).getOrElse(Long.MaxValue)
 }
 
 trait SpillableHandle extends StoreHandle with Logging {

@@ -2802,6 +2802,11 @@ class MultiFileCloudParquetPartitionReader(
       var bufferStartTime = 0L
       var allocTime = 0L
       val result = try {
+        // Record the first cloud access time for override priority scheduling.
+        // This timestamp determines the task's priority in the reader thread pool.
+        // Earlier access means higher priority.
+        TaskOverridePriority.recordFirstCloudAccess(taskContext.taskAttemptId())
+
         val filterStartTime = System.nanoTime()
         val fileBlockMeta = filterFunc(file)
         filterTime = System.nanoTime() - filterStartTime

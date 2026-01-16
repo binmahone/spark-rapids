@@ -23,8 +23,6 @@ import java.util.function.LongUnaryOperator
 
 import scala.collection.mutable
 
-import com.nvidia.spark.rapids.jni.TaskPriority
-
 import org.apache.spark.TaskContext
 
 /**
@@ -339,7 +337,10 @@ abstract class MemoryBoundedAsyncRunner[T] extends AsyncRunner[T] {
 
   override def priority: Long = {
     sparkTaskContext match {
-      case Some(ctx) => TaskPriority.getTaskPriority(ctx.taskAttemptId())
+      case Some(ctx) =>
+        // Use effective priority that considers override priority for cloud reader tasks.
+        // Tasks that have accessed cloud storage get higher priority based on access time.
+        TaskOverridePriority.getEffectivePriority(ctx.taskAttemptId())
       case None => 0L
     }
   }

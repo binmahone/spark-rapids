@@ -1324,6 +1324,34 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
         .createWithDefault(false)
   }
 
+  val MULTITHREAD_READ_SCHEDULING_STRATEGY = {
+    conf("spark.rapids.sql.multiThreadedRead.schedulingStrategy")
+        .doc("Scheduling strategy for the cloud reader thread pool. " +
+            "STRICT: Strictly follow priority order based on first cloud access time. " +
+            "Tasks that accessed cloud storage earlier get higher priority. " +
+            "FUZZY: Divide active tasks into two tiers (top 50% and bottom 50%) based on " +
+            "priority. Tasks in top tier are scheduled before bottom tier. " +
+            "DISABLED: Disable override priority scheduling, use original TaskPriority.")
+        .startupOnly()
+        .internal()
+        .stringConf
+        .transform(_.toUpperCase(java.util.Locale.ROOT))
+        .checkValues(Set("STRICT", "FUZZY", "DISABLED"))
+        .createWithDefault("DISABLED")
+  }
+
+  val MULTITHREAD_READ_FUZZY_TOP_PERCENTILE = {
+    conf("spark.rapids.sql.multiThreadedRead.fuzzyTopPercentile")
+        .doc("The percentile threshold for fuzzy scheduling strategy. " +
+            "Tasks with priority in the top N percentile are considered high priority. " +
+            "Only effective when schedulingStrategy is FUZZY.")
+        .startupOnly()
+        .internal()
+        .integerConf
+        .checkValue(v => v > 0 && v < 100, "Percentile must be between 1 and 99")
+        .createWithDefault(50)
+  }
+
   val ENABLE_PARQUET = conf("spark.rapids.sql.format.parquet.enabled")
     .doc("When set to false disables all parquet input and output acceleration")
     .booleanConf
@@ -2358,6 +2386,18 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
         .startupOnly()
         .integerConf
         .createWithDefault(20)
+
+  val SHUFFLE_FETCH_PRIORITY_SCHEDULING_ENABLED = {
+    conf("spark.rapids.shuffle.fetch.priority.enabled")
+        .doc("Enable priority-based scheduling for shuffle fetch requests. When enabled, " +
+            "tasks with higher priority (based on first GCS access time) will have their " +
+            "shuffle fetch requests processed first. This helps reduce resource contention " +
+            "and improve overall task completion time.")
+        .startupOnly()
+        .internal()
+        .booleanConf
+        .createWithDefault(false)
+  }
 
   val SHUFFLE_KUDO_SERIALIZER_ENABLED = conf("spark.rapids.shuffle.kudo.serializer.enabled")
     .doc("Enable or disable the Kudo serializer for the shuffle.")
@@ -3531,6 +3571,10 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val multiThreadReadStageLevelPool: Boolean =
     get(MULTITHREAD_READ_MEMORY_LIMIT_TEST_PER_STAGE_POOL)
 
+  lazy val multiThreadReadSchedulingStrategy: String = get(MULTITHREAD_READ_SCHEDULING_STRATEGY)
+
+  lazy val multiThreadReadFuzzyTopPercentile: Int = get(MULTITHREAD_READ_FUZZY_TOP_PERCENTILE)
+
   lazy val isParquetEnabled: Boolean = get(ENABLE_PARQUET)
 
   lazy val isParquetInt96WriteEnabled: Boolean = get(ENABLE_PARQUET_INT96_WRITE)
@@ -3724,6 +3768,9 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val shuffleMultiThreadedWriterThreads: Int = get(SHUFFLE_MULTITHREADED_WRITER_THREADS)
 
   lazy val shuffleMultiThreadedReaderThreads: Int = get(SHUFFLE_MULTITHREADED_READER_THREADS)
+
+  lazy val shuffleFetchPrioritySchedulingEnabled: Boolean =
+    get(SHUFFLE_FETCH_PRIORITY_SCHEDULING_ENABLED)
 
   lazy val shuffleParitioningMaxCpuBatchSize: Long = get(SHUFFLE_PARTITIONING_MAX_CPU_BATCH_SIZE)
 

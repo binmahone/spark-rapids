@@ -62,6 +62,7 @@ import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
 import scala.util.{Failure, Success}
 
+import com.nvidia.spark.rapids.io.async.ShuffleFetchPriorityScheduler
 import org.roaringbitmap.RoaringBitmap
 
 import org.apache.spark.{MapOutputTracker, SparkEnv, TaskContext}
@@ -288,6 +289,11 @@ final class RapidsShuffleBlockFetcherIterator(
   }
 
   private[this] def sendRequest(req: FetchRequest): Unit = {
+    // Acquire global bytes quota for priority-based shuffle fetch scheduling
+    val taskAttemptId = context.taskAttemptId()
+    val requestSize = req.size
+    ShuffleFetchPriorityScheduler.acquireBytes(taskAttemptId, requestSize)
+
     logDebug("Sending request for %d blocks (%s) from %s".format(
       req.blocks.size, Utils.bytesToString(req.size), req.address.hostPort))
     bytesInFlight += req.size
@@ -301,6 +307,15 @@ final class RapidsShuffleBlockFetcherIterator(
     val deferredBlocks = new ArrayBuffer[String]()
     val blockIds = req.blocks.map(_.blockId.toString)
     val address = req.address
+    // Track whether global bytes have been released to avoid double release
+    var bytesReleased = false
+
+    @inline def releaseBytesIfDone(): Unit = {
+      if (!bytesReleased && remainingBlocks.isEmpty) {
+        bytesReleased = true
+        ShuffleFetchPriorityScheduler.releaseBytes(requestSize)
+      }
+    }
 
     @inline def enqueueDeferredFetchRequestIfNecessary(): Unit = {
       if (remainingBlocks.isEmpty && deferredBlocks.nonEmpty) {
@@ -328,6 +343,7 @@ final class RapidsShuffleBlockFetcherIterator(
               address, infoMap(blockId)._1, buf, remainingBlocks.isEmpty))
             logDebug("remainingBlocks: " + remainingBlocks)
             enqueueDeferredFetchRequestIfNecessary()
+            releaseBytesIfDone()
           }
         }
         logTrace(s"Got remote block $blockId after ${Utils.getUsedTimeNs(startTimeNs)}")
@@ -370,6 +386,7 @@ final class RapidsShuffleBlockFetcherIterator(
                 remainingBlocks -= blockId
                 deferredBlocks += blockId
                 enqueueDeferredFetchRequestIfNecessary()
+                releaseBytesIfDone()
               }
 
             case _ =>
@@ -378,8 +395,14 @@ final class RapidsShuffleBlockFetcherIterator(
                 remainingBlocks -= blockId
                 results.put(FallbackOnPushMergedFailureResult(
                   block, address, infoMap(blockId)._1, remainingBlocks.isEmpty))
+                releaseBytesIfDone()
               } else {
                 results.put(FailureFetchResult(block, infoMap(blockId)._2, address, e))
+                // For non-retryable failures, release bytes immediately
+                if (!bytesReleased) {
+                  bytesReleased = true
+                  ShuffleFetchPriorityScheduler.releaseBytes(requestSize)
+                }
               }
           }
         }

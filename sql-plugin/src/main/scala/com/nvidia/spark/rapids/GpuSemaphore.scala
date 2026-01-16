@@ -25,7 +25,8 @@ import scala.collection.mutable.ArrayBuffer
 
 import ai.rapids.cudf.{NvtxColor, NvtxUniqueRange}
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
-import com.nvidia.spark.rapids.jni.{RmmSpark, TaskPriority}
+import com.nvidia.spark.rapids.io.async.TaskOverridePriority
+import com.nvidia.spark.rapids.jni.RmmSpark
 import com.nvidia.spark.rapids.metrics.GpuBubbleTimerManager
 
 import org.apache.spark.TaskContext
@@ -426,7 +427,7 @@ private final class SemaphoreTaskInfo(val stageId: Int, val taskAttemptId: Long,
           val used = semaphore.acquire(() => 
               GpuSemaphore.memToPermitsWithMax(memoryEstimator.estimate()),
             () => lastAcquired > 0,
-            TaskPriority.getTaskPriority(taskAttemptId), taskAttemptId)
+            TaskOverridePriority.getEffectivePriority(taskAttemptId), taskAttemptId)
           synchronized {
             permitsUsed = used
             // We now own the semaphore so we need to wake up all of the other tasks that are
@@ -471,7 +472,7 @@ private final class SemaphoreTaskInfo(val stageId: Int, val taskAttemptId: Long,
         // No other threads for this task are waiting, so we might be able to grab this directly
         val numPermits = GpuSemaphore.memToPermitsWithMax(memoryEstimator.estimate())
         val ret = semaphore.tryAcquire(numPermits,
-          TaskPriority.getTaskPriority(taskAttemptId),
+          TaskOverridePriority.getEffectivePriority(taskAttemptId),
           () => lastAcquired > 0,
           taskAttemptId)
         if (ret) {

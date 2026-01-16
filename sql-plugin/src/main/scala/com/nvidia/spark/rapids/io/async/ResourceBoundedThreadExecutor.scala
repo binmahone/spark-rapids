@@ -103,11 +103,49 @@ class RapidsFutureTask[T](val runner: AsyncRunner[T])
  * This enables priority-based scheduling in PriorityBlockingQueue where tasks with
  * higher priority are executed first.
  *
+ * Supports different scheduling strategies:
+ * - STRICT: Strictly follow priority order
+ * - FUZZY: Divide tasks into top/bottom tiers based on percentile
+ * - DISABLED: Use original priority comparison
+ *
+ * @param strategy the scheduling strategy to use
+ * @param fuzzyTopPercentile the percentile threshold for fuzzy scheduling (default 50)
  * @tparam T the result type of the RapidsFutureTask
  */
-class RapidsFutureTaskComparator[T] extends java.util.Comparator[RapidsFutureTask[T]] {
+class RapidsFutureTaskComparator[T](
+    strategy: CloudReaderSchedulingStrategy.Value =
+      CloudReaderSchedulingStrategy.DISABLED,
+    fuzzyTopPercentile: Int = 50)
+    extends java.util.Comparator[RapidsFutureTask[T]] with Logging {
+
   override def compare(o1: RapidsFutureTask[T], o2: RapidsFutureTask[T]): Int = {
-    o2.runner.priority.compareTo(o1.runner.priority)
+    strategy match {
+      case CloudReaderSchedulingStrategy.STRICT =>
+        // Strict mode: use effective priority directly
+        // Larger priority = higher priority, so o2 - o1 for descending order
+        o2.runner.priority.compareTo(o1.runner.priority)
+
+      case CloudReaderSchedulingStrategy.FUZZY =>
+        // Fuzzy mode: first compare tiers, then compare within tier
+        val task1Id = o1.runner.sparkTaskContext.map(_.taskAttemptId()).getOrElse(-1L)
+        val task2Id = o2.runner.sparkTaskContext.map(_.taskAttemptId()).getOrElse(-1L)
+
+        val isTop1 = TaskOverridePriority.isInTopPercentile(task1Id, fuzzyTopPercentile)
+        val isTop2 = TaskOverridePriority.isInTopPercentile(task2Id, fuzzyTopPercentile)
+
+        if (isTop1 && !isTop2) {
+          -1 // o1 is in top tier, o2 is not, o1 wins
+        } else if (!isTop1 && isTop2) {
+          1 // o2 is in top tier, o1 is not, o2 wins
+        } else {
+          // Both in same tier, use priority comparison
+          o2.runner.priority.compareTo(o1.runner.priority)
+        }
+
+      case CloudReaderSchedulingStrategy.DISABLED =>
+        // Disabled mode: fall back to original priority comparison
+        o2.runner.priority.compareTo(o1.runner.priority)
+    }
   }
 }
 
@@ -388,8 +426,12 @@ object ResourceBoundedThreadExecutor {
   def apply[T](name: String,
       pool: ResourcePool,
       maxThreadNumber: Int,
-      waitResourceTimeoutMs: Long): ResourceBoundedThreadExecutor = {
-    val taskQueue = new PriorityBlockingQueue(10000, new RapidsFutureTaskComparator[T])
+      waitResourceTimeoutMs: Long,
+      schedulingStrategy: CloudReaderSchedulingStrategy.Value =
+        CloudReaderSchedulingStrategy.DISABLED,
+      fuzzyTopPercentile: Int = 50): ResourceBoundedThreadExecutor = {
+    val comparator = new RapidsFutureTaskComparator[T](schedulingStrategy, fuzzyTopPercentile)
+    val taskQueue = new PriorityBlockingQueue(10000, comparator)
     val threadFactory: ThreadFactory = new ThreadFactoryBuilder()
         .setDaemon(true)
         .setNameFormat(name)
@@ -397,6 +439,97 @@ object ResourceBoundedThreadExecutor {
 
     new ResourceBoundedThreadExecutor(pool,
       waitResourceTimeoutMs,
+      corePoolSize = maxThreadNumber,
+      maximumPoolSize = maxThreadNumber,
+      workQueue = taskQueue.asInstanceOf[BlockingQueue[Runnable]],
+      threadFactory = threadFactory)
+  }
+}
+
+/**
+ * A ThreadPoolExecutor that supports priority-based scheduling for AsyncRunners without
+ * resource constraints. This is used when memoryLimit.enabled is false but we still want
+ * priority scheduling based on cloud access time.
+ *
+ * Unlike ResourceBoundedThreadExecutor, this executor does not enforce memory limits or
+ * resource acquisition - tasks are executed immediately when a thread is available, but
+ * the queue ordering respects priority.
+ */
+class PriorityThreadPoolExecutor(
+    corePoolSize: Int,
+    maximumPoolSize: Int,
+    workQueue: BlockingQueue[Runnable],
+    threadFactory: ThreadFactory,
+    keepAliveTime: Long = 100L) extends ThreadPoolExecutor(corePoolSize,
+  maximumPoolSize, keepAliveTime, TimeUnit.SECONDS, workQueue, threadFactory) with Logging {
+
+  logInfo(s"Creating PriorityThreadPoolExecutor with " +
+      s"corePoolSize: $corePoolSize, maximumPoolSize: $maximumPoolSize")
+
+  override def submit[T](fn: Callable[T]): Future[T] = {
+    fn match {
+      case runner: AsyncRunner[_] =>
+        super.submit(runner)
+      case f =>
+        // For non-AsyncRunner callables, wrap in a simple FutureTask
+        super.submit(f)
+    }
+  }
+
+  override def submit[T](r: Runnable, result: T): Future[T] = {
+    r match {
+      case ft: RapidsFutureTask[_] =>
+        super.submit(ft, null.asInstanceOf[T])
+      case _ =>
+        super.submit(r, result)
+    }
+  }
+
+  override def submit(r: Runnable): Future[_] = {
+    r match {
+      case runner: AsyncRunner[_] =>
+        super.submit(runner.asInstanceOf[Callable[_]])
+      case _ =>
+        super.submit(r)
+    }
+  }
+
+  override protected def newTaskFor[T](fn: Callable[T]): RunnableFuture[T] = {
+    fn match {
+      case task: AsyncRunner[_] =>
+        new RapidsFutureTask(task).asInstanceOf[RunnableFuture[T]]
+      case f =>
+        // Fallback for non-AsyncRunner callables
+        super.newTaskFor(f)
+    }
+  }
+
+  override protected def newTaskFor[T](r: Runnable, result: T): RunnableFuture[T] = {
+    r match {
+      case futTask: RapidsFutureTask[_] =>
+        futTask.asInstanceOf[RunnableFuture[T]]
+      case task: AsyncRunner[_] =>
+        new RapidsFutureTask(task).asInstanceOf[RunnableFuture[T]]
+      case f =>
+        super.newTaskFor(f, result)
+    }
+  }
+}
+
+object PriorityThreadPoolExecutor {
+  def apply[T](name: String,
+      maxThreadNumber: Int,
+      schedulingStrategy: CloudReaderSchedulingStrategy.Value =
+        CloudReaderSchedulingStrategy.DISABLED,
+      fuzzyTopPercentile: Int = 50): PriorityThreadPoolExecutor = {
+    val comparator = new RapidsFutureTaskComparator[T](schedulingStrategy, fuzzyTopPercentile)
+    val taskQueue = new PriorityBlockingQueue(10000, comparator)
+    val threadFactory: ThreadFactory = new ThreadFactoryBuilder()
+        .setDaemon(true)
+        .setNameFormat(name)
+        .build()
+
+    new PriorityThreadPoolExecutor(
       corePoolSize = maxThreadNumber,
       maximumPoolSize = maxThreadNumber,
       workQueue = taskQueue.asInstanceOf[BlockingQueue[Runnable]],

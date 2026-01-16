@@ -190,11 +190,19 @@ object MultiFileReaderThreadPool extends Logging {
           s"threads instead of ${RapidsConf.MULTITHREAD_READ_NUM_THREADS} = $maxThreads")
     }
     logDebug(s"Using $numThreads for the multithreaded reader thread pool")
+    logInfo(s"Scheduling strategy: ${conf.schedulingStrategy}, " +
+        s"fuzzy top percentile: ${conf.fuzzyTopPercentile}")
 
     // Create the thread pool according to the memory bounded configuration
     val threadPoolExecutor = conf match {
-      case _: DefaultThreadPoolConf =>
-        TrampolineUtil.newDaemonCachedThreadPool("multithreaded file reader worker", numThreads)
+      case defaultConf: DefaultThreadPoolConf =>
+        // Use PriorityThreadPoolExecutor to support priority-based scheduling
+        // even when memoryLimit is not enabled
+        PriorityThreadPoolExecutor[HostMemoryBuffersWithMetaDataBase](
+          name,
+          numThreads,
+          defaultConf.schedulingStrategy,
+          defaultConf.fuzzyTopPercentile)
       case boundedConf: MemoryBoundedPoolConf =>
         require(boundedConf.memoryCapacity > 0,
           "The memory capacity of ResourceBoundedThreadExecutor must be set before use")
@@ -203,7 +211,9 @@ object MultiFileReaderThreadPool extends Logging {
           name,
           pool,
           numThreads,
-          boundedConf.waitMemTimeoutMs)
+          boundedConf.waitMemTimeoutMs,
+          boundedConf.schedulingStrategy,
+          boundedConf.fuzzyTopPercentile)
     }
     threadPoolExecutor.allowCoreThreadTimeOut(true)
     threadPoolExecutor
@@ -406,17 +416,33 @@ trait ThreadPoolConf {
    * Whether to create pools for each Spark stage, only for testing for now
    */
   def stageLevelPool: Boolean
+
+  /**
+   * Scheduling strategy for override priority
+   */
+  def schedulingStrategy: CloudReaderSchedulingStrategy.Value
+
+  /**
+   * Top percentile for fuzzy scheduling strategy
+   */
+  def fuzzyTopPercentile: Int
 }
 
 case class DefaultThreadPoolConf(
     maxThreadNumber: Int,
-    stageLevelPool: Boolean) extends ThreadPoolConf
+    stageLevelPool: Boolean,
+    schedulingStrategy: CloudReaderSchedulingStrategy.Value =
+      CloudReaderSchedulingStrategy.DISABLED,
+    fuzzyTopPercentile: Int = 50) extends ThreadPoolConf
 
 case class MemoryBoundedPoolConf(
     maxThreadNumber: Int,
     stageLevelPool: Boolean,
     memoryCapacity: Long, // The maximum host memory being used in bytes, must be > 0
-    waitMemTimeoutMs: Long // The timeout for acquiring host memory in milliseconds
+    waitMemTimeoutMs: Long, // The timeout for acquiring host memory in milliseconds
+    schedulingStrategy: CloudReaderSchedulingStrategy.Value =
+      CloudReaderSchedulingStrategy.DISABLED,
+    fuzzyTopPercentile: Int = 50
 ) extends ThreadPoolConf
 
 class ThreadPoolConfBuilder(
@@ -424,7 +450,9 @@ class ThreadPoolConfBuilder(
     private val isMemoryBounded: Boolean,
     private val memoryCapacityFromDriver: Long,
     private val timeoutMs: Long,
-    private val stageLevelPool: Boolean
+    private val stageLevelPool: Boolean,
+    private val schedulingStrategy: String,
+    private val fuzzyTopPercentile: Int
 ) extends Logging with Serializable {
 
   // Finalize the ThreadPoolConf, which mainly determines the memory capacity of the
@@ -436,8 +464,9 @@ class ThreadPoolConfBuilder(
   // executor via `initializePinnedPoolAndOffHeapLimits`
   // 3. if still not set, use the default value `DEFAULT_MEMORY_CAPACITY`.
   def build(): ThreadPoolConf = {
+    val strategy = CloudReaderSchedulingStrategy.withName(schedulingStrategy)
     if (!isMemoryBounded) {
-      DefaultThreadPoolConf(maxThreadNumber, stageLevelPool)
+      DefaultThreadPoolConf(maxThreadNumber, stageLevelPool, strategy, fuzzyTopPercentile)
     } else {
       val memCap: Long = if (memoryCapacityFromDriver > 0) {
         memoryCapacityFromDriver
@@ -457,7 +486,9 @@ class ThreadPoolConfBuilder(
         maxThreadNumber = maxThreadNumber,
         stageLevelPool = stageLevelPool,
         memoryCapacity = memCap,
-        waitMemTimeoutMs = timeoutMs)
+        waitMemTimeoutMs = timeoutMs,
+        schedulingStrategy = strategy,
+        fuzzyTopPercentile = fuzzyTopPercentile)
     }
   }
 }
@@ -470,7 +501,9 @@ object ThreadPoolConfBuilder {
       conf.enableMultiThreadReadMemoryLimit,
       conf.multiThreadReadMemoryLimit,
       conf.multiThreadReadMemoryAcquireTimeout,
-      conf.multiThreadReadStageLevelPool)
+      conf.multiThreadReadStageLevelPool,
+      conf.multiThreadReadSchedulingStrategy,
+      conf.multiThreadReadFuzzyTopPercentile)
   }
 
   // Set an extremely large memory capacity by default, so that the thread pool can be used

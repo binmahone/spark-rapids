@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2026, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,12 +87,14 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
   // Total bytes read
   def bytesRead: Long
 
-  // Time spent on filtering
+  // Time spent on filtering (includes filter-phase allocations)
   private var _filterTime: Long = 0L
-  // Time spent on buffering
+  // Time spent on buffering (includes buffer-phase allocations)
   private var _bufferTime: Long = 0L
   // Time spent on waiting for (virtual) resource
   private var _scheduleTime: Long = 0L
+  // Time spent on allocating host memory buffer (subset of filter + buffer time)
+  private var _allocTime: Long = 0L
 
   // The partition values which are needed if combining host memory buffers
   // after read by the multithreaded reader but before sending to GPU.
@@ -105,26 +107,28 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
     _filterTime = filterTime
   }
 
+  def setAllocTime(time: Long): Unit = _allocTime = time
+
   def setScheduleTime(time: Long): Unit = _scheduleTime = time
 
   def getBufferTime: Long = _bufferTime
   def getFilterTime: Long = _filterTime
   def getScheduleTime: Long = _scheduleTime
+  def getAllocTime: Long = _allocTime
 
-  def getBufferTimePct: Double = {
-    val totalTime = _filterTime + _bufferTime + _scheduleTime
-    _bufferTime.toDouble / totalTime
-  }
+  // Total bg time = filter + buffer + schedule (these are mutually exclusive)
+  // allocTime is a subset of (filter + buffer), tracked separately
+  private def getTotalBgTime: Long = _filterTime + _bufferTime + _scheduleTime
 
-  def getFilterTimePct: Double = {
-    val totalTime = _filterTime + _bufferTime + _scheduleTime
-    _filterTime.toDouble / totalTime
-  }
+  def getBufferTimePct: Double = _bufferTime.toDouble / getTotalBgTime
 
-  def getScheduleTimePct: Double = {
-    val totalTime = _filterTime + _bufferTime + _scheduleTime
-    _scheduleTime.toDouble / totalTime
-  }
+  def getFilterTimePct: Double = _filterTime.toDouble / getTotalBgTime
+
+  def getScheduleTimePct: Double = _scheduleTime.toDouble / getTotalBgTime
+
+  // allocTime is a subset of (filter + buffer), this pct shows how much of the total
+  // bg time was spent on allocation
+  def getAllocTimePct: Double = _allocTime.toDouble / getTotalBgTime
 
   def releaseResource(): Unit = {
     while (_releaseCallback.nonEmpty)  {
@@ -704,7 +708,9 @@ abstract class MultiFileCloudPartitionReaderBase(
   private def readReadyFiles(
       initSize: Long,
       initNumRows: Long,
-      results: ArrayBuffer[HostMemoryBuffersWithMetaDataBase]): Unit = {
+      results: ArrayBuffer[HostMemoryBuffersWithMetaDataBase],
+      waitBgMetric: GpuMetric,
+      exclWaitMetric: GpuMetric): Unit = {
     var takeMore = true
     var currSize = initSize
     var currNumRows = initNumRows
@@ -721,6 +727,7 @@ abstract class MultiFileCloudPartitionReaderBase(
       if (hmbFuture == null) {
         if (combineConf.combineWaitTime > 0) {
           // no more are ready, wait to see if any finish within wait time
+          val waitStart = System.nanoTime()
           val taskResult = if (keepReadsInOrder) {
             tasks.poll().get(combineConf.combineWaitTime, TimeUnit.MILLISECONDS)
           } else {
@@ -732,11 +739,15 @@ abstract class MultiFileCloudPartitionReaderBase(
               fut.get()
             }
           }
+          waitBgMetric += (System.nanoTime() - waitStart)
+
           if (taskResult == null) {
             // no more ready after waiting
             takeMore = false
           } else {
+            val convertStart = System.nanoTime()
             val hmbAndMeta = convertAsyncResult(taskResult)
+            exclWaitMetric += (System.nanoTime() - convertStart)
             results.append(hmbAndMeta)
             currSize += hmbAndMeta.memBuffersAndSizes.map(_.bytes).sum
             filesToRead -= 1
@@ -746,7 +757,14 @@ abstract class MultiFileCloudPartitionReaderBase(
           takeMore = false
         }
       } else {
-        val hmbWithMeta = convertAsyncResult(hmbFuture.get())
+        // Future is ready, .get() should be instant but still count it
+        val waitStart = System.nanoTime()
+        val taskResult = hmbFuture.get()
+        waitBgMetric += (System.nanoTime() - waitStart)
+
+        val convertStart = System.nanoTime()
+        val hmbWithMeta = convertAsyncResult(taskResult)
+        exclWaitMetric += (System.nanoTime() - convertStart)
         results.append(hmbWithMeta)
         currSize += hmbWithMeta.memBuffersAndSizes.map(_.bytes).sum
         currNumRows += hmbWithMeta.memBuffersAndSizes.map(_.numRows).sum
@@ -756,19 +774,30 @@ abstract class MultiFileCloudPartitionReaderBase(
   }
 
   private def getNextBuffersAndMetaAndCombine(): HostMemoryBuffersWithMetaDataBase = {
+    val waitBgMetric = metrics.getOrElse(PCR_WAIT_BG_TIME, NoopMetric)
+    val exclWaitMetric = metrics.getOrElse(PCR_GET_BUFFER_EXCL_WAIT_TIME, NoopMetric)
+
     var sizeRead = 0L
     var numRowsRead = 0L
     val results = ArrayBuffer[HostMemoryBuffersWithMetaDataBase]()
-    readReadyFiles(0, 0, results)
+
+    readReadyFiles(0, 0, results, waitBgMetric, exclWaitMetric)
+
     if (results.isEmpty) {
       // none were ready yet so wait as long as need for first one
-      val hostBuffersWithMeta = if (keepReadsInOrder) {
-        convertAsyncResult(tasks.poll().get())
+      val waitStart = System.nanoTime()
+      val taskResult = if (keepReadsInOrder) {
+        tasks.poll().get()
       } else {
         val bufMetaFut = fcs.take()
         tasks.remove(bufMetaFut)
-        convertAsyncResult(bufMetaFut.get())
+        bufMetaFut.get()
       }
+      waitBgMetric += (System.nanoTime() - waitStart)
+
+      val convertStart = System.nanoTime()
+      val hostBuffersWithMeta = convertAsyncResult(taskResult)
+      exclWaitMetric += (System.nanoTime() - convertStart)
       sizeRead += hostBuffersWithMeta.memBuffersAndSizes.map(_.bytes).sum
       numRowsRead += hostBuffersWithMeta.memBuffersAndSizes.map(_.numRows).sum
 
@@ -776,12 +805,20 @@ abstract class MultiFileCloudPartitionReaderBase(
       results.append(hostBuffersWithMeta)
       // since we had to wait for one to be ready,
       // check if more are ready as well
-      readReadyFiles(sizeRead, numRowsRead, results)
+      readReadyFiles(sizeRead, numRowsRead, results, waitBgMetric, exclWaitMetric)
     }
-    combineHMBs(results.toArray)
+
+    val combineStart = System.nanoTime()
+    val ret = combineHMBs(results.toArray)
+    exclWaitMetric += (System.nanoTime() - combineStart)
+    ret
   }
 
   private def getNextBuffersAndMetaSingleFile(): HostMemoryBuffersWithMetaDataBase = {
+    val waitBgMetric = metrics.getOrElse(PCR_WAIT_BG_TIME, NoopMetric)
+    val exclWaitMetric = metrics.getOrElse(PCR_GET_BUFFER_EXCL_WAIT_TIME, NoopMetric)
+
+    val waitStart = System.nanoTime()
     val taskResult = if (keepReadsInOrder) {
       tasks.poll().get()
     } else {
@@ -789,8 +826,13 @@ abstract class MultiFileCloudPartitionReaderBase(
       tasks.remove(bufMetaFut)
       bufMetaFut.get()
     }
+    waitBgMetric += (System.nanoTime() - waitStart)
+
     filesToRead -= 1
-    convertAsyncResult(taskResult)
+    val convertStart = System.nanoTime()
+    val ret = convertAsyncResult(taskResult)
+    exclWaitMetric += (System.nanoTime() - convertStart)
+    ret
   }
 
   private def getNextBuffersAndMeta(): HostMemoryBuffersWithMetaDataBase = {
@@ -806,15 +848,19 @@ abstract class MultiFileCloudPartitionReaderBase(
    * then we handle the left over ones first.
    */
   private def handleLeftOverCombineFiles(): HostMemoryBuffersWithMetaDataBase = {
+    val waitBgMetric = metrics.getOrElse(PCR_WAIT_BG_TIME, NoopMetric)
+    val exclWaitMetric = metrics.getOrElse(PCR_GET_BUFFER_EXCL_WAIT_TIME, NoopMetric)
     val leftOvers = combineLeftOverFiles.get
     // unset leftOverFiles because it will get reset in combineHMBs again if needed
     combineLeftOverFiles = None
     val results = ArrayBuffer[HostMemoryBuffersWithMetaDataBase]()
     val curSize = leftOvers.map(_.memBuffersAndSizes.map(_.bytes).sum).sum
     val curNumRows = leftOvers.map(_.memBuffersAndSizes.map(_.numRows).sum).sum
-    readReadyFiles(curSize, curNumRows, results)
+    readReadyFiles(curSize, curNumRows, results, waitBgMetric, exclWaitMetric)
     val allReady = leftOvers ++ results
+    val combineStart = System.nanoTime()
     val fileBufsAndMeta = combineHMBs(allReady)
+    exclWaitMetric += (System.nanoTime() - combineStart)
 
     TrampolineUtil.incBytesRead(inputMetrics, fileBufsAndMeta.bytesRead)
     // this is combine mode so input file shouldn't be used at all but update to
@@ -828,11 +874,17 @@ abstract class MultiFileCloudPartitionReaderBase(
   }
 
   override def next(): Boolean = {
+    val batchIterNextMetric = metrics.getOrElse(PCR_BATCH_ITER_NEXT_TIME, NoopMetric)
     NvtxRegistry.FILE_FORMAT_READ_BATCH {
       // submit async tasks if it is not done
-      initAndStartReaders()
+      metrics.getOrElse(PCR_INIT_READERS_TIME, NoopMetric).ns {
+        initAndStartReaders()
+      }
 
-      if (batchIter.hasNext) {
+      val batchIterHasNextStart = System.nanoTime()
+      val hasNextResult = batchIter.hasNext
+      batchIterNextMetric += (System.nanoTime() - batchIterHasNextStart)
+      if (hasNextResult) {
         // leave early we have something more to be read
         return true
       }
@@ -858,6 +910,7 @@ abstract class MultiFileCloudPartitionReaderBase(
           val bufGpuIdleTime = metrics.getOrElse(BUFFER_TIME_BUBBLE, NoopMetric)
           val filterGpuIdleTime = metrics.getOrElse(FILTER_TIME_BUBBLE, NoopMetric)
           val scheduleGpuIdleTime = metrics.getOrElse(SCHEDULE_TIME_BUBBLE, NoopMetric)
+          val allocTimeMetric = metrics.getOrElse(PCR_BG_ALLOC_TIME, NoopMetric)
 
           val fileBufsAndMeta = {
             if (GpuMetric.isTimeMetric(bufTime) &&
@@ -876,12 +929,14 @@ abstract class MultiFileCloudPartitionReaderBase(
               val filterPct = ret.getFilterTimePct
               val bufferPct = ret.getBufferTimePct
               val schedulePct = ret.getScheduleTimePct
+              val allocPct = ret.getAllocTimePct
               filterTime += (wallClockInc.value * filterPct).toLong
               bufTime += (wallClockInc.value * bufferPct).toLong
               scheduleTime += (wallClockInc.value * schedulePct).toLong
               filterGpuIdleTime += (gpuIdleTimeInc.value * filterPct).toLong
               bufGpuIdleTime += (gpuIdleTimeInc.value * bufferPct).toLong
               scheduleGpuIdleTime += (gpuIdleTimeInc.value * schedulePct).toLong
+              allocTimeMetric += (wallClockInc.value * allocPct).toLong
               ret
             } else {
               // Collect wall clock time only
@@ -891,6 +946,7 @@ abstract class MultiFileCloudPartitionReaderBase(
               filterTime += (blockedTime * ret.getFilterTimePct).toLong
               bufTime += (blockedTime * ret.getBufferTimePct).toLong
               scheduleTime += (blockedTime * ret.getScheduleTimePct).toLong
+              allocTimeMetric += (blockedTime * ret.getAllocTimePct).toLong
               ret
             }
           }
@@ -920,7 +976,10 @@ abstract class MultiFileCloudPartitionReaderBase(
     // advertises `hasNext` as false when we return false here. No downstream tasks should
     // try to call next after `hasNext` returns false, and any task that produces some kind of
     // data when `hasNext` is false is responsible to get the semaphore themselves.
-    batchIter.hasNext
+    val finalHasNextStart = System.nanoTime()
+    val result = batchIter.hasNext
+    batchIterNextMetric += (System.nanoTime() - finalHasNextStart)
+    result
   }
 
   private def getNumRowsInHostBuffers(fileInfo: HostMemoryBuffersWithMetaDataBase): Long = {
@@ -1281,19 +1340,27 @@ abstract class MultiFileCoalescingPartitionReaderBase(
             CachedGpuBatchIterator(EmptyTableReader, colTypes)
           } else {
             startNewBufferRetry
+            val materializeMetric =
+              execMetrics.getOrElse(PCR_L2_MATERIALIZE_HOST_BUFFER_TIME, NoopMetric)
+            val tableToBatchMetric =
+              execMetrics.getOrElse(PCR_L2_TABLE_TO_BATCH_TIME, NoopMetric)
             RmmRapidsRetryIterator.withRetryNoSplit(dataBuffer) { _ =>
-              val dataBuf = dataBuffer.getDataHostBuffer()
+              val dataBuf = materializeMetric.ns {
+                dataBuffer.getDataHostBuffer()
+              }
               val tableReader = readBufferToTablesAndClose(dataBuf, dataBuf.getLength,
                 currentChunkMeta.clippedSchema, currentChunkMeta.readSchema,
                 currentChunkMeta.extraInfo)
-              CachedGpuBatchIterator(tableReader, colTypes)
+              CachedGpuBatchIterator(tableReader, colTypes, tableToBatchMetric)
             }
           }
         }
       }
+      val finalizeBatchMetric =
+        execMetrics.getOrElse(PCR_FINALIZE_BATCH_TIME, NoopMetric)
       new GpuColumnarBatchWithPartitionValuesIterator(batchIter, currentChunkMeta.allPartValues,
         currentChunkMeta.rowsPerPartition, partitionSchema,
-        maxGpuColumnSizeBytes).map { withParts =>
+        maxGpuColumnSizeBytes, finalizeBatchMetric).map { withParts =>
         withResource(withParts) { _ =>
           finalizeOutputBatch(withParts, currentChunkMeta.extraInfo)
         }

@@ -514,6 +514,67 @@ class PriorityThreadPoolExecutor(
         super.newTaskFor(f, result)
     }
   }
+
+  /**
+   * Transitions the task state from Init to Running before execution.
+   * Unlike ResourceBoundedThreadExecutor, this does not acquire resources -
+   * it simply enables the task to run with priority ordering.
+   */
+  override def beforeExecute(t: Thread, r: Runnable): Unit = {
+    r match {
+      case futTask: RapidsFutureTask[_] =>
+        futTask.runner.withStateLock { rr =>
+          // Check if the Spark task has been interrupted before execution
+          rr.sparkTaskContext.foreach {
+            case ctx if ctx.isInterrupted() => rr.setState(Cancelled)
+            case _ => // do nothing
+          }
+
+          rr.getState match {
+            case Cancelled =>
+              rr.setState(ScheduleFailed(new IllegalStateException("cancelled")))
+              logWarning(s"Runner being cancelled ahead of execution: $rr")
+
+            case _: Init =>
+              // For PriorityThreadPoolExecutor, we don't need resource management,
+              // just transition directly to Running state
+              rr.setState(Running)
+
+            case _ =>
+              rr.setState(ScheduleFailed(new IllegalStateException("Unexpected state")))
+              logError(s"Unexpected state before schedule: $rr")
+          }
+        }
+      case _ =>
+        // Not a RapidsFutureTask, do nothing
+    }
+    super.beforeExecute(t, r)
+  }
+
+  /**
+   * Handles post-execution cleanup including error logging.
+   */
+  override def afterExecute(r: Runnable, t: Throwable): Unit = {
+    r match {
+      case futTask: RapidsFutureTask[_] =>
+        futTask.runner.withStateLock { rr =>
+          // Log any uncaught exceptions
+          if (t != null) {
+            if (!rr.getState.isInstanceOf[ExecFailed]) {
+              rr.setState(ExecFailed(t))
+            }
+            // Also try to fail the Spark task which launched this runner.
+            rr.sparkTaskContext.foreach { ctx =>
+              TrampolineUtil.markTaskFailed(ctx, t)
+            }
+            logError(s"Uncaught exception from $futTask: ${t.getMessage}", t)
+          }
+        }
+      case _ =>
+        // Not a RapidsFutureTask, do nothing
+    }
+    super.afterExecute(r, t)
+  }
 }
 
 object PriorityThreadPoolExecutor {

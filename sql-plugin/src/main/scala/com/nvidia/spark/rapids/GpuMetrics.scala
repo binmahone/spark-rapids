@@ -131,6 +131,10 @@ object GpuMetric extends Logging {
   val FILECACHE_DATA_RANGE_MISSES_SIZE = "filecacheDataRangeMissesSize"
   val FILECACHE_FOOTER_READ_TIME = "filecacheFooterReadTime"
   val FILECACHE_DATA_RANGE_READ_TIME = "filecacheDataRangeReadTime"
+  // Remote read metrics (for A/B comparison: P2P ON vs OFF)
+  val FILECACHE_REMOTE_READ_TIME = "filecacheRemoteReadTime"
+  val FILECACHE_REMOTE_READ_BYTES = "filecacheRemoteReadBytes"
+  val FILECACHE_REMOTE_READ_COUNT = "filecacheRemoteReadCount"
   // P2P cache sharing metrics
   val FILECACHE_P2P_FOOTER_HITS = "filecacheP2pFooterHits"
   val FILECACHE_P2P_FOOTER_HITS_SIZE = "filecacheP2pFooterHitsSize"
@@ -139,6 +143,11 @@ object GpuMetric extends Logging {
   val FILECACHE_P2P_DATA_RANGE_HITS_SIZE = "filecacheP2pDataRangeHitsSize"
   val FILECACHE_P2P_DATA_RANGE_MISSES = "filecacheP2pDataRangeMisses"
   val FILECACHE_P2P_TRANSFER_TIME = "filecacheP2pTransferTime"
+  // P2P performance optimization metrics
+  val FILECACHE_P2P_CONN_CREATED = "filecacheP2pConnCreated"
+  val FILECACHE_P2P_CONN_REUSED = "filecacheP2pConnReused"
+  val FILECACHE_P2P_AVG_LATENCY_MS = "filecacheP2pAvgLatencyMs"
+  val FILECACHE_P2P_MAX_LATENCY_MS = "filecacheP2pMaxLatencyMs"
   val DELETION_VECTOR_SCATTER_TIME = "deletionVectorScatterTime"
   val DELETION_VECTOR_SIZE = "deletionVectorSize"
   val CPU_BRIDGE_PROCESSING_TIME = "cpuBridgeProcessingTime"
@@ -223,6 +232,9 @@ object GpuMetric extends Logging {
   val DESCRIPTION_FILECACHE_DATA_RANGE_MISSES_SIZE = "cached data misses size"
   val DESCRIPTION_FILECACHE_FOOTER_READ_TIME = "cached footer read time"
   val DESCRIPTION_FILECACHE_DATA_RANGE_READ_TIME = "cached data read time"
+  val DESCRIPTION_FILECACHE_REMOTE_READ_TIME = "remote storage read time (cache miss)"
+  val DESCRIPTION_FILECACHE_REMOTE_READ_BYTES = "remote storage read bytes"
+  val DESCRIPTION_FILECACHE_REMOTE_READ_COUNT = "remote storage read count"
   // P2P cache sharing metric descriptions
   val DESCRIPTION_FILECACHE_P2P_FOOTER_HITS = "P2P footer hits (cross-executor)"
   val DESCRIPTION_FILECACHE_P2P_FOOTER_HITS_SIZE = "P2P footer hits size"
@@ -231,6 +243,10 @@ object GpuMetric extends Logging {
   val DESCRIPTION_FILECACHE_P2P_DATA_RANGE_HITS_SIZE = "P2P data range hits size"
   val DESCRIPTION_FILECACHE_P2P_DATA_RANGE_MISSES = "P2P data range misses"
   val DESCRIPTION_FILECACHE_P2P_TRANSFER_TIME = "P2P data transfer time"
+  val DESCRIPTION_FILECACHE_P2P_CONN_CREATED = "P2P connections created"
+  val DESCRIPTION_FILECACHE_P2P_CONN_REUSED = "P2P connections reused from pool"
+  val DESCRIPTION_FILECACHE_P2P_AVG_LATENCY_MS = "P2P average request latency (ms)"
+  val DESCRIPTION_FILECACHE_P2P_MAX_LATENCY_MS = "P2P max request latency (ms)"
   val DESCRIPTION_DELETION_VECTOR_SCATTER_TIME = "deletion vector scatter time"
   val DESCRIPTION_DELETION_VECTOR_SIZE = "deletion vector size"
   val DESCRIPTION_CPU_BRIDGE_PROCESSING_TIME = "CPU bridge processing time"

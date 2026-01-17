@@ -37,7 +37,7 @@ import com.nvidia.spark.rapids.GpuMetric._
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
 import com.nvidia.spark.rapids.SchemaUtils._
-import com.nvidia.spark.rapids.filecache.FileCache
+import com.nvidia.spark.rapids.filecache.{CacheSource, FileCache}
 import com.nvidia.spark.rapids.io.async._
 import com.nvidia.spark.rapids.jni.{CastStrings, RmmSpark}
 import com.nvidia.spark.rapids.shims.{ColumnDefaultValuesShims, GpuOrcDataReader, NullOutputStreamShim, OrcCastingShims, OrcReadingShims, OrcShims, ShimFilePartitionReaderFactory}
@@ -1790,16 +1790,23 @@ private object GpuOrcFileFilterHandler {
       conf: Configuration,
       metrics: Map[String, GpuMetric]): OrcTail = {
     val filePathStr = filePath.toString
-    val cachedFooter = FileCache.get.getFooter(filePathStr, conf)
-    val bb = cachedFooter.map { hmb =>
+    val cachedFooter = FileCache.get.getFooterWithSource(filePathStr, conf)
+    val bb = cachedFooter.map { result =>
       // ORC can only deal with on-heap buffers
-      val bb = withResource(hmb) { _ =>
+      val (bb, bufferLength) = withResource(result.buffer) { hmb =>
         val bb = ByteBuffer.allocate(hmb.getLength.toInt)
         hmb.getBytes(bb.array(), 0, 0, hmb.getLength.toInt)
-        bb
+        (bb, hmb.getLength)
       }
-      metrics.getOrElse(GpuMetric.FILECACHE_FOOTER_HITS, NoopMetric) += 1
-      metrics.getOrElse(GpuMetric.FILECACHE_FOOTER_HITS_SIZE, NoopMetric) += hmb.getLength
+      // Update metrics based on cache source (local or P2P)
+      result.source match {
+        case CacheSource.Local =>
+          metrics.getOrElse(GpuMetric.FILECACHE_FOOTER_HITS, NoopMetric) += 1
+          metrics.getOrElse(GpuMetric.FILECACHE_FOOTER_HITS_SIZE, NoopMetric) += bufferLength
+        case CacheSource.P2P =>
+          metrics.getOrElse(GpuMetric.FILECACHE_P2P_FOOTER_HITS, NoopMetric) += 1
+          metrics.getOrElse(GpuMetric.FILECACHE_P2P_FOOTER_HITS_SIZE, NoopMetric) += bufferLength
+      }
       bb
     }.getOrElse {
       metrics.getOrElse(GpuMetric.FILECACHE_FOOTER_MISSES, NoopMetric) += 1

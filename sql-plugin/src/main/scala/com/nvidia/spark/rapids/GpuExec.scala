@@ -181,7 +181,13 @@ trait GpuExec extends SparkPlan with Logging {
         FILECACHE_FOOTER_READ_TIME -> createNanoTimingMetric(MODERATE_LEVEL,
           DESCRIPTION_FILECACHE_FOOTER_READ_TIME),
         FILECACHE_DATA_RANGE_READ_TIME -> createNanoTimingMetric(MODERATE_LEVEL,
-          DESCRIPTION_FILECACHE_DATA_RANGE_READ_TIME))
+          DESCRIPTION_FILECACHE_DATA_RANGE_READ_TIME),
+        FILECACHE_REMOTE_READ_TIME -> createNanoTimingMetric(MODERATE_LEVEL,
+          DESCRIPTION_FILECACHE_REMOTE_READ_TIME),
+        FILECACHE_REMOTE_READ_BYTES -> createSizeMetric(MODERATE_LEVEL,
+          DESCRIPTION_FILECACHE_REMOTE_READ_BYTES),
+        FILECACHE_REMOTE_READ_COUNT -> createMetric(MODERATE_LEVEL,
+          DESCRIPTION_FILECACHE_REMOTE_READ_COUNT))
       // Add P2P cache sharing metrics if enabled
       val p2pMetrics = if (FileCacheConf.FILECACHE_P2P_ENABLED.get(conf)) {
         Map(

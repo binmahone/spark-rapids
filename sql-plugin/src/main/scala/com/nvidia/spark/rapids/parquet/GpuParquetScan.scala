@@ -531,10 +531,22 @@ private case class GpuParquetFileFilterHandler(
       conf: Configuration,
       metrics: Map[String, GpuMetric]): HostMemoryBuffer = {
     val filePathString = filePath.toString
-    FileCache.get.getFooter(filePathString, conf).map { hmb =>
-      withResource(hmb) { _ =>
-        metrics.getOrElse(GpuMetric.FILECACHE_FOOTER_HITS, NoopMetric) += 1
-        metrics.getOrElse(GpuMetric.FILECACHE_FOOTER_HITS_SIZE, NoopMetric) += hmb.getLength
+    FileCache.get.getFooterWithSource(filePathString, conf).map { result =>
+      withResource(result.buffer) { hmb =>
+        // Update metrics based on cache source (local or P2P)
+        result.source match {
+          case CacheSource.Local =>
+            metrics.getOrElse(GpuMetric.FILECACHE_FOOTER_HITS, NoopMetric) += 1
+            metrics.getOrElse(GpuMetric.FILECACHE_FOOTER_HITS_SIZE, NoopMetric) +=
+              hmb.getLength
+          case CacheSource.P2P =>
+            metrics.getOrElse(GpuMetric.FILECACHE_P2P_FOOTER_HITS, NoopMetric) += 1
+            metrics.getOrElse(GpuMetric.FILECACHE_P2P_FOOTER_HITS_SIZE, NoopMetric) +=
+              hmb.getLength
+            // Record P2P transfer time
+            metrics.getOrElse(GpuMetric.FILECACHE_P2P_TRANSFER_TIME, NoopMetric) +=
+              result.transferTimeNs
+        }
         // buffer includes header and trailing length and magic, stripped here
         hmb.slice(MAGIC.length, hmb.getLength - Integer.BYTES - MAGIC.length)
       }
@@ -659,10 +671,22 @@ private case class GpuParquetFileFilterHandler(
     //noinspection ScalaDeprecation
     NvtxRegistry.PARQUET_READ_FOOTER {
       val filePathString = filePath.toString
-      FileCache.get.getFooter(filePathString, conf).map { hmb =>
-        withResource(hmb) { _ =>
-          metrics.getOrElse(GpuMetric.FILECACHE_FOOTER_HITS, NoopMetric) += 1
-          metrics.getOrElse(GpuMetric.FILECACHE_FOOTER_HITS_SIZE, NoopMetric) += hmb.getLength
+      FileCache.get.getFooterWithSource(filePathString, conf).map { result =>
+        withResource(result.buffer) { hmb =>
+          // Update metrics based on cache source (local or P2P)
+          result.source match {
+            case CacheSource.Local =>
+              metrics.getOrElse(GpuMetric.FILECACHE_FOOTER_HITS, NoopMetric) += 1
+              metrics.getOrElse(GpuMetric.FILECACHE_FOOTER_HITS_SIZE, NoopMetric) +=
+                hmb.getLength
+            case CacheSource.P2P =>
+              metrics.getOrElse(GpuMetric.FILECACHE_P2P_FOOTER_HITS, NoopMetric) += 1
+              metrics.getOrElse(GpuMetric.FILECACHE_P2P_FOOTER_HITS_SIZE, NoopMetric) +=
+                hmb.getLength
+              // Record P2P transfer time
+              metrics.getOrElse(GpuMetric.FILECACHE_P2P_TRANSFER_TIME, NoopMetric) +=
+                result.transferTimeNs
+          }
           ParquetFileReader.readFooter(new HMBInputFile(hmb),
             ParquetMetadataConverter.range(file.start, file.start + file.length))
         }
@@ -1623,7 +1647,8 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
             column.getStartingPos, columnSize, conf)
           if (cacheResult.isDefined) {
             val result = cacheResult.get
-            localItems += LocalCopy(result.channel, columnSize, outputOffset, result.source)
+            localItems += LocalCopy(result.channel, columnSize, outputOffset,
+              result.source, result.transferTimeNs)
           } else {
             remoteItems += CopyRange(column.getStartingPos, columnSize, outputOffset)
           }
@@ -1917,12 +1942,25 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
 
     val coalescedRanges = coalesceReads(remoteCopies)
 
-    val totalBytesCopied = if (fileIO.isInstanceOf[HadoopFileIO]) {
-      // Fix this after https://github.com/NVIDIA/spark-rapids/issues/13306 is resolved
-      PerfIO.readToHostMemory(
-        conf, out.buffer, filePath.toUri,
-        coalescedRanges.map(r => IntRangeWithOffset(r.offset, r.length, r.outputOffset))
-      ).getOrElse {
+    // Track remote read count
+    metrics.getOrElse(GpuMetric.FILECACHE_REMOTE_READ_COUNT, NoopMetric) += coalescedRanges.size
+
+    // Track remote read time and bytes
+    val totalBytesCopied = metrics.getOrElse(GpuMetric.FILECACHE_REMOTE_READ_TIME, NoopMetric).ns {
+      if (fileIO.isInstanceOf[HadoopFileIO]) {
+        // Fix this after https://github.com/NVIDIA/spark-rapids/issues/13306 is resolved
+        PerfIO.readToHostMemory(
+          conf, out.buffer, filePath.toUri,
+          coalescedRanges.map(r => IntRangeWithOffset(r.offset, r.length, r.outputOffset))
+        ).getOrElse {
+          withResource(fileIO.newInputFile(filePath).open()) { in =>
+            val copyBuffer: Array[Byte] = new Array[Byte](copyBufferSize)
+            coalescedRanges.foldLeft(0L) { (acc, blockCopy) =>
+              acc + copyDataRange(blockCopy, in, out, copyBuffer)
+            }
+          }
+        }
+      } else {
         withResource(fileIO.newInputFile(filePath).open()) { in =>
           val copyBuffer: Array[Byte] = new Array[Byte](copyBufferSize)
           coalescedRanges.foldLeft(0L) { (acc, blockCopy) =>
@@ -1930,14 +1968,10 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
           }
         }
       }
-    } else {
-      withResource(fileIO.newInputFile(filePath).open()) { in =>
-        val copyBuffer: Array[Byte] = new Array[Byte](copyBufferSize)
-        coalescedRanges.foldLeft(0L) { (acc, blockCopy) =>
-          acc + copyDataRange(blockCopy, in, out, copyBuffer)
-        }
-      }
     }
+
+    // Track remote read bytes
+    metrics.getOrElse(GpuMetric.FILECACHE_REMOTE_READ_BYTES, NoopMetric) += totalBytesCopied
 
     // try to cache the remote ranges that were copied
     remoteCopies.foreach { range =>
@@ -1997,6 +2031,8 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       case CacheSource.P2P =>
         metrics.getOrElse(GpuMetric.FILECACHE_P2P_DATA_RANGE_HITS, NoopMetric) += 1
         metrics.getOrElse(GpuMetric.FILECACHE_P2P_DATA_RANGE_HITS_SIZE, NoopMetric) += item.length
+        // Record P2P transfer time
+        metrics.getOrElse(GpuMetric.FILECACHE_P2P_TRANSFER_TIME, NoopMetric) += item.transferTimeNs
     }
     metrics.getOrElse(GpuMetric.FILECACHE_DATA_RANGE_READ_TIME, NoopMetric).ns {
       out.seek(item.outputOffset)
@@ -3331,7 +3367,8 @@ object ParquetPartitionReader {
       channel: SeekableByteChannel,
       length: Long,
       outputOffset: Long,
-      source: CacheSource = CacheSource.Local) extends CopyItem with Closeable {
+      source: CacheSource = CacheSource.Local,
+      transferTimeNs: Long = 0L) extends CopyItem with Closeable {
     override def close(): Unit = {
       channel.close()
     }

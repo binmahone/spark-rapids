@@ -37,7 +37,7 @@ import com.nvidia.spark.rapids.GpuMetric._
 import com.nvidia.spark.rapids.RapidsConf.ParquetFooterReaderType
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
-import com.nvidia.spark.rapids.filecache.FileCache
+import com.nvidia.spark.rapids.filecache.{CacheSource, FileCache}
 import com.nvidia.spark.rapids.fileio.hadoop.HadoopFileIO
 import com.nvidia.spark.rapids.io.async._
 import com.nvidia.spark.rapids.jni.{DateTimeRebase, ParquetFooter, RmmSpark}
@@ -1619,10 +1619,11 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
         block.getColumns.asScala.foreach { column =>
           val columnSize = column.getTotalSize
           val outputOffset = totalBytesToCopy + startPos
-          val channel = FileCache.get.getDataRangeChannel(filePathString,
+          val cacheResult = FileCache.get.getDataRangeChannelWithSource(filePathString,
             column.getStartingPos, columnSize, conf)
-          if (channel.isDefined) {
-            localItems += LocalCopy(channel.get, columnSize, outputOffset)
+          if (cacheResult.isDefined) {
+            val result = cacheResult.get
+            localItems += LocalCopy(result.channel, columnSize, outputOffset, result.source)
           } else {
             remoteItems += CopyRange(column.getStartingPos, columnSize, outputOffset)
           }
@@ -1988,8 +1989,15 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       item: LocalCopy,
       out: HostMemoryOutputStream,
       metrics: Map[String, GpuMetric]): Long = {
-    metrics.getOrElse(GpuMetric.FILECACHE_DATA_RANGE_HITS, NoopMetric) += 1
-    metrics.getOrElse(GpuMetric.FILECACHE_DATA_RANGE_HITS_SIZE, NoopMetric) += item.length
+    // Update metrics based on cache source (local or P2P)
+    item.source match {
+      case CacheSource.Local =>
+        metrics.getOrElse(GpuMetric.FILECACHE_DATA_RANGE_HITS, NoopMetric) += 1
+        metrics.getOrElse(GpuMetric.FILECACHE_DATA_RANGE_HITS_SIZE, NoopMetric) += item.length
+      case CacheSource.P2P =>
+        metrics.getOrElse(GpuMetric.FILECACHE_P2P_DATA_RANGE_HITS, NoopMetric) += 1
+        metrics.getOrElse(GpuMetric.FILECACHE_P2P_DATA_RANGE_HITS_SIZE, NoopMetric) += item.length
+    }
     metrics.getOrElse(GpuMetric.FILECACHE_DATA_RANGE_READ_TIME, NoopMetric).ns {
       out.seek(item.outputOffset)
       out.copyFromChannel(item.channel, item.length)
@@ -3322,7 +3330,8 @@ object ParquetPartitionReader {
   private[parquet] case class LocalCopy(
       channel: SeekableByteChannel,
       length: Long,
-      outputOffset: Long) extends CopyItem with Closeable {
+      outputOffset: Long,
+      source: CacheSource = CacheSource.Local) extends CopyItem with Closeable {
     override def close(): Unit = {
       channel.close()
     }

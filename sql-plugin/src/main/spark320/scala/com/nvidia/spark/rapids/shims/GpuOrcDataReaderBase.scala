@@ -56,7 +56,7 @@ import java.nio.channels.SeekableByteChannel
 import ai.rapids.cudf.HostMemoryBuffer
 import com.nvidia.spark.rapids.{GpuMetric, HostMemoryOutputStream, NoopMetric}
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
-import com.nvidia.spark.rapids.filecache.FileCache
+import com.nvidia.spark.rapids.filecache.{CacheSource, FileCache}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FSDataInputStream
 import org.apache.hadoop.hive.common.io.DiskRangeList
@@ -75,6 +75,8 @@ abstract class GpuOrcDataReaderBase(
   private val readTimeMetric = getMetric(GpuMetric.FILECACHE_DATA_RANGE_READ_TIME)
   private val missMetric = getMetric(GpuMetric.FILECACHE_DATA_RANGE_MISSES)
   private val missSizeMetric = getMetric(GpuMetric.FILECACHE_DATA_RANGE_MISSES_SIZE)
+  private val p2pHitMetric = getMetric(GpuMetric.FILECACHE_P2P_DATA_RANGE_HITS)
+  private val p2pHitSizeMetric = getMetric(GpuMetric.FILECACHE_P2P_DATA_RANGE_HITS_SIZE)
 
   // cache of the last stripe footer that was read and the corresponding stripe info for it
   private var lastStripeFooter: OrcProto.StripeFooter = null
@@ -135,11 +137,19 @@ abstract class GpuOrcDataReaderBase(
     val offset = stripe.getOffset + stripe.getIndexLength + stripe.getDataLength
     val tailLength = stripe.getFooterLength.toInt
     val tailBuf = ByteBuffer.allocate(tailLength)
-    val cacheChannel = FileCache.get.getDataRangeChannel(filePathString, offset, tailLength, conf)
-    if (cacheChannel.isDefined) {
-      withResource(cacheChannel.get) { channel =>
-        hitMetric += 1
-        hitSizeMetric += tailLength
+    val cacheResult = FileCache.get.getDataRangeChannelWithSource(
+      filePathString, offset, tailLength, conf)
+    if (cacheResult.isDefined) {
+      val result = cacheResult.get
+      withResource(result.channel) { channel =>
+        result.source match {
+          case CacheSource.Local =>
+            hitMetric += 1
+            hitSizeMetric += tailLength
+          case CacheSource.P2P =>
+            p2pHitMetric += 1
+            p2pHitSizeMetric += tailLength
+        }
         readTimeMetric.ns {
           while (tailBuf.hasRemaining) {
             if (channel.read(tailBuf) < 0) {
@@ -200,11 +210,19 @@ abstract class GpuOrcDataReaderBase(
     while (current != null) {
       val offset = current.getOffset + baseOffset
       val size = current.getLength
-      val cacheChannel = FileCache.get.getDataRangeChannel(filePathString, offset, size, conf)
-      if (cacheChannel.isDefined) {
-        withResource(cacheChannel.get) { channel =>
-          hitMetric += 1
-          hitSizeMetric += size
+      val cacheResult = FileCache.get.getDataRangeChannelWithSource(
+        filePathString, offset, size, conf)
+      if (cacheResult.isDefined) {
+        val result = cacheResult.get
+        withResource(result.channel) { channel =>
+          result.source match {
+            case CacheSource.Local =>
+              hitMetric += 1
+              hitSizeMetric += size
+            case CacheSource.P2P =>
+              p2pHitMetric += 1
+              p2pHitSizeMetric += size
+          }
           readTimeMetric.ns {
             current = loader.loadCachedBlock(current, channel)
           }
@@ -231,16 +249,18 @@ abstract class GpuOrcDataReaderBase(
     var currentEnd = first.getEnd
     missMetric += 1
     missSizeMetric += last.getLength
-    var cachedChannel: Option[SeekableByteChannel] = None
+    var cachedResult: Option[(SeekableByteChannel, CacheSource)] = None
     try {
-      while (cachedChannel.isEmpty &&
+      while (cachedResult.isEmpty &&
           last.next != null &&
           last.next.getOffset == currentEnd &&
           last.next.getEnd - first.getOffset <= Int.MaxValue) {
         val offset = baseOffset + last.next.getOffset
-        cachedChannel = FileCache.get.getDataRangeChannel(filePathString, offset,
+        val result = FileCache.get.getDataRangeChannelWithSource(filePathString, offset,
           last.next.getLength, conf)
-        if (cachedChannel.isEmpty) {
+        if (result.isDefined) {
+          cachedResult = Some((result.get.channel, result.get.source))
+        } else {
           last = last.next
           currentEnd = currentEnd.max(last.getEnd)
           missMetric += 1
@@ -251,9 +271,15 @@ abstract class GpuOrcDataReaderBase(
       val readSize = (currentEnd - first.getOffset).toInt
       var endRange = remoteRead(loader, baseOffset, first, last, readSize)
       // If the remote read ended because of a cached range, load the cached range.
-      cachedChannel.foreach { channel =>
-        hitMetric += 1
-        hitSizeMetric += last.getLength
+      cachedResult.foreach { case (channel, source) =>
+        source match {
+          case CacheSource.Local =>
+            hitMetric += 1
+            hitSizeMetric += last.next.getLength
+          case CacheSource.P2P =>
+            p2pHitMetric += 1
+            p2pHitSizeMetric += last.next.getLength
+        }
         readTimeMetric.ns {
           endRange = loader.loadCachedBlock(endRange, channel)
         }
@@ -261,7 +287,7 @@ abstract class GpuOrcDataReaderBase(
       }
       endRange
     } finally {
-      cachedChannel.foreach(_.close)
+      cachedResult.foreach(_._1.close)
     }
   }
 

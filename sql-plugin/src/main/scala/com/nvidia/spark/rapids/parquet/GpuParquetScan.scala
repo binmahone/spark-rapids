@@ -37,7 +37,7 @@ import com.nvidia.spark.rapids.GpuMetric._
 import com.nvidia.spark.rapids.RapidsConf.ParquetFooterReaderType
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
-import com.nvidia.spark.rapids.filecache.{CacheSource, FileCache}
+import com.nvidia.spark.rapids.filecache.{CacheEntryKey, CacheSource, DataRange, FileCache, FileCacheP2PFetchStrategy, LocalCacheSource, P2PSource, RemoteStorageSource}
 import com.nvidia.spark.rapids.fileio.hadoop.HadoopFileIO
 import com.nvidia.spark.rapids.io.async._
 import com.nvidia.spark.rapids.jni.{DateTimeRebase, ParquetFooter, RmmSpark}
@@ -1636,35 +1636,150 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       metrics: Map[String, GpuMetric]): Seq[BlockMetaData] = {
     val startPos = out.getPos
     val filePathString: String = filePath.toString
-    val remoteItems = new ArrayBuffer[CopyRange](blocks.length)
+
+    // Step 1: Collect all column chunks with their output offsets
     var totalBytesToCopy = 0L
-    withResource(new ArrayBuffer[LocalCopy](blocks.length)) { localItems =>
-      blocks.foreach { block =>
-        block.getColumns.asScala.foreach { column =>
-          val columnSize = column.getTotalSize
-          val outputOffset = totalBytesToCopy + startPos
-          val cacheResult = FileCache.get.getDataRangeChannelWithSource(filePathString,
-            column.getStartingPos, columnSize, conf)
-          if (cacheResult.isDefined) {
-            val result = cacheResult.get
-            localItems += LocalCopy(result.channel, columnSize, outputOffset,
-              result.source, result.transferTimeNs)
-          } else {
-            remoteItems += CopyRange(column.getStartingPos, columnSize, outputOffset)
-          }
-          totalBytesToCopy += columnSize
+    val columnInfos = blocks.flatMap { block =>
+      block.getColumns.asScala.map { column =>
+        val columnSize = column.getTotalSize
+        val outputOffset = totalBytesToCopy + startPos
+        totalBytesToCopy += columnSize
+        (column.getStartingPos, columnSize, outputOffset)
+      }
+    }
+
+    // Step 2: Use batch lookup and intelligent planning if P2P strategy is available
+    val fetchStrategy = FileCache.get.getP2PFetchStrategy
+    if (fetchStrategy.isDefined && columnInfos.nonEmpty) {
+      copyBlocksDataWithStrategy(filePath, filePathString, out, columnInfos,
+        fetchStrategy.get, metrics)
+    } else {
+      // Fallback to original per-column lookup
+      copyBlocksDataLegacy(filePath, filePathString, out, columnInfos, metrics)
+    }
+
+    // fixup output pos after blocks were copied possibly out of order
+    out.seek(startPos + totalBytesToCopy)
+    computeBlockMetaData(blocks, realStartOffset)
+  }
+
+  /**
+   * Copy blocks data using intelligent fetch strategy with batch lookup and coalescing.
+   * This optimizes for fewer requests by preferring sources that allow coalescing.
+   */
+  private def copyBlocksDataWithStrategy(
+      filePath: Path,
+      filePathString: String,
+      out: HostMemoryOutputStream,
+      columnInfos: Seq[(Long, Long, Long)], // (offset, length, outputOffset)
+      strategy: FileCacheP2PFetchStrategy,
+      metrics: Map[String, GpuMetric]): Unit = {
+
+    // Step 1: Batch lookup availability
+    val ranges = columnInfos.map { case (offset, length, _) => (offset, length) }
+    val availabilities = FileCache.get.batchLookupAvailability(filePathString, ranges, conf)
+
+    // Step 2: Convert to DataRanges and build lookup maps
+    val dataRanges = columnInfos.map { case (offset, length, _) =>
+      DataRange(filePathString, offset, length)
+    }
+
+    // Build local index function
+    val availMap = availabilities.map(a => (a.offset, a.length) -> a).toMap
+    val localIndex: CacheEntryKey => Boolean = key => {
+      availMap.get((key.offset, key.length)).exists(_.localAvailable)
+    }
+
+    // Build peer locations map
+    val peerLocations = availabilities.flatMap { a =>
+      if (a.p2pPeers.nonEmpty) {
+        Some(CacheEntryKey(filePathString, a.offset, a.length) -> a.p2pPeers)
+      } else {
+        None
+      }
+    }.toMap
+
+    // Step 3: Use strategy to plan optimal fetch
+    val fetchGroups = strategy.analyzeFetchStrategy(dataRanges, localIndex, peerLocations)
+
+    // Log the fetch plan
+    val localGroups = fetchGroups.filter(_.source == LocalCacheSource)
+    val p2pGroups = fetchGroups.filter(_.source.isInstanceOf[P2PSource])
+    val remoteGroups = fetchGroups.filter(_.source == RemoteStorageSource)
+    logInfo(s"Batch fetch plan for $filePathString: " +
+        s"${localGroups.size} local groups (${localGroups.map(_.totalBytes).sum} bytes), " +
+        s"${p2pGroups.size} P2P groups (${p2pGroups.map(_.totalBytes).sum} bytes), " +
+        s"${remoteGroups.size} remote groups (${remoteGroups.map(_.totalBytes).sum} bytes)")
+
+    // Step 4: Execute batch fetch for local and P2P
+    val batchResult = FileCache.get.executeBatchFetch(filePathString, fetchGroups, conf)
+
+    // Step 5: Build output offset map
+    val offsetMap = columnInfos.map { case (offset, length, outputOffset) =>
+      (offset, length) -> outputOffset
+    }.toMap
+
+    // Step 6: Copy fetched data to output buffer
+    withResource(new ArrayBuffer[LocalCopy](columnInfos.size)) { localItems =>
+      batchResult.results.foreach { case ((offset, length), result) =>
+        offsetMap.get((offset, length)).foreach { outputOffset =>
+          localItems += LocalCopy(result.channel, length, outputOffset,
+            result.source, result.transferTimeNs)
         }
       }
+
       localItems.foreach { localItem =>
         copyLocal(localItem, out, metrics)
         localItem.close()
       }
     }
-    copyRemoteBlocksData(remoteItems.toSeq, filePath,
-      filePathString, out, metrics)
-    // fixup output pos after blocks were copied possibly out of order
-    out.seek(startPos + totalBytesToCopy)
-    computeBlockMetaData(blocks, realStartOffset)
+
+    // Step 7: Handle remote storage fetches (ranges not in local or P2P)
+    val fetchedKeys = batchResult.results.keySet
+    val remoteRanges = columnInfos.filterNot { case (offset, length, _) =>
+      fetchedKeys.contains((offset, length))
+    }.map { case (offset, length, outputOffset) =>
+      CopyRange(offset, length, outputOffset)
+    }
+
+    if (remoteRanges.nonEmpty) {
+      copyRemoteBlocksData(remoteRanges, filePath, filePathString, out, metrics)
+    }
+  }
+
+  /**
+   * Legacy per-column lookup (fallback when P2P strategy is not available).
+   */
+  private def copyBlocksDataLegacy(
+      filePath: Path,
+      filePathString: String,
+      out: HostMemoryOutputStream,
+      columnInfos: Seq[(Long, Long, Long)], // (offset, length, outputOffset)
+      metrics: Map[String, GpuMetric]): Unit = {
+    val remoteItems = new ArrayBuffer[CopyRange](columnInfos.size)
+
+    withResource(new ArrayBuffer[LocalCopy](columnInfos.size)) { localItems =>
+      columnInfos.foreach { case (offset, length, outputOffset) =>
+        val cacheResult = FileCache.get.getDataRangeChannelWithSource(filePathString,
+          offset, length, conf)
+        if (cacheResult.isDefined) {
+          val result = cacheResult.get
+          localItems += LocalCopy(result.channel, length, outputOffset,
+            result.source, result.transferTimeNs)
+        } else {
+          remoteItems += CopyRange(offset, length, outputOffset)
+        }
+      }
+
+      localItems.foreach { localItem =>
+        copyLocal(localItem, out, metrics)
+        localItem.close()
+      }
+    }
+
+    if (remoteItems.nonEmpty) {
+      copyRemoteBlocksData(remoteItems.toSeq, filePath, filePathString, out, metrics)
+    }
   }
 
   private class BufferedFileInput(

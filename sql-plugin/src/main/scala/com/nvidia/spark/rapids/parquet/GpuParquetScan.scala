@@ -1666,6 +1666,7 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
   /**
    * Copy blocks data using intelligent fetch strategy with batch lookup and coalescing.
    * This optimizes for fewer requests by preferring sources that allow coalescing.
+   * P2P and GCS fetches are executed in parallel for better throughput.
    */
   private def copyBlocksDataWithStrategy(
       filePath: Path,
@@ -1711,15 +1712,83 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
         s"${p2pGroups.size} P2P groups (${p2pGroups.map(_.totalBytes).sum} bytes), " +
         s"${remoteGroups.size} remote groups (${remoteGroups.map(_.totalBytes).sum} bytes)")
 
-    // Step 4: Execute batch fetch for local and P2P
-    val batchResult = FileCache.get.executeBatchFetch(filePathString, fetchGroups, conf)
-
-    // Step 5: Build output offset map
+    // Step 4: Build output offset map
     val offsetMap = columnInfos.map { case (offset, length, outputOffset) =>
       (offset, length) -> outputOffset
     }.toMap
 
-    // Step 6: Copy fetched data to output buffer
+    // Step 5: Identify ranges planned for remote (GCS) fetch
+    val plannedRemoteKeys = fetchGroups
+      .filter(_.source == RemoteSource)
+      .flatMap(_.ranges)
+      .map(r => (r.offset, r.length))
+      .toSet
+
+    val plannedRemoteRanges = columnInfos.filter { case (offset, length, _) =>
+      plannedRemoteKeys.contains((offset, length))
+    }.map { case (offset, length, outputOffset) =>
+      CopyRange(offset, length, outputOffset)
+    }
+
+    val plannedP2PKeys = fetchGroups
+      .filter(g => g.source == LocalCacheSource || g.source.isInstanceOf[P2PSource])
+      .flatMap(_.ranges)
+      .map(r => (r.offset, r.length))
+      .toSet
+
+    // Step 6: OPTIMISTIC PARALLEL - start GCS and P2P concurrently
+    // Start GCS fetch asynchronously for planned remote ranges
+    val gcsFuture: Option[java.util.concurrent.CompletableFuture[Long]] =
+      if (plannedRemoteRanges.nonEmpty) {
+        Some(java.util.concurrent.CompletableFuture.supplyAsync(
+          new java.util.function.Supplier[Long] {
+            override def get(): Long = {
+              copyRemoteBlocksData(plannedRemoteRanges, filePath, filePathString, out, metrics)
+            }
+          }))
+      } else {
+        None
+      }
+
+    // Execute P2P/local fetch in current thread concurrently with GCS
+    val localAndP2PGroups = fetchGroups.filter(g =>
+      g.source == LocalCacheSource || g.source.isInstanceOf[P2PSource])
+    val batchResult = if (localAndP2PGroups.nonEmpty) {
+      FileCache.get.executeBatchFetch(filePathString, localAndP2PGroups, conf)
+    } else {
+      new filecache.BatchFetchResult(Map.empty)
+    }
+
+    // Step 7: Wait for GCS to complete before writing P2P data
+    gcsFuture.foreach { future =>
+      try {
+        future.join()
+      } catch {
+        case e: java.util.concurrent.CompletionException =>
+          logWarning(s"Error in parallel GCS fetch for $filePathString", e.getCause)
+          throw e.getCause
+        case e: Exception =>
+          logWarning(s"Error in parallel GCS fetch for $filePathString", e)
+          throw e
+      }
+    }
+
+    // Step 8: Check for P2P failures and fallback to GCS if needed
+    val successfulP2PKeys = batchResult.results.keySet
+    val failedP2PRanges = columnInfos.filter { case (offset, length, _) =>
+      plannedP2PKeys.contains((offset, length)) && !successfulP2PKeys.contains((offset, length))
+    }.map { case (offset, length, outputOffset) =>
+      CopyRange(offset, length, outputOffset)
+    }
+
+    if (failedP2PRanges.nonEmpty) {
+      logWarning(s"P2P fetch partial failure for $filePathString: " +
+        s"${failedP2PRanges.size} ranges falling back to GCS")
+      // Synchronous fallback GCS fetch for failed P2P ranges
+      copyRemoteBlocksData(failedP2PRanges, filePath, filePathString, out, metrics)
+    }
+
+    // Step 9: Copy P2P/local fetched data to output buffer
     withResource(new ArrayBuffer[LocalCopy](columnInfos.size)) { localItems =>
       batchResult.results.foreach { case ((offset, length), result) =>
         offsetMap.get((offset, length)).foreach { outputOffset =>
@@ -1732,18 +1801,6 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
         copyLocal(localItem, out, metrics)
         localItem.close()
       }
-    }
-
-    // Step 7: Handle remote storage fetches (ranges not in local or P2P)
-    val fetchedKeys = batchResult.results.keySet
-    val remoteRanges = columnInfos.filterNot { case (offset, length, _) =>
-      fetchedKeys.contains((offset, length))
-    }.map { case (offset, length, outputOffset) =>
-      CopyRange(offset, length, outputOffset)
-    }
-
-    if (remoteRanges.nonEmpty) {
-      copyRemoteBlocksData(remoteRanges, filePath, filePathString, out, metrics)
     }
   }
 

@@ -1737,15 +1737,21 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       .toSet
 
     // Step 6: OPTIMISTIC PARALLEL - start GCS and P2P concurrently
-    // Start GCS fetch asynchronously for planned remote ranges
-    val gcsFuture: Option[java.util.concurrent.CompletableFuture[Long]] =
+    // Start GCS fetch asynchronously using FileCacheManager's shared thread pool
+    val gcsFuture: Option[java.util.concurrent.Future[Long]] =
       if (plannedRemoteRanges.nonEmpty) {
-        Some(java.util.concurrent.CompletableFuture.supplyAsync(
-          new java.util.function.Supplier[Long] {
-            override def get(): Long = {
-              copyRemoteBlocksData(plannedRemoteRanges, filePath, filePathString, out, metrics)
-            }
-          }))
+        FileCache.get.getParallelIOExecutor match {
+          case Some(executor) =>
+            Some(executor.submit(new java.util.concurrent.Callable[Long] {
+              override def call(): Long = {
+                copyRemoteBlocksData(plannedRemoteRanges, filePath, filePathString, out, metrics)
+              }
+            }))
+          case None =>
+            // Fallback: execute synchronously if no executor available
+            copyRemoteBlocksData(plannedRemoteRanges, filePath, filePathString, out, metrics)
+            None
+        }
       } else {
         None
       }
@@ -1762,9 +1768,9 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
     // Step 7: Wait for GCS to complete before writing P2P data
     gcsFuture.foreach { future =>
       try {
-        future.join()
+        future.get()
       } catch {
-        case e: java.util.concurrent.CompletionException =>
+        case e: java.util.concurrent.ExecutionException =>
           logWarning(s"Error in parallel GCS fetch for $filePathString", e.getCause)
           throw e.getCause
         case e: Exception =>

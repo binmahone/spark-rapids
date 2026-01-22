@@ -34,7 +34,7 @@ import com.nvidia.spark.rapids.RapidsPluginUtils.buildInfoEvent
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
 import com.nvidia.spark.rapids.filecache.{FileCache, FileCacheLocalityManager, FileCacheLocalityMsg}
 import com.nvidia.spark.rapids.io.async.TrafficController
-import com.nvidia.spark.rapids.jni.{GpuTimeZoneDB, RmmSpark, TaskPriority}
+import com.nvidia.spark.rapids.jni.{GpuTimeZoneDB, Hash, RmmSpark, TaskPriority}
 import com.nvidia.spark.rapids.python.PythonWorkerSemaphore
 import org.apache.commons.lang3.exception.ExceptionUtils
 
@@ -494,6 +494,24 @@ class RapidsDriverPlugin extends DriverPlugin with Logging {
     }
 
     FileCacheLocalityManager.init(sc)
+
+    // Preload native libraries to avoid ~7s delay during first query plan conversion.
+    // When expressions like xxhash64 or get_json_object are used, accessing static fields
+    // like Hash.MAX_STACK_DEPTH triggers class initialization which loads native libraries.
+    // By doing this at driver startup, we ensure consistent query latency.
+    if (conf.driverPreloadNativeLibs) {
+      try {
+        val startTime = System.currentTimeMillis()
+        // Access a static field to trigger Hash class initialization,
+        // which in turn loads native libraries via NativeDepsLoader.loadNativeDeps()
+        val _ = Hash.MAX_STACK_DEPTH
+        val elapsed = System.currentTimeMillis() - startTime
+        logInfo(s"Native libraries preloaded in ${elapsed}ms")
+      } catch {
+        case e: Throwable =>
+          logWarning(s"Failed to preload native libraries: ${e.getMessage}", e)
+      }
+    }
 
     logDebug("Loading extra driver plugins: " +
       s"${extraDriverPlugins.map(_.getClass.getName).mkString(",")}")

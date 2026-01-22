@@ -2726,6 +2726,16 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
     .booleanConf
     .createWithDefault(false)
 
+  val DRIVER_PRELOAD_NATIVE_LIBS = conf("spark.rapids.driver.preloadNativeLibs")
+    .doc("When true, preload native libraries (libcudf.so, etc.) during Driver plugin " +
+      "initialization. This avoids a ~7 second delay during the first query plan conversion " +
+      "when expressions like xxhash64 or get_json_object trigger lazy class loading. " +
+      "The native libraries (~1.2GB) are extracted from JAR to a temp directory, and doing " +
+      "this at startup rather than during first query improves query latency predictability.")
+    .internal()
+    .booleanConf
+    .createWithDefault(true)
+
   val TEST_GET_JSON_OBJECT_SAVE_PATH = conf("spark.rapids.sql.expression.GetJsonObject.debugPath")
     .doc("Only for tests: specify a directory to save CSV debug output for get_json_object " +
       "if the output differs from the CPU version. Multiple files may be saved")
@@ -3901,6 +3911,8 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val splitUntilSizeOverride: Option[Long] = get(SPLIT_UNTIL_SIZE_OVERRIDE)
 
   lazy val skipGpuArchCheck: Boolean = get(SKIP_GPU_ARCH_CHECK)
+
+  lazy val driverPreloadNativeLibs: Boolean = get(DRIVER_PRELOAD_NATIVE_LIBS)
 
   lazy val testGetJsonObjectSavePath: Option[String] = get(TEST_GET_JSON_OBJECT_SAVE_PATH)
 

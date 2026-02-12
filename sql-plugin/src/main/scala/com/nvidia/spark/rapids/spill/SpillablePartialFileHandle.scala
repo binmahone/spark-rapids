@@ -224,8 +224,12 @@ class SpillablePartialFileHandle private (
             SpillFramework.stores.hostStore.trackNoSpill(this)
 
             expansionCount += 1
-            logDebug(s"Expanded buffer from $oldCapacity to $newCapacity bytes " +
-              s"(required $requiredCapacity bytes)")
+            logInfo(s"Expanded buffer from $oldCapacity to " +
+              s"$newCapacity bytes " +
+              s"(required $requiredCapacity, " +
+              s"hostAllocated=" +
+              s"${HostAlloc.getCurrentHostAllocated}, " +
+              s"hostLimit=${HostAlloc.getHostLimit})")
           }
           true
         } catch {
@@ -639,6 +643,12 @@ class SpillablePartialFileHandle private (
 
       spilledToDisk = true
       spillCount += 1
+
+      // Capture memory stats before releasing the buffer
+      val preSpillAllocated = HostAlloc.getCurrentHostAllocated
+      val preSpillLimit = HostAlloc.getHostLimit
+      val spilledCapacity = currentBufferCapacity
+
       SpillFramework.removeFromHostStore(this)
       bufferToSpill.close()
       host = None
@@ -646,8 +656,15 @@ class SpillablePartialFileHandle private (
       // Record spill bytes metric
       TrampolineUtil.incTaskMetricsDiskBytesSpilled(totalBytesWritten)
 
-      logDebug(s"Spilled to ${file.getAbsolutePath} " +
-        s"($totalBytesWritten bytes)")
+      val usagePct = if (preSpillLimit > 0) {
+        f"${preSpillAllocated.toDouble / preSpillLimit * 100}%.1f%%"
+      } else "N/A"
+      logInfo(s"Spilled to ${file.getAbsolutePath} " +
+        s"($totalBytesWritten bytes, " +
+        s"bufferCapacity=$spilledCapacity, " +
+        s"hostAllocatedBeforeRelease=$preSpillAllocated, " +
+        s"hostLimit=$preSpillLimit, " +
+        s"usage=$usagePct)")
 
       totalBytesWritten
     }

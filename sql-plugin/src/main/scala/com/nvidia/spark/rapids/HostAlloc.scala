@@ -322,8 +322,17 @@ object HostAlloc extends Logging {
     }
   }
 
+  def getCurrentHostAllocated: Long = {
+    getSingleton.getCurrentAllocated
+  }
+
+  def getHostLimit: Long = {
+    getSingleton.getTotalLimit
+  }
+
   /**
-   * Check if host memory usage is below the given threshold (0.0 to 1.0).
+   * Check if host memory usage is below the given threshold
+   * (0.0 to 1.0).
    */
   def isUsageBelowThreshold(threshold: Double): Boolean = {
     getUsageRatio() < threshold

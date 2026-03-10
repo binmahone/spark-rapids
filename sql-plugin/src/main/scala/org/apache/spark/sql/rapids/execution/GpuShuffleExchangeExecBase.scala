@@ -303,6 +303,9 @@ object GpuShuffleExchangeExecBase {
   val METRIC_DESC_SHUFFLE_READ_TIME = "RAPIDS shuffle shuffle read time"
   val METRIC_SHUFFLE_SER_COPY_BUFFER_TIME = "rapidsShuffleSerializationCopyBufferTime"
   val METRIC_DESC_SHUFFLE_SER_COPY_BUFFER_TIME = "RAPIDS shuffle serialization copy buffer time"
+  val METRIC_SHUFFLE_SER_STREAM_WRITE_TIME = "rapidsShuffleSerStreamWriteTime"
+  val METRIC_DESC_SHUFFLE_SER_STREAM_WRITE_TIME =
+    "RAPIDS shuffle serialization output stream write time"
   val METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM = "rapidsShuffleStalledByInputStream"
   val METRIC_DESC_SHUFFLE_STALLED_BY_INPUT_STREAM =
     "RAPIDS shuffle time stalled by input stream operations"
@@ -353,6 +356,9 @@ object GpuShuffleExchangeExecBase {
         gpu.createNanoTimingMetric(ESSENTIAL_LEVEL, METRIC_DESC_SHUFFLE_READ_TIME),
     METRIC_SHUFFLE_SER_COPY_BUFFER_TIME ->
         gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_SER_COPY_BUFFER_TIME),
+    METRIC_SHUFFLE_SER_STREAM_WRITE_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_SHUFFLE_SER_STREAM_WRITE_TIME),
     METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM ->
         gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_STALLED_BY_INPUT_STREAM),
     METRIC_THREADED_WRITER_LIMITER_WAIT_TIME ->

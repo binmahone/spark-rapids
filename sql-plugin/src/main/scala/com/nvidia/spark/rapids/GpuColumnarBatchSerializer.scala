@@ -34,7 +34,14 @@ import com.nvidia.spark.rapids.jni.kudo.{KudoSerializer, KudoTableHeader, WriteI
 
 import org.apache.spark.TaskContext
 import org.apache.spark.serializer.{DeserializationStream, SerializationStream, Serializer, SerializerInstance}
-import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{METRIC_DATA_SIZE, METRIC_SHUFFLE_DESER_STREAM_TIME, METRIC_SHUFFLE_SER_COPY_BUFFER_TIME, METRIC_SHUFFLE_SER_STREAM_TIME, METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM}
+import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{
+  METRIC_DATA_SIZE,
+  METRIC_SHUFFLE_DESER_STREAM_TIME,
+  METRIC_SHUFFLE_SER_COPY_BUFFER_TIME,
+  METRIC_SHUFFLE_SER_STREAM_TIME,
+  METRIC_SHUFFLE_SER_STREAM_WRITE_TIME,
+  METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM
+}
 import org.apache.spark.sql.types.{DataType, NullType}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
@@ -73,6 +80,34 @@ class InputStreamWrapper(underlying: InputStream, stalledByInputStreamMetric: Gp
   override def mark(readlimit: Int): Unit = timeOperation(underlying.mark(readlimit))
   override def reset(): Unit = timeOperation(underlying.reset())
   override def markSupported(): Boolean = timeOperation(underlying.markSupported())
+}
+
+/**
+ * A wrapper around OutputStream that tracks time spent on write operations
+ * to measure how much time is spent pushing bytes through the compression layer.
+ */
+class OutputStreamWrapper(
+    underlying: OutputStream,
+    streamWriteTimeMetric: GpuMetric)
+  extends OutputStream {
+
+  @inline
+  private def timeOperation[T](operation: => T): T = {
+    val start = System.nanoTime()
+    try {
+      operation
+    } finally {
+      streamWriteTimeMetric += (System.nanoTime() - start)
+    }
+  }
+
+  override def write(b: Int): Unit = timeOperation(underlying.write(b))
+  override def write(b: Array[Byte]): Unit =
+    timeOperation(underlying.write(b))
+  override def write(b: Array[Byte], off: Int, len: Int): Unit =
+    timeOperation(underlying.write(b, off, len))
+  override def flush(): Unit = timeOperation(underlying.flush())
+  override def close(): Unit = timeOperation(underlying.close())
 }
 
 /**
@@ -190,13 +225,15 @@ private class GpuColumnarBatchSerializerInstance(metrics: Map[String, GpuMetric]
   SerializerInstance {
   private val dataSize = metrics(METRIC_DATA_SIZE)
   private val serTime = metrics(METRIC_SHUFFLE_SER_STREAM_TIME)
+  private val serStreamWriteTime = metrics(METRIC_SHUFFLE_SER_STREAM_WRITE_TIME)
   private val deserTime = metrics(METRIC_SHUFFLE_DESER_STREAM_TIME)
   private val stalledByInputStream = metrics(METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM)
 
 
   override def serializeStream(out: OutputStream): SerializationStream = new SerializationStream {
+    private[this] val wrappedOut = new OutputStreamWrapper(out, serStreamWriteTime)
     private[this] val dOut: DataOutputStream =
-      new DataOutputStream(new BufferedOutputStream(out))
+      new DataOutputStream(new BufferedOutputStream(wrappedOut))
 
     override def writeValue[T: ClassTag](value: T): SerializationStream = serTime.ns {
       val batch = value.asInstanceOf[ColumnarBatch]
@@ -390,6 +427,7 @@ private class KudoSerializerInstance(
   private val dataSize = metrics(METRIC_DATA_SIZE)
   private val serTime = metrics(METRIC_SHUFFLE_SER_STREAM_TIME)
   private val serCopyBufferTime = metrics(METRIC_SHUFFLE_SER_COPY_BUFFER_TIME)
+  private val serStreamWriteTime = metrics(METRIC_SHUFFLE_SER_STREAM_WRITE_TIME)
   private val deserTime = metrics(METRIC_SHUFFLE_DESER_STREAM_TIME)
   private val stalledByInputStream = metrics(METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM)
 
@@ -400,6 +438,7 @@ private class KudoSerializerInstance(
   }
 
   override def serializeStream(out: OutputStream): SerializationStream = new SerializationStream {
+    private[this] val wrappedOut = new OutputStreamWrapper(out, serStreamWriteTime)
 
     override def writeValue[T: ClassTag](value: T): SerializationStream = serTime.ns {
       val batch = value.asInstanceOf[ColumnarBatch]
@@ -447,7 +486,7 @@ private class KudoSerializerInstance(
           NvtxRegistry.SERIALIZE_BATCH {
             val writeInput = WriteInput.builder
               .setColumns(columns)
-              .setOutputStream(out)
+              .setOutputStream(wrappedOut)
               .setNumRows(numRows)
               .setRowOffset(startRow)
               .setMeasureCopyBufferTime(measureBufferCopyTime)
@@ -464,7 +503,7 @@ private class KudoSerializerInstance(
           }
         } else {
           NvtxRegistry.SERIALIZE_ROW_ONLY_BATCH {
-            dataSize += KudoSerializer.writeRowCountToStream(out, numRows)
+            dataSize += KudoSerializer.writeRowCountToStream(wrappedOut, numRows)
           }
         }
         this
@@ -489,11 +528,11 @@ private class KudoSerializerInstance(
     }
 
     override def flush(): Unit = {
-      out.flush()
+      wrappedOut.flush()
     }
 
     override def close(): Unit = {
-      out.close()
+      wrappedOut.close()
     }
   }
 
@@ -550,10 +589,12 @@ private class KudoGpuSerializerInstance(
 ) extends SerializerInstance {
   private val dataSize = metrics(METRIC_DATA_SIZE)
   private val serTime = metrics(METRIC_SHUFFLE_SER_STREAM_TIME)
+  private val serStreamWriteTime = metrics(METRIC_SHUFFLE_SER_STREAM_WRITE_TIME)
   private val deserTime = metrics(METRIC_SHUFFLE_DESER_STREAM_TIME)
   private val stalledByInputStream = metrics(METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM)
 
   override def serializeStream(out: OutputStream): SerializationStream = new SerializationStream {
+    private[this] val wrappedOut = new OutputStreamWrapper(out, serStreamWriteTime)
 
     override def writeValue[T: ClassTag](value: T): SerializationStream = serTime.ns {
       NvtxRegistry.GPU_KUDO_WRITE_BUFFERS {
@@ -571,7 +612,7 @@ private class KudoGpuSerializerInstance(
               while (remaining > 0) {
                 val read = math.min(remaining, temp.length)
                 data.getBytes(temp, 0, at, read)
-                out.write(temp, 0, read)
+                wrappedOut.write(temp, 0, read)
                 at = at + read
                 remaining = remaining - read
               }
@@ -579,7 +620,8 @@ private class KudoGpuSerializerInstance(
             case _ =>
           }
         } else {
-          dataSize += KudoSerializer.writeRowCountToStream(out, batch.numRows())
+          dataSize += KudoSerializer.writeRowCountToStream(
+            wrappedOut, batch.numRows())
         }
         this
       }
@@ -603,11 +645,11 @@ private class KudoGpuSerializerInstance(
     }
 
     override def flush(): Unit = {
-      out.flush()
+      wrappedOut.flush()
     }
 
     override def close(): Unit = {
-      out.close()
+      wrappedOut.close()
     }
   }
 

@@ -57,6 +57,7 @@ import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
 import scala.util.{Failure, Success}
 
+import com.nvidia.spark.rapids.{GpuMetric, InputStreamWrapper}
 import org.roaringbitmap.RoaringBitmap
 
 import org.apache.spark.{MapOutputTracker, SparkEnv, TaskContext}
@@ -1642,23 +1643,39 @@ object RapidsShuffleBlockFetcherIterator {
       context: TaskContext,
       blockManager: BlockManager,
       sparkEnv: SparkEnv,
-      blocksByAddress: Iterator[(BlockManagerId, collection.Seq[(BlockId, Long, Int)])],
+      blocksByAddress: Iterator[(BlockManagerId,
+        collection.Seq[(BlockId, Long, Int)])],
       serializerManager: SerializerManager,
       readMetrics: ShuffleReadMetricsReporter,
-      fetchContinuousBlocksInBatch: Boolean): RapidsShuffleBlockFetcherIterator = {
+      fetchContinuousBlocksInBatch: Boolean,
+      diskReadTimeMetric: Option[GpuMetric] = None
+  ): RapidsShuffleBlockFetcherIterator = {
+    val streamWrapperFn: (BlockId, InputStream) => InputStream =
+      diskReadTimeMetric match {
+        case Some(metric) =>
+          (blockId: BlockId, in: InputStream) => {
+            val timedIn = new InputStreamWrapper(in, metric)
+            serializerManager.wrapStream(blockId, timedIn)
+          }
+        case None =>
+          serializerManager.wrapStream
+      }
     new RapidsShuffleBlockFetcherIterator(
       context,
       blockManager.blockStoreClient,
       blockManager,
       sparkEnv.mapOutputTracker,
       blocksByAddress,
-      serializerManager.wrapStream,
-      // Note: we use getSizeAsMb when no suffix is provided for backwards compatibility
-      sparkEnv.conf.get(config.REDUCER_MAX_SIZE_IN_FLIGHT) * 1024 * 1024, // 48mb default per task
-      sparkEnv.conf.get(config.REDUCER_MAX_REQS_IN_FLIGHT), //Int.MaxValue by default
-      sparkEnv.conf.get(config.REDUCER_MAX_BLOCKS_IN_FLIGHT_PER_ADDRESS),
-      sparkEnv.conf.get(config.MAX_REMOTE_BLOCK_SIZE_FETCH_TO_MEM),
-      sparkEnv.conf.get(config.SHUFFLE_MAX_ATTEMPTS_ON_NETTY_OOM),
+      streamWrapperFn,
+      sparkEnv.conf.get(config.REDUCER_MAX_SIZE_IN_FLIGHT) *
+        1024 * 1024,
+      sparkEnv.conf.get(config.REDUCER_MAX_REQS_IN_FLIGHT),
+      sparkEnv.conf.get(
+        config.REDUCER_MAX_BLOCKS_IN_FLIGHT_PER_ADDRESS),
+      sparkEnv.conf.get(
+        config.MAX_REMOTE_BLOCK_SIZE_FETCH_TO_MEM),
+      sparkEnv.conf.get(
+        config.SHUFFLE_MAX_ATTEMPTS_ON_NETTY_OOM),
       sparkEnv.conf.get(config.SHUFFLE_DETECT_CORRUPT),
       sparkEnv.conf.get(config.SHUFFLE_DETECT_CORRUPT_MEMORY),
       sparkEnv.conf.get(config.SHUFFLE_CHECKSUM_ENABLED),

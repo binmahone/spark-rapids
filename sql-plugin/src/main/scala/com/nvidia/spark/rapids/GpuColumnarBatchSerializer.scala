@@ -201,9 +201,12 @@ class SerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric)
  *
  * @note The RAPIDS shuffle does not use this code.
  */
-class GpuColumnarBatchSerializer(metrics: Map[String, GpuMetric], dataTypes: Array[DataType],
-                                 kudoMode: ShuffleKudoMode.Value, useKudo: Boolean,
-                                 kudoMeasureBufferCopy: Boolean)
+class GpuColumnarBatchSerializer(
+    val metrics: Map[String, GpuMetric],
+    dataTypes: Array[DataType],
+    kudoMode: ShuffleKudoMode.Value,
+    useKudo: Boolean,
+    kudoMeasureBufferCopy: Boolean)
   extends Serializer with Serializable {
 
   override def newInstance(): SerializerInstance = {

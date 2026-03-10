@@ -46,7 +46,7 @@ import org.apache.spark.shuffle.api._
 import org.apache.spark.shuffle.sort.SortShuffleManager
 import org.apache.spark.shuffle.sort.io.{RapidsLocalDiskShuffleDataIO, RapidsLocalDiskShuffleMapOutputWriter}
 import org.apache.spark.sql.execution.metric.SQLMetric
-import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{METRIC_DATA_READ_SIZE, METRIC_DATA_SIZE, METRIC_SHUFFLE_DESERIALIZATION_TIME, METRIC_SHUFFLE_READ_TIME, METRIC_THREADED_READER_DESER_WAIT_TIME, METRIC_THREADED_READER_IO_WAIT_TIME, METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT, METRIC_THREADED_READER_LIMITER_ACQUIRE_FAIL_COUNT, METRIC_THREADED_READER_LIMITER_PENDING_BLOCK_COUNT, METRIC_THREADED_WRITER_INPUT_FETCH_TIME, METRIC_THREADED_WRITER_LIMITER_WAIT_TIME, METRIC_THREADED_WRITER_SERIALIZATION_WAIT_TIME}
+import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{METRIC_DATA_READ_SIZE, METRIC_DATA_SIZE, METRIC_SHUFFLE_DESER_DISK_READ_TIME, METRIC_SHUFFLE_DESERIALIZATION_TIME, METRIC_SHUFFLE_READ_TIME, METRIC_THREADED_READER_DESER_WAIT_TIME, METRIC_THREADED_READER_IO_WAIT_TIME, METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT, METRIC_THREADED_READER_LIMITER_ACQUIRE_FAIL_COUNT, METRIC_THREADED_READER_LIMITER_PENDING_BLOCK_COUNT, METRIC_THREADED_WRITER_INPUT_FETCH_TIME, METRIC_THREADED_WRITER_LIMITER_WAIT_TIME, METRIC_THREADED_WRITER_SERIALIZATION_WAIT_TIME}
 import org.apache.spark.sql.rapids.shims.{GpuShuffleBlockResolver, RapidsShuffleThreadedReader, RapidsShuffleThreadedWriter}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.storage.{RapidsShuffleBlockFetcherIterator, _}
@@ -1547,6 +1547,10 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
 
   /** Read the combined key-values for this reduce task */
   override def read(): Iterator[Product2[K, C]] = {
+    val gpuSerializer =
+      dep.serializer.asInstanceOf[GpuColumnarBatchSerializer]
+    val diskReadMetric =
+      gpuSerializer.metrics.get(METRIC_SHUFFLE_DESER_DISK_READ_TIME)
     val wrappedStreams = RapidsShuffleBlockFetcherIterator.makeIterator(
       context,
       blockManager,
@@ -1554,11 +1558,12 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
       blocksByAddress,
       serializerManager,
       readMetrics,
-      fetchContinuousBlocksInBatch)
+      fetchContinuousBlocksInBatch,
+      diskReadTimeMetric = diskReadMetric)
 
     val recordIter = new RapidsShuffleThreadedBlockIterator(
       wrappedStreams,
-      dep.serializer.asInstanceOf[GpuColumnarBatchSerializer])
+      gpuSerializer)
 
     // Update the context task metrics for each record read.
     val metricIter = CompletionIterator[(Any, Any), Iterator[(Any, Any)]](

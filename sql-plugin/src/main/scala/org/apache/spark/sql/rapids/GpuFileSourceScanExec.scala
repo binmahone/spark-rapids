@@ -413,6 +413,16 @@ case class GpuFileSourceScanExec(
       case _: GpuReadParquetFileFormat | _: GpuOrcFileFormat =>
         val bf = Map.newBuilder[String, GpuMetric]
         bf += READ_FS_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_READ_FS_TIME)
+        bf += FOOTER_READ_FS_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+          DESCRIPTION_FOOTER_READ_FS_TIME)
+        bf += PARQUET_PARSE_FILTER_FOOTER_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+          DESCRIPTION_PARQUET_PARSE_FILTER_FOOTER_TIME)
+        bf += PARQUET_READ_FILTERED_FOOTER_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+          DESCRIPTION_PARQUET_READ_FILTERED_FOOTER_TIME)
+        bf += PARQUET_GET_BLOCKS_WITH_FILTER_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+          DESCRIPTION_PARQUET_GET_BLOCKS_WITH_FILTER_TIME)
+        bf += PARQUET_CLIP_SCHEMA_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+          DESCRIPTION_PARQUET_CLIP_SCHEMA_TIME)
         bf += WRITE_BUFFER_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
           DESCRIPTION_WRITE_BUFFER_TIME)
         if (rapidsConf.isParquetMultiThreadReadEnabled) {

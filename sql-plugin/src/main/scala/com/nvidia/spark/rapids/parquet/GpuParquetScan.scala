@@ -596,10 +596,13 @@ protected case class GpuParquetFileFilterHandler(
       // (Range: bytes=-N) — no separate file-length round-trip beyond getLength
       // above, no inputStream.seek + IOUtils.readFully loop. HadoopInputFile
       // falls back to the default RapidsInputFile.readTail (open + seek + read).
+      val footerReadTime = metrics.getOrElse(FOOTER_READ_FS_TIME, NoopMetric)
       val trailerLen = FOOTER_LENGTH_SIZE + MAGIC.length
       val (footerLength, trailerMagic) = withResource(
           HostAlloc.alloc(trailerLen, preferPinned = false)) { trailerBuf =>
-        inputFile.readTail(trailerLen, trailerBuf)
+        footerReadTime.ns {
+          inputFile.readTail(trailerLen, trailerBuf)
+        }
         val view = trailerBuf.asByteBuffer(0, trailerLen).order(ByteOrder.LITTLE_ENDIAN)
         val len = view.getInt()
         val m = new Array[Byte](MAGIC.length)
@@ -623,7 +626,9 @@ protected case class GpuParquetFileFilterHandler(
         // async client; HadoopInputFile uses the RapidsInputFile interface default.
         val ranges = new java.util.ArrayList[CopyRange](1)
         ranges.add(new CopyRange(footerIndex, hmbLength, MAGIC.length))
-        inputFile.readVectored(outBuffer, ranges)
+        footerReadTime.ns {
+          inputFile.readVectored(outBuffer, ranges)
+        }
         outBuffer
       }
     }
@@ -644,14 +649,16 @@ protected case class GpuParquetFileFilterHandler(
     val footerBuffer = getFooterBuffer(fileIO, filePath, conf, metrics)
     withResource(footerBuffer) { footerBuffer =>
       NvtxRegistry.PARQUET_PARSE_FILTER_FOOTER {
-        // In the future, if we know we're going to read the entire file,
-        // i.e.: having file length from file stat == amount to read,
-        // then sending -1 as length to the native footer parser allows it to
-        // skip the row group filtering.
-        val len = file.length
+        metrics.getOrElse(PARQUET_PARSE_FILTER_FOOTER_TIME, NoopMetric).ns {
+          // In the future, if we know we're going to read the entire file,
+          // i.e.: having file length from file stat == amount to read,
+          // then sending -1 as length to the native footer parser allows it to
+          // skip the row group filtering.
+          val len = file.length
 
-        ParquetFooter.readAndFilter(footerBuffer, file.start, len,
-          footerSchema, !isCaseSensitive)
+          ParquetFooter.readAndFilter(footerBuffer, file.start, len,
+            footerSchema, !isCaseSensitive)
+        }
       }
     }
   }
@@ -718,10 +725,12 @@ protected case class GpuParquetFileFilterHandler(
             }
             val footer = withResource(serialized) { serialized =>
               NvtxRegistry.PARQUET_READ_FILTERED_FOOTER {
-                val inputFile = new HMBInputFile(serialized)
+                metrics.getOrElse(PARQUET_READ_FILTERED_FOOTER_TIME, NoopMetric).ns {
+                  val inputFile = new HMBInputFile(serialized)
 
-                // We already filtered the ranges so no need to do more here...
-                ParquetFileReader.readFooter(inputFile, ParquetMetadataConverter.NO_FILTER)
+                  // We already filtered the ranges so no need to do more here...
+                  ParquetFileReader.readFooter(inputFile, ParquetMetadataConverter.NO_FILTER)
+                }
               }
             }
             // Fix up row index offsets. ParquetFileReader.readFooter computes row
@@ -769,12 +778,14 @@ protected case class GpuParquetFileFilterHandler(
 
       val blocks = if (pushedFilters.isDefined) {
         NvtxRegistry.PARQUET_GET_BLOCKS_WITH_FILTER {
-          // Use the ParquetFileReader to perform dictionary-level filtering
-          ParquetInputFormat.setFilterPredicate(conf, pushedFilters.get)
-          //noinspection ScalaDeprecation
-          withResource(new ParquetFileReader(conf, footer.getFileMetaData, filePath,
-            footer.getBlocks, Collections.emptyList[ColumnDescriptor])) { parquetReader =>
-            parquetReader.getRowGroups
+          metrics.getOrElse(PARQUET_GET_BLOCKS_WITH_FILTER_TIME, NoopMetric).ns {
+            // Use the ParquetFileReader to perform dictionary-level filtering
+            ParquetInputFormat.setFilterPredicate(conf, pushedFilters.get)
+            //noinspection ScalaDeprecation
+            withResource(new ParquetFileReader(conf, footer.getFileMetaData, filePath,
+              footer.getBlocks, Collections.emptyList[ColumnDescriptor])) { parquetReader =>
+              parquetReader.getRowGroups
+            }
           }
         }
       } else {
@@ -783,14 +794,17 @@ protected case class GpuParquetFileFilterHandler(
 
       val (clipped, clippedSchema) =
         NvtxRegistry.PARQUET_CLIP_SCHEMA {
-          val clippedSchema = ParquetSchemaUtils.clipParquetSchema(
-            fileSchema, readDataSchema, isCaseSensitive, readUseFieldId)
-          // Check if the read schema is compatible with the file schema.
-          checkSchemaCompat(clippedSchema, readDataSchema,
-            (t: Type, d: DataType) => throwTypeIncompatibleError(t, d, file.filePath.toString()),
-            isCaseSensitive, readUseFieldId)
-          val clipped = GpuParquetUtils.clipBlocksToSchema(clippedSchema, blocks, isCaseSensitive)
-          (clipped, clippedSchema)
+          metrics.getOrElse(PARQUET_CLIP_SCHEMA_TIME, NoopMetric).ns {
+            val clippedSchema = ParquetSchemaUtils.clipParquetSchema(
+              fileSchema, readDataSchema, isCaseSensitive, readUseFieldId)
+            // Check if the read schema is compatible with the file schema.
+            checkSchemaCompat(clippedSchema, readDataSchema,
+              (t: Type, d: DataType) => throwTypeIncompatibleError(t, d, file.filePath.toString()),
+              isCaseSensitive, readUseFieldId)
+            val clipped =
+              GpuParquetUtils.clipBlocksToSchema(clippedSchema, blocks, isCaseSensitive)
+            (clipped, clippedSchema)
+          }
         }
       val hasDateTimeInReadSchema = DataTypeUtils.hasDateOrTimestampType(readDataSchema)
       val dateRebaseModeForThisFile = DateTimeRebaseUtils.datetimeRebaseMode(

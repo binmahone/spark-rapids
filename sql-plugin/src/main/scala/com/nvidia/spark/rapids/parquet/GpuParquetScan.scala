@@ -557,7 +557,7 @@ protected case class GpuParquetFileFilterHandler(
       metrics: Map[String, GpuMetric]): HostMemoryBuffer = {
     val inputFile = fileIO.newInputFile(filePath)
     withResource(ParquetFooterUtils.getFooterBuffer(inputFile, metrics,
-        readFooterBuffer(fileIO, filePath, conf))) { hmb =>
+        readFooterBuffer(fileIO, filePath, conf, metrics))) { hmb =>
       // buffer includes header and trailing length and magic, stripped here
       hmb.slice(MAGIC.length, hmb.getLength - Integer.BYTES - MAGIC.length)
     }
@@ -566,7 +566,8 @@ protected case class GpuParquetFileFilterHandler(
   private def readFooterBuffer(
       fileIO: RapidsFileIO,
       filePath: Path,
-      conf: Configuration): HostMemoryBuffer = {
+      conf: Configuration,
+      metrics: Map[String, GpuMetric]): HostMemoryBuffer = {
     if (fileIO.isInstanceOf[HadoopFileIO]) {
       // We should remove this after https://github.com/NVIDIA/spark-rapids/issues/13306 is
       // implemented.
@@ -575,17 +576,22 @@ protected case class GpuParquetFileFilterHandler(
       if (scheme != null && scheme.startsWith("s3")) {
         GpuTaskMetrics.get.recordPerfioS3BackendOnce()
       }
-      result.getOrElse(readFooterBufUsingHadoop(fileIO, filePath))
+      result.getOrElse(readFooterBufUsingHadoop(fileIO, filePath, metrics))
     } else {
-      readFooterBufUsingHadoop(fileIO, filePath)
+      readFooterBufUsingHadoop(fileIO, filePath, metrics)
     }
   }
 
-  private def readFooterBufUsingHadoop(fileIO: RapidsFileIO, filePath: Path): HostMemoryBuffer = {
+  private def readFooterBufUsingHadoop(
+      fileIO: RapidsFileIO,
+      filePath: Path,
+      metrics: Map[String, GpuMetric]): HostMemoryBuffer = {
     val inputFile = fileIO.newInputFile(filePath)
     // Much of this code came from the parquet_mr projects ParquetFileReader, and was modified
     // to match our needs.
-    val fileLen = inputFile.getLength
+    val fileLen = metrics.getOrElse(FILE_GET_LENGTH_TIME, NoopMetric).ns {
+      inputFile.getLength
+    }
     // MAGIC + data + footer + footerIndex + MAGIC
     if (fileLen < MAGIC.length + FOOTER_LENGTH_SIZE + MAGIC.length) {
       throw new RuntimeException(s"$filePath is not a Parquet file (too small length: $fileLen )")
@@ -675,7 +681,7 @@ protected case class GpuParquetFileFilterHandler(
     NvtxRegistry.PARQUET_READ_FOOTER {
       val inputFile = fileIO.newInputFile(filePath)
       withResource(ParquetFooterUtils.getFooterBuffer(inputFile, metrics,
-          readFooterBuffer(fileIO, filePath, conf))) { hmb =>
+          readFooterBuffer(fileIO, filePath, conf, metrics))) { hmb =>
         ParquetFileReader.readFooter(new HMBInputFile(hmb),
           ParquetMetadataConverter.range(file.start, file.start + file.length))
       }

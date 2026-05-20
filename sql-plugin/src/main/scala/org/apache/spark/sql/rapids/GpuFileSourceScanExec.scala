@@ -415,6 +415,8 @@ case class GpuFileSourceScanExec(
         bf += READ_FS_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_READ_FS_TIME)
         bf += FOOTER_READ_FS_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
           DESCRIPTION_FOOTER_READ_FS_TIME)
+        bf += FILE_GET_LENGTH_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+          DESCRIPTION_FILE_GET_LENGTH_TIME)
         bf += PARQUET_PARSE_FILTER_FOOTER_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
           DESCRIPTION_PARQUET_PARSE_FILTER_FOOTER_TIME)
         bf += PARQUET_READ_FILTERED_FOOTER_TIME -> createNanoTimingMetric(DEBUG_LEVEL,

@@ -57,67 +57,91 @@ import java.util.function.IntFunction;
  */
 public class HadoopInputFile implements RapidsInputFile {
     // ----------------------------------------------------------------------
-    // Per-executor DirectByteBuffer pool for the vectored read path.
+    // Per-executor scratch DirectByteBuffer pool for vectored read.
     //
-    // Rationale: under sustained concurrent vectored reads (NDS queries with
-    // wide parquet column scans), repeatedly calling ByteBuffer.allocateDirect
-    // -> GC -> Cleaner -> munmap churns off-heap memory. The previous
-    // optimization attempted to short-circuit this with reflective
-    // Cleaner.clean per range; that helped one outlier query but added
-    // per-range reflection overhead that net-slowed other queries.
+    // Each readVectored call allocates ONE scratch DirectByteBuffer sized to
+    // sum(range.length). The allocator hands out non-overlapping slices of
+    // that scratch to Hadoop's IntFunction, advancing an offset counter. After
+    // the drain loop copies each range's data into the destination
+    // HostMemoryBuffer, the whole scratch goes back into a per-executor pool
+    // for reuse on the next call.
     //
-    // This pool reuses DirectByteBuffers across calls. Keying by exact
-    // capacity is intentional — parquet column chunks within a file repeat at
-    // identical sizes, so exact-match hit rate is high on real workloads and
-    // we never hand out a buffer larger than requested (avoids confusing
-    // the FS impl's range bookkeeping).
+    // Why one big buffer + slices instead of one DirectByteBuffer per range:
+    //   - 1 mmap per readVectored call instead of N — far less kernel
+    //     mm_struct lock pressure on the executor's high-concurrency path
+    //   - Slice operations are pure arithmetic on the parent's address; no
+    //     extra native allocation
+    //   - On exception, freeing/recycling one scratch is simpler than tracking
+    //     N partially filled buffers
     //
-    // Caps:
-    //   - MAX_DISTINCT_SIZES bounds the number of size classes tracked
-    //     (excess sizes bypass the pool, get GC'd normally)
-    //   - MAX_PER_SIZE bounds how many idle buffers per size class
-    //   - On overflow the buffer is dropped to GC, no leak
+    // Pool keying: size classes (next power of 2 of the requested total size,
+    // floored at MIN_BUCKET to avoid micro-allocations, ceilinged at
+    // MAX_BUCKET to keep the worst-case waste bounded). Power-of-2 bucketing
+    // guarantees at most 2x waste vs the requested size and gives a small
+    // fixed bucket count.
     //
-    // The pool is a static JVM-singleton on the executor, shared across all
-    // HadoopInputFile instances and all tasks. ConcurrentLinkedQueue gives
-    // lock-free poll/offer; ConcurrentHashMap.computeIfAbsent is the only
-    // synchronization point and only on first sight of a new size class.
+    // Slicing uses duplicate() + position/limit + slice() (Java 8+ available;
+    // spark-rapids sql-plugin's compile target is older than JDK 13 which
+    // would otherwise allow the more concise slice(int, int)). duplicate()
+    // returns a buffer that shares the SAME memory as the parent but has
+    // INDEPENDENT position/limit/mark — that means concurrent IntFunction
+    // calls from Hadoop's internal worker threads each get their own
+    // duplicate and don't race on parent state. AtomicInteger handles the
+    // offset bookkeeping. As long as the scratch capacity is at least the
+    // sum of requested lengths, all slices land in disjoint regions.
+    //
+    // Caps: SCRATCH_BUCKETS bounds the number of size classes (max ~32 from
+    // MIN_BUCKET=64KB to MAX_BUCKET=2GB, power-of-2 spaced). SCRATCH_PER_BUCKET
+    // bounds idle scratches per bucket. Overflow drops to GC, no leak.
     // ----------------------------------------------------------------------
-    private static final int MAX_DISTINCT_SIZES = 256;
-    private static final int MAX_PER_SIZE = 64;
-    private static final ConcurrentHashMap<Integer, ConcurrentLinkedQueue<ByteBuffer>> POOL =
+    private static final int MIN_BUCKET = 64 * 1024;          // 64 KiB
+    private static final int MAX_BUCKET = Integer.MAX_VALUE;  // ~2 GiB
+    private static final int SCRATCH_PER_BUCKET = 8;
+    private static final ConcurrentHashMap<Integer, ConcurrentLinkedQueue<ByteBuffer>> SCRATCH_POOL =
             new ConcurrentHashMap<>();
-    private static final AtomicInteger POOL_HITS = new AtomicInteger();
-    private static final AtomicInteger POOL_MISSES = new AtomicInteger();
+    private static final AtomicInteger SCRATCH_HITS = new AtomicInteger();
+    private static final AtomicInteger SCRATCH_MISSES = new AtomicInteger();
 
-    private static ByteBuffer poolAllocate(int size) {
-        ConcurrentLinkedQueue<ByteBuffer> q = POOL.get(size);
+    /** Round size up to the next power of 2, clamped to [MIN_BUCKET, MAX_BUCKET]. */
+    private static int sizeClass(int size) {
+        if (size <= MIN_BUCKET) return MIN_BUCKET;
+        // highestOneBit(size-1) << 1 gives next power of 2 (size > 0).
+        int bucket = Integer.highestOneBit(size - 1) << 1;
+        // Defensive: if size-1 has the top bit set (>=2^30), the shift overflows
+        // negative — fall through to MAX_BUCKET.
+        if (bucket <= 0 || bucket > MAX_BUCKET) return MAX_BUCKET;
+        return bucket;
+    }
+
+    /** Allocate a scratch buffer of capacity >= size from the pool, or fresh. */
+    private static ByteBuffer allocateScratch(int size) {
+        int bucket = sizeClass(size);
+        ConcurrentLinkedQueue<ByteBuffer> q = SCRATCH_POOL.get(bucket);
         if (q != null) {
             ByteBuffer buf = q.poll();
             if (buf != null) {
+                // Reset state. position/limit may have been set by Hadoop's
+                // last use; slice(int, int) ignores them but clear() keeps
+                // the buffer's invariants tidy for any future bulk ops.
                 buf.clear();
-                POOL_HITS.incrementAndGet();
+                SCRATCH_HITS.incrementAndGet();
                 return buf;
             }
         }
-        POOL_MISSES.incrementAndGet();
-        return ByteBuffer.allocateDirect(size);
+        SCRATCH_MISSES.incrementAndGet();
+        return ByteBuffer.allocateDirect(bucket);
     }
 
-    private static void poolRelease(ByteBuffer buf) {
-        if (buf == null || !buf.isDirect()) {
+    /** Return a scratch buffer to the pool (or drop to GC on overflow). */
+    private static void releaseScratch(ByteBuffer scratch) {
+        if (scratch == null || !scratch.isDirect()) {
             return;
         }
-        int capacity = buf.capacity();
-        if (POOL.size() >= MAX_DISTINCT_SIZES && !POOL.containsKey(capacity)) {
-            // Don't admit a new size class once we're at the size-class cap.
-            // The buffer will be reclaimed by GC via its Cleaner.
-            return;
-        }
+        int bucket = scratch.capacity();
         ConcurrentLinkedQueue<ByteBuffer> q =
-                POOL.computeIfAbsent(capacity, k -> new ConcurrentLinkedQueue<>());
-        if (q.size() < MAX_PER_SIZE) {
-            q.offer(buf);
+                SCRATCH_POOL.computeIfAbsent(bucket, k -> new ConcurrentLinkedQueue<>());
+        if (q.size() < SCRATCH_PER_BUCKET) {
+            q.offer(scratch);
         }
         // else: drop to GC.
     }
@@ -176,12 +200,13 @@ public class HadoopInputFile implements RapidsInputFile {
      * on Hadoop versions older than 3.3.5, falls back to the sequential
      * default inherited from {@link RapidsInputFile}.
      *
-     * <p>After each per-range copy into {@code output}, the source
-     * DirectByteBuffer is returned to a per-executor pool keyed by exact
-     * capacity. Subsequent vectored reads that need the same size hit the
-     * pool instead of allocating a fresh direct buffer + later triggering
-     * its Cleaner. This keeps off-heap churn flat under sustained vectored
-     * read concurrency.
+     * <p>Buffer management: a single scratch DirectByteBuffer is allocated
+     * (or reused from a pool) sized to {@code sum(range.length)}. The
+     * IntFunction allocator hands out non-overlapping slices of that scratch
+     * to Hadoop. After all ranges are drained and copied into the destination
+     * {@code output}, the scratch is returned to the pool. This collapses N
+     * mmap/munmap cycles per call into one (or zero, on pool hit) while
+     * keeping the existing memcpy from scratch to {@code output}.
      */
     @Override
     public void readVectored(HostMemoryBuffer output, List<RapidsInputFile.CopyRange> copyRanges)
@@ -204,11 +229,13 @@ public class HadoopInputFile implements RapidsInputFile {
             }
         }
 
+        // Build FileRange list and accumulate total bytes needed for the scratch.
         // CopyRange.length is long; FileRange takes int. Split ranges that
         // exceed Integer.MAX_VALUE into chunks. Parquet column chunks rarely
         // exceed 2 GiB but the split keeps the contract safe. The destination
         // offset is stashed in the FileRange reference for the drain phase.
         List<FileRange> fileRanges = new ArrayList<>(copyRanges.size());
+        long totalBytes = 0L;
         for (RapidsInputFile.CopyRange r : copyRanges) {
             long remaining = r.getLength();
             long inOff = r.getInputOffset();
@@ -216,17 +243,36 @@ public class HadoopInputFile implements RapidsInputFile {
             while (remaining > 0) {
                 int chunkLen = (int) Math.min(remaining, (long) Integer.MAX_VALUE);
                 fileRanges.add(FileRange.createFileRange(inOff, chunkLen, Long.valueOf(outOff)));
+                totalBytes += chunkLen;
                 inOff += chunkLen;
                 outOff += chunkLen;
                 remaining -= chunkLen;
             }
         }
 
-        // Pooled direct-buffer allocator: returns a recycled DirectByteBuffer
-        // from the per-executor pool when one of the exact requested size is
-        // available, otherwise allocates fresh. Reuse eliminates the off-heap
-        // alloc / Cleaner churn under sustained concurrent vectored reads.
-        IntFunction<ByteBuffer> allocate = HadoopInputFile::poolAllocate;
+        // The scratch capacity is a single int, so the sum of all range
+        // lengths must fit. If a single readVectored call exceeds 2 GiB
+        // (extremely rare — Parquet column chunks combined), fall through
+        // to the sequential default which uses a stream per range.
+        if (totalBytes > MAX_BUCKET) {
+            RapidsInputFile.super.readVectored(output, copyRanges);
+            return;
+        }
+
+        final ByteBuffer scratch = allocateScratch((int) totalBytes);
+        // The slice offset is advanced atomically per IntFunction call; Hadoop
+        // may invoke this concurrently from internal worker threads. We use
+        // duplicate() + position/limit + slice() (Java 8 compatible) — each
+        // duplicate has independent position/limit/mark so concurrent callers
+        // don't race on the parent's state.
+        final AtomicInteger sliceOffset = new AtomicInteger(0);
+        IntFunction<ByteBuffer> allocate = length -> {
+            int start = sliceOffset.getAndAdd(length);
+            ByteBuffer dup = scratch.duplicate();
+            dup.position(start);
+            dup.limit(start + length);
+            return dup.slice();
+        };
 
         try (FSDataInputStream stream = fs.open(filePath)) {
             try {
@@ -234,46 +280,51 @@ public class HadoopInputFile implements RapidsInputFile {
             } catch (UnsupportedOperationException | NoSuchMethodError uoe) {
                 // FS driver / runtime Hadoop does not implement vectored I/O.
                 // Fall back to the sequential default.
+                releaseScratch(scratch);
                 RapidsInputFile.super.readVectored(output, copyRanges);
                 return;
             }
 
-            // Drain each future and copy into the destination at the offset
-            // stashed in FileRange.reference. After each copy, explicitly free
-            // the source DirectByteBuffer instead of waiting for GC to trigger
-            // its Cleaner — this keeps off-heap RSS flat under sustained
-            // vectored read concurrency.
-            for (int i = 0; i < fileRanges.size(); i++) {
-                FileRange r = fileRanges.get(i);
-                ByteBuffer src;
-                try {
-                    src = r.getData().get();
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    cancelRemainingFutures(fileRanges, i + 1);
-                    throw new IOException(
-                            "readVectored interrupted at offset " + r.getOffset(), ie);
-                } catch (ExecutionException ee) {
-                    cancelRemainingFutures(fileRanges, i + 1);
-                    Throwable cause = ee.getCause();
-                    if (cause instanceof IOException) {
-                        throw (IOException) cause;
+            // Drain each range's slice and copy into the destination at the
+            // offset stashed in FileRange.reference. The drain loop runs on
+            // the caller's thread; success path returns the scratch to the
+            // pool at the end. Failure paths cancel pending futures (so their
+            // slices stop being filled) and still return the scratch.
+            try {
+                for (int i = 0; i < fileRanges.size(); i++) {
+                    FileRange r = fileRanges.get(i);
+                    ByteBuffer src;
+                    try {
+                        src = r.getData().get();
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        cancelRemainingFutures(fileRanges, i + 1);
+                        throw new IOException(
+                                "readVectored interrupted at offset " + r.getOffset(), ie);
+                    } catch (ExecutionException ee) {
+                        cancelRemainingFutures(fileRanges, i + 1);
+                        Throwable cause = ee.getCause();
+                        if (cause instanceof IOException) {
+                            throw (IOException) cause;
+                        }
+                        throw new IOException(
+                                "readVectored failed at offset " + r.getOffset(), cause);
                     }
-                    throw new IOException(
-                            "readVectored failed at offset " + r.getOffset(), cause);
+                    long destOffset = (Long) r.getReference();
+                    int len = src.remaining();
+                    // asByteBuffer returns a view into HostMemoryBuffer at the
+                    // destination slice; put(src) copies bytes (direct-to-direct
+                    // memcpy when both buffers are direct). The src slice
+                    // remains tied to the scratch parent — releasing the scratch
+                    // happens once all slices have been drained, in the finally
+                    // block below.
+                    ByteBuffer dst = output.asByteBuffer(destOffset, len);
+                    dst.put(src);
                 }
-                long destOffset = (Long) r.getReference();
-                int len = src.remaining();
-                // asByteBuffer returns a view into HostMemoryBuffer at the
-                // destination slice; put(src) copies bytes (direct-to-direct
-                // memcpy when both buffers are direct).
-                ByteBuffer dst = output.asByteBuffer(destOffset, len);
-                dst.put(src);
-                // Return the source DirectByteBuffer to the pool for reuse on
-                // the next readVectored call needing this size class. Avoids
-                // both the alloc churn and the per-call reflection cost of an
-                // explicit Cleaner.clean.
-                poolRelease(src);
+            } finally {
+                // All slices have been drained (or their owning futures
+                // cancelled). The scratch parent can be safely reused.
+                releaseScratch(scratch);
             }
         }
     }

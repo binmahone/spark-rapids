@@ -264,6 +264,13 @@ object GpuParquetScan {
    * analog on this path -- readVectored writes directly into `output` in
    * a single bundled call -- and remains scoped to the CPU decompress
    * path in copyAndUncompressBlocksData.
+   *
+   * Releases the GPU semaphore around the readVectored call. The vectored
+   * read is pure CPU + network IO and does not touch the GPU, so holding
+   * the semaphore through it blocks other tasks from making GPU progress
+   * (see NVIDIA/spark-rapids#14324). The semaphore will be re-acquired
+   * lazily when the caller next needs the GPU (e.g., in
+   * readBufferToTablesAndClose's acquireIfNecessary).
    */
   private[parquet] def readRangesToHostMemory(
       inputFile: RapidsInputFile,
@@ -273,6 +280,8 @@ object GpuParquetScan {
     if (ranges.isEmpty) {
       0L
     } else {
+      val tc = TaskContext.get()
+      if (tc != null) GpuSemaphore.releaseIfNecessary(tc)
       metrics.getOrElse(READ_FS_TIME, NoopMetric).ns {
         inputFile.readVectored(output, ranges.asJava)
       }
@@ -597,17 +606,25 @@ protected case class GpuParquetFileFilterHandler(
       throw new RuntimeException(s"$filePath is not a Parquet file (too small length: $fileLen )")
     }
     NvtxRegistry.PARQUET_READ_FOOTER_BYTES {
-      // Step 1: read the trailing footer-length int + final MAGIC via readTail.
-      // For the IcebergS3InputFile path this is a single suffix-range GET
-      // (Range: bytes=-N) — no separate file-length round-trip beyond getLength
-      // above, no inputStream.seek + IOUtils.readFully loop. HadoopInputFile
-      // falls back to the default RapidsInputFile.readTail (open + seek + read).
+      // The vectored read path is CPU + network IO with no GPU work; release
+      // the GPU semaphore so peer tasks can make GPU progress while we wait
+      // on the FS driver (see NVIDIA/spark-rapids#14324).
+      val tc = TaskContext.get()
+      if (tc != null) GpuSemaphore.releaseIfNecessary(tc)
+      // Step 1: read the trailing footer-length int + final MAGIC.
+      // Use readVectored with the already-known fileLen instead of readTail
+      // (whose default impl on HadoopInputFile would invoke getLength a
+      // second time and add a metadata roundtrip per file). The vectored
+      // read path serves the same fast suffix-style GET on gcs-connector
+      // (Range: bytes=N-fileLen).
       val footerReadTime = metrics.getOrElse(FOOTER_READ_FS_TIME, NoopMetric)
       val trailerLen = FOOTER_LENGTH_SIZE + MAGIC.length
       val (footerLength, trailerMagic) = withResource(
           HostAlloc.alloc(trailerLen, preferPinned = false)) { trailerBuf =>
+        val trailerRanges = new java.util.ArrayList[CopyRange](1)
+        trailerRanges.add(new CopyRange(fileLen - trailerLen, trailerLen, 0))
         footerReadTime.ns {
-          inputFile.readTail(trailerLen, trailerBuf)
+          inputFile.readVectored(trailerBuf, trailerRanges)
         }
         val view = trailerBuf.asByteBuffer(0, trailerLen).order(ByteOrder.LITTLE_ENDIAN)
         val len = view.getInt()

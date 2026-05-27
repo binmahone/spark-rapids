@@ -31,9 +31,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalLong;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntFunction;
 
 /**
@@ -89,13 +88,27 @@ public class HadoopInputFile implements RapidsInputFile {
     /**
      * Vectored read via {@link FSDataInputStream#readVectored}.
      *
-     * <p>Each range allocates its own pageable {@link HostMemoryBuffer}
-     * ({@code preferPinned=false}) inside the {@code IntFunction}. Hadoop's
-     * worker threads fill the buffers asynchronously; the drain loop memcpys
-     * each filled buffer into {@code output} at the offset stashed in
-     * {@link FileRange#getReference()}. After drain, every per-range HMB is
-     * closed in {@code finally} — deterministic release, no pool, no
-     * long-lived retention.
+     * <p>Buffer management: a single pageable {@link HostMemoryBuffer} is
+     * allocated once per call, sized to the file-offset SPAN of the input
+     * ranges (i.e., {@code max(end) - min(start)}). This is the maximum size
+     * gcs-connector / S3A can possibly request through the IntFunction —
+     * their internal range merging can grow a {@code CombinedFileRange}'s
+     * length to cover gaps between coalesced children, but never beyond the
+     * file extent the caller asked for. Sizing by {@code sum(range.length)}
+     * is INCORRECT and silently underflows: cudf's
+     * {@code addressOutOfBoundsCheck} is an {@code assert} and disabled in
+     * production, so an undersized scratch returns a buffer pointing past
+     * its allocation and worker threads then corrupt adjacent native memory
+     * (typically the caller-provided {@code output} HMB).
+     *
+     * <p>The IntFunction hands Hadoop a fresh JNI-wrapped {@link ByteBuffer}
+     * view at each call via {@code scratch.asByteBuffer(start, length)} — no
+     * {@code duplicate()}, no {@code slice()} chain (those add no value over
+     * a direct view). After the drain loop memcpys each range into
+     * {@code output}, the scratch is closed by try-with-resources:
+     * deterministic native release, no pool, no retention.
+     * {@code preferPinned=false} keeps the GPU pinned pool free for actual
+     * device transfers.
      */
     @Override
     public void readVectored(HostMemoryBuffer output, List<RapidsInputFile.CopyRange> copyRanges)
@@ -104,14 +117,19 @@ public class HadoopInputFile implements RapidsInputFile {
             return;
         }
 
+        // Build FileRange list and compute the file-offset SPAN of the input.
         // CopyRange.length is long; FileRange takes int. Split ranges that
-        // exceed Integer.MAX_VALUE into chunks. Each chunk's destination
-        // offset is stashed in the FileRange reference for the drain phase.
+        // exceed Integer.MAX_VALUE into chunks. The destination offset is
+        // stashed in the FileRange reference for the drain phase.
         List<FileRange> fileRanges = new ArrayList<>(copyRanges.size());
+        long firstStart = Long.MAX_VALUE;
+        long lastEnd = 0L;
         for (RapidsInputFile.CopyRange r : copyRanges) {
             long remaining = r.getLength();
             long inOff = r.getInputOffset();
             long outOff = r.getOutputOffset();
+            firstStart = Math.min(firstStart, inOff);
+            lastEnd = Math.max(lastEnd, inOff + r.getLength());
             while (remaining > 0) {
                 int chunkLen = (int) Math.min(remaining, (long) Integer.MAX_VALUE);
                 fileRanges.add(FileRange.createFileRange(inOff, chunkLen, Long.valueOf(outOff)));
@@ -120,26 +138,29 @@ public class HadoopInputFile implements RapidsInputFile {
                 remaining -= chunkLen;
             }
         }
+        long scratchSize = lastEnd - firstStart;
 
-        // ConcurrentLinkedQueue because Hadoop may invoke the IntFunction
-        // from internal worker threads.
-        final Queue<HostMemoryBuffer> perRangeBuffers = new ConcurrentLinkedQueue<>();
-        IntFunction<ByteBuffer> allocate = length -> {
-            HostMemoryBuffer hmb = HostMemoryBuffer.allocate(length, false);
-            perRangeBuffers.add(hmb);
-            return hmb.asByteBuffer(0L, length);
-        };
+        try (HostMemoryBuffer scratch = HostMemoryBuffer.allocate(scratchSize, false)) {
+            // Hadoop may invoke the IntFunction concurrently from internal
+            // worker threads. AtomicLong.getAndAdd guarantees each call gets
+            // a unique, non-overlapping [start, start+length) region of the
+            // scratch. Each call's length is bounded by the FS driver's
+            // mergeRangeMaxSize (~8 MiB for gcs-connector), so int length is
+            // safe; the cumulative offset can exceed 2 GiB so we use long.
+            final AtomicLong sliceOffset = new AtomicLong(0L);
+            IntFunction<ByteBuffer> allocate = length -> {
+                long start = sliceOffset.getAndAdd(length);
+                return scratch.asByteBuffer(start, length);
+            };
 
-        try (FSDataInputStream stream = fs.open(filePath)) {
-            try {
-                stream.readVectored(fileRanges, allocate);
-            } catch (UnsupportedOperationException | NoSuchMethodError uoe) {
-                closeAll(perRangeBuffers);
-                RapidsInputFile.super.readVectored(output, copyRanges);
-                return;
-            }
+            try (FSDataInputStream stream = fs.open(filePath)) {
+                try {
+                    stream.readVectored(fileRanges, allocate);
+                } catch (UnsupportedOperationException | NoSuchMethodError uoe) {
+                    RapidsInputFile.super.readVectored(output, copyRanges);
+                    return;
+                }
 
-            try {
                 for (int i = 0; i < fileRanges.size(); i++) {
                     FileRange r = fileRanges.get(i);
                     ByteBuffer src;
@@ -163,8 +184,6 @@ public class HadoopInputFile implements RapidsInputFile {
                     int len = src.remaining();
                     output.asByteBuffer(destOffset, len).put(src);
                 }
-            } finally {
-                closeAll(perRangeBuffers);
             }
         }
     }
@@ -173,17 +192,6 @@ public class HadoopInputFile implements RapidsInputFile {
         for (int i = fromIdx; i < ranges.size(); i++) {
             try {
                 ranges.get(i).getData().cancel(true);
-            } catch (Throwable ignored) {
-                // best effort
-            }
-        }
-    }
-
-    private static void closeAll(Queue<HostMemoryBuffer> buffers) {
-        HostMemoryBuffer hmb;
-        while ((hmb = buffers.poll()) != null) {
-            try {
-                hmb.close();
             } catch (Throwable ignored) {
                 // best effort
             }

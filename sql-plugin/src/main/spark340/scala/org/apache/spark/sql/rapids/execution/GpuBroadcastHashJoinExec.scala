@@ -37,11 +37,16 @@ spark-rapids-shim-json-lines ***/
 package org.apache.spark.sql.rapids.execution
 
 import com.nvidia.spark.rapids._
+import org.apache.spark.rapids.shims.GpuShuffleExchangeExec
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.adaptive.BroadcastQueryStageExec
+import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, ReusedExchangeExec}
 import org.apache.spark.sql.execution.joins.BroadcastHashJoinExec
+import org.apache.spark.sql.internal.SQLConf
 
 class GpuBroadcastHashJoinMeta(
     join: BroadcastHashJoinExec,
@@ -57,23 +62,126 @@ class GpuBroadcastHashJoinMeta(
       (None, condition)
     }
     val Seq(left, right) = childPlans.map(_.convertIfNeeded())
-    // The broadcast part of this must be a BroadcastExchangeExec
     val buildSideMeta = buildSide match {
       case GpuBuildLeft => left
       case GpuBuildRight => right
     }
     verifyBuildSideWasReplaced(buildSideMeta)
-    val joinExec = GpuBroadcastHashJoinExec(
-      leftKeys.map(_.convertToGpu()),
-      rightKeys.map(_.convertToGpu()),
-      join.joinType,
-      buildSide,
-      joinCondition,
-      left, right,
-      join.isNullAwareAntiJoin)
-    // For inner joins we can apply a post-join condition for any conditions that cannot be
-    // evaluated directly in a mixed join that leverages a cudf AST expression
-    filterCondition.map(c => GpuFilterExec(c, joinExec)()).getOrElse(joinExec)
+
+    val sbEnabled = conf.isShuffleBroadcastEnabled
+    val sbDecision = sbEnabled &&
+      GpuBroadcastHashJoinMeta.shouldUseShuffleBroadcast(buildSideMeta, conf)
+    GpuBroadcastHashJoinMeta.logRewriteDecision(buildSideMeta, sbEnabled, sbDecision, conf)
+    if (sbDecision) {
+      // Swap the GpuBroadcastExchangeExec under the build side for a
+      // GpuShuffleExchangeExec writing GpuBroadcastReplicatePartitioning, then
+      // construct the consumer GpuShuffleBroadcastHashJoinExec.
+      val (newLeft, newRight) =
+        GpuBroadcastHashJoinMeta.rewriteBuildToShuffle(left, right, buildSide)
+      val joinExec = GpuShuffleBroadcastHashJoinExec(
+        leftKeys.map(_.convertToGpu()),
+        rightKeys.map(_.convertToGpu()),
+        join.joinType,
+        buildSide,
+        joinCondition,
+        newLeft, newRight,
+        join.isNullAwareAntiJoin)
+      filterCondition.map(c => GpuFilterExec(c, joinExec)()).getOrElse(joinExec)
+    } else {
+      val joinExec = GpuBroadcastHashJoinExec(
+        leftKeys.map(_.convertToGpu()),
+        rightKeys.map(_.convertToGpu()),
+        join.joinType,
+        buildSide,
+        joinCondition,
+        left, right,
+        join.isNullAwareAntiJoin)
+      filterCondition.map(c => GpuFilterExec(c, joinExec)()).getOrElse(joinExec)
+    }
+  }
+}
+
+object GpuBroadcastHashJoinMeta extends Logging {
+
+  /** Emit a one-line diagnostic describing whether we will rewrite this BHJ
+   *  through the native shuffle-broadcast path. */
+  def logRewriteDecision(
+      buildSidePlan: SparkPlan,
+      enabledFlag: Boolean,
+      finalDecision: Boolean,
+      conf: RapidsConf): Unit = {
+    val (sizeStr, unwrapStatus) = unwrapBroadcastExchange(buildSidePlan) match {
+      case Some(ex) =>
+        val sz = try {
+          ex.runtimeStatistics.sizeInBytes.longValue.toString
+        } catch {
+          case t: Throwable => s"UNAVAILABLE(${t.getClass.getSimpleName})"
+        }
+        (sz, "ok")
+      case None => ("n/a", s"unwrap_fail(${buildSidePlan.getClass.getSimpleName})")
+    }
+    val driverThreshold = SQLConf.get.autoBroadcastJoinThreshold
+    val maxSize = conf.shuffleBroadcastMaxSize
+    logWarning(s"[NATIVE-BCAST] enabled=$enabledFlag unwrap=$unwrapStatus " +
+      s"buildSizeBytes=$sizeStr driverThreshold=$driverThreshold maxSize=$maxSize " +
+      s"decision=$finalDecision")
+  }
+
+  /** Peel BroadcastQueryStageExec / ReusedExchangeExec wrappers to get the
+   *  underlying GpuBroadcastExchangeExec on the build side. Returns None if
+   *  the structure is unexpected (e.g. AQE on, or already-rewritten). */
+  private def unwrapBroadcastExchange(plan: SparkPlan): Option[GpuBroadcastExchangeExec] = plan match {
+    case g: GpuBroadcastExchangeExec => Some(g)
+    case bqse: BroadcastQueryStageExec => bqse.plan match {
+      case g: GpuBroadcastExchangeExec => Some(g)
+      case ReusedExchangeExec(_, g: GpuBroadcastExchangeExec) => Some(g)
+      case _ => None
+    }
+    case ReusedExchangeExec(_, g: GpuBroadcastExchangeExec) => Some(g)
+    case _ => None
+  }
+
+  /** Decide whether this build side is eligible for shuffle-broadcast.
+   *
+   *  In an aggressive SOL configuration the user has already set
+   *  `spark.sql.autoBroadcastJoinThreshold` to gate which joins become BHJ;
+   *  any BHJ that reaches GpuOverrides has, by definition, a build estimate
+   *  small enough for the broadcast pattern. Layering another runtime size
+   *  check on `GpuBroadcastExchangeExec.runtimeStatistics` is unreliable —
+   *  at GpuOverrides time the relationFuture has not been kicked off, so
+   *  the runtime stats return 0 and the rewrite never fires.
+   *
+   *  So this method just verifies the build side structure is something we
+   *  can rewrite (a GpuBroadcastExchangeExec, possibly behind a
+   *  BroadcastQueryStageExec / ReusedExchangeExec wrapper). */
+  def shouldUseShuffleBroadcast(buildSidePlan: SparkPlan, conf: RapidsConf): Boolean = {
+    unwrapBroadcastExchange(buildSidePlan).isDefined
+  }
+
+  /** Rewrite the broadcast exchange under the build side into a single-output
+   *  shuffle exchange. Every consumer task reads partition 0 (the only
+   *  partition) and gets the full build assembled from all mappers' shards. */
+  private[execution] def rewriteBuildToShuffle(
+      left: SparkPlan,
+      right: SparkPlan,
+      buildSide: GpuBuildSide): (SparkPlan, SparkPlan) = {
+    val buildPlan = buildSide match {
+      case GpuBuildLeft => left
+      case GpuBuildRight => right
+    }
+    val broadcastExchange = unwrapBroadcastExchange(buildPlan).getOrElse {
+      throw new IllegalStateException(
+        "shouldUseShuffleBroadcast returned true but build side has no GpuBroadcastExchangeExec")
+    }
+    val newExchange = GpuShuffleExchangeExec(
+      GpuSinglePartitioning,
+      broadcastExchange.child,
+      ENSURE_REQUIREMENTS)(GpuSinglePartitioning)
+
+    buildSide match {
+      case GpuBuildLeft => (newExchange, right)
+      case GpuBuildRight => (left, newExchange)
+    }
   }
 }
 

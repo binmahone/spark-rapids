@@ -17,7 +17,7 @@
 package com.nvidia.spark.rapids
 
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.function.{Consumer, IntUnaryOperator}
 
 import scala.collection.mutable.ArrayBuffer
@@ -66,6 +66,129 @@ class ShuffleBufferCatalog extends Logging {
   /** Tracks the next table identifier */
   private[this] val tableIdCounter = new AtomicInteger(0)
 
+  // ===========================================================================
+  // INSTRUMENTATION for per-block release diagnostics. INFO-level logging adds
+  // ~1 line per shuffle block add/remove; in steady state this is one log line
+  // per ~MB of shuffle traffic, which is small relative to the work being done.
+  // Counters are atomic so all paths (caching writer, UCX server send-complete,
+  // stage-end cleanup) share a consistent view.
+  // ===========================================================================
+  private[this] val cumulativeAddBytes = new AtomicLong(0)
+  private[this] val cumulativeAddCount = new AtomicLong(0)
+  // Additional metrics to triangulate true catalog footprint vs reported
+  // buff.getLength (the shared cuDF parent buffer length, which over-counts
+  // when ContiguousTable is a slice of a contiguousSplit result).
+  private[this] val cumulativeAddRows = new AtomicLong(0)
+  private[this] val cumulativeUncompressedSize = new AtomicLong(0)
+  private[this] val cumulativePerBlockRemoveBytes = new AtomicLong(0)
+  private[this] val cumulativePerBlockRemoveCount = new AtomicLong(0)
+  private[this] val cumulativeUnregisterBytes = new AtomicLong(0)
+  private[this] val cumulativeUnregisterCount = new AtomicLong(0)
+  // ShuffleBufferId -> recorded byte length, captured at add time so remove
+  // path knows what to deduct from the running totals.
+  private[this] val bufferIdToSize = new ConcurrentHashMap[ShuffleBufferId, Long]()
+  // per-shuffleId live bytes (add - remove). Lets us see which shuffle's
+  // output dominates at any point in time.
+  private[this] val perShuffleLiveBytes =
+    new ConcurrentHashMap[Int, AtomicLong]()
+  private[this] val perShuffleBlockCount =
+    new ConcurrentHashMap[Int, AtomicLong]()
+
+  private def logBytes(b: Long): String = f"${b.toDouble / (1024 * 1024)}%.1f MB"
+
+  private def perShuffleBreakdown(): String = {
+    import scala.collection.JavaConverters._
+    val pairs = perShuffleLiveBytes.entrySet().asScala
+      .map(e => (e.getKey, e.getValue.get(),
+        Option(perShuffleBlockCount.get(e.getKey)).map(_.get()).getOrElse(0L)))
+      .toSeq.sortBy(-_._2)
+    pairs.map { case (sid, b, c) =>
+      s"sid=$sid:${logBytes(b)}/${c}blk"
+    }.mkString(" ")
+  }
+
+  private def recordAdd(
+      bufferId: ShuffleBufferId,
+      bufLen: Long,
+      rowCount: Long,
+      uncompressedSize: Long): Unit = {
+    bufferIdToSize.put(bufferId, bufLen)
+    val addCount = cumulativeAddCount.incrementAndGet()
+    val addBytes = cumulativeAddBytes.addAndGet(bufLen)
+    val addRows = cumulativeAddRows.addAndGet(rowCount)
+    val addUncomp = cumulativeUncompressedSize.addAndGet(uncompressedSize)
+    perShuffleLiveBytes
+      .computeIfAbsent(bufferId.shuffleId, _ => new AtomicLong(0L))
+      .addAndGet(bufLen)
+    perShuffleBlockCount
+      .computeIfAbsent(bufferId.shuffleId, _ => new AtomicLong(0L))
+      .incrementAndGet()
+    val live = addBytes - cumulativePerBlockRemoveBytes.get() -
+      cumulativeUnregisterBytes.get()
+    // every 100 adds, log all three size metrics for triangulation:
+    //   cumAddBytes      = sum of buff.getLength (the cuDF parent buffer length)
+    //   cumAddUncompSize = sum of TableMeta.bufferMeta().uncompressedSize()
+    //   cumAddRows       = sum of contigTable.getRowCount() (slice's actual rows)
+    // If catalog metric is 8x inflated, cumAddBytes >> cumAddUncompSize and
+    // also >> cumAddRows × bytes_per_row. The right metric tells us true
+    // catalog footprint.
+    if (addCount % 100L == 0L) {
+      logInfo(s"GpuShuffleCatalog: add count=$addCount " +
+        s"cumAddBytes=${logBytes(addBytes)} " +
+        s"cumAddUncomp=${logBytes(addUncomp)} " +
+        s"cumAddRows=$addRows " +
+        s"cumPerBlockReleased=${logBytes(cumulativePerBlockRemoveBytes.get())} " +
+        s"cumUnregisterReleased=${logBytes(cumulativeUnregisterBytes.get())} " +
+        s"liveBytes=${logBytes(live)} blocks=${bufferIdToSize.size()} " +
+        s"per-shuffle=[${perShuffleBreakdown()}]")
+    }
+  }
+
+  private def recordPerBlockRemove(bufferId: ShuffleBufferId): Unit = {
+    val size: java.lang.Long = bufferIdToSize.remove(bufferId)
+    if (size != null) {
+      val rmCount = cumulativePerBlockRemoveCount.incrementAndGet()
+      val rmBytes = cumulativePerBlockRemoveBytes.addAndGet(size.longValue())
+      val perShuf = perShuffleLiveBytes.get(bufferId.shuffleId)
+      if (perShuf != null) perShuf.addAndGet(-size.longValue())
+      val perShufCount = perShuffleBlockCount.get(bufferId.shuffleId)
+      if (perShufCount != null) perShufCount.decrementAndGet()
+      if (rmCount % 100L == 0L) {
+        val live = cumulativeAddBytes.get() - rmBytes -
+          cumulativeUnregisterBytes.get()
+        logInfo(s"GpuShuffleCatalog: per-block-remove count=$rmCount " +
+          s"cumRemoved=${logBytes(rmBytes)} liveBytes=${logBytes(live)}")
+      }
+    }
+  }
+
+  private def recordUnregister(bufferIds: Seq[ShuffleBufferId]): Unit = {
+    var totalSize = 0L
+    var n = 0
+    var shuffleId = -1
+    bufferIds.foreach { id =>
+      shuffleId = id.shuffleId
+      val size: java.lang.Long = bufferIdToSize.remove(id)
+      if (size != null) {
+        totalSize += size.longValue()
+        n += 1
+      }
+    }
+    // wipe out per-shuffle counters for this shuffleId.
+    if (shuffleId >= 0) {
+      perShuffleLiveBytes.remove(shuffleId)
+      perShuffleBlockCount.remove(shuffleId)
+    }
+    val urCount = cumulativeUnregisterCount.incrementAndGet()
+    val urBytes = cumulativeUnregisterBytes.addAndGet(totalSize)
+    val live = cumulativeAddBytes.get() -
+      cumulativePerBlockRemoveBytes.get() - urBytes
+    logInfo(s"GpuShuffleCatalog: unregister #$urCount shuffleId=$shuffleId " +
+      s"blocks=$n freedBytes=${logBytes(totalSize)} " +
+      s"cumUnregisterReleased=${logBytes(urBytes)} liveBytes=${logBytes(live)} " +
+      s"per-shuffle-remaining=[${perShuffleBreakdown()}]")
+  }
+
   private def trackCachedHandle(
       bufferId: ShuffleBufferId,
       handle: SpillableDeviceBufferHandle,
@@ -109,6 +232,9 @@ class ShuffleBufferCatalog extends Logging {
       buff.incRefCount()
       val handle = SpillableDeviceBufferHandle(buff, initialSpillPriority)
       trackCachedHandle(bufferId, handle, tableMeta)
+      val uncomp = Option(tableMeta.bufferMeta())
+        .map(_.uncompressedSize()).getOrElse(0L)
+      recordAdd(bufferId, buff.getLength, contigTable.getRowCount, uncomp)
     }
   }
 
@@ -134,6 +260,10 @@ class ShuffleBufferCatalog extends Logging {
       buff.incRefCount()
       val handle = SpillableDeviceBufferHandle(buff, initialSpillPriority)
       trackCachedHandle(bufferId, handle, tableMeta)
+      val uncomp = Option(tableMeta.bufferMeta())
+        .map(_.uncompressedSize()).getOrElse(0L)
+      val rows = Option(tableMeta).map(_.rowCount()).getOrElse(0L)
+      recordAdd(bufferId, buff.getLength, rows, uncomp)
     }
   }
 
@@ -162,17 +292,25 @@ class ShuffleBufferCatalog extends Logging {
     // This might be called on a background thread that has not set the device yet.
     GpuDeviceManager.getDeviceId().foreach(Cuda.setDevice)
 
+    noPerBlockReleaseShuffles.remove(shuffleId)
     val info = activeShuffles.remove(shuffleId)
     if (info != null) {
+      val freedIds = new ArrayBuffer[ShuffleBufferId]()
       val bufferRemover: Consumer[ArrayBuffer[ShuffleBufferId]] = { bufferIds =>
         // NOTE: Not synchronizing array buffer because this shuffle should be inactive.
         bufferIds.foreach { id =>
           tableMap.remove(id.tableId)
           val handleAndMeta = bufferIdToHandle.remove(id)
-          handleAndMeta._1.foreach(_.close())
+          // handleAndMeta may be null if removeShuffleBlockByTableId already
+          // released this block via per-block release path.
+          if (handleAndMeta != null) {
+            handleAndMeta._1.foreach(_.close())
+            freedIds += id
+          }
         }
       }
       info.forEachValue(Long.MaxValue, bufferRemover)
+      recordUnregister(freedIds.toSeq)
     } else {
       // currently shuffle unregister can get called on the driver which never saw a register
       if (!TrampolineUtil.isDriver(SparkEnv.get)) {
@@ -182,6 +320,71 @@ class ShuffleBufferCatalog extends Logging {
   }
 
   def hasActiveShuffle(shuffleId: Int): Boolean = activeShuffles.containsKey(shuffleId)
+
+  // Shuffles that have been observed to be consumed by more than one stage
+  // (e.g. via ReusedExchangeExec). For these, per-block release at UCX
+  // send-complete is unsafe because a second consumer stage still needs to
+  // fetch each block. Listener marks these at onJobStart; we fall back to
+  // stage-level cleanup for them.
+  private val noPerBlockReleaseShuffles =
+    ConcurrentHashMap.newKeySet[Int]()
+
+  /**
+   * Mark a shuffle as ineligible for per-block release. Called by the cleanup
+   * listener when it detects a second consumer stage for the shuffle.
+   */
+  def markNoPerBlockRelease(shuffleId: Int): Unit = {
+    noPerBlockReleaseShuffles.add(shuffleId)
+  }
+
+  /**
+   * Whether per-block release is allowed for the given shuffle. Returns false
+   * for shuffles consumed by more than one stage (ReusedExchange etc.).
+   */
+  def canReleasePerBlock(shuffleId: Int): Boolean = {
+    !noPerBlockReleaseShuffles.contains(shuffleId)
+  }
+
+  /**
+   * Remove a single shuffle block by its table identifier after it has been
+   * consumed (e.g. UCX send-complete). This is more eager than
+   * unregisterShuffle which clears the entire shuffleId at once.
+   *
+   * No-op when canReleasePerBlock returns false for the owning shuffle
+   * (typically when a ReusedExchange has marked the shuffle ineligible).
+   * Caller passes the tableId of the consumed block.
+   */
+  def removeShuffleBlockByTableId(tableId: Int): Unit = {
+    val shuffleBufferId = tableMap.get(tableId)
+    if (shuffleBufferId == null) {
+      // already removed, or this is a degenerate/unknown table id.
+      return
+    }
+    if (!canReleasePerBlock(shuffleBufferId.shuffleId)) {
+      // ReusedExchange or similar — leave the block alone, stage-end cleanup
+      // will handle it once all consumer stages are done.
+      return
+    }
+    // commit the removal (CAS-style on tableMap to avoid concurrent double-close).
+    if (tableMap.remove(tableId, shuffleBufferId)) {
+      val handleAndMeta = bufferIdToHandle.remove(shuffleBufferId)
+      if (handleAndMeta != null) {
+        handleAndMeta._1.foreach(_.close())
+      }
+      // remove from the ShuffleInfo entry so subsequent unregisterShuffle is
+      // a no-op for this id.
+      val info = activeShuffles.get(shuffleBufferId.shuffleId)
+      if (info != null) {
+        val entries = info.get(shuffleBufferId.blockId)
+        if (entries != null) {
+          entries.synchronized {
+            entries -= shuffleBufferId
+          }
+        }
+      }
+      recordPerBlockRemove(shuffleBufferId)
+    }
+  }
 
   /** Get all the buffer IDs that correspond to a shuffle block identifier. */
   private def blockIdToBuffersIds(blockId: ShuffleBlockId): Array[ShuffleBufferId] = {

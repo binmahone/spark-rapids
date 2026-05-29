@@ -313,6 +313,11 @@ object NvtxRegistry {
   val ROUND_ROBIN_PARTITION_SLICE: NvtxId = NvtxId("Round robin partition slice",
     NvtxColor.BLUE, "Slicing data for round-robin partitioning")
 
+  val BROADCAST_REPLICATE_PARTITION: NvtxId = NvtxId("Broadcast replicate partition",
+    NvtxColor.PURPLE,
+    "Emitting one copy of each input batch per output partition for native " +
+      "GPU-to-GPU broadcast (replicate-to-all wire format)")
+
   // Filter operations
   val FILTER_BATCH: NvtxId = NvtxId("filter batch", NvtxColor.YELLOW,
     "Filtering rows from a columnar batch")
@@ -755,6 +760,7 @@ object NvtxRegistry {
     register(BRING_BACK_TO_HOST)
     register(ROUND_ROBIN_PARTITION)
     register(ROUND_ROBIN_PARTITION_SLICE)
+    register(BROADCAST_REPLICATE_PARTITION)
     register(FILTER_BATCH)
     register(PROJECT_EXEC)
     register(PROJECT_AST)

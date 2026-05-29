@@ -57,6 +57,19 @@ case class UCXActiveMessage(activeMessageId: Int, header: Long, forceRndv: Boole
 }
 
 /**
+ * An active-message send deferred because the destination endpoint was not yet registered.
+ * Retried on the progress thread until `deadlineNanos`.
+ */
+private case class PendingActiveMessage(
+    executorId: Long,
+    am: UCXActiveMessage,
+    dataAddress: Long,
+    dataSize: Long,
+    cb: UcxCallback,
+    isGpu: Boolean,
+    deadlineNanos: Long)
+
+/**
  * The UCX class wraps JUCX classes and handles all communication with UCX from other
  * parts of the shuffle code. It manages a `UcpContext` and `UcpWorker`, for the
  * local executor, and maintain a set of `UcpEndpoint` for peers.
@@ -115,6 +128,14 @@ class UCX(transport: UCXShuffleTransport, executor: BlockManagerId, rapidsConf: 
   // task threads and [[progressThread]] will hand them to the UcpWorker thread.
   private val workerTasks = new ConcurrentLinkedQueue[() => Unit]()
 
+  // Active-message sends whose destination endpoint was not yet registered when the send was
+  // attempted (UCX startup race: an inbound peer's endpoint is only added to `endpoints` after
+  // its Control handshake completes in `handleConnectedPeerFromRequest`, so a fetch response
+  // issued before that races to a null lookup). Such sends are deferred here and retried on
+  // subsequent progress-loop iterations until the endpoint registers or the deadline elapses,
+  // rather than failing the transaction permanently. Only touched on the progress thread.
+  private val pendingActiveMessages = new ConcurrentLinkedQueue[PendingActiveMessage]()
+
   // holds memory registered against UCX that should be de-register on exit (used for bounce
   // buffers)
   // NOTE: callers should hold the `registeredMemory` lock before modifying this array
@@ -169,7 +190,10 @@ class UCX(transport: UCXShuffleTransport, executor: BlockManagerId, rapidsConf: 
           // else worker.progress returned 0
           if (rapidsConf.shuffleUcxUseWakeup) {
             drainWorker()
-            if (workerTasks.isEmpty) {
+            // Do not sleep while sends are deferred waiting for an endpoint: their retry depends
+            // on this loop running, and the only event that would wake us is the handshake we are
+            // waiting on -- keep progressing so the retry fires once it registers the endpoint.
+            if (workerTasks.isEmpty && pendingActiveMessages.isEmpty) {
               withResource(new NvtxRange("UCX Sleeping", NvtxColor.PURPLE)) { _ =>
                 // Note that `waitForEvents` checks any events that have occurred, and will
                 // return early in those cases. Therefore, `waitForEvents` is safe to be
@@ -189,6 +213,7 @@ class UCX(transport: UCXShuffleTransport, executor: BlockManagerId, rapidsConf: 
               }
             }
             worker.progress()
+            retryPendingActiveMessages()
           }
         } catch {
           case t: Throwable =>
@@ -198,6 +223,14 @@ class UCX(transport: UCXShuffleTransport, executor: BlockManagerId, rapidsConf: 
 
       synchronized {
         logDebug("Exiting UCX progress thread.")
+        // Fail any sends still deferred for a missing endpoint so their callbacks do not hang
+        // waiting on a retry that will never run now the progress loop has exited.
+        var p = pendingActiveMessages.poll()
+        while (p != null) {
+          p.cb.onError(-200,
+            s"UCX progress thread exiting; cannot send message to executor ${p.executorId}")
+          p = pendingActiveMessages.poll()
+        }
         Seq(endpointManager, worker, context).safeClose()
         worker = null
       }
@@ -552,12 +585,49 @@ class UCX(transport: UCXShuffleTransport, executor: BlockManagerId, rapidsConf: 
     onWorkerThreadAsync(() => {
       val endpoint = endpointManager.getEndpointByExecutorId(executorId)
       if (endpoint == null) {
-        cb.onError(-200,
-          s"Trying to send a message to an executor that doesn't exist $executorId")
+        // Endpoint not registered yet (UCX startup race, see pendingActiveMessages). Defer and
+        // retry on subsequent progress-loop iterations instead of permanently failing, so the
+        // in-flight Control handshake has a chance to register the endpoint first.
+        val timeoutSec = Option(SparkEnv.get)
+          .map(_.conf.getTimeAsSeconds("spark.network.timeout", "120s"))
+          .getOrElse(120L)
+        pendingActiveMessages.add(PendingActiveMessage(executorId, am, dataAddress, dataSize,
+          cb, isGpu, System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSec)))
       } else {
         sendActiveMessage(endpoint, am, dataAddress, dataSize, cb, isGpu)
       }
     })
+  }
+
+  /**
+   * Drain `pendingActiveMessages` once per progress-loop iteration. For each deferred send,
+   * re-resolve the destination endpoint: send it if now registered, fail it past the deadline,
+   * otherwise keep it for a later iteration. The snapshot count ensures entries re-added in this
+   * pass are not reprocessed until the next iteration (so `worker.progress()` runs between
+   * retries and the handshake can complete -- avoids the tight-spin that re-enqueuing onto
+   * `workerTasks` would cause).
+   */
+  private def retryPendingActiveMessages(): Unit = {
+    var remaining = pendingActiveMessages.size()
+    if (remaining == 0) {
+      return
+    }
+    val now = System.nanoTime()
+    while (remaining > 0) {
+      remaining -= 1
+      val p = pendingActiveMessages.poll()
+      if (p != null) {
+        val endpoint = endpointManager.getEndpointByExecutorId(p.executorId)
+        if (endpoint != null) {
+          sendActiveMessage(endpoint, p.am, p.dataAddress, p.dataSize, p.cb, p.isGpu)
+        } else if (now >= p.deadlineNanos) {
+          p.cb.onError(-200,
+            s"Trying to send a message to an executor that doesn't exist ${p.executorId}")
+        } else {
+          pendingActiveMessages.add(p)
+        }
+      }
+    }
   }
 
   private def sendActiveMessage(ep: UcpEndpoint, am: UCXActiveMessage,

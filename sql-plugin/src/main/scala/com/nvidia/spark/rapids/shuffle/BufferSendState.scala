@@ -55,10 +55,13 @@ class BufferSendState(
     transaction: Transaction,
     sendBounceBuffers: SendBounceBuffers,
     requestHandler: RapidsShuffleRequestHandler,
-    serverStream: Cuda.Stream = Cuda.DEFAULT_STREAM)
+    serverStream: Cuda.Stream = Cuda.DEFAULT_STREAM,
+    perBlockEagerRelease: Boolean = false)
     extends AutoCloseable with Logging {
 
-  class SendBlock(val bufferHandle: RapidsShuffleHandle) extends BlockWithSize {
+  class SendBlock(
+      val bufferHandle: RapidsShuffleHandle,
+      val bufferId: Int) extends BlockWithSize {
     // we assume that the size of the buffer won't change as it goes to host/disk
     // we also are likely to assume this is just a device buffer, and so we should
     // copy to device and then send.
@@ -87,13 +90,19 @@ class BufferSendState(
       val btr = new BufferTransferRequest() // for reuse
       val blocksToSend = (0 until transferRequest.requestsLength()).map { ix =>
         val bufferTransferRequest = transferRequest.requests(btr, ix)
-        val handle = requestHandler.getShuffleHandle(bufferTransferRequest.bufferId())
+        val bufferId = bufferTransferRequest.bufferId()
+        val handle = requestHandler.getShuffleHandle(bufferId)
         bufferMetas(ix) = handle.tableMeta.bufferMeta()
-        new SendBlock(handle)
+        new SendBlock(handle, bufferId)
       }
       (peerBufferReceiveHeader, bufferMetas, blocksToSend)
     }
   }
+
+  // Per-block eager release: gating on owning shuffle's canReleasePerBlock
+  // is done inside the catalog's removeShuffleBlockByTableId. We pass tableId
+  // only; the catalog looks up the shuffleId from its tableMap and skips the
+  // remove for ineligible shuffles.
 
   // the header to use for all sends in this `BufferSendState` (sent to us
   // by the peer)
@@ -145,6 +154,22 @@ class BufferSendState(
       isClosed = true
       freeBounceBuffers()
       releaseAcquiredToCatalog()
+      // Per-block eager release: when enabled and the owning shuffle is
+      // eligible (canReleasePerBlock = true, i.e. single consumer stage),
+      // immediately drop each block's catalog entry. The catalog itself
+      // performs the eligibility check; passing perBlockEagerRelease=false
+      // skips the call entirely so non-enabled builds pay no cost.
+      if (perBlockEagerRelease && !hasMoreBlocks) {
+        blocksToSend.foreach { sb =>
+          requestHandler.removeShuffleBlock(sb.bufferId)
+        }
+        // log lightly so we can see this is firing; subject to log level INFO.
+        if (BufferSendState.firstPerBlockReleaseLogged.compareAndSet(false, true)) {
+          logInfo(s"GpuShuffleCatalog: per-block-release firing " +
+            s"(first observed close), ${blocksToSend.size} blocks released " +
+            s"for peer ${peerExecutorId}.")
+        }
+      }
     }
   }
 
@@ -255,4 +280,10 @@ class BufferSendState(
     acquiredBuffs.foreach(_.close())
     acquiredBuffs = Seq.empty
   }
+}
+
+object BufferSendState {
+  // One-shot flag so we get a single log when per-block release first fires.
+  private val firstPerBlockReleaseLogged =
+    new java.util.concurrent.atomic.AtomicBoolean(false)
 }

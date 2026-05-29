@@ -197,6 +197,11 @@ class RapidsShuffleIterator(
             blockId match {
               case sbbid: ShuffleBlockBatchId => BlockIdMapIndex(sbbid, mapIndex)
               case sbid: ShuffleBlockId =>
+                // NOTE: per Spark spec ShuffleBlockBatchId end is exclusive,
+                // so the correct value is `reduceId + 1`. But the server-side
+                // expansion in RapidsShuffleInternalManagerBase iterates
+                // inclusively via `to`, so we use `reduceId, reduceId` —
+                // the two off-by-one bugs cancel exactly here.
                 BlockIdMapIndex(
                   ShuffleBlockBatchId(sbid.shuffleId, sbid.mapId, sbid.reduceId, sbid.reduceId),
                     mapIndex)

@@ -16,7 +16,7 @@
 
 package com.nvidia.spark.rapids
 
-import com.nvidia.spark.rapids.parquet.{GpuParquetMultiFilePartitionReaderFactory, GpuParquetPartitionReaderFactory, GpuParquetPartitionReaderFactoryBase, GpuParquetScan}
+import com.nvidia.spark.rapids.parquet.{GpuParquetGDSPartitionReaderFactory, GpuParquetMultiFilePartitionReaderFactory, GpuParquetPartitionReaderFactory, GpuParquetPartitionReaderFactoryBase, GpuParquetScan}
 import org.apache.hadoop.conf.Configuration
 
 import org.apache.spark.broadcast.Broadcast
@@ -40,6 +40,11 @@ class GpuReadParquetFileFormat extends ParquetFileFormat with GpuReadFileFormatW
 
   /**
    * Create a partition reader factory for the per-file reader.
+   *
+   * For reader.type=GDS we route here too (see [[isPerFileReadEnabled]]) and
+   * substitute the GDS factory; the per-file dispatch shape in
+   * [[org.apache.spark.sql.rapids.GpuFileSourceScanExec]] is the right
+   * granularity for our cuFile DataSource (one open file per reader).
    */
   def createPartitionReaderFactory(sqlConf: SQLConf,
       broadcastedConf: Broadcast[SerializableConfiguration],
@@ -50,16 +55,29 @@ class GpuReadParquetFileFormat extends ParquetFileFormat with GpuReadFileFormatW
       rapidsConf: RapidsConf,
       metrics: Map[String, GpuMetric],
       options: Map[String, String]) : GpuParquetPartitionReaderFactoryBase = {
-    GpuParquetPartitionReaderFactory(
-      sqlConf,
-      broadcastedConf,
-      dataSchema,
-      readDataSchema,
-      partitionSchema,
-      filters.toArray,
-      rapidsConf,
-      metrics,
-      options)
+    if (rapidsConf.isParquetGDSReadEnabled) {
+      GpuParquetGDSPartitionReaderFactory(
+        sqlConf,
+        broadcastedConf,
+        dataSchema,
+        readDataSchema,
+        partitionSchema,
+        filters.toArray,
+        rapidsConf,
+        metrics,
+        options)
+    } else {
+      GpuParquetPartitionReaderFactory(
+        sqlConf,
+        broadcastedConf,
+        dataSchema,
+        readDataSchema,
+        partitionSchema,
+        filters.toArray,
+        rapidsConf,
+        metrics,
+        options)
+    }
   }
 
   override def buildReaderWithPartitionValuesAndMetrics(
@@ -88,7 +106,9 @@ class GpuReadParquetFileFormat extends ParquetFileFormat with GpuReadFileFormatW
     PartitionReaderIterator.buildReader(factory)
   }
 
-  override def isPerFileReadEnabled(conf: RapidsConf): Boolean = conf.isParquetPerFileReadEnabled
+  // GDS shares the per-file dispatch path (one reader per PartitionedFile).
+  override def isPerFileReadEnabled(conf: RapidsConf): Boolean =
+    conf.isParquetPerFileReadEnabled || conf.isParquetGDSReadEnabled
 
   override def createMultiFileReaderFactory(
       broadcastedConf: Broadcast[SerializableConfiguration],

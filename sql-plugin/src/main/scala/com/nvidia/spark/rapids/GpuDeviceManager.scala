@@ -342,6 +342,52 @@ object GpuDeviceManager extends Logging {
       logWarning("SparkRMM retry has been disabled")
       Rmm.setEventHandler(memoryEventHandler)
     }
+
+    startMemoryWatchThread()
+  }
+
+  // Gate: -Dai.rapids.cudf.memwatch.enabled=true on the executor JVM.
+  // Optional: -Dai.rapids.cudf.memwatch.intervalMs=N (default 1000).
+  // Emits a periodic INFO line comparing what RMM reports vs what the
+  // SpillFramework device/host stores see. Useful for diagnosing whether the
+  // spill framework's view of memory pressure diverges from RMM truth.
+  private def startMemoryWatchThread(): Unit = {
+    val enabled = sys.props.get("ai.rapids.cudf.memwatch.enabled").exists(_.toBoolean)
+    if (!enabled) return
+    val intervalMs = sys.props.get("ai.rapids.cudf.memwatch.intervalMs")
+      .map(_.toLong).getOrElse(1000L)
+    val execId = Option(SparkEnv.get).map(_.executorId).getOrElse("driver")
+    val t = new Thread(s"gpu-mem-watch-$execId") {
+      override def run(): Unit = {
+        val startNs = System.nanoTime()
+        while (!Thread.interrupted()) {
+          try {
+            val rmmAlloc = Rmm.getTotalBytesAllocated
+            val rmmMax = Rmm.getMaximumTotalBytesAllocated
+            val devSummary = try {
+              SpillFramework.stores.deviceStore.spillableSummary()
+            } catch { case NonFatal(_) => "<not-init>" }
+            val hostSummary = try {
+              SpillFramework.stores.hostStore.spillableSummary()
+            } catch { case NonFatal(_) => "<not-init>" }
+            val elapsedMs = (System.nanoTime() - startNs) / 1000000L
+            logInfo(s"RMM-WATCH exec=$execId t_ms=$elapsedMs " +
+              s"rmm_alloc_MB=${rmmAlloc / 1048576L} " +
+              s"rmm_max_MB=${rmmMax / 1048576L} " +
+              s"device={$devSummary} host={$hostSummary}")
+            Thread.sleep(intervalMs)
+          } catch {
+            case _: InterruptedException => return
+            case NonFatal(ex) =>
+              logWarning("RMM-WATCH tick failed", ex)
+              try { Thread.sleep(intervalMs) } catch { case _: InterruptedException => return }
+          }
+        }
+      }
+    }
+    t.setDaemon(true)
+    t.start()
+    logInfo(s"RMM-WATCH started for executor $execId interval=${intervalMs}ms")
   }
 
   /**

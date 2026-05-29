@@ -50,6 +50,22 @@ trait RapidsShuffleRequestHandler {
    * @return a [[RapidsBuffer]] which is reference counted, and should be closed by the acquirer
    */
   def getShuffleHandle(tableId: Int): RapidsShuffleHandle
+
+  /**
+   * Release a single shuffle block from the catalog after it has been fully
+   * sent to its peer reducer. Called by the server-side BufferSendState
+   * when per-block eager release is enabled and the shuffle is eligible
+   * (single consumer stage). Default no-op so existing handlers keep working
+   * unchanged.
+   */
+  def removeShuffleBlock(tableId: Int): Unit = {}
+
+  /**
+   * Whether the given shuffle can have its blocks released individually
+   * (true) or must wait for stage-level cleanup (false, e.g. ReusedExchange
+   * with multiple consumer stages).
+   */
+  def canReleasePerBlock(shuffleId: Int): Boolean = false
 }
 
 /**
@@ -75,6 +91,9 @@ class RapidsShuffleServer(transport: RapidsShuffleTransport,
                           exec: Executor,
                           bssExec: Executor,
                           rapidsConf: RapidsConf) extends AutoCloseable with Logging {
+
+  private val perBlockEagerRelease: Boolean =
+    rapidsConf.isShuffleGpuCatalogPerBlockEagerReleaseEnabled
 
   def getId: BlockManagerId = {
     // upon seeing this port, the other side will try to connect to the port
@@ -193,7 +212,8 @@ class RapidsShuffleServer(transport: RapidsShuffleTransport,
               pendingTransfer.tx,
               sendBounceBuffers.head, // there's only one bounce buffer here for now
               pendingTransfer.requestHandler,
-              serverStream))
+              serverStream,
+              perBlockEagerRelease))
           } else {
             // TODO: make this a metric => "blocked while waiting on bounce buffers"
             logTrace(s"Can't acquire send bounce buffers")

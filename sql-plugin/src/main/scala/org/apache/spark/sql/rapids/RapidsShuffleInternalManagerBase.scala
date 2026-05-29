@@ -148,6 +148,42 @@ class ThreadSafeShuffleWriteMetricsReporter(val wrapped: ShuffleWriteMetricsRepo
 }
 
 object RapidsShuffleInternalManagerBase extends Logging {
+  /**
+   * Spark local-property key that the driver uses to signal which
+   * shuffleIds are part of a native-broadcast (multi-consumer) pattern.
+   * Executors read it via `TaskContext.getLocalProperty` when registering
+   * a shuffle and disable per-block eager release for those ids.
+   *
+   * Value is a comma-separated list of integer shuffleIds (no whitespace).
+   */
+  val NATIVE_BROADCAST_SHUFFLE_IDS_KEY: String =
+    "spark.rapids.shuffle.broadcast.shuffleIds"
+
+  /** Returns true iff the calling task's local property says this shuffleId
+   *  belongs to a native-broadcast set. Returns false on the driver (no
+   *  TaskContext) or when the property is unset/empty. */
+  def shuffleIsNativeBroadcast(shuffleId: Int): Boolean = {
+    val taskCtx = org.apache.spark.TaskContext.get()
+    if (taskCtx == null) {
+      false
+    } else {
+      val prop = taskCtx.getLocalProperty(NATIVE_BROADCAST_SHUFFLE_IDS_KEY)
+      if (prop == null || prop.isEmpty) {
+        false
+      } else {
+        val target = shuffleId.toString
+        var found = false
+        var i = 0
+        val parts = prop.split(",")
+        while (!found && i < parts.length) {
+          if (parts(i) == target) found = true
+          i += 1
+        }
+        found
+      }
+    }
+  }
+
   def unwrapHandle(handle: ShuffleHandle): ShuffleHandle = handle match {
     case gh: GpuShuffleHandle[_, _] => gh.wrapped
     case other => other
@@ -1641,9 +1677,18 @@ class RapidsCachingWriter[K, V](
     NvtxRegistry.RAPIDS_CACHING_WRITER_WRITE {
       var bytesWritten: Long = 0L
       var recordsWritten: Long = 0L
+      var iterCount: Long = 0L
+      val tid = Option(org.apache.spark.TaskContext.get())
+        .map(_.taskAttemptId().toString).getOrElse("noctx")
       records.foreach { p =>
         val partId = p._1.asInstanceOf[Int]
         val batch = p._2.asInstanceOf[ColumnarBatch]
+        iterCount += 1
+        if (iterCount <= 5 || iterCount % 100 == 0) {
+          logInfo(s"WRITER-DIAG tid=$tid shuffle_id=${handle.shuffleId} map_id=$mapId " +
+            s"iter=$iterCount partId=$partId batch.numRows=${batch.numRows()} " +
+            s"batch.numCols=${batch.numCols()} cumRecords=${recordsWritten + batch.numRows()}")
+        }
         logDebug(s"Caching shuffle_id=${handle.shuffleId} map_id=$mapId, partId=$partId, "
           + s"batch=[num_cols=${batch.numCols()}, num_rows=${batch.numRows()}]")
         recordsWritten = recordsWritten + batch.numRows()
@@ -1862,9 +1907,26 @@ class RapidsShuffleInternalManagerBase(conf: SparkConf, val isDriver: Boolean)
         }
 
         override def getShuffleBufferMetas(sbbId: ShuffleBlockBatchId): Seq[TableMeta] = {
+          // NOTE: per Spark BlockId.scala, ShuffleBlockBatchId range is
+          // documented as [startReduceId, endReduceId) (exclusive end).
+          // However spark-rapids historically iterates inclusively via `to`,
+          // because the client side in RapidsShuffleIterator wraps single
+          // ShuffleBlockIds with (reduceId, reduceId) — i.e. an empty range
+          // per the documented semantics, but interpreted as the single
+          // partition under the inclusive convention used here. The two
+          // off-by-one bugs cancel for the single-partition fetch path.
+          // Do not change this without also changing the client-side wrap.
           (sbbId.startReduceId to sbbId.endReduceId).flatMap(rid => {
             catalog.blockIdToMetas(ShuffleBlockId(sbbId.shuffleId, sbbId.mapId, rid))
           })
+        }
+
+        override def removeShuffleBlock(tableId: Int): Unit = {
+          catalog.removeShuffleBlockByTableId(tableId)
+        }
+
+        override def canReleasePerBlock(shuffleId: Int): Boolean = {
+          catalog.canReleasePerBlock(shuffleId)
         }
       }
       val server = transport.get.makeServer(requestHandler)
@@ -2073,6 +2135,17 @@ class RapidsShuffleInternalManagerBase(conf: SparkConf, val isDriver: Boolean)
       // Note that in local mode this can be called multiple times.
       logInfo(s"Registering shuffle $shuffleId")
       catalog.registerShuffle(shuffleId)
+      // If the driver flagged this shuffle as a native broadcast (so every
+      // consumer task across the cluster reads the same blocks), mark it
+      // ineligible for per-block eager release. The driver propagates the
+      // set of broadcast shuffleIds via a Spark local property; executors
+      // read it from TaskContext.
+      RapidsShuffleInternalManagerBase.shuffleIsNativeBroadcast(shuffleId) match {
+        case true =>
+          logInfo(s"Marking shuffle $shuffleId as native-broadcast (no per-block release)")
+          catalog.markNoPerBlockRelease(shuffleId)
+        case false => // no-op
+      }
     }
     // Also register with MultithreadedShuffleBufferCatalog if available
     GpuShuffleEnv.getMultithreadedCatalog.foreach { mtCatalog =>
@@ -2087,6 +2160,11 @@ class RapidsShuffleInternalManagerBase(conf: SparkConf, val isDriver: Boolean)
       logInfo(s"Unregistering shuffle $shuffleId from shuffle buffer catalog")
       catalog.unregisterShuffle(shuffleId)
     }
+    // If we cached a native-broadcast build batch keyed by this shuffleId
+    // in the executor-scoped cache, drop it now so the underlying device
+    // buffer is freed. Safe no-op for non-broadcast shuffles.
+    org.apache.spark.sql.rapids.execution.GpuShuffleBroadcastBuildCache
+      .remove(shuffleId)
     // For MultithreadedShuffleBufferCatalog:
     // Cleanup is triggered by ShuffleCleanupListener on job end, not here.
     // The ShuffleCleanupEndpoint polls the driver for shuffles to clean and calls

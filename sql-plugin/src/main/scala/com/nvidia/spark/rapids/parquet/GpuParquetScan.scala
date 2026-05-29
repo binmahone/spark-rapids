@@ -56,6 +56,7 @@ import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.Util
 import org.apache.parquet.format.converter.ParquetMetadataConverter
 import org.apache.parquet.hadoop.{ParquetFileReader, ParquetInputFormat}
+import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.hadoop.ParquetFileWriter.MAGIC
 import org.apache.parquet.hadoop.metadata._
 import org.apache.parquet.io.{InputFile, SeekableInputStream => ParquetSeekableInputStream}
@@ -125,7 +126,12 @@ case class GpuParquetScan(
     val broadcastedConf = sparkSession.sparkContext.broadcast(
       new SerializableConfiguration(hadoopConf))
 
-    if (rapidsConf.isParquetPerFileReadEnabled) {
+    if (rapidsConf.isParquetGDSReadEnabled) {
+      logInfo("Using the GDS (cuFile direct) parquet reader")
+      GpuParquetGDSPartitionReaderFactory(sparkSession.sessionState.conf, broadcastedConf,
+        dataSchema, readDataSchema, readPartitionSchema, pushedFilters, rapidsConf, metrics,
+        options.asScala.toMap)
+    } else if (rapidsConf.isParquetPerFileReadEnabled) {
       logInfo("Using the original per file parquet reader")
       GpuParquetPartitionReaderFactory(sparkSession.sessionState.conf, broadcastedConf,
         dataSchema, readDataSchema, readPartitionSchema, pushedFilters, rapidsConf, metrics,
@@ -2251,13 +2257,22 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
   def getParquetOptions(
       readDataSchema: StructType,
       clippedSchema: MessageType,
-      useFieldId: Boolean): ParquetOptions = {
+      useFieldId: Boolean,
+      rowGroupIndices: Array[Int] = null): ParquetOptions = {
     val includeColumns = toCudfColumnNames(readDataSchema, clippedSchema,
       isSchemaCaseSensitive, useFieldId)
-    ParquetOptions.builder()
+    val builder = ParquetOptions.builder()
         .withTimeUnit(DType.TIMESTAMP_MICROSECONDS)
         .includeColumn(includeColumns : _*)
-        .build()
+    // rowGroupIndices semantics:
+    //   null         -> caller wants default (all row groups)
+    //   empty array  -> caller wants no row groups (read 0 rows; e.g. a Spark
+    //                   byte range that contains no row group starting offset)
+    //   non-empty    -> explicit selection
+    if (rowGroupIndices != null) {
+      builder.withRowGroups(rowGroupIndices)
+    }
+    builder.build()
   }
 
   /** conversions used by multithreaded reader and coalescing reader */
@@ -3728,5 +3743,252 @@ object ParquetPartitionReader {
     } else {
       block.getColumns.asScala.map(_.getTotalSize).sum
     }
+  }
+}
+
+// ================================================================================
+//  GDS (cuFile direct-to-GPU) parquet reader path
+// ================================================================================
+
+/**
+ * Per-file reader factory for the GDS path. Constructs a [[ParquetGDSPartitionReader]]
+ * for each PartitionedFile.
+ *
+ * Reuses [[GpuParquetPartitionReaderFactoryBase]] to share footer-filter handling,
+ * useChunkedReader, targetSizeBytes, etc.
+ */
+case class GpuParquetGDSPartitionReaderFactory(
+    @transient sqlConf: SQLConf,
+    broadcastedConf: Broadcast[SerializableConfiguration],
+    dataSchema: StructType,
+    readDataSchema: StructType,
+    partitionSchema: StructType,
+    filters: Array[Filter],
+    @transient rapidsConf: RapidsConf,
+    metrics: Map[String, GpuMetric],
+    @transient params: Map[String, String])
+  extends GpuParquetPartitionReaderFactoryBase(
+    sqlConf, broadcastedConf, dataSchema, readDataSchema, partitionSchema,
+    rapidsConf, metrics, params) with Logging {
+
+  override protected def buildBaseColumnarParquetReader(
+      file: PartitionedFile): PartitionReader[ColumnarBatch] = {
+    val conf = new Configuration(broadcastedConf.value.value)
+    val filePath = new Path(new URI(file.filePath.toString()))
+    // Compute absolute row-group indices for the byte range [file.start,
+    // file.start + file.length). cuDF's ParquetOptions.withRowGroups expects
+    // positions in the original file footer; we therefore read the full
+    // footer here (NO_FILTER) rather than reusing filterHandler.filterBlocks,
+    // whose NATIVE footer reader pre-filters by byte range and loses the
+    // absolute indices. Whole-file scans naturally yield indices
+    // [0, 1, ..., N-1]; sliced scans yield the subset that falls in range.
+    val rowGroupIndices = computeRowGroupIndices(conf, filePath, file.start, file.length)
+    // A non-empty placeholder schema so the empty-schema (count-only) branch
+    // in ParquetGDSPartitionReader stays inactive. Field types don't matter
+    // for the GDS path since cuDF parses its own footer.
+    val placeholderSchema = new MessageType("root",
+      readDataSchema.fields.map { f =>
+        new org.apache.parquet.schema.PrimitiveType(
+          org.apache.parquet.schema.Type.Repetition.REQUIRED,
+          org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT32,
+          f.name).asInstanceOf[org.apache.parquet.schema.Type]
+      }.toList.asJava)
+    new ParquetGDSPartitionReader(
+      fileIO, conf, file, filePath, Iterable.empty[BlockMetaData],
+      placeholderSchema, isCaseSensitive, readDataSchema,
+      debugDumpPrefix, debugDumpAlways,
+      targetSizeBytes,
+      useChunkedReader, maxChunkedReaderMemoryUsageSizeBytes, compressCfg,
+      metrics, DateTimeRebaseCorrected, DateTimeRebaseCorrected,
+      hasInt96Timestamps = false, readUseFieldId, rowGroupIndices)
+  }
+
+  @scala.annotation.nowarn
+  private def computeRowGroupIndices(
+      conf: Configuration,
+      filePath: Path,
+      fileStart: Long,
+      fileLen: Long): Array[Int] = {
+    val footer = ParquetFileReader.readFooter(HadoopInputFile.fromPath(filePath, conf),
+      ParquetMetadataConverter.NO_FILTER)
+    val blocks = footer.getBlocks
+    val end = fileStart + fileLen
+    val indices = new ArrayBuffer[Int](blocks.size())
+    var i = 0
+    while (i < blocks.size()) {
+      val startPos = blocks.get(i).getStartingPos
+      if (startPos >= fileStart && startPos < end) {
+        indices += i
+      }
+      i += 1
+    }
+    indices.toArray
+  }
+}
+
+/**
+ * Produces [[Table]] chunks from a parquet file via a cuFile-backed cuDF DataSource.
+ * Sibling to [[ParquetTableReader]], but skips the host-buffer "synthetic parquet"
+ * step: column data flows directly disk → GPU.
+ *
+ * Phase 1: feeds cuDF the WHOLE original parquet file. Column pruning honored via
+ * ParquetOptions.includeColumn. Row-group filtering provided by spark-rapids'
+ * filterHandler is NOT enforced; cuDF will read all row groups in the file.
+ */
+class GDSParquetTableReader(
+    conf: Configuration,
+    chunkSizeByteLimit: Long,
+    maxChunkedReaderMemoryUsageSizeBytes: Long,
+    opts: ParquetOptions,
+    file: java.io.File,
+    metrics: Map[String, GpuMetric],
+    dateRebaseMode: DateTimeRebaseMode,
+    timestampRebaseMode: DateTimeRebaseMode,
+    isSchemaCaseSensitive: Boolean,
+    useFieldId: Boolean,
+    readDataSchema: StructType,
+    clippedParquetSchema: MessageType,
+    splits: Array[PartitionedFile]) extends GpuDataProducer[Table] with Logging {
+
+  // Pass the file path directly to cuDF. cuDF's default file_source class
+  // wraps kvikio::FileHandle internally — kvikio handles IO via its own
+  // 8-thread (configurable via KVIKIO_NTHREADS env) worker pool calling
+  // libcufile (true GDS on supported FS, compat mode otherwise). This is
+  // the same path pv-cli takes via velox's source_info{filePath}; no
+  // custom DataSource, no D2D copy, no Java-side prefetch pool needed.
+  // (plannedRanges parameter is kept in the signature for now to avoid
+  // touching the factory; cuDF reads the footer itself and derives ranges.)
+  private val delegate = new JniParquetChunkedReader(
+    chunkSizeByteLimit, maxChunkedReaderMemoryUsageSizeBytes, opts, file)
+
+  private lazy val splitsString = splits.mkString("; ")
+
+  override def hasNext: Boolean = delegate.hasNext
+
+  override def next: Table = {
+    val table = NvtxIdWithMetrics(NvtxRegistry.PARQUET_DECODE, metrics(GPU_DECODE_TIME)) {
+      try {
+        delegate.readChunk()
+      } catch {
+        case e: Exception =>
+          throw new IOException(s"Error when processing $splitsString", e)
+      }
+    }
+    if (table == null) {
+      return null
+    }
+    closeOnExcept(table) { _ =>
+      // Skip throwIfRebaseNeededInExceptionMode: in Phase 2-E we hard-code
+      // CORRECTED rebase mode so the exception path is unreachable.
+      if (readDataSchema.length < table.getNumberOfColumns) {
+        throw new QueryExecutionException(s"Expected ${readDataSchema.length} columns " +
+          s"but read ${table.getNumberOfColumns} from $splitsString")
+      }
+    }
+    metrics(NUM_OUTPUT_BATCHES) += 1
+    // Phase 2-E: skip evolveSchemaIfNeededAndClose. Trusts that cuDF returns
+    // columns matching readDataSchema (we drove cuDF via includeColumn with
+    // the same field names in the same order, so cuDF's output schema is
+    // exactly what Spark wants). Skipping rebaseDateTime is safe because
+    // both modes are CORRECTED.
+    table
+  }
+
+  override def close(): Unit = {
+    delegate.close()
+  }
+}
+
+/**
+ * Per-file partition reader for the GDS path. One file at a time per task, no
+ * background thread pool — cuFile internally parallelizes IO (max_io_threads
+ * configured in cufile.json).
+ */
+class ParquetGDSPartitionReader(
+    override val fileIO: RapidsFileIO,
+    override val conf: Configuration,
+    split: PartitionedFile,
+    filePath: Path,
+    clippedBlocks: Iterable[BlockMetaData],
+    clippedParquetSchema: MessageType,
+    override val isSchemaCaseSensitive: Boolean,
+    readDataSchema: StructType,
+    debugDumpPrefix: Option[String],
+    debugDumpAlways: Boolean,
+    targetBatchSizeBytes: Long,
+    useChunkedReader: Boolean,
+    maxChunkedReaderMemoryUsageSizeBytes: Long,
+    override val compressCfg: CpuCompressionConfig,
+    override val execMetrics: Map[String, GpuMetric],
+    dateRebaseMode: DateTimeRebaseMode,
+    timestampRebaseMode: DateTimeRebaseMode,
+    hasInt96Timestamps: Boolean,
+    useFieldId: Boolean,
+    rowGroupIndices: Array[Int] = null) extends FilePartitionReaderBase(conf, execMetrics)
+  with ParquetPartitionReaderBase {
+
+  private var initialized: Boolean = false
+  private var producer: GDSParquetTableReader = _
+
+  override def next(): Boolean = {
+    if (batchIter.hasNext) {
+      return true
+    }
+    if (isDone) {
+      return false
+    }
+    if (!initialized) {
+      initialized = true
+      // Handle count-only / empty-schema case: no column data needs to flow through cuDF.
+      if (clippedParquetSchema.getFieldCount == 0) {
+        val rowCount = clippedBlocks.iterator.map(_.getRowCount).sum.toInt
+        if (rowCount == 0) {
+          isDone = true
+          batchIter = EmptyGpuColumnarBatchIterator
+          return false
+        }
+        GpuSemaphore.acquireIfNecessary(TaskContext.get())
+        val nullColumns = readDataSchema.fields.safeMap(f =>
+          GpuColumnVector.fromNull(rowCount, f.dataType).asInstanceOf[SparkVector])
+        batchIter = new SingleGpuColumnarBatchIterator(
+          new ColumnarBatch(nullColumns.toArray, rowCount))
+        return true
+      }
+
+      // cuFile reads are synchronous and write into a DeviceMemoryBuffer; the task
+      // must hold the GPU semaphore for the duration so device allocations and
+      // subsequent decode kernels are serialized per the spark-rapids contract.
+      GpuSemaphore.acquireIfNecessary(TaskContext.get())
+      val parseOpts = getParquetOptions(readDataSchema, clippedParquetSchema, useFieldId,
+        rowGroupIndices)
+      val javaFile = new java.io.File(new URI(filePath.toString()).getPath)
+      // Phase 2-D: hand cuDF the file path directly and let cuDF's internal
+      // `file_source` (kvikio::FileHandle-backed) handle IO. cuDF parses the
+      // footer itself and issues only the column-chunk ranges it needs. This
+      // is the same path pv-cli (velox) uses for parquet read.
+      producer = new GDSParquetTableReader(
+        conf, targetBatchSizeBytes, maxChunkedReaderMemoryUsageSizeBytes,
+        parseOpts, javaFile,
+        execMetrics, dateRebaseMode, timestampRebaseMode,
+        isSchemaCaseSensitive, useFieldId, readDataSchema,
+        clippedParquetSchema, Array(split))
+      val colTypes = readDataSchema.fields.map(_.dataType)
+      batchIter = CachedGpuBatchIterator(producer, colTypes)
+    }
+    if (batchIter.hasNext) {
+      true
+    } else {
+      isDone = true
+      false
+    }
+  }
+
+  override def close(): Unit = {
+    if (producer != null) {
+      try producer.close()
+      catch { case _: Throwable => /* best effort */ }
+      producer = null
+    }
+    super.close()
   }
 }

@@ -285,7 +285,7 @@ abstract class GpuShuffleExchangeExecBase(
     }
 }
 
-object GpuShuffleExchangeExecBase {
+object GpuShuffleExchangeExecBase extends org.apache.spark.internal.Logging {
   val METRIC_DATA_SIZE = "dataSize"
   val METRIC_DESC_DATA_SIZE = "data size"
   val METRIC_DATA_READ_SIZE = "dataReadSize"
@@ -445,6 +445,9 @@ object GpuShuffleExchangeExecBase {
           private var partitioned: Array[(ColumnarBatch, Int)] = _
           private var at = 0
           private val mutablePair = new MutablePair[Int, ColumnarBatch]()
+          private var iterNextCount: Long = 0L
+          private var iterTotalRows: Long = 0L
+          private var nextItemCount: Long = 0L
           private def partNextBatch(): Unit = {
             if (partitioned != null) {
               partitioned.map(_._1).safeClose()
@@ -454,9 +457,19 @@ object GpuShuffleExchangeExecBase {
             // Try to fill partitionedIter from iter if it's empty
             if (!partitionedIter.hasNext && iter.hasNext) {
               var batch = iter.next()
+              iterNextCount += 1
+              iterTotalRows += batch.numRows()
+              if (iterNextCount <= 5 || iterNextCount % 20 == 0) {
+                val tid = Option(org.apache.spark.TaskContext.get())
+                  .map(_.taskAttemptId().toString).getOrElse("noctx")
+                logInfo(s"ITER-DIAG tid=$tid iter.next call=$iterNextCount " +
+                  s"batch.numRows=${batch.numRows()} cumIterRows=$iterTotalRows " +
+                  s"nextItemCount=$nextItemCount partNextBatchCount=$partNextBatchCount")
+              }
               while (batch.numRows == 0 && iter.hasNext) {
                 batch.close()
                 batch = iter.next()
+                iterNextCount += 1
               }
               // Get a non-empty batch or the last batch. So still need to
               // check if it is empty for the later case.
@@ -475,6 +488,17 @@ object GpuShuffleExchangeExecBase {
             // Process the next partitioned array from the iterator
             if (partitionedIter.hasNext) {
               partitioned = partitionedIter.next()
+              val rowsArr = partitioned.map(_._1.numRows().toLong)
+              val rowsSum = rowsArr.sum
+              partNextBatchCount += 1
+              if (partNextBatchCount <= 5 || partNextBatchCount % 20 == 0) {
+                val tid = Option(org.apache.spark.TaskContext.get())
+                  .map(_.taskAttemptId().toString).getOrElse("noctx")
+                logInfo(s"PARTNEXT-DIAG tid=$tid call=$partNextBatchCount " +
+                  s"partitioned.length=${partitioned.length} rowsSum=$rowsSum " +
+                  s"iterNextCount=$iterNextCount iterTotalRows=$iterTotalRows " +
+                  s"perPartRows=${rowsArr.toSeq.take(8).mkString(",")}")
+              }
               partitioned.foreach(batches => {
                 metrics(GpuMetric.NUM_OUTPUT_ROWS) += batches._1.numRows()
               })
@@ -482,6 +506,7 @@ object GpuShuffleExchangeExecBase {
               at = 0
             }
           }
+          private var partNextBatchCount: Long = 0L
 
           override def hasNext: Boolean = {
             if (partitioned == null || at >= partitioned.length) {
@@ -501,6 +526,7 @@ object GpuShuffleExchangeExecBase {
             val tup = partitioned(at)
             mutablePair.update(tup._2, tup._1)
             at += 1
+            nextItemCount += 1
             mutablePair
           }
         }
@@ -552,6 +578,10 @@ object GpuShuffleExchangeExecBase {
         GpuSinglePartitioning
       case rrp: GpuRoundRobinPartitioning =>
         GpuBindReferences.bindReference(rrp, outputAttributes, metrics)
+      case brp: GpuBroadcastReplicatePartitioning =>
+        // No bound expressions to rebind; the partitioner emits N identical
+        // copies of every input batch (refcounted).
+        brp
       case _ => sys.error(s"Exchange not implemented for $newPartitioning")
     }
   }

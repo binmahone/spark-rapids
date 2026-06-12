@@ -30,12 +30,14 @@ import org.apache.spark.SparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{Ascending, Attribute, AttributeReference, Expression, SortOrder}
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.adaptive._
 import org.apache.spark.sql.execution.columnar.InMemoryTableScanExec
 import org.apache.spark.sql.execution.command.{DataWritingCommandExec, ExecutedCommandExec}
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2ScanExecBase, DropTableExec, ShowTablesExec}
-import org.apache.spark.sql.execution.exchange.{BroadcastExchangeLike, Exchange, ReusedExchangeExec, ShuffleExchangeLike}
+import org.apache.spark.sql.execution.exchange.{BroadcastExchangeLike, ENSURE_REQUIREMENTS,
+  Exchange, ReusedExchangeExec, ShuffleExchangeLike}
 import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, BroadcastNestedLoopJoinExec}
 import org.apache.spark.sql.rapids.{GpuDataSourceScanExec, GpuFileSourceScanExec, GpuShuffleEnv, GpuTaskMetrics}
 import org.apache.spark.sql.rapids.execution.{ExchangeMappingCache, GpuBroadcastExchangeExec, GpuBroadcastExchangeExecBase, GpuBroadcastToRowExec, GpuCustomShuffleReaderExec, GpuHashJoin, GpuShuffleExchangeExecBase, GpuSubqueryBroadcastExec}
@@ -132,19 +134,23 @@ class GpuTransitionOverrides extends Rule[SparkPlan] {
       // because we need to return an operator that implements `BroadcastExchangeLike` or
       // `ShuffleExchangeLike`.
       bb.child match {
-        case GpuShuffleCoalesceExec(e: GpuShuffleExchangeExecBase, _) if parent.isEmpty =>
+        case GpuShuffleCoalesceExec(e: GpuShuffleExchangeExecBase, _)
+            if GpuTransitionOverrides.canExposeExchangeForAqeStage(e, parent) =>
           // The coalesce step gets added back into the plan later on, in a
           // future query stage that reads the output from this query stage. This
           // is handled in the case clauses below.
           e.withNewChildren(e.children.map(c => optimizeAdaptiveTransitions(c, Some(e))))
-        case GpuCoalesceBatches(e: GpuShuffleExchangeExecBase, _) if parent.isEmpty =>
+        case GpuCoalesceBatches(e: GpuShuffleExchangeExecBase, _)
+            if GpuTransitionOverrides.canExposeExchangeForAqeStage(e, parent) =>
           // The coalesce step gets added back into the plan later on, in a
           // future query stage that reads the output from this query stage. This
           // is handled in the case clauses below.
           e.withNewChildren(e.children.map(c => optimizeAdaptiveTransitions(c, Some(e))))
         case _ => optimizeAdaptiveTransitions(bb.child, Some(bb)) match {
-          case e: GpuBroadcastExchangeExecBase => e
-          case e: GpuShuffleExchangeExecBase => e
+          case e: GpuBroadcastExchangeExecBase
+              if GpuTransitionOverrides.canExposeExchangeForAqeStage(e, parent) => e
+          case e: GpuShuffleExchangeExecBase
+              if GpuTransitionOverrides.canExposeExchangeForAqeStage(e, parent) => e
           case other => GpuColumnarToRowExec(other)
         }
       }
@@ -876,8 +882,8 @@ class GpuTransitionOverrides extends Rule[SparkPlan] {
       GpuOverrides.logDuration(rapidsConf.shouldExplain,
         t => f"GPU plan transition optimization took $t%.2f ms") {
         var updatedPlan = DeltaProvider().pruneFileMetadata(plan)
-        if (DeltaProvider().canPushDVPredicateDownToScan(rapidsConf)) {
-          updatedPlan = DeltaProvider().pushDVPredicateDownToScan(updatedPlan)
+        if (DeltaProvider().isPushDVPredicateDownEnabled(rapidsConf)) {
+          updatedPlan = DeltaProvider().tryPushDVPredicateDownToScan(updatedPlan)
         }
         updatedPlan = insertHashOptimizeSorts(updatedPlan)
         updatedPlan = updateScansForInputAndOrder(updatedPlan)
@@ -945,6 +951,55 @@ class GpuTransitionOverrides extends Rule[SparkPlan] {
 }
 
 object GpuTransitionOverrides {
+  val aqeQueryStageExchange = TreeNodeTag[Boolean]("rapids.aqe.queryStageExchange")
+
+  def tagAqeQueryStageExchanges(plan: SparkPlan): Unit = {
+    def tagPlanAndSubqueries(plan: SparkPlan): Unit = {
+      plan.foreach { node =>
+        node match {
+          case exchange: Exchange =>
+            exchange.setTagValue(aqeQueryStageExchange, true)
+          case reused: ReusedSubqueryExec =>
+            tagPlanAndSubqueries(reused.child)
+          case _ =>
+        }
+        node.expressions.foreach(_.foreach {
+          case subquery: ExecSubqueryExpression =>
+            tagPlanAndSubqueries(subquery.plan)
+          case _ =>
+        })
+      }
+    }
+    tagPlanAndSubqueries(plan)
+  }
+
+  def copyAqeQueryStageExchangeTag(from: SparkPlan, to: SparkPlan): Unit = {
+    if (from.getTagValue(aqeQueryStageExchange).contains(true)) {
+      to.setTagValue(aqeQueryStageExchange, true)
+    }
+  }
+
+  private[rapids] def canExposeExchangeForAqeStage(
+      exchange: SparkPlan,
+      parent: Option[SparkPlan]): Boolean = {
+    parent.isEmpty &&
+        (exchange.getTagValue(aqeQueryStageExchange).contains(true) ||
+            exchangeGeneratedByEnsureRequirements(exchange))
+  }
+
+  // AQE can insert generated shuffles during re-optimization after query-stage prep has
+  // already tagged the original exchanges. A parentless ENSURE_REQUIREMENTS shuffle is a
+  // query-stage root, unlike user repartition exchanges with explicit repartition origins.
+  private def exchangeGeneratedByEnsureRequirements(exchange: SparkPlan): Boolean = exchange match {
+    case shuffle: ShuffleExchangeLike =>
+      // Compare by origin name instead of `==`. Some proprietary Spark distributions define
+      // their own ENSURE_REQUIREMENTS singleton to work around upstream ShuffleOrigin being
+      // sealed. Those instances are not equal to the upstream case object but preserve the
+      // same origin name.
+      shuffle.shuffleOrigin.toString == ENSURE_REQUIREMENTS.toString
+    case _ => false
+  }
+
   /**
    * Returning the underlying plan of a query stage, or the plan itself if it is not a
    * query stage. This method is typically used when we want to determine if a plan is

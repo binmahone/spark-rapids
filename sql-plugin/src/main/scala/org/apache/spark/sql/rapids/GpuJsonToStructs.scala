@@ -52,7 +52,7 @@ case class GpuJsonToStructs(
         case _: MapType => JSONUtils.extractRawMapFromJsonString(input.getBase, cudfOptions)
         case struct: StructType =>
           val parsedStructs = JSONUtils.fromJSONToStructs(input.getBase, makeSchema(struct),
-            cudfOptions, parsedOptions.locale == Locale.US)
+            cudfOptions, parsedOptions.locale == Locale.US).getData
           val hasDateTime = TrampolineUtil.dataTypeExistsRecursively(struct, t =>
             t.isInstanceOf[DateType] || t.isInstanceOf[TimestampType]
           )

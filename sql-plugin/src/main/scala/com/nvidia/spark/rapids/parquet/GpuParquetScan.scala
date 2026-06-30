@@ -3500,6 +3500,11 @@ case class ParquetTableReader(
   opts, buffers, metrics, dateRebaseMode, timestampRebaseMode, isSchemaCaseSensitive, useFieldId,
   readDataSchema, clippedParquetSchema, splits, debugDumpPrefix, debugDumpAlways) {
 
+  logInfo(s"Creating cuDF ParquetChunkedReader with chunkSizeByteLimit=$chunkSizeByteLimit, " +
+    s"passReadLimit=$maxChunkedReaderMemoryUsageSizeBytes, " +
+    s"numHostBuffers=${buffers.length}, numSplits=${splits.length}, " +
+    s"readColumns=${readDataSchema.length}, splitBytes=${splits.map(_.length).sum}")
+
   override protected val reader: ChunkedReader = ParquetChunkedReader(
     new JniParquetChunkedReader(chunkSizeByteLimit, maxChunkedReaderMemoryUsageSizeBytes,
       opts, buffers:_*)

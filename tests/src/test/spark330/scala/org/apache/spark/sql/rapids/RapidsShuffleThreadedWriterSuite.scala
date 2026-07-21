@@ -31,7 +31,7 @@ package org.apache.spark.sql.rapids
 import java.io._
 import java.nio.ByteBuffer
 import java.util.UUID
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.{CountDownLatch, FutureTask, TimeUnit}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -283,6 +283,24 @@ class RapidsShuffleThreadedWriterSuite extends AnyFunSuite
     }
     assert(countThreads(prefix) <= expectedMaximum,
       s"Threads with prefix $prefix did not fall to $expectedMaximum or fewer")
+  }
+
+  private def submitWriterTask(body: => Unit): FutureTask[Void] = {
+    val task = new FutureTask[Void](() => {
+      body
+      null
+    })
+    RapidsShuffleInternalManagerBase.queueWriteTask(task)
+    task
+  }
+
+  private def submitMergerTask(body: => Unit): FutureTask[Void] = {
+    val task = new FutureTask[Void](() => {
+      body
+      null
+    })
+    RapidsShuffleInternalManagerBase.executeMergerTask(task)
+    task
   }
 
   /**
@@ -621,11 +639,10 @@ class RapidsShuffleThreadedWriterSuite extends AnyFunSuite
       val mergerStarted = new CountDownLatch(writerThreads)
       val releaseTasks = new CountDownLatch(1)
       val writerTasks = (0 until writerThreads * 2).map { _ =>
-        RapidsShuffleInternalManagerBase.queueWriteTask(() => {
+        submitWriterTask {
           writerStarted.countDown()
           releaseTasks.await()
-          null
-        })
+        }
       }
       val readerTasks = (0 until readerThreads * 2).map { _ =>
         RapidsShuffleInternalManagerBase.queueReadTask(() => {
@@ -635,11 +652,10 @@ class RapidsShuffleThreadedWriterSuite extends AnyFunSuite
         })
       }
       val mergerTasks = (0 until writerThreads * 2).map { _ =>
-        RapidsShuffleInternalManagerBase.queueMergerTask(() => {
+        submitMergerTask {
           mergerStarted.countDown()
           releaseTasks.await()
-          null
-        })
+        }
       }
 
       assert(writerStarted.await(5, TimeUnit.SECONDS), "writer pool did not reach its limit")
@@ -657,9 +673,9 @@ class RapidsShuffleThreadedWriterSuite extends AnyFunSuite
       waitForThreadCount("rapids-shuffle-merger-", 0)
 
       RapidsShuffleInternalManagerBase.startThreadPoolIfNeeded(1, 1)
-      RapidsShuffleInternalManagerBase.queueWriteTask(() => null).get(5, TimeUnit.SECONDS)
+      submitWriterTask(()).get(5, TimeUnit.SECONDS)
       RapidsShuffleInternalManagerBase.queueReadTask(() => null).get(5, TimeUnit.SECONDS)
-      RapidsShuffleInternalManagerBase.queueMergerTask(() => null).get(5, TimeUnit.SECONDS)
+      submitMergerTask(()).get(5, TimeUnit.SECONDS)
       assert(countThreads("rapids-shuffle-writer-") <= 1)
       assert(countThreads("rapids-shuffle-reader-") <= 1)
       assert(countThreads("rapids-shuffle-merger-") <= 1)
@@ -761,11 +777,10 @@ class RapidsShuffleThreadedWriterSuite extends AnyFunSuite
     val blockersStarted = new CountDownLatch(numWriterThreads)
     val releaseBlockers = new CountDownLatch(1)
     val writerBlockers = (0 until numWriterThreads).map { _ =>
-      RapidsShuffleInternalManagerBase.queueWriteTask(() => {
+      submitWriterTask {
         blockersStarted.countDown()
         releaseBlockers.await()
-        null
-      })
+      }
     }
     assert(blockersStarted.await(5, TimeUnit.SECONDS), "writer blockers did not start")
 
@@ -814,11 +829,10 @@ class RapidsShuffleThreadedWriterSuite extends AnyFunSuite
     val blockersStarted = new CountDownLatch(numWriterThreads)
     val releaseBlockers = new CountDownLatch(1)
     val writerBlockers = (0 until numWriterThreads).map { _ =>
-      RapidsShuffleInternalManagerBase.queueWriteTask(() => {
+      submitWriterTask {
         blockersStarted.countDown()
         releaseBlockers.await()
-        null
-      })
+      }
     }
     assert(blockersStarted.await(5, TimeUnit.SECONDS), "writer blockers did not start")
 

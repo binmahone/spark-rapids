@@ -18,7 +18,8 @@ package org.apache.spark.sql.rapids
 
 import java.io.{IOException, OutputStream}
 import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, ConcurrentLinkedQueue,
-  ExecutionException, Executors, ExecutorService, Future, FutureTask, LinkedBlockingQueue, TimeUnit}
+  ExecutionException, Executors, ExecutorService, Future, FutureTask, LinkedBlockingQueue,
+  ThreadPoolExecutor, TimeoutException, TimeUnit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicLong, AtomicReference}
 
 import scala.collection.JavaConverters._
@@ -149,6 +150,8 @@ class ThreadSafeShuffleWriteMetricsReporter(val wrapped: ShuffleWriteMetricsRepo
 }
 
 object RapidsShuffleInternalManagerBase extends Logging {
+  private val poolUnavailable = "unavailable"
+
   def unwrapHandle(handle: ShuffleHandle): ShuffleHandle = handle match {
     case gh: GpuShuffleHandle[_, _] => gh.wrapped
     case other => other
@@ -175,6 +178,22 @@ object RapidsShuffleInternalManagerBase extends Logging {
   }
 
   def executeMergerTask(task: Runnable): Unit = mergerPool.execute(task)
+
+  private def poolDiagnosticSnapshot(pool: ExecutorService): String = pool match {
+    case threadPool: ThreadPoolExecutor =>
+      s"size=${threadPool.getPoolSize}," +
+        s"active=${threadPool.getActiveCount}," +
+        s"queued=${threadPool.getQueue.size()}," +
+        s"completed=${threadPool.getCompletedTaskCount}"
+    case null => poolUnavailable
+    case other => s"type=${other.getClass.getSimpleName}"
+  }
+
+  private[rapids] def threadPoolDiagnosticSnapshot: String = {
+    s"writer={${poolDiagnosticSnapshot(writerPool)}}," +
+      s"merger={${poolDiagnosticSnapshot(mergerPool)}}," +
+      s"reader={${poolDiagnosticSnapshot(readerPool)}}"
+  }
 
   private def shutdownNow(pool: ExecutorService): Unit = {
     pool.shutdownNow().asScala.foreach {
@@ -269,6 +288,11 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
     handle.metrics.get(METRIC_THREADED_WRITER_SERIALIZATION_WAIT_TIME)
   private val inputFetchTimeMetric =
     handle.metrics.get(METRIC_THREADED_WRITER_INPUT_FETCH_TIME)
+  private val compressionTasksSubmitted = new AtomicLong(0L)
+  private val compressionTasksStarted = new AtomicLong(0L)
+  private val compressionTasksCompleted = new AtomicLong(0L)
+  private val compressionTasksFailed = new AtomicLong(0L)
+  private val mergerWaitDiagnosticIntervalSeconds = 30L
 
   private var shuffleWriteRange: NvtxId = NvtxRegistry.THREADED_WRITER_WRITE.push()
 
@@ -308,6 +332,8 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
     private val stepFuture = new AtomicReference[FutureTask[Void]]()
     private var currentPartitionToWrite = 0
     private var outputStream: OutputStream = _
+    private val mergerStepsStarted = new AtomicLong(0L)
+    private val mergerStepsCompleted = new AtomicLong(0L)
 
     private sealed trait WorkState
     private case object Complete extends WorkState
@@ -347,6 +373,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
     }
 
     private def runStep(): Unit = synchronized {
+      mergerStepsStarted.incrementAndGet()
       try {
         var keepDraining = true
         while (keepDraining && !completionFuture.isDone) {
@@ -383,6 +410,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
           completionFuture.cancel(true)
         case t: Throwable => fail(t)
       } finally {
+        mergerStepsCompleted.incrementAndGet()
         stepFuture.set(null)
         scheduled.set(false)
         if (completionFuture.isDone) {
@@ -394,6 +422,39 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
           schedule()
         }
       }
+    }
+
+    def diagnosticSnapshot(batchId: Int): String = synchronized {
+      var queueCount = 0L
+      var recordCount = 0L
+      var doneCount = 0L
+      var cancelledCount = 0L
+      partitionRecords.values().asScala.foreach { queue =>
+        queueCount += 1
+        queue.iterator().asScala.foreach { future =>
+          recordCount += 1
+          if (future.isDone) {
+            doneCount += 1
+          }
+          if (future.isCancelled) {
+            cancelledCount += 1
+          }
+        }
+      }
+      val head = Option(partitionRecords.get(currentPartitionToWrite))
+        .flatMap(queue => Option(queue.peek()))
+      s"batch=$batchId,currentPartition=$currentPartitionToWrite," +
+        s"maxPartitionQueued=${maxPartitionIdQueued.get()}," +
+        s"partitionQueues=$queueCount,queuedRecords=$recordCount," +
+        s"doneRecords=$doneCount,cancelledRecords=$cancelledCount," +
+        s"headPresent=${head.isDefined},headDone=${head.exists(_.isDone)}," +
+        s"headCancelled=${head.exists(_.isCancelled)}," +
+        s"scheduled=${scheduled.get()},stepFuturePresent=${stepFuture.get() != null}," +
+        s"stepFutureDone=${Option(stepFuture.get()).exists(_.isDone)}," +
+        s"completionDone=${completionFuture.isDone}," +
+        s"outputStreamOpen=${outputStream != null}," +
+        s"mergerStepsStarted=${mergerStepsStarted.get()}," +
+        s"mergerStepsCompleted=${mergerStepsCompleted.get()}"
     }
 
     private def currentWorkState: WorkState = {
@@ -697,8 +758,9 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
         val batchForRecord = currentBatch
         val compressionTask = new FutureTask[CompressedRecord](new Callable[CompressedRecord] {
           override def call(): CompressedRecord = {
+            compressionTasksStarted.incrementAndGet()
             try {
-              withResource(cb) { _ =>
+              val result = withResource(cb) { _ =>
                 // Create a new buffer for this record.
                 // The buffer is closed by the merger thread after writing to disk.
                 val buffer = new OpenByteArrayOutputStream()
@@ -732,11 +794,17 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                 val remainingQuota = recordSize - excessQuota
                 CompressedRecord(buffer, compressedSize, remainingQuota)
               }
+              compressionTasksCompleted.incrementAndGet()
+              result
             } catch {
               case e: Exception =>
+                compressionTasksFailed.incrementAndGet()
                 throw new IOException(
                   s"Failed compression task for shuffle $shuffleId, map $mapId, " +
                     s"partition $reducePartitionId", e)
+              case t: Throwable =>
+                compressionTasksFailed.incrementAndGet()
+                throw t
             }
           }
         }) {
@@ -745,6 +813,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
             batchForRecord.scheduleMerger()
           }
         }
+        compressionTasksSubmitted.incrementAndGet()
         val future = RapidsShuffleInternalManagerBase.queueWriteTask(compressionTask)
 
         currentBatch.maxPartitionIdQueued.synchronized {
@@ -775,7 +844,28 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
       batchStates.foreach { batch =>
         try {
           val waitStart = System.nanoTime()
-          batch.mergerFuture.get()
+          var mergerComplete = false
+          while (!mergerComplete) {
+            try {
+              batch.mergerFuture.get(mergerWaitDiagnosticIntervalSeconds, TimeUnit.SECONDS)
+              mergerComplete = true
+            } catch {
+              case _: TimeoutException =>
+                val context = TaskContext.get()
+                logWarning(
+                  s"RAPIDS_SHUFFLE_HANG_DIAGNOSTIC " +
+                    s"stage=${context.stageId()},partition=${context.partitionId()}," +
+                    s"attempt=${context.attemptNumber()},taskAttempt=${context.taskAttemptId()}," +
+                    s"shuffle=$shuffleId,map=$mapId," +
+                    s"bytesInFlight=${limiter.getBytesInFlight}," +
+                    s"compressionSubmitted=${compressionTasksSubmitted.get()}," +
+                    s"compressionStarted=${compressionTasksStarted.get()}," +
+                    s"compressionCompleted=${compressionTasksCompleted.get()}," +
+                    s"compressionFailed=${compressionTasksFailed.get()}," +
+                    s"${batch.merger.diagnosticSnapshot(batch.batchId)}," +
+                    s"pools={${RapidsShuffleInternalManagerBase.threadPoolDiagnosticSnapshot}}")
+            }
+          }
           totalSerializationWaitTimeNs += System.nanoTime() - waitStart
         } catch {
           case ee: ExecutionException => throw ee.getCause

@@ -746,6 +746,11 @@ class RapidsShuffleThreadedWriterSuite extends AnyFunSuite
       assert(countThreads("rapids-shuffle-writer-") <= writerThreads)
       assert(countThreads("rapids-shuffle-reader-") <= readerThreads)
       assert(countThreads("rapids-shuffle-merger-") <= writerThreads)
+      val poolSnapshot = RapidsShuffleInternalManagerBase.threadPoolDiagnosticSnapshot
+      assert(poolSnapshot.contains(s"writer={size=$writerThreads,active=$writerThreads"))
+      assert(poolSnapshot.contains(s"reader={size=$readerThreads,active=$readerThreads"))
+      assert(poolSnapshot.contains(s"merger={size=$writerThreads,active=$writerThreads"))
+      assert(poolSnapshot.contains("queued=2"))
 
       releaseTasks.countDown()
       (writerTasks ++ readerTasks ++ mergerTasks).foreach(_.get(5, TimeUnit.SECONDS))

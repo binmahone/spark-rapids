@@ -18,7 +18,8 @@ package com.nvidia.spark.rapids
 
 import scala.collection.mutable.ArrayBuffer
 
-import ai.rapids.cudf.{ContiguousTable, Cuda, DeviceMemoryBuffer, HostMemoryBuffer, Table}
+import ai.rapids.cudf.{BaseDeviceMemoryBuffer, ContiguousTable, Cuda, DeviceMemoryBuffer,
+  HostMemoryBuffer, Table}
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
@@ -33,14 +34,30 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
 trait GpuPartitioning extends Partitioning {
   private[this] val (
     maxCpuBatchSize, maxCompressionBatchSize, _useGPUShuffle,
-        _useKudoGPUSlicing, _useMultiThreadedShuffle) = {
+        _useKudoGPUSlicing, _useMultiThreadedShuffle, _useGpuShuffleCompression,
+        zstdChunkSize, _runGpuDecompressionProbe, gpuDecompressionProbeSamples,
+        gpuDecompressionProbeIterations, gpuDecompressionProbeBatchSize) = {
     val rapidsConf = new RapidsConf(SQLConf.get)
     (rapidsConf.shuffleParitioningMaxCpuBatchSize,
       rapidsConf.shuffleCompressionMaxBatchMemory,
       GpuShuffleEnv.useGPUShuffle(rapidsConf),
       rapidsConf.shuffleKudoGpuSerializerEnabled,
-      GpuShuffleEnv.useMultiThreadedShuffle(rapidsConf))
+      GpuShuffleEnv.useMultiThreadedShuffle(rapidsConf),
+      rapidsConf.isMultithreadedShuffleAdaptiveGpuCompressionEnabled,
+      rapidsConf.shuffleCompressionZstdChunkSize,
+      rapidsConf.isMultithreadedShuffleGpuDecompressionProbeEnabled,
+      rapidsConf.multithreadedShuffleGpuDecompressionProbeSamples,
+      rapidsConf.multithreadedShuffleGpuDecompressionProbeIterations,
+      rapidsConf.multithreadedShuffleGpuDecompressionProbeBatchSize)
   }
+  private lazy val gpuZstdCompressor =
+    new GpuZstdStreamCompressor(
+      zstdChunkSize,
+      maxCompressionBatchSize,
+      _runGpuDecompressionProbe,
+      gpuDecompressionProbeSamples,
+      gpuDecompressionProbeIterations,
+      gpuDecompressionProbeBatchSize)
 
   // Lift once GPU shuffle supports long (64-bit) serialized-slice offsets.
   // protected[rapids] so tests can override it to exercise the guard below.
@@ -208,7 +225,17 @@ trait GpuPartitioning extends Partitioning {
 
   private def sliceAndSerializeOnGpu(numRows: Int, partitionIndexes: Array[Int],
       partitionColumns: Array[GpuColumnVector]): Array[(ColumnarBatch, Int)] = {
-    partitionColumns.foreach(_.getBase.getNullCount)
+    if (_useGpuShuffleCompression) {
+      sliceSerializeAndCompressOnGpu(
+        numRows, partitionIndexes, partitionColumns)
+    } else {
+      partitionColumns.foreach(_.getBase.getNullCount)
+      sliceAndSerializeToHost(numRows, partitionIndexes, partitionColumns)
+    }
+  }
+
+  private def sliceAndSerializeToHost(numRows: Int, partitionIndexes: Array[Int],
+      partitionColumns: Array[GpuColumnVector]): Array[(ColumnarBatch, Int)] = {
     val (dataHost, offsetsHost) = withResource(partitionColumns) { _ =>
       withResource(new Table(partitionColumns.map(_.getBase).toArray: _*)) { table =>
         withResource(gpuSplitAndSerialize(table,
@@ -266,6 +293,138 @@ trait GpuPartitioning extends Partitioning {
 
         res.zipWithIndex.filter(_._1 != null)
       }
+    }
+  }
+
+  private case class SerializedDevicePartition(
+      partitionId: Int,
+      numRows: Int,
+      uncompressedBytes: Long,
+      byteOffset: Long)
+
+  private def sliceSerializeAndCompressOnGpu(
+      numRows: Int,
+      partitionIndexes: Array[Int],
+      partitionColumns: Array[GpuColumnVector]): Array[(ColumnarBatch, Int)] = {
+    try {
+      withResource(partitionColumns) { _ =>
+        if (numRows == 0) {
+          Array.empty[(ColumnarBatch, Int)]
+        } else {
+          partitionColumns.foreach(_.getBase.getNullCount)
+          require(_useMultiThreadedShuffle,
+            "GPU-resident Spark-compatible compression requires MULTITHREADED shuffle")
+          require(SQLConf.get.getConfString("spark.io.compression.codec", "lz4")
+            .equalsIgnoreCase("zstd"),
+            "GPU-resident Spark-compatible compression requires spark.io.compression.codec=zstd")
+          require(SQLConf.get.getConfString("spark.shuffle.compress", "true").toBoolean,
+            "GPU-resident Spark-compatible compression requires spark.shuffle.compress=true")
+          withResource(new Table(partitionColumns.map(_.getBase).toArray: _*)) { table =>
+            withResource(gpuSplitAndSerialize(table, partitionIndexes.tail: _*)) { dmbs =>
+              val data = dmbs(0)
+              val offsets = dmbs(1)
+              require(data.getLength <= maxGpuSerializedSliceBytes,
+                s"GPU-serialized shuffle batch is ${data.getLength} bytes, exceeding the " +
+                  s"$maxGpuSerializedSliceBytes-byte (2GB) limit")
+
+              withResource(HostMemoryBuffer.allocate(offsets.getLength)) { offsetsHost =>
+                offsetsHost.copyFromDeviceBufferAsync(offsets, Cuda.DEFAULT_STREAM)
+                Cuda.DEFAULT_STREAM.sync()
+
+                val numOffsets = numPartitions + 1
+                require(offsetsHost.getLength ==
+                  Math.multiplyExact(numOffsets.toLong, java.lang.Long.BYTES.toLong),
+                  s"unexpected Kudo offset buffer length ${offsetsHost.getLength} for " +
+                    s"$numPartitions partitions")
+                val offsetElementSize = java.lang.Long.BYTES.toLong
+                val partitions = new ArrayBuffer[SerializedDevicePartition](numPartitions)
+                var partitionId = 0
+                var previousRowIndex = 0
+                var previousByteOffset = 0L
+                while (partitionId < numPartitions) {
+                  val nextRowIndex =
+                    if (partitionId + 1 < partitionIndexes.length) {
+                      partitionIndexes(partitionId + 1)
+                    } else {
+                      numRows
+                    }
+                  val nextByteOffset = offsetsHost.getLong(
+                    (partitionId + 1L) * offsetElementSize)
+                  require(nextRowIndex >= previousRowIndex && nextRowIndex <= numRows,
+                    s"invalid row boundary $nextRowIndex for shuffle partition $partitionId")
+                  require(nextByteOffset >= previousByteOffset &&
+                      nextByteOffset <= data.getLength,
+                    s"invalid byte boundary $nextByteOffset for shuffle partition $partitionId")
+
+                  val partitionRows = nextRowIndex - previousRowIndex
+                  val partitionBytes = nextByteOffset - previousByteOffset
+                  if (partitionRows > 0) {
+                    require(partitionBytes > 0,
+                      s"non-empty shuffle partition $partitionId has no serialized bytes")
+                    partitions += SerializedDevicePartition(
+                      partitionId,
+                      partitionRows,
+                      partitionBytes,
+                      previousByteOffset)
+                  } else {
+                    require(partitionBytes == 0,
+                      s"empty shuffle partition $partitionId has $partitionBytes serialized bytes")
+                  }
+                  previousRowIndex = nextRowIndex
+                  previousByteOffset = nextByteOffset
+                  partitionId += 1
+                }
+                require(previousRowIndex == numRows,
+                  s"final shuffle row boundary $previousRowIndex did not match $numRows rows")
+                require(previousByteOffset == data.getLength,
+                  s"final shuffle byte boundary $previousByteOffset did not match " +
+                    s"${data.getLength} serialized bytes")
+                require(partitions.nonEmpty,
+                  "non-empty shuffle batch produced no serialized partitions")
+
+                val deviceSlices = closeOnExcept(
+                    new ArrayBuffer[BaseDeviceMemoryBuffer](partitions.length)) { result =>
+                  partitions.foreach { partition =>
+                    result += data.slice(partition.byteOffset, partition.uncompressedBytes)
+                      .asInstanceOf[BaseDeviceMemoryBuffer]
+                  }
+                  result.toArray
+                }
+                withResource(deviceSlices) { _ =>
+                  val hostFrames = gpuZstdCompressor.compressDevice(
+                    deviceSlices, Cuda.DEFAULT_STREAM)
+                  try {
+                    require(hostFrames.length == partitions.length,
+                      s"expected ${partitions.length} compressed partitions, " +
+                        s"found ${hostFrames.length}")
+                    val batches = closeOnExcept(
+                        new ArrayBuffer[ColumnarBatch](partitions.length)) { result =>
+                      hostFrames.zip(partitions).foreach { case (frames, partition) =>
+                        require(frames.getLength <= Int.MaxValue,
+                          s"compressed shuffle partition ${partition.partitionId} exceeds " +
+                            s"the JVM slice limit: ${frames.getLength}")
+                        val vector = new PrecompressedSerializedColumnVector(
+                          frames, 0, frames.getLength.toInt, partition.uncompressedBytes)
+                        val batch = closeOnExcept(vector) { _ =>
+                          new ColumnarBatch(Array(vector))
+                        }
+                        batch.setNumRows(partition.numRows)
+                        result += batch
+                      }
+                      result.toArray
+                    }
+                    batches.zip(partitions.map(_.partitionId))
+                  } finally {
+                    hostFrames.foreach(_.safeClose())
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    } finally {
+      GpuSemaphore.releaseIfNecessary(TaskContext.get())
     }
   }
 

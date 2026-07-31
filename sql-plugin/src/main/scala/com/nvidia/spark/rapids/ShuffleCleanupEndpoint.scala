@@ -105,16 +105,20 @@ class ShuffleCleanupEndpoint(
   private def pollAndCleanup(): Unit = {
     // Ask driver for shuffles that need cleanup
     val response = pluginContext.ask(RapidsShuffleCleanupPollMsg(executorId))
+    val adaptiveCompressionStats = drainAdaptiveCompressionStats()
 
     response match {
       case RapidsShuffleCleanupResponseMsg(shuffleIds) if shuffleIds.nonEmpty =>
         logDebug(s"Received ${shuffleIds.length} shuffles to clean up: " +
           s"${shuffleIds.mkString(", ")}")
-        processCleanup(shuffleIds)
+        processCleanup(shuffleIds, adaptiveCompressionStats)
 
       case RapidsShuffleCleanupResponseMsg(_) =>
         // No shuffles to clean up
         logTrace("No shuffles to clean up")
+        if (adaptiveCompressionStats.nonEmpty) {
+          reportStats(Array.empty, adaptiveCompressionStats)
+        }
 
       case other =>
         logWarning(s"Unexpected response from driver: $other")
@@ -124,13 +128,15 @@ class ShuffleCleanupEndpoint(
   /**
    * Process cleanup for the given shuffle IDs and report statistics.
    */
-  private def processCleanup(shuffleIds: Array[Int]): Unit = {
+  private def processCleanup(
+      shuffleIds: Array[Int],
+      adaptiveCompressionStats: Array[AdaptiveShuffleCompressionStats]): Unit = {
     val catalog = GpuShuffleEnv.getMultithreadedCatalog
     if (catalog.isEmpty) {
       logDebug("MultithreadedShuffleBufferCatalog not available, skipping cleanup")
       // Still report empty stats so driver knows we processed the request
       val emptyStats = shuffleIds.map(id => ShuffleCleanupStats(id, 0, 0))
-      reportStats(emptyStats)
+      reportStats(emptyStats, adaptiveCompressionStats)
       return
     }
 
@@ -160,20 +166,46 @@ class ShuffleCleanupEndpoint(
     }
 
     if (statsBuffer.nonEmpty) {
-      reportStats(statsBuffer.toArray)
+      reportStats(statsBuffer.toArray, adaptiveCompressionStats)
     }
+  }
+
+  private def drainAdaptiveCompressionStats(): Array[AdaptiveShuffleCompressionStats] = {
+    AdaptiveShuffleCompressionMetrics.drainShuffleSnapshots.map {
+      case (shuffleId, snapshot) =>
+        AdaptiveShuffleCompressionStats(
+          shuffleId,
+          snapshot.gpuProposedTaskAttempts,
+          snapshot.gpuSelectedTaskAttempts,
+          snapshot.gpuReservationDeniedTaskAttempts,
+          snapshot.cpuSelectedTaskAttempts,
+          snapshot.gpuRawBytes,
+          snapshot.gpuCompressedBytes,
+          snapshot.gpuCompressionTimeNs,
+          snapshot.gpuReservationTimeNs,
+          snapshot.cpuRawBytes,
+          snapshot.cpuCompressedBytes,
+          snapshot.cpuCompressionTimeNs)
+    }.toArray
   }
 
   /**
    * Report cleanup statistics to driver.
    */
-  private def reportStats(stats: Array[ShuffleCleanupStats]): Unit = {
+  private def reportStats(
+      stats: Array[ShuffleCleanupStats],
+      adaptiveCompressionStats: Array[AdaptiveShuffleCompressionStats]): Unit = {
     try {
       val nonZeroStats = stats.filter(s => s.bytesFromMemory > 0 || s.bytesFromDisk > 0)
       if (nonZeroStats.nonEmpty) {
         logDebug(s"Reporting cleanup stats to driver for ${nonZeroStats.length} shuffle(s)")
       }
-      pluginContext.send(RapidsShuffleCleanupStatsMsg(executorId, stats))
+      if (adaptiveCompressionStats.nonEmpty) {
+        logDebug(s"Reporting adaptive compression stats to driver for " +
+          s"${adaptiveCompressionStats.length} shuffle(s)")
+      }
+      pluginContext.send(
+        RapidsShuffleCleanupStatsMsg(executorId, stats, adaptiveCompressionStats))
     } catch {
       case e: Exception =>
         logWarning("Failed to report cleanup stats to driver", e)
@@ -245,18 +277,20 @@ class ShuffleCleanupEndpoint(
     }
 
     // Report final stats to driver (best effort)
-    if (statsBuffer.nonEmpty) {
-      val nonZeroStats = statsBuffer.filter(s => s.bytesFromMemory > 0 || s.bytesFromDisk > 0)
-      if (nonZeroStats.nonEmpty) {
-        try {
-          logInfo(s"Reporting final cleanup stats for ${nonZeroStats.size} shuffle(s)")
-          pluginContext.send(RapidsShuffleCleanupStatsMsg(executorId, nonZeroStats.toArray))
-        } catch {
-          case e: Exception =>
-            logWarning("Failed to report final cleanup stats to driver", e)
-        }
+    val nonZeroStats = statsBuffer.filter(s => s.bytesFromMemory > 0 || s.bytesFromDisk > 0)
+    val adaptiveCompressionStats = drainAdaptiveCompressionStats()
+    if (nonZeroStats.nonEmpty || adaptiveCompressionStats.nonEmpty) {
+      try {
+        logInfo(s"Reporting final cleanup stats for ${nonZeroStats.size} shuffle(s) and " +
+          s"adaptive compression stats for ${adaptiveCompressionStats.length} shuffle(s)")
+        pluginContext.send(RapidsShuffleCleanupStatsMsg(
+          executorId,
+          nonZeroStats.toArray,
+          adaptiveCompressionStats))
+      } catch {
+        case e: Exception =>
+          logWarning("Failed to report final cleanup stats to driver", e)
       }
     }
   }
 }
-

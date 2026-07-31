@@ -59,7 +59,8 @@ import scala.reflect.ClassTag
 import scala.util.control.NonFatal
 
 import ai.rapids.cudf.HostMemoryBuffer
-import com.nvidia.spark.rapids.SlicedSerializedColumnVector
+import com.nvidia.spark.rapids.{PrecompressedSerializedColumnVector,
+  SlicedSerializedColumnVector}
 import org.mockito.{Mock, MockitoAnnotations}
 import org.mockito.Answers.RETURNS_SMART_NULLS
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong}
@@ -253,6 +254,15 @@ class RapidsShuffleThreadedWriterSuite extends AnyFunSuite
 
   private def createTestRecords(keys: Iterator[Int]): Iterator[(Int, ColumnarBatch)] =
     keys.map(key => (key, createTestBatch(key)))
+
+  private def createPrecompressedTestBatch(bytes: Array[Byte]): ColumnarBatch = {
+    val hmb = HostMemoryBuffer.allocate(bytes.length)
+    hmb.setBytes(0, bytes, 0, bytes.length)
+    val cv = new PrecompressedSerializedColumnVector(hmb, 0, bytes.length, bytes.length * 2L)
+    slicedBuffersToClean += cv.getWrap
+    hmb.close()
+    new ColumnarBatch(Array(cv), 1)
+  }
 
   private def createWriter(): RapidsShuffleThreadedWriter[Int, ColumnarBatch] = {
     new RapidsShuffleThreadedWriter[Int, ColumnarBatch](
@@ -525,6 +535,24 @@ class RapidsShuffleThreadedWriterSuite extends AnyFunSuite
     writer.write(createTestRecords(Iterator(0, 1, 2, 3, 4, 5, 6)))
     writer.stop(true)
     verifyWrite(writer, expectedRecords = 7, partitionsWithData = Set(0, 1, 2, 3, 4, 5, 6))
+  }
+
+  test("precompressed partition bypasses serializer and compression wrappers") {
+    val expected = Array.tabulate[Byte](257)(index => (index & 0xff).toByte)
+    val writer = createWriter()
+    writer.write(Iterator.single((0, createPrecompressedTestBatch(expected))))
+    writer.stop(true)
+
+    val partitionLength = writer.getPartitionLengths.head
+    assertResult(expected.length.toLong)(partitionLength)
+    val actual = new Array[Byte](partitionLength.toInt)
+    val input = new RandomAccessFile(outputFile, "r")
+    try {
+      input.readFully(actual)
+    } finally {
+      input.close()
+    }
+    assertResult(expected.toSeq)(actual.toSeq)
   }
 
   // ==================== Multi-batch: Basic Scenarios ====================

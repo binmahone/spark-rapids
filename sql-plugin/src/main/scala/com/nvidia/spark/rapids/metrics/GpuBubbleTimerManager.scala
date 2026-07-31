@@ -40,6 +40,9 @@ import scala.collection.mutable
  */
 class GpuBubbleTimerManager private {
 
+  /** Returns the current number of threads waiting to acquire the GPU semaphore. */
+  def waiterCount: Int = waitingThreads.get()
+
   /**
    * Notify the manager that a thread starts to wait for GpuSemaphore.
    */

@@ -512,10 +512,10 @@ class RapidsDriverPlugin extends DriverPlugin with Logging {
         } else {
           RapidsShuffleCleanupResponseMsg(Array.empty)
         }
-      case RapidsShuffleCleanupStatsMsg(executorId, stats) =>
+      case RapidsShuffleCleanupStatsMsg(executorId, stats, adaptiveCompressionStats) =>
         val manager = ShuffleCleanupManager.get
         if (manager != null) {
-          manager.handleStats(executorId, stats)
+          manager.handleStats(executorId, stats, adaptiveCompressionStats)
         }
         null // No response needed for stats report
       case m => throw new IllegalStateException(s"Unknown message $m")

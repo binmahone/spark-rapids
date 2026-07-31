@@ -45,3 +45,24 @@ case class SparkRapidsShuffleDiskSavingsEvent(
   numSpills: Int = 0,
   numForcedFileOnly: Int = 0
 ) extends SparkListenerEvent
+
+/**
+ * Executor-local adaptive compression decisions for a shuffle.
+ *
+ * Counts represent task attempts rather than unique map IDs so retry behavior remains visible.
+ */
+case class SparkRapidsAdaptiveShuffleCompressionEvent(
+  shuffleId: Int,
+  executorId: String,
+  gpuProposedTaskAttempts: Long,
+  gpuSelectedTaskAttempts: Long,
+  gpuReservationDeniedTaskAttempts: Long,
+  cpuSelectedTaskAttempts: Long,
+  gpuRawBytes: Long,
+  gpuCompressedBytes: Long,
+  gpuCompressionTimeNs: Long,
+  gpuReservationTimeNs: Long,
+  cpuRawBytes: Long,
+  cpuCompressedBytes: Long,
+  cpuCompressionTimeNs: Long
+) extends SparkListenerEvent

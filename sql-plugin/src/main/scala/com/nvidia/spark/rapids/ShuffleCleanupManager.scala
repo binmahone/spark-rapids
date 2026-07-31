@@ -172,7 +172,10 @@ class ShuffleCleanupManager(
    * @param executorId the executor reporting stats
    * @param stats cleanup statistics
    */
-  def handleStats(executorId: String, stats: Array[ShuffleCleanupStats]): Unit = {
+  def handleStats(
+      executorId: String,
+      stats: Array[ShuffleCleanupStats],
+      adaptiveCompressionStats: Array[AdaptiveShuffleCompressionStats]): Unit = {
     stats.foreach { stat =>
       val shuffleId = stat.shuffleId
       logDebug(s"Received cleanup stats from executor $executorId for shuffle $shuffleId: " +
@@ -198,6 +201,42 @@ class ShuffleCleanupManager(
           case e: Exception =>
             logWarning(s"Failed to post shuffle disk savings event for shuffle $shuffleId", e)
         }
+      }
+    }
+
+    adaptiveCompressionStats.foreach { stat =>
+      logDebug(s"Emitting SparkRapidsAdaptiveShuffleCompressionEvent for shuffle " +
+        s"${stat.shuffleId} from executor $executorId: " +
+        s"gpuProposedTaskAttempts=${stat.gpuProposedTaskAttempts}, " +
+        s"gpuSelectedTaskAttempts=${stat.gpuSelectedTaskAttempts}, " +
+        s"gpuReservationDeniedTaskAttempts=${stat.gpuReservationDeniedTaskAttempts}, " +
+        s"cpuSelectedTaskAttempts=${stat.cpuSelectedTaskAttempts}, " +
+        s"gpuRawBytes=${stat.gpuRawBytes}, gpuCompressedBytes=${stat.gpuCompressedBytes}, " +
+        s"gpuCompressionTimeNs=${stat.gpuCompressionTimeNs}, " +
+        s"gpuReservationTimeNs=${stat.gpuReservationTimeNs}, " +
+        s"cpuRawBytes=${stat.cpuRawBytes}, cpuCompressedBytes=${stat.cpuCompressedBytes}, " +
+        s"cpuCompressionTimeNs=${stat.cpuCompressionTimeNs}")
+      try {
+        TrampolineUtil.postEvent(sc,
+          SparkRapidsAdaptiveShuffleCompressionEvent(
+            stat.shuffleId,
+            executorId,
+            stat.gpuProposedTaskAttempts,
+            stat.gpuSelectedTaskAttempts,
+            stat.gpuReservationDeniedTaskAttempts,
+            stat.cpuSelectedTaskAttempts,
+            stat.gpuRawBytes,
+            stat.gpuCompressedBytes,
+            stat.gpuCompressionTimeNs,
+            stat.gpuReservationTimeNs,
+            stat.cpuRawBytes,
+            stat.cpuCompressedBytes,
+            stat.cpuCompressionTimeNs))
+      } catch {
+        case e: Exception =>
+          logWarning(
+            s"Failed to post adaptive shuffle compression event for shuffle ${stat.shuffleId}",
+            e)
       }
     }
   }

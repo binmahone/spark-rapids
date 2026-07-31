@@ -25,6 +25,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
+import ai.rapids.cudf.HostMemoryBuffer
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.Arm.withResource
 import com.nvidia.spark.rapids.NvtxRegistry
@@ -291,6 +292,32 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
     buffer: OpenByteArrayOutputStream,
     compressedSize: Long,
     remainingQuota: Long)
+
+  private def writePrecompressedFrames(
+      compressedFrames: HostMemoryBuffer,
+      destination: OpenByteArrayOutputStream): Unit = {
+    require(compressedFrames.getLength <= Int.MaxValue,
+      s"GPU-compressed shuffle record exceeds the JVM buffer limit: " +
+        s"${compressedFrames.getLength}")
+
+    if (blockManager.serializerManager.encryptionEnabled) {
+      withResource(blockManager.serializerManager.wrapForEncryption(destination)) { encrypted =>
+        val copyBuffer = new Array[Byte](math.min(
+          fileBufferSize.toLong,
+          compressedFrames.getLength).toInt)
+        var offset = 0L
+        while (offset < compressedFrames.getLength) {
+          val copyLength = math.min(copyBuffer.length.toLong,
+            compressedFrames.getLength - offset).toInt
+          compressedFrames.getBytes(copyBuffer, 0, offset, copyLength)
+          encrypted.write(copyBuffer, 0, copyLength)
+          offset += copyLength
+        }
+      }
+    } else {
+      destination.write(compressedFrames, 0, compressedFrames.getLength.toInt)
+    }
+  }
 
   /**
    * Cooperatively writes one GPU batch without occupying a merger thread while waiting for work.
@@ -703,15 +730,19 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                 // The buffer is closed by the merger thread after writing to disk.
                 val buffer = new OpenByteArrayOutputStream()
 
-                // Serialize + compress + encryption to memory buffer
-                val compressedOutputStream = blockManager.serializerManager.wrapStream(
-                  ShuffleBlockId(shuffleId, mapId, reducePartitionId), buffer)
-
-                val serializationStream = serializerInstance.serializeStream(
-                  compressedOutputStream)
-                withResource(serializationStream) { serializer =>
-                  serializer.writeKey(key.asInstanceOf[Any])
-                  serializer.writeValue(value.asInstanceOf[Any])
+                cb.column(0) match {
+                  case precompressed: PrecompressedSerializedColumnVector =>
+                    writePrecompressedFrames(precompressed.getWrap, buffer)
+                  case _ =>
+                    val shuffleBlockId = ShuffleBlockId(shuffleId, mapId, reducePartitionId)
+                    val compressedOutputStream = blockManager.serializerManager.wrapStream(
+                      shuffleBlockId, buffer)
+                    val serializationStream = serializerInstance.serializeStream(
+                      compressedOutputStream)
+                    withResource(serializationStream) { serializer =>
+                      serializer.writeKey(key.asInstanceOf[Any])
+                      serializer.writeValue(value.asInstanceOf[Any])
+                    }
                 }
 
                 // Track total written data size (compressed size)
@@ -834,6 +865,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
       if (currentBatch != null && !batchStates.contains(currentBatch)) {
         cleanupBatch(currentBatch)
       }
+
     }
 
     // Track whether handles have been transferred to catalog or merged

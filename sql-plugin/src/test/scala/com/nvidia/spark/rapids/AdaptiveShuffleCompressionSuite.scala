@@ -239,6 +239,52 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     assertResult(4)(explored.targetConcurrentTasks)
   }
 
+  test("CPU backlog takes precedence over GPU waiter pressure") {
+    val controller = new AdaptiveGpuCompressionController(
+      maxConcurrentTasks = 8,
+      maxGpuSemaphoreWaiters = 2)
+    val cpuAndGpuBacklogged = AdaptiveCompressionPressure(
+      writerPoolSize = 20,
+      activeWriterThreads = 20,
+      queuedWriterTasks = 3,
+      gpuSemaphoreWaiters = 3)
+
+    val first = controller.observe(cpuAndGpuBacklogged)
+    val second = controller.observe(cpuAndGpuBacklogged)
+
+    assert(first.proposeGpu)
+    assert(second.proposeGpu)
+    assertResult("cpu-backlogged")(first.reason)
+    assertResult("cpu-backlogged")(second.reason)
+    assertResult(2)(second.targetConcurrentTasks)
+  }
+
+  test("GPU waiter pressure backs off a learned route after CPU backlog drains") {
+    val controller = new AdaptiveGpuCompressionController(
+      maxConcurrentTasks = 8,
+      maxGpuSemaphoreWaiters = 2)
+    val cpuBacklogged = AdaptiveCompressionPressure(
+      writerPoolSize = 20,
+      activeWriterThreads = 20,
+      queuedWriterTasks = 3,
+      gpuSemaphoreWaiters = 0)
+    val gpuBacklogged = cpuBacklogged.copy(
+      activeWriterThreads = 4,
+      queuedWriterTasks = 0,
+      gpuSemaphoreWaiters = 3)
+
+    controller.observe(cpuBacklogged)
+    assertResult(2)(controller.observe(cpuBacklogged).targetConcurrentTasks)
+    val firstBackoff = controller.observe(gpuBacklogged)
+    val secondBackoff = controller.observe(gpuBacklogged)
+
+    assert(!firstBackoff.proposeGpu)
+    assert(!secondBackoff.proposeGpu)
+    assertResult("gpu-overloaded")(firstBackoff.reason)
+    assertResult("gpu-overloaded")(secondBackoff.reason)
+    assertResult(1)(secondBackoff.targetConcurrentTasks)
+  }
+
   test("executor controller initializes from task settings before its first observation") {
     ExecutorAdaptiveGpuCompressionController.resetForTests()
     val healthy = AdaptiveCompressionPressure(

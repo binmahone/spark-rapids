@@ -25,6 +25,7 @@
 {"spark": "342"}
 {"spark": "343"}
 {"spark": "344"}
+{"spark": "351"}
 spark-rapids-shim-json-lines ***/
 package org.apache.spark.sql.rapids
 
@@ -947,6 +948,8 @@ class RapidsShuffleThreadedWriterSuite extends AnyFunSuite
       assert(!writeThread.isAlive, "exceptional compression future left the merger waiting")
       assert(writeFailure.isInstanceOf[IOException],
         s"Expected IOException, got ${Option(writeFailure).map(_.getClass.getName)}")
+      assert(writer.getBytesInFlight == 0,
+        "exceptional compression future leaked bytes-in-flight quota")
     } finally {
       releaseBlockers.countDown()
       writerBlockers.foreach(_.get(5, TimeUnit.SECONDS))

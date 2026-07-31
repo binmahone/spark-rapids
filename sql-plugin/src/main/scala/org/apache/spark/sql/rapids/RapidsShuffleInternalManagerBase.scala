@@ -805,6 +805,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
         val compressionTask = new FutureTask[CompressedRecord](new Callable[CompressedRecord] {
           override def call(): CompressedRecord = {
             compressionTasksStarted.incrementAndGet()
+            var releasedQuota = 0L
             try {
               val result = withResource(cb) { _ =>
                 // Create a new buffer for this record.
@@ -833,6 +834,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                 val excessQuota = math.max(0L, recordSize - compressedSize)
                 if (excessQuota > 0) {
                   limiter.release(excessQuota)
+                  releasedQuota = excessQuota
                 }
 
                 // Return CompressedRecord with buffer and remaining quota for Merger
@@ -845,11 +847,13 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
             } catch {
               case e: Exception =>
                 compressionTasksFailed.incrementAndGet()
+                limiter.release(recordSize - releasedQuota)
                 throw new IOException(
                   s"Failed compression task for shuffle $shuffleId, map $mapId, " +
                     s"partition $reducePartitionId", e)
               case t: Throwable =>
                 compressionTasksFailed.incrementAndGet()
+                limiter.release(recordSize - releasedQuota)
                 throw t
             }
           }

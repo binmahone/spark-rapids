@@ -41,16 +41,17 @@ case class AdaptiveCompressionPressure(
     gpuSemaphoreWaiters: Int) {
 
   /**
-   * Selects the GPU only when CPU compression work is backlogged and no task is waiting for GPU.
+   * Selects the GPU only when CPU compression work is backlogged and GPU waiters stay within the
+   * caller's configured bound.
    *
    * This deliberately avoids utilization percentages or synthetic thresholds. Runtime metrics
    * will be collected before any broader policy is considered.
    */
-  def proposesGpu: Boolean =
+  def proposesGpu(maxGpuSemaphoreWaiters: Int): Boolean =
     writerPoolSize > 0 &&
       activeWriterThreads >= writerPoolSize &&
       queuedWriterTasks > 0 &&
-      gpuSemaphoreWaiters == 0
+      gpuSemaphoreWaiters <= maxGpuSemaphoreWaiters
 }
 
 trait GpuCompressionReservation {

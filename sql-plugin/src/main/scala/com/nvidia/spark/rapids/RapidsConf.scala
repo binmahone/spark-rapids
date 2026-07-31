@@ -2206,12 +2206,13 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
   val MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION =
     conf("spark.rapids.shuffle.multithreaded.adaptiveGpuCompression.enabled")
       .doc("Dynamically compress GPU-serialized Kudo shuffle partitions with nvCOMP Zstd when " +
-        "the CPU writer pool is backlogged and no task is waiting for the GPU. A task keeps its " +
-        "first CPU/GPU choice for its lifetime. GPU-compressed output is stored as standard Zstd " +
-        "frames without applying Spark compression again; all other output follows Spark's CPU " +
-        "compression path. When disabled, every task follows the existing CPU path. This " +
-        "experimental setting requires Kudo GPU write mode, MULTITHREADED shuffle, " +
-        "spark.shuffle.compress=true, and spark.io.compression.codec=zstd.")
+        "the CPU writer pool is backlogged and the observed GPU semaphore waiter count is within " +
+        "the configured bound. A task keeps its first CPU/GPU choice for its lifetime. " +
+        "GPU-compressed output is stored as standard Zstd frames without applying Spark " +
+        "compression again; all other output follows Spark's CPU compression path. When " +
+        "disabled, every task follows the existing CPU path. This experimental setting requires " +
+        "Kudo GPU write mode, MULTITHREADED shuffle, spark.shuffle.compress=true, and " +
+        "spark.io.compression.codec=zstd.")
       .internal()
       .startupOnly()
       .booleanConf
@@ -2226,6 +2227,16 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
       .integerConf
       .checkValue(_ > 0, "Maximum concurrent adaptive GPU compression tasks must be positive")
       .createWithDefault(1)
+
+  val MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_MAX_GPU_SEMAPHORE_WAITERS =
+    conf("spark.rapids.shuffle.multithreaded.adaptiveGpuCompression.maxGpuSemaphoreWaiters")
+      .doc("Maximum observed GPU semaphore waiter count that permits a task to propose adaptive " +
+        "GPU shuffle compression. The concurrent reservation limit remains an independent bound.")
+      .internal()
+      .startupOnly()
+      .integerConf
+      .checkValue(_ >= 0, "Maximum GPU semaphore waiters must be non-negative")
+      .createWithDefault(0)
 
   val SHUFFLE_TRANSPORT_EARLY_START = conf("spark.rapids.shuffle.transport.earlyStart")
     .doc("Enable early connection establishment for RAPIDS Shuffle")
@@ -3931,6 +3942,9 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   def multithreadedShuffleAdaptiveGpuCompressionMaxConcurrentTasks: Int =
     get(MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_MAX_CONCURRENT_TASKS)
+
+  def multithreadedShuffleAdaptiveGpuCompressionMaxGpuSemaphoreWaiters: Int =
+    get(MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_MAX_GPU_SEMAPHORE_WAITERS)
 
   def isCacheOnlyShuffleManagerMode: Boolean =
     RapidsShuffleManagerMode

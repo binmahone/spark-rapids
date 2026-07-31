@@ -106,6 +106,8 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     val key = RapidsConf.MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION.key
     val maxTasksKey =
       RapidsConf.MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_MAX_CONCURRENT_TASKS.key
+    val maxWaitersKey =
+      RapidsConf.MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_MAX_GPU_SEMAPHORE_WAITERS.key
 
     assert(!new RapidsConf(Map.empty[String, String])
       .isMultithreadedShuffleAdaptiveGpuCompressionEnabled)
@@ -115,19 +117,30 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
       .multithreadedShuffleAdaptiveGpuCompressionMaxConcurrentTasks)
     assertResult(2)(new RapidsConf(Map(maxTasksKey -> "2"))
       .multithreadedShuffleAdaptiveGpuCompressionMaxConcurrentTasks)
+    assertResult(0)(new RapidsConf(Map.empty[String, String])
+      .multithreadedShuffleAdaptiveGpuCompressionMaxGpuSemaphoreWaiters)
+    assertResult(16)(new RapidsConf(Map(maxWaitersKey -> "16"))
+      .multithreadedShuffleAdaptiveGpuCompressionMaxGpuSemaphoreWaiters)
   }
 
-  test("GPU proposal requires CPU backlog and no GPU semaphore waiters") {
+  test("GPU proposal requires CPU backlog and waiter count within the configured bound") {
     val cpuBackloggedGpuAvailable = AdaptiveCompressionPressure(
       writerPoolSize = 20,
       activeWriterThreads = 20,
       queuedWriterTasks = 3,
       gpuSemaphoreWaiters = 0)
-    assert(cpuBackloggedGpuAvailable.proposesGpu)
+    assert(cpuBackloggedGpuAvailable.proposesGpu(maxGpuSemaphoreWaiters = 0))
 
-    assert(!cpuBackloggedGpuAvailable.copy(queuedWriterTasks = 0).proposesGpu)
-    assert(!cpuBackloggedGpuAvailable.copy(activeWriterThreads = 19).proposesGpu)
-    assert(!cpuBackloggedGpuAvailable.copy(gpuSemaphoreWaiters = 1).proposesGpu)
+    assert(!cpuBackloggedGpuAvailable.copy(queuedWriterTasks = 0)
+      .proposesGpu(maxGpuSemaphoreWaiters = 0))
+    assert(!cpuBackloggedGpuAvailable.copy(activeWriterThreads = 19)
+      .proposesGpu(maxGpuSemaphoreWaiters = 0))
+    assert(!cpuBackloggedGpuAvailable.copy(gpuSemaphoreWaiters = 1)
+      .proposesGpu(maxGpuSemaphoreWaiters = 0))
+    assert(cpuBackloggedGpuAvailable.copy(gpuSemaphoreWaiters = 16)
+      .proposesGpu(maxGpuSemaphoreWaiters = 16))
+    assert(!cpuBackloggedGpuAvailable.copy(gpuSemaphoreWaiters = 17)
+      .proposesGpu(maxGpuSemaphoreWaiters = 16))
   }
 
   test("only one task reserves GPU compression and other tasks stay on CPU") {

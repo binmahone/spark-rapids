@@ -218,6 +218,27 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     assertResult("no-cpu-backlog")(decision.reason)
   }
 
+  test("executor controller continues exploring after GPU offload drains the CPU queue") {
+    val controller = new AdaptiveGpuCompressionController(
+      maxConcurrentTasks = 8,
+      maxGpuSemaphoreWaiters = 2)
+    val healthy = AdaptiveCompressionPressure(
+      writerPoolSize = 20,
+      activeWriterThreads = 20,
+      queuedWriterTasks = 3,
+      gpuSemaphoreWaiters = 0)
+    val drainedCpuQueue = healthy.copy(activeWriterThreads = 4, queuedWriterTasks = 0)
+
+    controller.observe(healthy)
+    assertResult(2)(controller.observe(healthy).targetConcurrentTasks)
+    assertResult(2)(controller.observe(drainedCpuQueue).targetConcurrentTasks)
+    val explored = controller.observe(drainedCpuQueue)
+
+    assert(explored.proposeGpu)
+    assertResult("learned-gpu-route")(explored.reason)
+    assertResult(4)(explored.targetConcurrentTasks)
+  }
+
   test("executor controller initializes from task settings before its first observation") {
     ExecutorAdaptiveGpuCompressionController.resetForTests()
     val healthy = AdaptiveCompressionPressure(

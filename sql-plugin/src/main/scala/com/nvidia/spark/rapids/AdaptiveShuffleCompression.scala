@@ -1,0 +1,362 @@
+/*
+ * Copyright (c) 2026, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.nvidia.spark.rapids
+
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
+
+import org.apache.spark.TaskContext
+
+sealed trait ShuffleCompressionBackend
+
+object ShuffleCompressionBackend {
+  case object SparkCpuZstd extends ShuffleCompressionBackend
+  case object NvcompGpuZstd extends ShuffleCompressionBackend
+}
+
+sealed trait ShuffleCompressionEncoding
+
+object ShuffleCompressionEncoding {
+  case object StandardZstdFrames extends ShuffleCompressionEncoding
+}
+
+case class AdaptiveCompressionPressure(
+    writerPoolSize: Int,
+    activeWriterThreads: Int,
+    queuedWriterTasks: Int,
+    gpuSemaphoreWaiters: Int) {
+
+  /**
+   * Selects the GPU only when CPU compression work is backlogged and no task is waiting for GPU.
+   *
+   * This deliberately avoids utilization percentages or synthetic thresholds. Runtime metrics
+   * will be collected before any broader policy is considered.
+   */
+  def proposesGpu: Boolean =
+    writerPoolSize > 0 &&
+      activeWriterThreads >= writerPoolSize &&
+      queuedWriterTasks > 0 &&
+      gpuSemaphoreWaiters == 0
+}
+
+trait GpuCompressionReservation {
+  def tryAcquire(): Boolean
+  def release(): Unit
+}
+
+object ExecutorGpuCompressionReservation extends GpuCompressionReservation {
+  private val reserved = new AtomicBoolean(false)
+
+  def tryAcquire(taskContext: TaskContext): Boolean = {
+    if (!reserved.compareAndSet(false, true)) {
+      false
+    } else {
+      GpuSemaphore.tryAcquire(taskContext) match {
+        case SemaphoreAcquired =>
+          true
+        case _: AcquireFailed =>
+          reserved.set(false)
+          false
+      }
+    }
+  }
+
+  def release(taskContext: TaskContext): Unit = {
+    try {
+      GpuSemaphore.releaseIfNecessary(taskContext)
+    } finally {
+      require(reserved.compareAndSet(true, false),
+        "GPU compression reservation was released without being held")
+    }
+  }
+
+  override def tryAcquire(): Boolean = tryAcquire(TaskContext.get())
+
+  override def release(): Unit = release(TaskContext.get())
+}
+
+class TaskContextGpuCompressionReservation(taskContext: TaskContext)
+    extends GpuCompressionReservation {
+  require(taskContext != null, "GPU compression requires a non-null task context")
+
+  override def tryAcquire(): Boolean =
+    ExecutorGpuCompressionReservation.tryAcquire(taskContext)
+
+  override def release(): Unit =
+    ExecutorGpuCompressionReservation.release(taskContext)
+}
+
+case class AdaptiveShuffleCompressionMetricsSnapshot(
+    gpuProposedTaskAttempts: Long,
+    gpuSelectedTaskAttempts: Long,
+    gpuReservationDeniedTaskAttempts: Long,
+    cpuSelectedTaskAttempts: Long,
+    gpuRawBytes: Long,
+    gpuCompressedBytes: Long,
+    gpuCompressionTimeNs: Long,
+    gpuReservationTimeNs: Long,
+    cpuRawBytes: Long,
+    cpuCompressedBytes: Long,
+    cpuCompressionTimeNs: Long) {
+  def nonEmpty: Boolean =
+    gpuProposedTaskAttempts != 0L ||
+      gpuSelectedTaskAttempts != 0L ||
+      gpuReservationDeniedTaskAttempts != 0L ||
+      cpuSelectedTaskAttempts != 0L ||
+      gpuRawBytes != 0L ||
+      gpuCompressedBytes != 0L ||
+      gpuCompressionTimeNs != 0L ||
+      gpuReservationTimeNs != 0L ||
+      cpuRawBytes != 0L ||
+      cpuCompressedBytes != 0L ||
+      cpuCompressionTimeNs != 0L
+}
+
+object AdaptiveShuffleCompressionMetrics {
+  private class Counters {
+    val gpuProposedTaskAttempts = new AtomicLong(0L)
+    val gpuSelectedTaskAttempts = new AtomicLong(0L)
+    val gpuReservationDeniedTaskAttempts = new AtomicLong(0L)
+    val cpuSelectedTaskAttempts = new AtomicLong(0L)
+    val gpuRawBytes = new AtomicLong(0L)
+    val gpuCompressedBytes = new AtomicLong(0L)
+    val gpuCompressionTimeNs = new AtomicLong(0L)
+    val gpuReservationTimeNs = new AtomicLong(0L)
+    val cpuRawBytes = new AtomicLong(0L)
+    val cpuCompressedBytes = new AtomicLong(0L)
+    val cpuCompressionTimeNs = new AtomicLong(0L)
+
+    def record(plan: TaskCompressionPlan): Unit = {
+      if (plan.proposedBackend == ShuffleCompressionBackend.NvcompGpuZstd) {
+        gpuProposedTaskAttempts.incrementAndGet()
+      }
+      if (plan.backend == ShuffleCompressionBackend.NvcompGpuZstd) {
+        gpuSelectedTaskAttempts.incrementAndGet()
+      } else {
+        cpuSelectedTaskAttempts.incrementAndGet()
+      }
+      if (plan.gpuReservationDenied) {
+        gpuReservationDeniedTaskAttempts.incrementAndGet()
+      }
+    }
+
+    def recordWork(
+        backend: ShuffleCompressionBackend,
+        rawBytes: Long,
+        compressedBytes: Long,
+        compressionTimeNs: Long,
+        reservationTimeNs: Long): Unit = backend match {
+      case ShuffleCompressionBackend.NvcompGpuZstd =>
+        gpuRawBytes.addAndGet(rawBytes)
+        gpuCompressedBytes.addAndGet(compressedBytes)
+        gpuCompressionTimeNs.addAndGet(compressionTimeNs)
+        gpuReservationTimeNs.addAndGet(reservationTimeNs)
+      case ShuffleCompressionBackend.SparkCpuZstd =>
+        cpuRawBytes.addAndGet(rawBytes)
+        cpuCompressedBytes.addAndGet(compressedBytes)
+        cpuCompressionTimeNs.addAndGet(compressionTimeNs)
+    }
+
+    def snapshot: AdaptiveShuffleCompressionMetricsSnapshot =
+      AdaptiveShuffleCompressionMetricsSnapshot(
+        gpuProposedTaskAttempts.get(),
+        gpuSelectedTaskAttempts.get(),
+        gpuReservationDeniedTaskAttempts.get(),
+        cpuSelectedTaskAttempts.get(),
+        gpuRawBytes.get(),
+        gpuCompressedBytes.get(),
+        gpuCompressionTimeNs.get(),
+        gpuReservationTimeNs.get(),
+        cpuRawBytes.get(),
+        cpuCompressedBytes.get(),
+        cpuCompressionTimeNs.get())
+
+    def drain: AdaptiveShuffleCompressionMetricsSnapshot =
+      AdaptiveShuffleCompressionMetricsSnapshot(
+        gpuProposedTaskAttempts.getAndSet(0L),
+        gpuSelectedTaskAttempts.getAndSet(0L),
+        gpuReservationDeniedTaskAttempts.getAndSet(0L),
+        cpuSelectedTaskAttempts.getAndSet(0L),
+        gpuRawBytes.getAndSet(0L),
+        gpuCompressedBytes.getAndSet(0L),
+        gpuCompressionTimeNs.getAndSet(0L),
+        gpuReservationTimeNs.getAndSet(0L),
+        cpuRawBytes.getAndSet(0L),
+        cpuCompressedBytes.getAndSet(0L),
+        cpuCompressionTimeNs.getAndSet(0L))
+  }
+
+  private val executorCumulative = new Counters
+  private val byShuffle = new ConcurrentHashMap[Int, Counters]()
+
+  def record(shuffleId: Int, plan: TaskCompressionPlan): Unit = {
+    executorCumulative.record(plan)
+    byShuffle.computeIfAbsent(shuffleId, _ => new Counters).record(plan)
+  }
+
+  def recordWork(
+      shuffleId: Int,
+      backend: ShuffleCompressionBackend,
+      rawBytes: Long,
+      compressedBytes: Long,
+      compressionTimeNs: Long,
+      reservationTimeNs: Long): Unit = {
+    executorCumulative.recordWork(
+      backend, rawBytes, compressedBytes, compressionTimeNs, reservationTimeNs)
+    byShuffle.computeIfAbsent(shuffleId, _ => new Counters)
+      .recordWork(backend, rawBytes, compressedBytes, compressionTimeNs, reservationTimeNs)
+  }
+
+  def executorSnapshot: AdaptiveShuffleCompressionMetricsSnapshot =
+    executorCumulative.snapshot
+
+  def takeShuffleSnapshot(shuffleId: Int): AdaptiveShuffleCompressionMetricsSnapshot = {
+    val counters = byShuffle.remove(shuffleId)
+    if (counters == null) {
+      AdaptiveShuffleCompressionMetricsSnapshot(
+        0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L)
+    } else {
+      counters.snapshot
+    }
+  }
+
+  /**
+   * Drains executor-local deltas for every shuffle without waiting for shuffle cleanup.
+   *
+   * Shuffle cleanup can happen after the driver listener bus has stopped. Periodic draining lets
+   * the executor heartbeat deliver evidence while the application is still running. Counters stay
+   * registered so task attempts recorded after a drain are included in a later delta.
+   */
+  def drainShuffleSnapshots: Seq[(Int, AdaptiveShuffleCompressionMetricsSnapshot)] = {
+    import scala.collection.JavaConverters._
+
+    byShuffle.entrySet().asScala.flatMap { entry =>
+      val snapshot = entry.getValue.drain
+      if (snapshot.nonEmpty) {
+        Some(entry.getKey -> snapshot)
+      } else {
+        None
+      }
+    }.toSeq
+  }
+
+  private[rapids] def clearShuffle(shuffleId: Int): Unit = {
+    byShuffle.remove(shuffleId)
+  }
+}
+
+/**
+ * A task-scoped compression plan.
+ *
+ * CPU and GPU backends intentionally share the same wire encoding so reducers can use Spark's
+ * existing CPU Zstd decoder. Exactly one compression owner is active for a plan.
+ */
+case class TaskCompressionPlan(
+    backend: ShuffleCompressionBackend,
+    proposedBackend: ShuffleCompressionBackend) {
+  val encoding: ShuffleCompressionEncoding = ShuffleCompressionEncoding.StandardZstdFrames
+
+  def useSparkCompressionWrapper: Boolean =
+    backend == ShuffleCompressionBackend.SparkCpuZstd
+
+  def useGpuCompressor: Boolean =
+    backend == ShuffleCompressionBackend.NvcompGpuZstd
+
+  require(useSparkCompressionWrapper ^ useGpuCompressor,
+    s"exactly one compression owner is required for backend $backend")
+
+  def gpuReservationDenied: Boolean =
+    proposedBackend == ShuffleCompressionBackend.NvcompGpuZstd &&
+      backend == ShuffleCompressionBackend.SparkCpuZstd
+}
+
+object TaskCompressionPlan {
+  def apply(backend: ShuffleCompressionBackend): TaskCompressionPlan =
+    new TaskCompressionPlan(backend, backend)
+}
+
+/**
+ * Freezes the compression backend on first use and keeps it for the lifetime of a task.
+ *
+ * Executor pressure may change while a task is running. Such changes affect later tasks, not
+ * records already being produced by this task.
+ */
+class TaskCompressionPlanState(
+    shuffleId: Int,
+    gpuReservation: GpuCompressionReservation = ExecutorGpuCompressionReservation)
+    extends AutoCloseable {
+  private val frozenPlan = new AtomicReference[TaskCompressionPlan]()
+  private val ownsGpuReservation = new AtomicBoolean(false)
+  private val gpuReservationAcquiredAtNs = new AtomicLong(0L)
+
+  /**
+   * Freezes the effective backend at the compression boundary.
+   *
+   * The caller should invoke this only after serializing the first record, immediately before
+   * compression. Disabling the feature always preserves the existing Spark CPU path.
+   */
+  def getOrFreeze(
+      adaptiveGpuCompressionEnabled: Boolean,
+      proposedBackend: => ShuffleCompressionBackend): TaskCompressionPlan = {
+    val existing = frozenPlan.get()
+    if (existing != null) {
+      return existing
+    }
+
+    synchronized {
+      val frozenInsideLock = frozenPlan.get()
+      if (frozenInsideLock != null) {
+        frozenInsideLock
+      } else {
+        val effectiveBackend = if (adaptiveGpuCompressionEnabled) {
+          proposedBackend
+        } else {
+          ShuffleCompressionBackend.SparkCpuZstd
+        }
+        val reservedBackend = effectiveBackend match {
+          case ShuffleCompressionBackend.NvcompGpuZstd if gpuReservation.tryAcquire() =>
+            ownsGpuReservation.set(true)
+            gpuReservationAcquiredAtNs.set(System.nanoTime())
+            ShuffleCompressionBackend.NvcompGpuZstd
+          case ShuffleCompressionBackend.NvcompGpuZstd =>
+            ShuffleCompressionBackend.SparkCpuZstd
+          case cpu =>
+            cpu
+        }
+        val plan = TaskCompressionPlan(reservedBackend, effectiveBackend)
+        frozenPlan.set(plan)
+        if (adaptiveGpuCompressionEnabled) {
+          AdaptiveShuffleCompressionMetrics.record(shuffleId, plan)
+        }
+        plan
+      }
+    }
+  }
+
+  def get: Option[TaskCompressionPlan] = Option(frozenPlan.get())
+
+  def gpuReservationHeldTimeNs: Long = {
+    val acquiredAtNs = gpuReservationAcquiredAtNs.get()
+    if (acquiredAtNs == 0L) 0L else System.nanoTime() - acquiredAtNs
+  }
+
+  override def close(): Unit = {
+    if (ownsGpuReservation.compareAndSet(true, false)) {
+      gpuReservation.release()
+    }
+  }
+}

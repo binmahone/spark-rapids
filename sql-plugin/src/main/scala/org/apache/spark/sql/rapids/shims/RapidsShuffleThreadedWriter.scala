@@ -27,7 +27,6 @@ object RapidsShuffleThreadedWriter {
   // copying here as it seemed relatively small.
   val EMPTY_CHECKSUM_VALUE = new Array[Long](0)
 }
-
 class RapidsShuffleThreadedWriter[K, V](
     blockManager: BlockManager,
     handle: ShuffleHandleWithMetrics[K, V, V],
@@ -70,4 +69,3 @@ class RapidsShuffleThreadedWriter[K, V](
     }
   }
 }
-

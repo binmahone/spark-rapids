@@ -65,6 +65,26 @@ case class ShuffleCleanupStats(
     numForcedFileOnly: Int = 0) extends Serializable
 
 /**
+ * Executor-local adaptive shuffle compression statistics for a single shuffle.
+ *
+ * These counters track task attempts. A failed task followed by a retry contributes one attempt
+ * for each compression decision that was made.
+ */
+case class AdaptiveShuffleCompressionStats(
+    shuffleId: Int,
+    gpuProposedTaskAttempts: Long,
+    gpuSelectedTaskAttempts: Long,
+    gpuReservationDeniedTaskAttempts: Long,
+    cpuSelectedTaskAttempts: Long,
+    gpuRawBytes: Long,
+    gpuCompressedBytes: Long,
+    gpuCompressionTimeNs: Long,
+    gpuReservationTimeNs: Long,
+    cpuRawBytes: Long,
+    cpuCompressedBytes: Long,
+    cpuCompressionTimeNs: Long) extends Serializable
+
+/**
  * Executor polls driver for shuffles that need to be cleaned up.
  *
  * @param executorId identifier for the executor
@@ -84,4 +104,7 @@ case class RapidsShuffleCleanupResponseMsg(shuffleIds: Array[Int])
  * @param executorId identifier for the executor
  * @param stats cleanup statistics for each shuffle
  */
-case class RapidsShuffleCleanupStatsMsg(executorId: String, stats: Array[ShuffleCleanupStats])
+case class RapidsShuffleCleanupStatsMsg(
+    executorId: String,
+    stats: Array[ShuffleCleanupStats],
+    adaptiveCompressionStats: Array[AdaptiveShuffleCompressionStats] = Array.empty)

@@ -195,6 +195,24 @@ object ExecutorAdaptiveGpuCompressionController {
       ExecutorGpuCompressionReservation.updateTarget(decision.targetConcurrentTasks)
       decision
     }
+
+  /**
+   * Configures the executor-local controller from serialized task settings before observing
+   * pressure. Driver-side singleton state is not available in executor JVMs.
+   */
+  def observe(
+      pressure: AdaptiveCompressionPressure,
+      maxConcurrentTasks: Int,
+      maxGpuSemaphoreWaiters: Int): AdaptiveGpuCompressionDecision = synchronized {
+    configure(maxConcurrentTasks, maxGpuSemaphoreWaiters)
+    observe(pressure)
+  }
+
+  private[rapids] def resetForTests(): Unit = synchronized {
+    require(ExecutorGpuCompressionReservation.activeCount == 0,
+      "Adaptive GPU compression controller cannot be reset while reservations are active")
+    controller = null
+  }
 }
 
 case class AdaptiveShuffleCompressionMetricsSnapshot(

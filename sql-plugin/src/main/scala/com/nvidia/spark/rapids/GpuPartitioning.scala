@@ -50,9 +50,6 @@ trait GpuPartitioning extends Partitioning with Logging {
       rapidsConf.multithreadedShuffleAdaptiveGpuCompressionReleaseAfterGpuPhase,
       rapidsConf.shuffleCompressionZstdChunkSize)
   }
-  ExecutorAdaptiveGpuCompressionController.configure(
-    gpuCompressionMaxConcurrentTasks,
-    gpuCompressionMaxGpuSemaphoreWaiters)
   private lazy val gpuZstdCompressor =
     new GpuZstdStreamCompressor(zstdChunkSize, maxCompressionBatchSize)
 
@@ -241,7 +238,10 @@ trait GpuPartitioning extends Partitioning with Logging {
       require(taskContext != null, "adaptive GPU compression requires a task context")
       val pressure = RapidsShuffleInternalManagerBase.adaptiveCompressionPressure
       val controllerDecision =
-        ExecutorAdaptiveGpuCompressionController.observe(pressure)
+        ExecutorAdaptiveGpuCompressionController.observe(
+          pressure,
+          gpuCompressionMaxConcurrentTasks,
+          gpuCompressionMaxGpuSemaphoreWaiters)
       val state = AdaptiveTaskCompressionPlans.getOrCreate(taskContext)
       val proposedBackend = if (controllerDecision.proposeGpu) {
         ShuffleCompressionBackend.NvcompGpuZstd

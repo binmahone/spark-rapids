@@ -218,6 +218,30 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     assertResult("no-cpu-backlog")(decision.reason)
   }
 
+  test("executor controller initializes from task settings before its first observation") {
+    ExecutorAdaptiveGpuCompressionController.resetForTests()
+    val healthy = AdaptiveCompressionPressure(
+      writerPoolSize = 20,
+      activeWriterThreads = 20,
+      queuedWriterTasks = 3,
+      gpuSemaphoreWaiters = 0)
+
+    val first = ExecutorAdaptiveGpuCompressionController.observe(
+      healthy,
+      maxConcurrentTasks = 8,
+      maxGpuSemaphoreWaiters = 2)
+    val second = ExecutorAdaptiveGpuCompressionController.observe(
+      healthy,
+      maxConcurrentTasks = 8,
+      maxGpuSemaphoreWaiters = 2)
+
+    assert(first.proposeGpu)
+    assertResult(1)(first.targetConcurrentTasks)
+    assertResult(2)(second.targetConcurrentTasks)
+    assertResult(2)(ExecutorGpuCompressionReservation.targetCount)
+    ExecutorAdaptiveGpuCompressionController.resetForTests()
+  }
+
   test("only one task reserves GPU compression and other tasks stay on CPU") {
     val shuffleId = 3
     AdaptiveShuffleCompressionMetrics.clearShuffle(shuffleId)

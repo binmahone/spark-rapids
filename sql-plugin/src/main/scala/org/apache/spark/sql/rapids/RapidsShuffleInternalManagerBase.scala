@@ -709,7 +709,8 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
           logWarning(
             s"RAPIDS_SHUFFLE_TASK_HEARTBEAT " +
               s"stage=${taskContext.stageId()},partition=${taskContext.partitionId()}," +
-              s"attempt=${taskContext.attemptNumber()},taskAttempt=${taskContext.taskAttemptId()}," +
+              s"attempt=${taskContext.attemptNumber()}," +
+              s"taskAttempt=${taskContext.taskAttemptId()}," +
               s"shuffle=$shuffleId,map=$mapId,phase=${diagnosticPhase.get()}," +
               s"stalledMs=${TimeUnit.NANOSECONDS.toMillis(stalledNs)}," +
               s"taskThreadState=${taskThread.getState},bytesInFlight=${limiter.getBytesInFlight}," +

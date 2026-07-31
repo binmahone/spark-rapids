@@ -2271,6 +2271,17 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
       .checkValue(_ >= 0, "Maximum GPU semaphore waiters must be non-negative")
       .createWithDefault(0)
 
+  val MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_RELEASE_AFTER_GPU_PHASE =
+    conf("spark.rapids.shuffle.multithreaded.adaptiveGpuCompression.releaseAfterGpuPhase")
+      .doc("Release the adaptive compression reservation immediately after GPU compression and " +
+        "device-to-host transfer complete, before asynchronous shuffle output finishes. This " +
+        "experimental mode fails closed if one task reaches the GPU compression phase more than " +
+        "once, so the reservation limit cannot be bypassed silently.")
+      .internal()
+      .startupOnly()
+      .booleanConf
+      .createWithDefault(false)
+
   val SHUFFLE_TRANSPORT_EARLY_START = conf("spark.rapids.shuffle.transport.earlyStart")
     .doc("Enable early connection establishment for RAPIDS Shuffle")
     .startupOnly()
@@ -3976,6 +3987,9 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   def multithreadedShuffleAdaptiveGpuCompressionMaxGpuSemaphoreWaiters: Int =
     get(MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_MAX_GPU_SEMAPHORE_WAITERS)
+
+  def multithreadedShuffleAdaptiveGpuCompressionReleaseAfterGpuPhase: Boolean =
+    get(MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_RELEASE_AFTER_GPU_PHASE)
 
   def isCacheOnlyShuffleManagerMode: Boolean =
     RapidsShuffleManagerMode

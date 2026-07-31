@@ -108,6 +108,8 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
       RapidsConf.MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_MAX_CONCURRENT_TASKS.key
     val maxWaitersKey =
       RapidsConf.MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_MAX_GPU_SEMAPHORE_WAITERS.key
+    val releaseAfterGpuPhaseKey =
+      RapidsConf.MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_RELEASE_AFTER_GPU_PHASE.key
 
     assert(!new RapidsConf(Map.empty[String, String])
       .isMultithreadedShuffleAdaptiveGpuCompressionEnabled)
@@ -121,6 +123,31 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
       .multithreadedShuffleAdaptiveGpuCompressionMaxGpuSemaphoreWaiters)
     assertResult(16)(new RapidsConf(Map(maxWaitersKey -> "16"))
       .multithreadedShuffleAdaptiveGpuCompressionMaxGpuSemaphoreWaiters)
+    assert(!new RapidsConf(Map.empty[String, String])
+      .multithreadedShuffleAdaptiveGpuCompressionReleaseAfterGpuPhase)
+    assert(new RapidsConf(Map(releaseAfterGpuPhaseKey -> "true"))
+      .multithreadedShuffleAdaptiveGpuCompressionReleaseAfterGpuPhase)
+  }
+
+  test("experimental GPU-phase release is fail-closed for a second phase in one task") {
+    val reservation = new TestGpuReservation
+    val state = new TaskCompressionPlanState(reservation)
+
+    val plan = state.getOrFreeze(
+      adaptiveGpuCompressionEnabled = true,
+      ShuffleCompressionBackend.NvcompGpuZstd)
+    assert(plan.useGpuCompressor)
+
+    state.releaseGpuReservationAfterCompression()
+    assertResult(1)(reservation.releaseCount)
+    assertThrows[IllegalArgumentException] {
+      state.getOrFreeze(
+        adaptiveGpuCompressionEnabled = true,
+        ShuffleCompressionBackend.NvcompGpuZstd)
+    }
+
+    state.close()
+    assertResult(1)(reservation.releaseCount)
   }
 
   test("GPU proposal requires CPU backlog and waiter count within the configured bound") {

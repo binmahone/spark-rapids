@@ -288,6 +288,7 @@ class TaskCompressionPlanState(
     extends AutoCloseable {
   private val frozenPlan = new AtomicReference[TaskCompressionPlan]()
   private val ownsGpuReservation = new AtomicBoolean(false)
+  private val gpuPhaseCompleted = new AtomicBoolean(false)
   private val gpuReservationAcquiredAtNs = new AtomicLong(0L)
   private val decisionLogged = new AtomicBoolean(false)
   private val decisionReported = new AtomicBoolean(false)
@@ -303,6 +304,9 @@ class TaskCompressionPlanState(
       proposedBackend: => ShuffleCompressionBackend): TaskCompressionPlan = {
     val existing = frozenPlan.get()
     if (existing != null) {
+      require(!existing.useGpuCompressor || !gpuPhaseCompleted.get(),
+        "experimental GPU-phase reservation mode does not support multiple GPU compression " +
+          "phases in one task")
       return existing
     }
 
@@ -344,6 +348,19 @@ class TaskCompressionPlanState(
   def gpuReservationHeldTimeNs: Long = {
     val acquiredAtNs = gpuReservationAcquiredAtNs.get()
     if (acquiredAtNs == 0L) 0L else System.nanoTime() - acquiredAtNs
+  }
+
+  def releaseGpuReservationAfterCompression(): Unit = {
+    require(frozenPlan.get() != null && frozenPlan.get().useGpuCompressor,
+      "only a GPU compression plan may release its reservation after compression")
+    require(gpuPhaseCompleted.compareAndSet(false, true),
+      "a task reached the GPU compression phase more than once")
+    if (ownsGpuReservation.compareAndSet(true, false)) {
+      gpuReservation.release()
+    } else {
+      throw new IllegalStateException(
+        "GPU compression completed without an active compression reservation")
+    }
   }
 
   override def close(): Unit = {

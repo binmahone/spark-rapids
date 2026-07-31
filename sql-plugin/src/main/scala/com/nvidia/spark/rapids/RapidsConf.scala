@@ -2238,53 +2238,17 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
 
   val MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION =
     conf("spark.rapids.shuffle.multithreaded.adaptiveGpuCompression.enabled")
-      .doc("Compress GPU-serialized Kudo shuffle partitions with nvCOMP Zstd before copying them " +
-        "to host memory. The MULTITHREADED writer stores the resulting standard Zstd frames " +
-        "without applying Spark compression again. When disabled, shuffle compression follows " +
-        "Spark's existing CPU compression path. This experimental setting requires Kudo GPU " +
-        "write mode, MULTITHREADED shuffle, spark.shuffle.compress=true, and " +
-        "spark.io.compression.codec=zstd.")
+      .doc("Dynamically compress GPU-serialized Kudo shuffle partitions with nvCOMP Zstd when " +
+        "the CPU writer pool is backlogged and no task is waiting for the GPU. A task keeps its " +
+        "first CPU/GPU choice for its lifetime. GPU-compressed output is stored as standard Zstd " +
+        "frames without applying Spark compression again; all other output follows Spark's CPU " +
+        "compression path. When disabled, every task follows the existing CPU path. This " +
+        "experimental setting requires Kudo GPU write mode, MULTITHREADED shuffle, " +
+        "spark.shuffle.compress=true, and spark.io.compression.codec=zstd.")
       .internal()
       .startupOnly()
       .booleanConf
       .createWithDefault(false)
-
-  val MULTITHREADED_SHUFFLE_GPU_DECOMPRESSION_PROBE =
-    conf("spark.rapids.shuffle.multithreaded.gpuDecompressionProbe.enabled")
-      .doc("Run a bounded diagnostic comparison of CPU and GPU Zstd decompression on real " +
-        "GPU-serialized shuffle partitions. This setting does not change the shuffle reader.")
-      .internal()
-      .startupOnly()
-      .booleanConf
-      .createWithDefault(false)
-
-  val MULTITHREADED_SHUFFLE_GPU_DECOMPRESSION_PROBE_SAMPLES =
-    conf("spark.rapids.shuffle.multithreaded.gpuDecompressionProbe.samplesPerExecutor")
-      .doc("Maximum number of GPU Zstd decompression diagnostic samples per executor.")
-      .internal()
-      .startupOnly()
-      .integerConf
-      .checkValue(_ > 0, "samplesPerExecutor must be positive")
-      .createWithDefault(1)
-
-  val MULTITHREADED_SHUFFLE_GPU_DECOMPRESSION_PROBE_ITERATIONS =
-    conf("spark.rapids.shuffle.multithreaded.gpuDecompressionProbe.iterations")
-      .doc("Number of CPU and GPU decompression iterations in each diagnostic sample.")
-      .internal()
-      .startupOnly()
-      .integerConf
-      .checkValue(_ > 0, "iterations must be positive")
-      .createWithDefault(3)
-
-  val MULTITHREADED_SHUFFLE_GPU_DECOMPRESSION_PROBE_BATCH_SIZE =
-    conf("spark.rapids.shuffle.multithreaded.gpuDecompressionProbe.batchSize")
-      .doc("Number of real shuffle partition buffers included in one GPU Zstd decompression " +
-        "diagnostic batch.")
-      .internal()
-      .startupOnly()
-      .integerConf
-      .checkValue(_ > 0, "batchSize must be positive")
-      .createWithDefault(16)
 
   val SHUFFLE_TRANSPORT_EARLY_START = conf("spark.rapids.shuffle.transport.earlyStart")
     .doc("Enable early connection establishment for RAPIDS Shuffle")
@@ -3985,18 +3949,6 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   def isMultithreadedShuffleAdaptiveGpuCompressionEnabled: Boolean =
     get(MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION)
-
-  def isMultithreadedShuffleGpuDecompressionProbeEnabled: Boolean =
-    get(MULTITHREADED_SHUFFLE_GPU_DECOMPRESSION_PROBE)
-
-  def multithreadedShuffleGpuDecompressionProbeSamples: Int =
-    get(MULTITHREADED_SHUFFLE_GPU_DECOMPRESSION_PROBE_SAMPLES)
-
-  def multithreadedShuffleGpuDecompressionProbeIterations: Int =
-    get(MULTITHREADED_SHUFFLE_GPU_DECOMPRESSION_PROBE_ITERATIONS)
-
-  def multithreadedShuffleGpuDecompressionProbeBatchSize: Int =
-    get(MULTITHREADED_SHUFFLE_GPU_DECOMPRESSION_PROBE_BATCH_SIZE)
 
   def isCacheOnlyShuffleManagerMode: Boolean =
     RapidsShuffleManagerMode

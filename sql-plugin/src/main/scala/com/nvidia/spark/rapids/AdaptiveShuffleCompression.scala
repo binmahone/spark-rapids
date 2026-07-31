@@ -61,43 +61,12 @@ trait GpuCompressionReservation {
 object ExecutorGpuCompressionReservation extends GpuCompressionReservation {
   private val reserved = new AtomicBoolean(false)
 
-  def tryAcquire(taskContext: TaskContext): Boolean = {
-    if (!reserved.compareAndSet(false, true)) {
-      false
-    } else {
-      GpuSemaphore.tryAcquire(taskContext) match {
-        case SemaphoreAcquired =>
-          true
-        case _: AcquireFailed =>
-          reserved.set(false)
-          false
-      }
-    }
+  override def tryAcquire(): Boolean = reserved.compareAndSet(false, true)
+
+  override def release(): Unit = {
+    require(reserved.compareAndSet(true, false),
+      "GPU compression reservation was released without being held")
   }
-
-  def release(taskContext: TaskContext): Unit = {
-    try {
-      GpuSemaphore.releaseIfNecessary(taskContext)
-    } finally {
-      require(reserved.compareAndSet(true, false),
-        "GPU compression reservation was released without being held")
-    }
-  }
-
-  override def tryAcquire(): Boolean = tryAcquire(TaskContext.get())
-
-  override def release(): Unit = release(TaskContext.get())
-}
-
-class TaskContextGpuCompressionReservation(taskContext: TaskContext)
-    extends GpuCompressionReservation {
-  require(taskContext != null, "GPU compression requires a non-null task context")
-
-  override def tryAcquire(): Boolean =
-    ExecutorGpuCompressionReservation.tryAcquire(taskContext)
-
-  override def release(): Unit =
-    ExecutorGpuCompressionReservation.release(taskContext)
 }
 
 case class AdaptiveShuffleCompressionMetricsSnapshot(
@@ -296,12 +265,13 @@ object TaskCompressionPlan {
  * records already being produced by this task.
  */
 class TaskCompressionPlanState(
-    shuffleId: Int,
     gpuReservation: GpuCompressionReservation = ExecutorGpuCompressionReservation)
     extends AutoCloseable {
   private val frozenPlan = new AtomicReference[TaskCompressionPlan]()
   private val ownsGpuReservation = new AtomicBoolean(false)
   private val gpuReservationAcquiredAtNs = new AtomicLong(0L)
+  private val decisionLogged = new AtomicBoolean(false)
+  private val decisionReported = new AtomicBoolean(false)
 
   /**
    * Freezes the effective backend at the compression boundary.
@@ -339,15 +309,18 @@ class TaskCompressionPlanState(
         }
         val plan = TaskCompressionPlan(reservedBackend, effectiveBackend)
         frozenPlan.set(plan)
-        if (adaptiveGpuCompressionEnabled) {
-          AdaptiveShuffleCompressionMetrics.record(shuffleId, plan)
-        }
         plan
       }
     }
   }
 
   def get: Option[TaskCompressionPlan] = Option(frozenPlan.get())
+
+  def markDecisionForLogging(): Boolean =
+    decisionLogged.compareAndSet(false, true)
+
+  def markDecisionForReporting(): Boolean =
+    decisionReported.compareAndSet(false, true)
 
   def gpuReservationHeldTimeNs: Long = {
     val acquiredAtNs = gpuReservationAcquiredAtNs.get()
@@ -358,5 +331,31 @@ class TaskCompressionPlanState(
     if (ownsGpuReservation.compareAndSet(true, false)) {
       gpuReservation.release()
     }
+  }
+}
+
+object AdaptiveTaskCompressionPlans {
+  private val plans = new ConcurrentHashMap[Long, TaskCompressionPlanState]()
+
+  def getOrCreate(taskContext: TaskContext): TaskCompressionPlanState = {
+    require(taskContext != null, "adaptive GPU compression requires a task context")
+    val taskAttemptId = taskContext.taskAttemptId()
+    plans.computeIfAbsent(taskAttemptId, _ => {
+      val state = new TaskCompressionPlanState()
+      taskContext.addTaskCompletionListener[Unit] { _ =>
+        val removed = plans.remove(taskAttemptId)
+        if (removed != null) {
+          removed.close()
+        }
+      }
+      state
+    })
+  }
+
+  private[rapids] def clear(): Unit = {
+    import scala.collection.JavaConverters._
+
+    plans.values().asScala.foreach(_.close())
+    plans.clear()
   }
 }

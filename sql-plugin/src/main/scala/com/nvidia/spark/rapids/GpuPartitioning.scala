@@ -26,17 +26,17 @@ import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
 import com.nvidia.spark.rapids.jni.kudo.KudoGpuSerializer
 
 import org.apache.spark.TaskContext
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.rapids.GpuShuffleEnv
+import org.apache.spark.sql.rapids.{GpuShuffleEnv, RapidsShuffleInternalManagerBase}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
-trait GpuPartitioning extends Partitioning {
+trait GpuPartitioning extends Partitioning with Logging {
   private[this] val (
     maxCpuBatchSize, maxCompressionBatchSize, _useGPUShuffle,
         _useKudoGPUSlicing, _useMultiThreadedShuffle, _useGpuShuffleCompression,
-        zstdChunkSize, _runGpuDecompressionProbe, gpuDecompressionProbeSamples,
-        gpuDecompressionProbeIterations, gpuDecompressionProbeBatchSize) = {
+        zstdChunkSize) = {
     val rapidsConf = new RapidsConf(SQLConf.get)
     (rapidsConf.shuffleParitioningMaxCpuBatchSize,
       rapidsConf.shuffleCompressionMaxBatchMemory,
@@ -44,20 +44,14 @@ trait GpuPartitioning extends Partitioning {
       rapidsConf.shuffleKudoGpuSerializerEnabled,
       GpuShuffleEnv.useMultiThreadedShuffle(rapidsConf),
       rapidsConf.isMultithreadedShuffleAdaptiveGpuCompressionEnabled,
-      rapidsConf.shuffleCompressionZstdChunkSize,
-      rapidsConf.isMultithreadedShuffleGpuDecompressionProbeEnabled,
-      rapidsConf.multithreadedShuffleGpuDecompressionProbeSamples,
-      rapidsConf.multithreadedShuffleGpuDecompressionProbeIterations,
-      rapidsConf.multithreadedShuffleGpuDecompressionProbeBatchSize)
+      rapidsConf.shuffleCompressionZstdChunkSize)
   }
   private lazy val gpuZstdCompressor =
-    new GpuZstdStreamCompressor(
-      zstdChunkSize,
-      maxCompressionBatchSize,
-      _runGpuDecompressionProbe,
-      gpuDecompressionProbeSamples,
-      gpuDecompressionProbeIterations,
-      gpuDecompressionProbeBatchSize)
+    new GpuZstdStreamCompressor(zstdChunkSize, maxCompressionBatchSize)
+
+  private case class AdaptiveCompressionSelection(
+      plan: TaskCompressionPlan,
+      state: TaskCompressionPlanState)
 
   final def columnarEval(batch: ColumnarBatch): GpuColumnVector = {
     throw new IllegalStateException(
@@ -221,17 +215,49 @@ trait GpuPartitioning extends Partitioning {
 
   private def sliceAndSerializeOnGpu(numRows: Int, partitionIndexes: Array[Int],
       partitionColumns: Array[GpuColumnVector]): Array[(ColumnarBatch, Int)] = {
-    if (_useGpuShuffleCompression) {
-      sliceSerializeAndCompressOnGpu(
-        numRows, partitionIndexes, partitionColumns)
+    val selection = adaptiveCompressionSelection()
+    selection match {
+      case Some(value) if value.plan.useGpuCompressor =>
+        sliceSerializeAndCompressOnGpu(
+          numRows, partitionIndexes, partitionColumns, value)
+      case _ =>
+        partitionColumns.foreach(_.getBase.getNullCount)
+        sliceAndSerializeToHost(numRows, partitionIndexes, partitionColumns, selection)
+    }
+  }
+
+  private def adaptiveCompressionSelection(): Option[AdaptiveCompressionSelection] = {
+    if (!_useGpuShuffleCompression) {
+      None
     } else {
-      partitionColumns.foreach(_.getBase.getNullCount)
-      sliceAndSerializeToHost(numRows, partitionIndexes, partitionColumns)
+      val taskContext = TaskContext.get()
+      require(taskContext != null, "adaptive GPU compression requires a task context")
+      val pressure = RapidsShuffleInternalManagerBase.adaptiveCompressionPressure
+      val state = AdaptiveTaskCompressionPlans.getOrCreate(taskContext)
+      val proposedBackend = if (pressure.proposesGpu) {
+        ShuffleCompressionBackend.NvcompGpuZstd
+      } else {
+        ShuffleCompressionBackend.SparkCpuZstd
+      }
+      val plan = state.getOrFreeze(
+        adaptiveGpuCompressionEnabled = true,
+        proposedBackend)
+      if (state.markDecisionForLogging()) {
+        logInfo(s"Adaptive GPU shuffle compression decision for task " +
+          s"${taskContext.taskAttemptId()}: proposed=${plan.proposedBackend}, " +
+          s"selected=${plan.backend}, writerPoolSize=${pressure.writerPoolSize}, " +
+          s"activeWriterThreads=${pressure.activeWriterThreads}, " +
+          s"queuedWriterTasks=${pressure.queuedWriterTasks}, " +
+          s"gpuSemaphoreWaiters=${pressure.gpuSemaphoreWaiters}, " +
+          s"gpuReservationDenied=${plan.gpuReservationDenied}")
+      }
+      Some(AdaptiveCompressionSelection(plan, state))
     }
   }
 
   private def sliceAndSerializeToHost(numRows: Int, partitionIndexes: Array[Int],
-      partitionColumns: Array[GpuColumnVector]): Array[(ColumnarBatch, Int)] = {
+      partitionColumns: Array[GpuColumnVector],
+      selection: Option[AdaptiveCompressionSelection]): Array[(ColumnarBatch, Int)] = {
     val (dataHost, offsetsHost) = withResource(partitionColumns) { _ =>
       withResource(new Table(partitionColumns.map(_.getBase).toArray: _*)) { table =>
         withResource(gpuSplitAndSerialize(table,
@@ -260,14 +286,28 @@ trait GpuPartitioning extends Partitioning {
         val elemSize = offsetsHost.getLength / numSlices
 
         val res = new Array[ColumnarBatch](numPartitions)
+        var reportDecision =
+          selection.exists(value => numRows > 0 && value.state.markDecisionForReporting())
         var start = 0
         var prevIndex: Int = 0
         for (i <- 1 until numPartitions) {
           val idx = offsetsHost.getLong((i) * elemSize).toInt
           val partNumRows = partitionIndexes(i) - prevIndex
           if (partNumRows > 0) {
-            res(i - 1) = new ColumnarBatch(Array(
-              new SlicedSerializedColumnVector(dataHost, start, idx)))
+            val vector = selection.map { value =>
+              val adaptiveVector = new AdaptiveSerializedColumnVector(
+                dataHost,
+                start,
+                idx,
+                value.plan.proposedBackend == ShuffleCompressionBackend.NvcompGpuZstd,
+                false,
+                value.plan.gpuReservationDenied,
+                reportDecision,
+                0L)
+              reportDecision = false
+              adaptiveVector
+            }.getOrElse(new SlicedSerializedColumnVector(dataHost, start, idx))
+            res(i - 1) = new ColumnarBatch(Array(vector))
             res(i - 1).setNumRows(partNumRows)
           }
           prevIndex = partitionIndexes(i)
@@ -275,8 +315,19 @@ trait GpuPartitioning extends Partitioning {
         }
         val partNumRows = numRows - prevIndex
         if (partNumRows > 0) {
-          res(numPartitions - 1) = new ColumnarBatch(Array(
-            new SlicedSerializedColumnVector(dataHost, start, dataHost.getLength.toInt)))
+          val vector = selection.map { value =>
+            new AdaptiveSerializedColumnVector(
+              dataHost,
+              start,
+              dataHost.getLength.toInt,
+              value.plan.proposedBackend == ShuffleCompressionBackend.NvcompGpuZstd,
+              false,
+              value.plan.gpuReservationDenied,
+              reportDecision,
+              0L)
+          }.getOrElse(
+            new SlicedSerializedColumnVector(dataHost, start, dataHost.getLength.toInt))
+          res(numPartitions - 1) = new ColumnarBatch(Array(vector))
           res(numPartitions - 1).setNumRows(partNumRows)
         }
 
@@ -294,7 +345,8 @@ trait GpuPartitioning extends Partitioning {
   private def sliceSerializeAndCompressOnGpu(
       numRows: Int,
       partitionIndexes: Array[Int],
-      partitionColumns: Array[GpuColumnVector]): Array[(ColumnarBatch, Int)] = {
+      partitionColumns: Array[GpuColumnVector],
+      selection: AdaptiveCompressionSelection): Array[(ColumnarBatch, Int)] = {
     try {
       withResource(partitionColumns) { _ =>
         if (numRows == 0) {
@@ -380,20 +432,32 @@ trait GpuPartitioning extends Partitioning {
                   result.toArray
                 }
                 withResource(deviceSlices) { _ =>
+                  val compressionStartNs = System.nanoTime()
                   val hostFrames = gpuZstdCompressor.compressDevice(
                     deviceSlices, Cuda.DEFAULT_STREAM)
+                  val compressionTimeNs = System.nanoTime() - compressionStartNs
                   try {
                     require(hostFrames.length == partitions.length,
                       s"expected ${partitions.length} compressed partitions, " +
                         s"found ${hostFrames.length}")
                     val batches = closeOnExcept(
                         new ArrayBuffer[ColumnarBatch](partitions.length)) { result =>
+                      var reportDecision = selection.state.markDecisionForReporting()
                       hostFrames.zip(partitions).foreach { case (frames, partition) =>
                         require(frames.getLength <= Int.MaxValue,
                           s"compressed shuffle partition ${partition.partitionId} exceeds " +
                             s"the JVM slice limit: ${frames.getLength}")
                         val vector = new PrecompressedSerializedColumnVector(
-                          frames, 0, frames.getLength.toInt, partition.uncompressedBytes)
+                          frames,
+                          0,
+                          frames.getLength.toInt,
+                          partition.uncompressedBytes,
+                          selection.plan.proposedBackend ==
+                            ShuffleCompressionBackend.NvcompGpuZstd,
+                          selection.plan.gpuReservationDenied,
+                          reportDecision,
+                          if (reportDecision) compressionTimeNs else 0L)
+                        reportDecision = false
                         val batch = closeOnExcept(vector) { _ =>
                           new ColumnarBatch(Array(vector))
                         }

@@ -35,6 +35,7 @@ import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
 import com.nvidia.spark.rapids.format.TableMeta
 import com.nvidia.spark.rapids.jni.kudo.OpenByteArrayOutputStream
+import com.nvidia.spark.rapids.metrics.GpuBubbleTimerManager
 import com.nvidia.spark.rapids.shuffle.{RapidsShuffleRequestHandler, RapidsShuffleServer, RapidsShuffleTransport}
 import com.nvidia.spark.rapids.spill.SpillablePartialFileHandle
 
@@ -162,7 +163,7 @@ object RapidsShuffleInternalManagerBase extends Logging {
   // shuffle mode is utilized, as per these configs:
   //   spark.rapids.shuffle.multiThreaded.writer.threads
   //   spark.rapids.shuffle.multiThreaded.reader.threads
-  private var writerPool: ExecutorService = _
+  private var writerPool: ThreadPoolExecutor = _
   private var readerPool: ExecutorService = _
   private var mergerPool: ExecutorService = _
 
@@ -180,6 +181,19 @@ object RapidsShuffleInternalManagerBase extends Logging {
   def queueWriteTask[T](task: FutureTask[T]): Future[T] = {
     writerPool.execute(task)
     task
+  }
+
+  def adaptiveCompressionPressure: AdaptiveCompressionPressure = {
+    val pool = writerPool
+    if (pool == null) {
+      AdaptiveCompressionPressure(0, 0, 0, GpuBubbleTimerManager.getInstance.waiterCount)
+    } else {
+      AdaptiveCompressionPressure(
+        pool.getCorePoolSize,
+        pool.getActiveCount,
+        pool.getQueue.size(),
+        GpuBubbleTimerManager.getInstance.waiterCount)
+    }
   }
 
   /** Send a deserialization task to the shared reader pool. */
@@ -225,7 +239,7 @@ object RapidsShuffleInternalManagerBase extends Logging {
         writerPool = Executors.newFixedThreadPool(numWriterThreads, new ThreadFactoryBuilder()
           .setNameFormat("rapids-shuffle-writer-%d")
           .setDaemon(true)
-          .build())
+          .build()).asInstanceOf[ThreadPoolExecutor]
         mergerPool = Executors.newFixedThreadPool(numWriterThreads, new ThreadFactoryBuilder()
           .setNameFormat("rapids-shuffle-merger-%d")
           .setDaemon(true)
@@ -835,9 +849,31 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
             var releasedQuota = 0L
             try {
               val result = withResource(cb) { _ =>
+                val compressionStartNs = System.nanoTime()
                 // Create a new buffer for this record.
                 // The buffer is closed by the merger thread after writing to disk.
                 val buffer = new OpenByteArrayOutputStream()
+
+                val adaptiveVector = cb.column(0) match {
+                  case adaptive: AdaptiveSerializedColumnVector =>
+                    if (adaptive.shouldReportDecision()) {
+                      val proposedBackend = if (adaptive.isGpuProposed()) {
+                        ShuffleCompressionBackend.NvcompGpuZstd
+                      } else {
+                        ShuffleCompressionBackend.SparkCpuZstd
+                      }
+                      val selectedBackend = if (adaptive.isGpuSelected()) {
+                        ShuffleCompressionBackend.NvcompGpuZstd
+                      } else {
+                        ShuffleCompressionBackend.SparkCpuZstd
+                      }
+                      AdaptiveShuffleCompressionMetrics.record(
+                        shuffleId, TaskCompressionPlan(selectedBackend, proposedBackend))
+                    }
+                    Some(adaptive)
+                  case _ =>
+                    None
+                }
 
                 cb.column(0) match {
                   case precompressed: PrecompressedSerializedColumnVector =>
@@ -857,6 +893,31 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                 // Track total written data size (compressed size)
                 val compressedSize = buffer.getCount.toLong
                 totalCompressedSize.addAndGet(compressedSize)
+                adaptiveVector.foreach { adaptive =>
+                  val backend = if (adaptive.isGpuSelected()) {
+                    ShuffleCompressionBackend.NvcompGpuZstd
+                  } else {
+                    ShuffleCompressionBackend.SparkCpuZstd
+                  }
+                  val rawBytes = adaptive match {
+                    case precompressed: PrecompressedSerializedColumnVector =>
+                      precompressed.getUncompressedLength
+                    case _ =>
+                      recordSize
+                  }
+                  val compressionTimeNs = if (adaptive.isGpuSelected()) {
+                    adaptive.getGpuCompressionTimeNs
+                  } else {
+                    System.nanoTime() - compressionStartNs
+                  }
+                  AdaptiveShuffleCompressionMetrics.recordWork(
+                    shuffleId,
+                    backend,
+                    rawBytes,
+                    compressedSize,
+                    compressionTimeNs,
+                    reservationTimeNs = 0L)
+                }
 
                 // Release excess quota immediately after compression.
                 // Data is now in OpenByteArrayOutputStream (heap), only need to hold

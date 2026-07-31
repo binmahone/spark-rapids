@@ -55,7 +55,7 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
 
   test("first backend decision remains sticky for a task") {
     val reservation = new TestGpuReservation
-    val state = new TaskCompressionPlanState(1, reservation)
+    val state = new TaskCompressionPlanState(reservation)
     var proposalCount = 0
 
     val first = state.getOrFreeze(
@@ -80,7 +80,7 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
   }
 
   test("disabled global switch preserves the CPU compression path") {
-    val state = new TaskCompressionPlanState(2)
+    val state = new TaskCompressionPlanState()
     var evaluatedProposal = false
 
     val plan = state.getOrFreeze(
@@ -91,6 +91,15 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
 
     assertResult(ShuffleCompressionBackend.SparkCpuZstd)(plan.backend)
     assert(!evaluatedProposal)
+  }
+
+  test("logging and event reporting each claim a task decision once") {
+    val state = new TaskCompressionPlanState()
+
+    assert(state.markDecisionForLogging())
+    assert(!state.markDecisionForLogging())
+    assert(state.markDecisionForReporting())
+    assert(!state.markDecisionForReporting())
   }
 
   test("adaptive GPU compression is disabled by default and can be enabled") {
@@ -120,8 +129,8 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     AdaptiveShuffleCompressionMetrics.clearShuffle(shuffleId)
     val before = AdaptiveShuffleCompressionMetrics.executorSnapshot
     val reservation = new TestGpuReservation
-    val firstTask = new TaskCompressionPlanState(shuffleId, reservation)
-    val secondTask = new TaskCompressionPlanState(shuffleId, reservation)
+    val firstTask = new TaskCompressionPlanState(reservation)
+    val secondTask = new TaskCompressionPlanState(reservation)
 
     val firstPlan = firstTask.getOrFreeze(
       adaptiveGpuCompressionEnabled = true,
@@ -129,6 +138,8 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     val secondPlan = secondTask.getOrFreeze(
       adaptiveGpuCompressionEnabled = true,
       ShuffleCompressionBackend.NvcompGpuZstd)
+    AdaptiveShuffleCompressionMetrics.record(shuffleId, firstPlan)
+    AdaptiveShuffleCompressionMetrics.record(shuffleId, secondPlan)
 
     assertResult(ShuffleCompressionBackend.NvcompGpuZstd)(firstPlan.backend)
     assertResult(ShuffleCompressionBackend.SparkCpuZstd)(secondPlan.backend)
@@ -158,10 +169,11 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     AdaptiveShuffleCompressionMetrics.clearShuffle(shuffleId)
     val reservation = new TestGpuReservation
 
-    val firstTask = new TaskCompressionPlanState(shuffleId, reservation)
-    firstTask.getOrFreeze(
+    val firstTask = new TaskCompressionPlanState(reservation)
+    val firstPlan = firstTask.getOrFreeze(
       adaptiveGpuCompressionEnabled = true,
       ShuffleCompressionBackend.SparkCpuZstd)
+    AdaptiveShuffleCompressionMetrics.record(shuffleId, firstPlan)
     AdaptiveShuffleCompressionMetrics.recordWork(
       shuffleId,
       ShuffleCompressionBackend.SparkCpuZstd,
@@ -178,10 +190,11 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     assertResult(10)(firstDrain.cpuCompressionTimeNs)
     assert(!AdaptiveShuffleCompressionMetrics.drainShuffleSnapshots.toMap.contains(shuffleId))
 
-    val secondTask = new TaskCompressionPlanState(shuffleId, reservation)
-    secondTask.getOrFreeze(
+    val secondTask = new TaskCompressionPlanState(reservation)
+    val secondPlan = secondTask.getOrFreeze(
       adaptiveGpuCompressionEnabled = true,
       ShuffleCompressionBackend.SparkCpuZstd)
+    AdaptiveShuffleCompressionMetrics.record(shuffleId, secondPlan)
     AdaptiveShuffleCompressionMetrics.recordWork(
       shuffleId,
       ShuffleCompressionBackend.SparkCpuZstd,

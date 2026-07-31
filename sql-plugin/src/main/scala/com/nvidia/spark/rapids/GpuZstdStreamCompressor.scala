@@ -178,11 +178,7 @@ private[rapids] object NvcompZstdStreamLayout {
  */
 class GpuZstdStreamCompressor(
     chunkSize: Long,
-    maxIntermediateBufferSize: Long,
-    runDecompressionProbe: Boolean = false,
-    decompressionProbeSamples: Int = 1,
-    decompressionProbeIterations: Int = 3,
-    decompressionProbeBatchSize: Int = 16) {
+    maxIntermediateBufferSize: Long) {
 
   private val compressor = new BatchedZstdCompressor(chunkSize, maxIntermediateBufferSize)
   private val batchRunner = new CoalescingBatchRunner[HostMemoryBuffer, HostMemoryBuffer](
@@ -219,21 +215,8 @@ class GpuZstdStreamCompressor(
     withResource(compressor.compress(compressorInputs, stream)) { compressedOutputs =>
       require(compressedOutputs.length == inputs.length,
         s"expected ${inputs.length} nvCOMP outputs, found ${compressedOutputs.length}")
-      val hostFrames = compressedOutputs.zip(inputs).safeMap { case (stitchedOutput, input) =>
+      compressedOutputs.zip(inputs).safeMap { case (stitchedOutput, input) =>
         copyStandardFramesToHost(stitchedOutput, input, stream)
-      }
-      closeOnExcept(hostFrames) { frames =>
-        GpuZstdDecompressionProbe.runBatchIfNeeded(
-          runDecompressionProbe,
-          decompressionProbeSamples,
-          decompressionProbeIterations,
-          decompressionProbeBatchSize,
-          chunkSize,
-          inputs,
-          compressedOutputs.map(_.asInstanceOf[BaseDeviceMemoryBuffer]),
-          frames,
-          stream)
-        frames
       }
     }
   }

@@ -24,15 +24,27 @@ import ai.rapids.cudf.HostMemoryBuffer;
  * Shuffle writers must send these bytes through encryption and storage only. Passing them through
  * Spark's compression wrapper would compress the payload twice.
  */
-public final class PrecompressedSerializedColumnVector extends SlicedSerializedColumnVector {
+public final class PrecompressedSerializedColumnVector extends AdaptiveSerializedColumnVector {
   private final long uncompressedLength;
 
   public PrecompressedSerializedColumnVector(
       HostMemoryBuffer buffer,
       int start,
       int end,
-      long uncompressedLength) {
-    super(buffer, start, end);
+      long uncompressedLength,
+      boolean gpuProposed,
+      boolean gpuReservationDenied,
+      boolean reportDecision,
+      long gpuCompressionTimeNs) {
+    super(
+        buffer,
+        start,
+        end,
+        gpuProposed,
+        true,
+        gpuReservationDenied,
+        reportDecision,
+        gpuCompressionTimeNs);
     if (uncompressedLength <= 0) {
       throw new IllegalArgumentException("uncompressedLength must be positive");
     }

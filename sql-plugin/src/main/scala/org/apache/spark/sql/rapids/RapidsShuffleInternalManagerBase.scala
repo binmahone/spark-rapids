@@ -19,7 +19,7 @@ package org.apache.spark.sql.rapids
 import java.io.{IOException, OutputStream}
 import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, ConcurrentLinkedQueue,
   ExecutionException, Executors, ExecutorService, Future, FutureTask, LinkedBlockingQueue,
-  ThreadPoolExecutor, TimeoutException, TimeUnit}
+  ScheduledFuture, ThreadFactory, ThreadPoolExecutor, TimeoutException, TimeUnit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicLong, AtomicReference}
 
 import scala.collection.JavaConverters._
@@ -165,6 +165,15 @@ object RapidsShuffleInternalManagerBase extends Logging {
   private var readerPool: ExecutorService = _
   private var mergerPool: ExecutorService = _
 
+  private val hangDiagnosticScheduler = Executors.newSingleThreadScheduledExecutor(
+    new ThreadFactory {
+      override def newThread(runnable: Runnable): Thread = {
+        val thread = new Thread(runnable, "rapids-shuffle-hang-diagnostic")
+        thread.setDaemon(true)
+        thread
+      }
+    })
+
   private var mtShuffleInitialized: Boolean = false
 
   def queueWriteTask[T](task: FutureTask[T]): Future[T] = {
@@ -178,6 +187,10 @@ object RapidsShuffleInternalManagerBase extends Logging {
   }
 
   def executeMergerTask(task: Runnable): Unit = mergerPool.execute(task)
+
+  def scheduleHangDiagnostic(task: Runnable): ScheduledFuture[_] = {
+    hangDiagnosticScheduler.scheduleAtFixedRate(task, 30L, 30L, TimeUnit.SECONDS)
+  }
 
   private def poolDiagnosticSnapshot(pool: ExecutorService): String = pool match {
     case threadPool: ThreadPoolExecutor =>
@@ -680,6 +693,36 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
     var waitTimeOnLimiterNs: Long = 0L
     var inputFetchTimeNs: Long = 0L
 
+    val taskContext = TaskContext.get()
+    val taskThread = Thread.currentThread()
+    val diagnosticPhase = new AtomicReference[String]("initializing")
+    val diagnosticProgressNs = new AtomicLong(System.nanoTime())
+    def markDiagnosticProgress(phase: String): Unit = {
+      diagnosticPhase.set(phase)
+      diagnosticProgressNs.set(System.nanoTime())
+    }
+    val hangDiagnostic = RapidsShuffleInternalManagerBase.scheduleHangDiagnostic(new Runnable {
+      override def run(): Unit = {
+        val stalledNs = System.nanoTime() - diagnosticProgressNs.get()
+        if (stalledNs >= TimeUnit.SECONDS.toNanos(30L)) {
+          val stack = taskThread.getStackTrace.take(16).mkString(" <- ")
+          logWarning(
+            s"RAPIDS_SHUFFLE_TASK_HEARTBEAT " +
+              s"stage=${taskContext.stageId()},partition=${taskContext.partitionId()}," +
+              s"attempt=${taskContext.attemptNumber()},taskAttempt=${taskContext.taskAttemptId()}," +
+              s"shuffle=$shuffleId,map=$mapId,phase=${diagnosticPhase.get()}," +
+              s"stalledMs=${TimeUnit.NANOSECONDS.toMillis(stalledNs)}," +
+              s"taskThreadState=${taskThread.getState},bytesInFlight=${limiter.getBytesInFlight}," +
+              s"compressionSubmitted=${compressionTasksSubmitted.get()}," +
+              s"compressionStarted=${compressionTasksStarted.get()}," +
+              s"compressionCompleted=${compressionTasksCompleted.get()}," +
+              s"compressionFailed=${compressionTasksFailed.get()}," +
+              s"pools={${RapidsShuffleInternalManagerBase.threadPoolDiagnosticSnapshot}}," +
+              s"taskStack=$stack")
+        }
+      }
+    })
+
     // Multi-batch tracking
     val batchStates = new ArrayBuffer[BatchState]()
     val partialFiles = new ArrayBuffer[PartialFile]()
@@ -693,6 +736,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
     try {
       var inputFetchStart = System.nanoTime()
       while (records.hasNext) {
+        markDiagnosticProgress("input_next")
         val record = records.next()
         inputFetchTimeNs += System.nanoTime() - inputFetchStart
 
@@ -752,6 +796,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
 
         // Acquire limiter and process compression task immediately
         val waitOnLimiterStart = System.nanoTime()
+        markDiagnosticProgress("limiter_acquire")
         limiter.acquireOrBlock(recordSize)
         waitTimeOnLimiterNs += System.nanoTime() - waitOnLimiterStart
 
@@ -814,6 +859,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
           }
         }
         compressionTasksSubmitted.incrementAndGet()
+        markDiagnosticProgress("compression_submit")
         val future = RapidsShuffleInternalManagerBase.queueWriteTask(compressionTask)
 
         currentBatch.maxPartitionIdQueued.synchronized {
@@ -826,12 +872,14 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
         currentBatch.scheduleMerger()
 
         // Reset timer for next iteration's hasNext/next
+        markDiagnosticProgress("input_has_next")
         inputFetchStart = System.nanoTime()
       }
       // Account for the final hasNext call that returned false
       inputFetchTimeNs += System.nanoTime() - inputFetchStart
 
       // Mark end of last batch by setting maxPartitionIdQueued to numPartitions.
+      markDiagnosticProgress("finalize_last_batch")
       // This signals the merger that all partitions have been queued.
       currentBatch.maxPartitionIdQueued.set(numPartitions)
       currentBatch.scheduleMerger()
@@ -847,6 +895,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
           var mergerComplete = false
           while (!mergerComplete) {
             try {
+              markDiagnosticProgress(s"merger_wait_batch_${batch.batchId}")
               batch.mergerFuture.get(mergerWaitDiagnosticIntervalSeconds, TimeUnit.SECONDS)
               mergerComplete = true
             } catch {
@@ -893,6 +942,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
       inputFetchTimeMetric.foreach(_ += inputFetchTimeNs)
 
     } finally {
+      hangDiagnostic.cancel(false)
       // Helper to cleanup a single batch
       def cleanupBatch(batch: BatchState): Unit = {
         // Cancel merger completion and any currently scheduled step.

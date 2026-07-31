@@ -2217,6 +2217,16 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
       .booleanConf
       .createWithDefault(false)
 
+  val MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_MAX_CONCURRENT_TASKS =
+    conf("spark.rapids.shuffle.multithreaded.adaptiveGpuCompression.maxConcurrentTasks")
+      .doc("Maximum number of tasks per executor that may concurrently hold an adaptive GPU " +
+        "shuffle-compression reservation. Other eligible tasks retain the CPU Zstd path.")
+      .internal()
+      .startupOnly()
+      .integerConf
+      .checkValue(_ > 0, "Maximum concurrent adaptive GPU compression tasks must be positive")
+      .createWithDefault(1)
+
   val SHUFFLE_TRANSPORT_EARLY_START = conf("spark.rapids.shuffle.transport.earlyStart")
     .doc("Enable early connection establishment for RAPIDS Shuffle")
     .startupOnly()
@@ -3918,6 +3928,9 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   def isMultithreadedShuffleAdaptiveGpuCompressionEnabled: Boolean =
     get(MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION)
+
+  def multithreadedShuffleAdaptiveGpuCompressionMaxConcurrentTasks: Int =
+    get(MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_MAX_CONCURRENT_TASKS)
 
   def isCacheOnlyShuffleManagerMode: Boolean =
     RapidsShuffleManagerMode

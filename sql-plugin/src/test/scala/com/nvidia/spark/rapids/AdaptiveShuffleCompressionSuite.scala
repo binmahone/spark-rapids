@@ -104,11 +104,17 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
 
   test("adaptive GPU compression is disabled by default and can be enabled") {
     val key = RapidsConf.MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION.key
+    val maxTasksKey =
+      RapidsConf.MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_MAX_CONCURRENT_TASKS.key
 
     assert(!new RapidsConf(Map.empty[String, String])
       .isMultithreadedShuffleAdaptiveGpuCompressionEnabled)
     assert(new RapidsConf(Map(key -> "true"))
       .isMultithreadedShuffleAdaptiveGpuCompressionEnabled)
+    assertResult(1)(new RapidsConf(Map.empty[String, String])
+      .multithreadedShuffleAdaptiveGpuCompressionMaxConcurrentTasks)
+    assertResult(2)(new RapidsConf(Map(maxTasksKey -> "2"))
+      .multithreadedShuffleAdaptiveGpuCompressionMaxConcurrentTasks)
   }
 
   test("GPU proposal requires CPU backlog and no GPU semaphore waiters") {
@@ -216,11 +222,20 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     AdaptiveShuffleCompressionMetrics.clearShuffle(shuffleId)
   }
 
-  test("executor GPU compression reservation is exclusive and reusable") {
-    assert(ExecutorGpuCompressionReservation.tryAcquire())
-    assert(!ExecutorGpuCompressionReservation.tryAcquire())
-    ExecutorGpuCompressionReservation.release()
-    assert(ExecutorGpuCompressionReservation.tryAcquire())
-    ExecutorGpuCompressionReservation.release()
+  test("executor GPU compression reservation enforces its configured limit") {
+    ExecutorGpuCompressionReservation.configure(2)
+    try {
+      assert(ExecutorGpuCompressionReservation.tryAcquire())
+      assert(ExecutorGpuCompressionReservation.tryAcquire())
+      assert(!ExecutorGpuCompressionReservation.tryAcquire())
+      assertResult(2)(ExecutorGpuCompressionReservation.activeCount)
+      ExecutorGpuCompressionReservation.release()
+      assert(ExecutorGpuCompressionReservation.tryAcquire())
+      ExecutorGpuCompressionReservation.release()
+      ExecutorGpuCompressionReservation.release()
+      assertResult(0)(ExecutorGpuCompressionReservation.activeCount)
+    } finally {
+      ExecutorGpuCompressionReservation.configure(1)
+    }
   }
 }

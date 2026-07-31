@@ -170,6 +170,54 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
       .proposesGpu(maxGpuSemaphoreWaiters = 16))
   }
 
+  test("executor controller ramps up, holds its learned route, and backs off") {
+    val controller = new AdaptiveGpuCompressionController(
+      maxConcurrentTasks = 8,
+      maxGpuSemaphoreWaiters = 2)
+    val healthy = AdaptiveCompressionPressure(
+      writerPoolSize = 20,
+      activeWriterThreads = 20,
+      queuedWriterTasks = 3,
+      gpuSemaphoreWaiters = 0)
+
+    assertResult(1)(controller.observe(healthy).targetConcurrentTasks)
+    assertResult(2)(controller.observe(healthy).targetConcurrentTasks)
+    assertResult(2)(controller.observe(healthy).targetConcurrentTasks)
+    assertResult(4)(controller.observe(healthy).targetConcurrentTasks)
+    assertResult(4)(controller.observe(healthy).targetConcurrentTasks)
+    assertResult(8)(controller.observe(healthy).targetConcurrentTasks)
+
+    val drainedCpuQueue = healthy.copy(activeWriterThreads = 4, queuedWriterTasks = 0)
+    val learned = controller.observe(drainedCpuQueue)
+    assert(learned.proposeGpu)
+    assertResult("learned-gpu-route")(learned.reason)
+    assertResult(8)(learned.targetConcurrentTasks)
+
+    val overloaded = drainedCpuQueue.copy(gpuSemaphoreWaiters = 3)
+    assertResult(8)(controller.observe(overloaded).targetConcurrentTasks)
+    val firstBackoff = controller.observe(overloaded)
+    assert(!firstBackoff.proposeGpu)
+    assertResult(4)(firstBackoff.targetConcurrentTasks)
+    controller.observe(overloaded)
+    assertResult(2)(controller.observe(overloaded).targetConcurrentTasks)
+  }
+
+  test("executor controller does not learn a GPU route without CPU backlog") {
+    val controller = new AdaptiveGpuCompressionController(
+      maxConcurrentTasks = 8,
+      maxGpuSemaphoreWaiters = 2)
+    val idle = AdaptiveCompressionPressure(
+      writerPoolSize = 20,
+      activeWriterThreads = 4,
+      queuedWriterTasks = 0,
+      gpuSemaphoreWaiters = 0)
+
+    val decision = controller.observe(idle)
+    assert(!decision.proposeGpu)
+    assertResult(1)(decision.targetConcurrentTasks)
+    assertResult("no-cpu-backlog")(decision.reason)
+  }
+
   test("only one task reserves GPU compression and other tasks stay on CPU") {
     val shuffleId = 3
     AdaptiveShuffleCompressionMetrics.clearShuffle(shuffleId)
@@ -265,6 +313,7 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
   test("executor GPU compression reservation enforces its configured limit") {
     ExecutorGpuCompressionReservation.configure(2)
     try {
+      ExecutorGpuCompressionReservation.updateTarget(2)
       assert(ExecutorGpuCompressionReservation.tryAcquire())
       assert(ExecutorGpuCompressionReservation.tryAcquire())
       assert(!ExecutorGpuCompressionReservation.tryAcquire())
@@ -276,6 +325,30 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
       assertResult(0)(ExecutorGpuCompressionReservation.activeCount)
     } finally {
       ExecutorGpuCompressionReservation.configure(1)
+      ExecutorGpuCompressionReservation.updateTarget(1)
+    }
+  }
+
+  test("executor GPU compression reservation follows a dynamic target below its ceiling") {
+    ExecutorGpuCompressionReservation.configure(4)
+    try {
+      ExecutorGpuCompressionReservation.updateTarget(2)
+      assert(ExecutorGpuCompressionReservation.tryAcquire())
+      assert(ExecutorGpuCompressionReservation.tryAcquire())
+      assert(!ExecutorGpuCompressionReservation.tryAcquire())
+      assertResult(2)(ExecutorGpuCompressionReservation.activeCount)
+      assertResult(2)(ExecutorGpuCompressionReservation.targetCount)
+
+      ExecutorGpuCompressionReservation.updateTarget(1)
+      assert(!ExecutorGpuCompressionReservation.tryAcquire())
+      ExecutorGpuCompressionReservation.release()
+      assert(!ExecutorGpuCompressionReservation.tryAcquire())
+      ExecutorGpuCompressionReservation.release()
+      assert(ExecutorGpuCompressionReservation.tryAcquire())
+      ExecutorGpuCompressionReservation.release()
+    } finally {
+      ExecutorGpuCompressionReservation.configure(1)
+      ExecutorGpuCompressionReservation.updateTarget(1)
     }
   }
 }

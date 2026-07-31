@@ -40,18 +40,93 @@ case class AdaptiveCompressionPressure(
     queuedWriterTasks: Int,
     gpuSemaphoreWaiters: Int) {
 
-  /**
-   * Selects the GPU only when CPU compression work is backlogged and GPU waiters stay within the
-   * caller's configured bound.
-   *
-   * This deliberately avoids utilization percentages or synthetic thresholds. Runtime metrics
-   * will be collected before any broader policy is considered.
-   */
-  def proposesGpu(maxGpuSemaphoreWaiters: Int): Boolean =
+  def cpuBacklogged: Boolean =
     writerPoolSize > 0 &&
       activeWriterThreads >= writerPoolSize &&
-      queuedWriterTasks > 0 &&
-      gpuSemaphoreWaiters <= maxGpuSemaphoreWaiters
+      queuedWriterTasks > 0
+
+  def gpuWithinBound(maxGpuSemaphoreWaiters: Int): Boolean =
+    gpuSemaphoreWaiters <= maxGpuSemaphoreWaiters
+
+  /** Returns the point-in-time pressure gate used to bootstrap the executor controller. */
+  def proposesGpu(maxGpuSemaphoreWaiters: Int): Boolean =
+    cpuBacklogged && gpuWithinBound(maxGpuSemaphoreWaiters)
+}
+
+case class AdaptiveGpuCompressionDecision(
+    proposeGpu: Boolean,
+    targetConcurrentTasks: Int,
+    reason: String)
+
+/**
+ * Learns an executor-local GPU compression concurrency target from observed CPU and GPU pressure.
+ *
+ * CPU backlog provides the initial evidence that GPU compression is useful. Two consecutive
+ * healthy observations double the target until the configured ceiling is reached. Once learned,
+ * the controller keeps routing work to the GPU while semaphore pressure remains acceptable,
+ * avoiding oscillation when successful offload temporarily drains the CPU queue. Two consecutive
+ * overloaded observations halve the target.
+ */
+class AdaptiveGpuCompressionController(
+    val maxConcurrentTasks: Int,
+    val maxGpuSemaphoreWaiters: Int) {
+  require(maxConcurrentTasks > 0, "Maximum concurrent GPU compression tasks must be positive")
+  require(maxGpuSemaphoreWaiters >= 0, "Maximum GPU semaphore waiters must be non-negative")
+
+  private var targetConcurrentTasks = 1
+  private var consecutiveHealthyObservations = 0
+  private var consecutiveOverloadedObservations = 0
+  private var learnedGpuRoute = false
+
+  def observe(pressure: AdaptiveCompressionPressure): AdaptiveGpuCompressionDecision =
+    synchronized {
+      val gpuWithinBound = pressure.gpuWithinBound(maxGpuSemaphoreWaiters)
+      val gpuOverloaded = !gpuWithinBound
+
+      if (gpuOverloaded) {
+        consecutiveHealthyObservations = 0
+        consecutiveOverloadedObservations += 1
+        if (consecutiveOverloadedObservations >= 2 && targetConcurrentTasks > 1) {
+          targetConcurrentTasks = math.max(1, (targetConcurrentTasks + 1) / 2)
+          if (targetConcurrentTasks == 1) {
+            learnedGpuRoute = false
+          }
+          consecutiveOverloadedObservations = 0
+        }
+      } else if (pressure.cpuBacklogged) {
+        consecutiveOverloadedObservations = 0
+        consecutiveHealthyObservations += 1
+        learnedGpuRoute = true
+        if (consecutiveHealthyObservations >= 2 &&
+            targetConcurrentTasks < maxConcurrentTasks) {
+          targetConcurrentTasks = math.min(maxConcurrentTasks, targetConcurrentTasks * 2)
+          consecutiveHealthyObservations = 0
+        }
+      } else {
+        consecutiveHealthyObservations = 0
+        consecutiveOverloadedObservations = 0
+      }
+
+      val proposeGpu =
+        pressure.writerPoolSize > 0 &&
+          gpuWithinBound &&
+          (pressure.cpuBacklogged || learnedGpuRoute)
+      val reason =
+        if (gpuOverloaded) {
+          "gpu-overloaded"
+        } else if (pressure.cpuBacklogged) {
+          "cpu-backlogged"
+        } else if (learnedGpuRoute) {
+          "learned-gpu-route"
+        } else {
+          "no-cpu-backlog"
+        }
+      AdaptiveGpuCompressionDecision(proposeGpu, targetConcurrentTasks, reason)
+    }
+
+  private[rapids] def target: Int = synchronized {
+    targetConcurrentTasks
+  }
 }
 
 trait GpuCompressionReservation {
@@ -62,16 +137,24 @@ trait GpuCompressionReservation {
 object ExecutorGpuCompressionReservation extends GpuCompressionReservation {
   private val activeReservations = new AtomicInteger(0)
   @volatile private var maxConcurrentTasks = 1
+  @volatile private var targetConcurrentTasks = 1
 
   def configure(maxTasks: Int): Unit = synchronized {
     require(maxTasks > 0, "GPU compression reservation limit must be positive")
     require(activeReservations.get() == 0 || maxConcurrentTasks == maxTasks,
       "GPU compression reservation limit cannot change while reservations are active")
     maxConcurrentTasks = maxTasks
+    targetConcurrentTasks = math.min(targetConcurrentTasks, maxConcurrentTasks)
+  }
+
+  def updateTarget(targetTasks: Int): Unit = synchronized {
+    require(targetTasks > 0 && targetTasks <= maxConcurrentTasks,
+      s"GPU compression target $targetTasks must be between 1 and $maxConcurrentTasks")
+    targetConcurrentTasks = targetTasks
   }
 
   override def tryAcquire(): Boolean = synchronized {
-    if (activeReservations.get() < maxConcurrentTasks) {
+    if (activeReservations.get() < targetConcurrentTasks) {
       activeReservations.incrementAndGet()
       true
     } else {
@@ -86,6 +169,32 @@ object ExecutorGpuCompressionReservation extends GpuCompressionReservation {
   }
 
   private[rapids] def activeCount: Int = activeReservations.get()
+  private[rapids] def targetCount: Int = targetConcurrentTasks
+}
+
+object ExecutorAdaptiveGpuCompressionController {
+  private var controller: AdaptiveGpuCompressionController = _
+
+  def configure(maxConcurrentTasks: Int, maxGpuSemaphoreWaiters: Int): Unit = synchronized {
+    if (controller == null ||
+        controller.maxConcurrentTasks != maxConcurrentTasks ||
+        controller.maxGpuSemaphoreWaiters != maxGpuSemaphoreWaiters) {
+      require(ExecutorGpuCompressionReservation.activeCount == 0,
+        "Adaptive GPU compression controller cannot be reconfigured while reservations are active")
+      controller =
+        new AdaptiveGpuCompressionController(maxConcurrentTasks, maxGpuSemaphoreWaiters)
+      ExecutorGpuCompressionReservation.configure(maxConcurrentTasks)
+      ExecutorGpuCompressionReservation.updateTarget(1)
+    }
+  }
+
+  def observe(pressure: AdaptiveCompressionPressure): AdaptiveGpuCompressionDecision =
+    synchronized {
+      require(controller != null, "Adaptive GPU compression controller is not configured")
+      val decision = controller.observe(pressure)
+      ExecutorGpuCompressionReservation.updateTarget(decision.targetConcurrentTasks)
+      decision
+    }
 }
 
 case class AdaptiveShuffleCompressionMetricsSnapshot(

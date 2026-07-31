@@ -93,10 +93,12 @@ class AdaptiveGpuCompressionController(
           }
           consecutiveOverloadedObservations = 0
         }
-      } else if (pressure.cpuBacklogged) {
+      } else if (pressure.cpuBacklogged || learnedGpuRoute) {
         consecutiveOverloadedObservations = 0
         consecutiveHealthyObservations += 1
-        learnedGpuRoute = true
+        if (pressure.cpuBacklogged) {
+          learnedGpuRoute = true
+        }
         if (consecutiveHealthyObservations >= 2 &&
             targetConcurrentTasks < maxConcurrentTasks) {
           targetConcurrentTasks = math.min(maxConcurrentTasks, targetConcurrentTasks * 2)

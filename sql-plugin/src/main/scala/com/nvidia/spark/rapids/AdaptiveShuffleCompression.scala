@@ -83,7 +83,7 @@ class AdaptiveGpuCompressionController(
       val gpuWithinBound = pressure.gpuWithinBound(maxGpuSemaphoreWaiters)
       val gpuOverloaded = !gpuWithinBound
 
-      if (gpuOverloaded) {
+      if (gpuOverloaded && !pressure.cpuBacklogged) {
         consecutiveHealthyObservations = 0
         consecutiveOverloadedObservations += 1
         if (consecutiveOverloadedObservations >= 2 && targetConcurrentTasks > 1) {
@@ -111,13 +111,12 @@ class AdaptiveGpuCompressionController(
 
       val proposeGpu =
         pressure.writerPoolSize > 0 &&
-          gpuWithinBound &&
-          (pressure.cpuBacklogged || learnedGpuRoute)
+          (pressure.cpuBacklogged || (gpuWithinBound && learnedGpuRoute))
       val reason =
-        if (gpuOverloaded) {
-          "gpu-overloaded"
-        } else if (pressure.cpuBacklogged) {
+        if (pressure.cpuBacklogged) {
           "cpu-backlogged"
+        } else if (gpuOverloaded) {
+          "gpu-overloaded"
         } else if (learnedGpuRoute) {
           "learned-gpu-route"
         } else {

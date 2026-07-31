@@ -64,8 +64,9 @@ case class AdaptiveGpuCompressionDecision(
  * CPU backlog provides the initial evidence that GPU compression is useful. Two consecutive
  * healthy observations double the target until the configured ceiling is reached. Once learned,
  * the controller keeps routing work to the GPU while semaphore pressure remains acceptable,
- * avoiding oscillation when successful offload temporarily drains the CPU queue. Two consecutive
- * overloaded observations halve the target.
+ * avoiding oscillation when successful offload temporarily drains the CPU queue. A single
+ * overloaded observation preserves the learned route. Two consecutive overloaded observations
+ * activate backoff and halve the target.
  */
 class AdaptiveGpuCompressionController(
     val maxConcurrentTasks: Int,
@@ -77,6 +78,7 @@ class AdaptiveGpuCompressionController(
   private var consecutiveHealthyObservations = 0
   private var consecutiveOverloadedObservations = 0
   private var learnedGpuRoute = false
+  private var gpuPressureBackoffActive = false
 
   def observe(pressure: AdaptiveCompressionPressure): AdaptiveGpuCompressionDecision =
     synchronized {
@@ -86,14 +88,18 @@ class AdaptiveGpuCompressionController(
       if (gpuOverloaded && !pressure.cpuBacklogged) {
         consecutiveHealthyObservations = 0
         consecutiveOverloadedObservations += 1
-        if (consecutiveOverloadedObservations >= 2 && targetConcurrentTasks > 1) {
-          targetConcurrentTasks = math.max(1, (targetConcurrentTasks + 1) / 2)
+        if (consecutiveOverloadedObservations >= 2) {
+          gpuPressureBackoffActive = true
+          if (targetConcurrentTasks > 1) {
+            targetConcurrentTasks = math.max(1, (targetConcurrentTasks + 1) / 2)
+          }
           if (targetConcurrentTasks == 1) {
             learnedGpuRoute = false
           }
           consecutiveOverloadedObservations = 0
         }
       } else if (pressure.cpuBacklogged || learnedGpuRoute) {
+        gpuPressureBackoffActive = false
         consecutiveOverloadedObservations = 0
         consecutiveHealthyObservations += 1
         if (pressure.cpuBacklogged) {
@@ -105,16 +111,19 @@ class AdaptiveGpuCompressionController(
           consecutiveHealthyObservations = 0
         }
       } else {
+        gpuPressureBackoffActive = false
         consecutiveHealthyObservations = 0
         consecutiveOverloadedObservations = 0
       }
 
       val proposeGpu =
         pressure.writerPoolSize > 0 &&
-          (pressure.cpuBacklogged || (gpuWithinBound && learnedGpuRoute))
+          (pressure.cpuBacklogged || (learnedGpuRoute && !gpuPressureBackoffActive))
       val reason =
         if (pressure.cpuBacklogged) {
           "cpu-backlogged"
+        } else if (gpuOverloaded && learnedGpuRoute && !gpuPressureBackoffActive) {
+          "learned-gpu-route-transient-overload"
         } else if (gpuOverloaded) {
           "gpu-overloaded"
         } else if (learnedGpuRoute) {

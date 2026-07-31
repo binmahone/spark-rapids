@@ -194,7 +194,10 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     assertResult(8)(learned.targetConcurrentTasks)
 
     val overloaded = drainedCpuQueue.copy(gpuSemaphoreWaiters = 3)
-    assertResult(8)(controller.observe(overloaded).targetConcurrentTasks)
+    val transientOverload = controller.observe(overloaded)
+    assert(transientOverload.proposeGpu)
+    assertResult("learned-gpu-route-transient-overload")(transientOverload.reason)
+    assertResult(8)(transientOverload.targetConcurrentTasks)
     val firstBackoff = controller.observe(overloaded)
     assert(!firstBackoff.proposeGpu)
     assertResult(4)(firstBackoff.targetConcurrentTasks)
@@ -278,9 +281,9 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     val firstBackoff = controller.observe(gpuBacklogged)
     val secondBackoff = controller.observe(gpuBacklogged)
 
-    assert(!firstBackoff.proposeGpu)
+    assert(firstBackoff.proposeGpu)
     assert(!secondBackoff.proposeGpu)
-    assertResult("gpu-overloaded")(firstBackoff.reason)
+    assertResult("learned-gpu-route-transient-overload")(firstBackoff.reason)
     assertResult("gpu-overloaded")(secondBackoff.reason)
     assertResult(1)(secondBackoff.targetConcurrentTasks)
   }

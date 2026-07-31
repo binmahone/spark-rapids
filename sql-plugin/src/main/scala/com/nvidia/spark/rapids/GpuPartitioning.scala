@@ -36,7 +36,7 @@ trait GpuPartitioning extends Partitioning with Logging {
   private[this] val (
     maxCpuBatchSize, maxCompressionBatchSize, _useGPUShuffle,
         _useKudoGPUSlicing, _useMultiThreadedShuffle, _useGpuShuffleCompression,
-        zstdChunkSize) = {
+        gpuCompressionMaxConcurrentTasks, zstdChunkSize) = {
     val rapidsConf = new RapidsConf(SQLConf.get)
     (rapidsConf.shuffleParitioningMaxCpuBatchSize,
       rapidsConf.shuffleCompressionMaxBatchMemory,
@@ -44,8 +44,10 @@ trait GpuPartitioning extends Partitioning with Logging {
       rapidsConf.shuffleKudoGpuSerializerEnabled,
       GpuShuffleEnv.useMultiThreadedShuffle(rapidsConf),
       rapidsConf.isMultithreadedShuffleAdaptiveGpuCompressionEnabled,
+      rapidsConf.multithreadedShuffleAdaptiveGpuCompressionMaxConcurrentTasks,
       rapidsConf.shuffleCompressionZstdChunkSize)
   }
+  ExecutorGpuCompressionReservation.configure(gpuCompressionMaxConcurrentTasks)
   private lazy val gpuZstdCompressor =
     new GpuZstdStreamCompressor(zstdChunkSize, maxCompressionBatchSize)
 

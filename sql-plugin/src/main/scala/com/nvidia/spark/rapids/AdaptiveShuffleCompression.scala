@@ -17,7 +17,7 @@
 package com.nvidia.spark.rapids
 
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicLong, AtomicReference}
 
 import org.apache.spark.TaskContext
 
@@ -59,14 +59,32 @@ trait GpuCompressionReservation {
 }
 
 object ExecutorGpuCompressionReservation extends GpuCompressionReservation {
-  private val reserved = new AtomicBoolean(false)
+  private val activeReservations = new AtomicInteger(0)
+  @volatile private var maxConcurrentTasks = 1
 
-  override def tryAcquire(): Boolean = reserved.compareAndSet(false, true)
-
-  override def release(): Unit = {
-    require(reserved.compareAndSet(true, false),
-      "GPU compression reservation was released without being held")
+  def configure(maxTasks: Int): Unit = synchronized {
+    require(maxTasks > 0, "GPU compression reservation limit must be positive")
+    require(activeReservations.get() == 0 || maxConcurrentTasks == maxTasks,
+      "GPU compression reservation limit cannot change while reservations are active")
+    maxConcurrentTasks = maxTasks
   }
+
+  override def tryAcquire(): Boolean = synchronized {
+    if (activeReservations.get() < maxConcurrentTasks) {
+      activeReservations.incrementAndGet()
+      true
+    } else {
+      false
+    }
+  }
+
+  override def release(): Unit = synchronized {
+    require(activeReservations.get() > 0,
+      "GPU compression reservation was released without being held")
+    activeReservations.decrementAndGet()
+  }
+
+  private[rapids] def activeCount: Int = activeReservations.get()
 }
 
 case class AdaptiveShuffleCompressionMetricsSnapshot(

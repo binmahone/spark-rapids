@@ -241,7 +241,15 @@ class RapidsShuffleThreadedWriterSuite extends AnyFunSuite
   private def createPrecompressedTestBatch(bytes: Array[Byte]): ColumnarBatch = {
     val hmb = HostMemoryBuffer.allocate(bytes.length)
     hmb.setBytes(0, bytes, 0, bytes.length)
-    val cv = new PrecompressedSerializedColumnVector(hmb, 0, bytes.length, bytes.length * 2L)
+    val cv = new PrecompressedSerializedColumnVector(
+      hmb,
+      0,
+      bytes.length,
+      bytes.length * 2L,
+      true,
+      false,
+      false,
+      0L)
     slicedBuffersToClean += cv.getWrap
     hmb.close()
     new ColumnarBatch(Array(cv), 1)

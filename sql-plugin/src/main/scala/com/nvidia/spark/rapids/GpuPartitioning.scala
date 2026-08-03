@@ -57,6 +57,10 @@ trait GpuPartitioning extends Partitioning with Logging {
       plan: TaskCompressionPlan,
       state: TaskCompressionPlanState)
 
+  // Lift once GPU shuffle supports long (64-bit) serialized-slice offsets.
+  // Protected so tests can override it to exercise the guard below.
+  protected[rapids] def maxGpuSerializedSliceBytes: Long = Int.MaxValue
+
   final def columnarEval(batch: ColumnarBatch): GpuColumnVector = {
     throw new IllegalStateException(
       "Partitioners do not support columnarEval, only columnarEvalAny")

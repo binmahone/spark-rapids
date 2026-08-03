@@ -129,7 +129,7 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
       .multithreadedShuffleAdaptiveGpuCompressionReleaseAfterGpuPhase)
   }
 
-  test("experimental GPU-phase release is fail-closed for a second phase in one task") {
+  test("GPU-phase release reacquires a reservation for a second phase in one task") {
     val reservation = new TestGpuReservation
     val state = new TaskCompressionPlanState(reservation)
 
@@ -140,14 +140,51 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
 
     state.releaseGpuReservationAfterCompression()
     assertResult(1)(reservation.releaseCount)
-    assertThrows[IllegalArgumentException] {
-      state.getOrFreeze(
-        adaptiveGpuCompressionEnabled = true,
-        ShuffleCompressionBackend.NvcompGpuZstd)
-    }
+    val secondPlan = state.getOrFreeze(
+      adaptiveGpuCompressionEnabled = true,
+      ShuffleCompressionBackend.NvcompGpuZstd)
+    assert(secondPlan.useGpuCompressor)
+    assertResult(2)(reservation.acquireCount)
+
+    state.releaseGpuReservationAfterCompression()
+    assertResult(2)(reservation.releaseCount)
 
     state.close()
-    assertResult(1)(reservation.releaseCount)
+    assertResult(2)(reservation.releaseCount)
+  }
+
+  test("a later GPU phase falls back to CPU when reacquisition is denied") {
+    val reservation = new TestGpuReservation
+    val firstTask = new TaskCompressionPlanState(reservation)
+    val blockingTask = new TaskCompressionPlanState(reservation)
+
+    val firstPlan = firstTask.getOrFreeze(
+      adaptiveGpuCompressionEnabled = true,
+      ShuffleCompressionBackend.NvcompGpuZstd)
+    assert(firstPlan.useGpuCompressor)
+    firstTask.releaseGpuReservationAfterCompression()
+
+    val blockingPlan = blockingTask.getOrFreeze(
+      adaptiveGpuCompressionEnabled = true,
+      ShuffleCompressionBackend.NvcompGpuZstd)
+    assert(blockingPlan.useGpuCompressor)
+
+    val fallbackPlan = firstTask.getOrFreeze(
+      adaptiveGpuCompressionEnabled = true,
+      ShuffleCompressionBackend.NvcompGpuZstd)
+    assert(fallbackPlan.useSparkCompressionWrapper)
+    assert(fallbackPlan.gpuReservationDenied)
+
+    blockingTask.close()
+    val resumedPlan = firstTask.getOrFreeze(
+      adaptiveGpuCompressionEnabled = true,
+      ShuffleCompressionBackend.NvcompGpuZstd)
+    assert(resumedPlan.useGpuCompressor)
+    firstTask.releaseGpuReservationAfterCompression()
+
+    firstTask.close()
+    assertResult(4)(reservation.acquireCount)
+    assertResult(3)(reservation.releaseCount)
   }
 
   test("GPU proposal requires CPU backlog and waiter count within the configured bound") {

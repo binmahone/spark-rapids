@@ -415,10 +415,12 @@ object TaskCompressionPlan {
 }
 
 /**
- * Freezes the compression backend on first use and keeps it for the lifetime of a task.
+ * Freezes the preferred compression backend on first use and keeps it for the lifetime of a task.
  *
  * Executor pressure may change while a task is running. Such changes affect later tasks, not
- * records already being produced by this task.
+ * records already being produced by this task. When GPU reservations are released after each
+ * compression phase, a later phase reacquires a reservation or falls back to CPU compression for
+ * that phase. Both backends produce the same wire encoding.
  */
 class TaskCompressionPlanState(
     gpuReservation: GpuCompressionReservation = ExecutorGpuCompressionReservation)
@@ -441,10 +443,7 @@ class TaskCompressionPlanState(
       proposedBackend: => ShuffleCompressionBackend): TaskCompressionPlan = {
     val existing = frozenPlan.get()
     if (existing != null) {
-      require(!existing.useGpuCompressor || !gpuPhaseCompleted.get(),
-        "experimental GPU-phase reservation mode does not support multiple GPU compression " +
-          "phases in one task")
-      return existing
+      return resumeGpuPlanOrFallback(existing)
     }
 
     synchronized {
@@ -474,6 +473,26 @@ class TaskCompressionPlanState(
     }
   }
 
+  private def resumeGpuPlanOrFallback(existing: TaskCompressionPlan): TaskCompressionPlan = {
+    if (!existing.useGpuCompressor || !gpuPhaseCompleted.get()) {
+      existing
+    } else synchronized {
+      if (!gpuPhaseCompleted.get()) {
+        existing
+      } else if (gpuReservation.tryAcquire()) {
+        require(ownsGpuReservation.compareAndSet(false, true),
+          "GPU compression reservation ownership was not released between phases")
+        gpuReservationAcquiredAtNs.set(System.nanoTime())
+        gpuPhaseCompleted.set(false)
+        existing
+      } else {
+        TaskCompressionPlan(
+          ShuffleCompressionBackend.SparkCpuZstd,
+          ShuffleCompressionBackend.NvcompGpuZstd)
+      }
+    }
+  }
+
   def get: Option[TaskCompressionPlan] = Option(frozenPlan.get())
 
   def markDecisionForLogging(): Boolean =
@@ -491,7 +510,7 @@ class TaskCompressionPlanState(
     require(frozenPlan.get() != null && frozenPlan.get().useGpuCompressor,
       "only a GPU compression plan may release its reservation after compression")
     require(gpuPhaseCompleted.compareAndSet(false, true),
-      "a task reached the GPU compression phase more than once")
+      "a GPU compression phase completed without an active phase")
     if (ownsGpuReservation.compareAndSet(true, false)) {
       gpuReservation.release()
     } else {

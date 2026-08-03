@@ -1,0 +1,121 @@
+{
+  "artifact_type": "snap_v017_serverless_adaptive_compression_result",
+  "artifact_version": 1,
+  "baseline": {
+    "batch_id": "i4i-snap-r3-rp4-nofc-quota-fix-uc1-260731c",
+    "container_digest": "sha256:de51d3e560bf47265b1a282fc3e7ff9097e3369588218923323e2fae89a841c7",
+    "estimated_cost_usd": 1.0670065040311112,
+    "jar_sha256": "933e207c26ac86efef56347278fd21cdfad37e55e3a65d6ee478a43ca854b1c5",
+    "rapids_source_commit": "58f33cdc1b4c06f4bcc0b4d2aaa055c890e314f4",
+    "shuffle_compression": "CPU LZ4",
+    "workload_wall_seconds": 395.792
+  },
+  "build": {
+    "cloud_build_id": "b2acfce9-a933-412e-9223-720ff5f7c227",
+    "container_digest": "sha256:0a9986cde640cb8a9d266a27ffaaead17509b6274d52c263f809af068bbdd4af",
+    "image": "us-central1-docker.pkg.dev/rapids-spark/rapids-serverless/snap-adaptive-v017-spark351-260803",
+    "jar_sha256": "5bfa48cd137e5cf497b581d475fe6371d523f6bb0d79c6079d7a9c78d899c6db",
+    "rapids_source_branch": "snap-v8-adaptive-gpu-compression-v017-20260803",
+    "rapids_source_commit": "d0e01011aa3517147098d12c68d2a181ef3d15d6",
+    "scala_binary_version": "2.13",
+    "spark_classifier": "spark351"
+  },
+  "comparison": {
+    "adaptive_on_vs_adaptive_off": {
+      "cost_reduction_percent": 20.844332206238942,
+      "wall_time_reduction_percent": 22.11255064101897
+    },
+    "v017_adaptive_on_vs_final_lz4_baseline": {
+      "cost_reduction_percent": 23.389021479713612,
+      "speedup": 1.3230685916957214,
+      "wall_time_reduction_percent": 24.418128714072036
+    }
+  },
+  "input": {
+    "candidate_sha256": "c1b05e921403a3049979b864cc456aa872d4bdf878963e8fcc4d24b77f1a09e1",
+    "left_uri": "gs://customer-perf-test-uscentral1/industry_example_benchmark/snap/datasets/v7-parquet-v6scale-v001/left",
+    "partitions": 256,
+    "repetitions": 3,
+    "right_uri": "gs://customer-perf-test-uscentral1/industry_example_benchmark/snap/datasets/v7-parquet-v6scale-v001/right"
+  },
+  "local_validation": {
+    "adaptive_controller_tests": {
+      "failed": 0,
+      "passed": 18
+    },
+    "distribution_build": "PASS",
+    "native_test_boundary": "The ARM control host lacks aarch64/Linux/libnvcomp.so, so the native threaded-writer suite aborted before completing. The accepted x86_64 L4 Serverless samples executed the native path successfully.",
+    "only_included_spark_shim": "spark351"
+  },
+  "monitoring_failure": {
+    "batch_id": "snap-v017-r3-rp4-uc1-260803a",
+    "classification": "MONITORING_EVIDENCE_FAILURE",
+    "credited": false,
+    "detail": "The fourth executor event had elapsed_seconds=29.059, but Cloud Logging ingestion lag caused the monitor to observe only three executors after the 30-second deadline and cancel the batch."
+  },
+  "runs": {
+    "adaptive_off": {
+      "adaptive_event_count": 0,
+      "batch_id": "snap-v017-off-r3-rp4-uc1-260803a",
+      "estimated_cost_usd": 1.032704475115,
+      "eventlog_sha256": "e102f0b7e7be56b4baad820e9bdf7409517111996f998a3eab20c6a635ff6579",
+      "eventlog_uri": "gs://rapids-spark-industry4-ideal-uc1-260731/runs/snap-v017-adaptive-off-repeat3-central-v001/rapids/snap-v017-off-r3-rp4-uc1-260803a/eventlogs/app-20260803023928287-0236.zstd",
+      "executor_four_arrival_seconds": 9.058,
+      "output_inventory_before_cleanup": [
+        {"bytes": 66494734570, "part_files": 256, "repetition": 1, "success_markers": 1},
+        {"bytes": 66494739683, "part_files": 256, "repetition": 2, "success_markers": 1},
+        {"bytes": 66494718568, "part_files": 256, "repetition": 3, "success_markers": 1}
+      ],
+      "repetition_wall_seconds": [154.732, 117.036, 112.308],
+      "runtime_version": "2.2.82",
+      "state": "SUCCEEDED",
+      "workload_wall_seconds": 384.076
+    },
+    "adaptive_on": {
+      "adaptive_summary": {
+        "cpu_compressed_bytes": 2348398041,
+        "cpu_compression_time_ns": 187958539249,
+        "cpu_raw_bytes": 5760147456,
+        "cpu_selected_task_attempts": 18,
+        "gpu_compressed_bytes": 343125346722,
+        "gpu_compression_time_ns": 656647301811,
+        "gpu_proposed_task_attempts": 2286,
+        "gpu_raw_bytes": 854418726912,
+        "gpu_reservation_denied_task_attempts": 0,
+        "gpu_selected_task_attempts": 2286
+      },
+      "batch_id": "snap-v017-r3-rp4-uc1-260803b",
+      "estimated_cost_usd": 0.8174441236133333,
+      "eventlog_sha256": "a0496e009285e2cb1b59fe7c64a6d471f5540c9e1edea61e9c06b1a457a4d2c6",
+      "eventlog_uri": "gs://rapids-spark-industry4-ideal-uc1-260731/runs/snap-v017-repeat3-central-v001/rapids/snap-v017-r3-rp4-uc1-260803b/eventlogs/app-20260803022701686-0453.zstd",
+      "executor_four_arrival_seconds": 9.048,
+      "output_inventory_before_cleanup": [
+        {"bytes": 66494736951, "part_files": 256, "repetition": 1, "success_markers": 1},
+        {"bytes": 66494717609, "part_files": 256, "repetition": 2, "success_markers": 1},
+        {"bytes": 66494762761, "part_files": 256, "repetition": 3, "success_markers": 1}
+      ],
+      "repetition_wall_seconds": [124.382, 87.188, 87.577],
+      "runtime_version": "2.2.82",
+      "state": "SUCCEEDED",
+      "workload_wall_seconds": 299.147
+    }
+  },
+  "shared_controls": {
+    "dynamic_allocation_enabled": false,
+    "executor_cores": 16,
+    "executor_instances": 4,
+    "file_cache_enabled": false,
+    "gpu_type": "L4",
+    "kudo_read_mode": "GPU",
+    "kudo_write_mode": "GPU",
+    "metrics_level": "DEBUG",
+    "shuffle_codec": "zstd",
+    "skip_merge_enabled": true
+  },
+  "cleanup": {
+    "adaptive_off_output_deleted": true,
+    "adaptive_on_output_deleted": true,
+    "eventlogs_retained": true,
+    "shared_inputs_modified": false
+  }
+}

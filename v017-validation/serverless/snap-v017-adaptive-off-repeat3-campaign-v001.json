@@ -1,0 +1,58 @@
+{
+  "artifact_type": "snap_v017_serverless_adaptive_off_repeat3_campaign",
+  "artifact_version": 1,
+  "arm_overrides": {
+    "lightning": {},
+    "rapids": {
+      "snap": {
+        "spark.io.compression.codec": "zstd",
+        "spark.rapids.shuffle.kudo.serializer.enabled": "true",
+        "spark.rapids.shuffle.kudo.serializer.read.mode": "GPU",
+        "spark.rapids.shuffle.kudo.serializer.write.mode": "GPU",
+        "spark.rapids.shuffle.multithreaded.adaptiveGpuCompression.enabled": "false",
+        "spark.rapids.shuffle.multithreaded.adaptiveGpuCompression.maxConcurrentTasks": "16",
+        "spark.rapids.shuffle.multithreaded.adaptiveGpuCompression.maxGpuSemaphoreWaiters": "16",
+        "spark.rapids.shuffle.multithreaded.adaptiveGpuCompression.releaseAfterGpuPhase": "true",
+        "spark.rapids.sql.concurrentGpuTasks.dynamic": "true",
+        "spark.rapids.sql.maxConcurrentGpuTasks": "2"
+      }
+    }
+  },
+  "base_wrapper": {
+    "sha256": "d6a4f27540b2773ae6faf15093f4ea17aecbdfedc7efadf59a4a945e83405c6e",
+    "uri": "gs://rapids-spark-industry4-ideal-uc1-260731/assets/wrapper/d6a4f27540b2773ae6faf15093f4ea17aecbdfedc7efadf59a4a945e83405c6e/ideal_schema_candidate_wrapper.py"
+  },
+  "candidate": {
+    "module": "frozen_snap_candidate",
+    "sha256": "c1b05e921403a3049979b864cc456aa872d4bdf878963e8fcc4d24b77f1a09e1",
+    "uri": "gs://rapids-spark-industry4-ideal-uc1-260731/assets/frozen/snap/c1b05e921403a3049979b864cc456aa872d4bdf878963e8fcc4d24b77f1a09e1/frozen_snap_candidate.py"
+  },
+  "gcp": {
+    "project": "rapids-spark",
+    "region": "us-central1",
+    "run_root": "gs://rapids-spark-industry4-ideal-uc1-260731/runs/snap-v017-adaptive-off-repeat3-central-v001",
+    "staging_bucket": "rapids-spark-industry4-ideal-uc1-260731"
+  },
+  "input": {
+    "left_uri": "gs://customer-perf-test-uscentral1/industry_example_benchmark/snap/datasets/v7-parquet-v6scale-v001/left",
+    "right_uri": "gs://customer-perf-test-uscentral1/industry_example_benchmark/snap/datasets/v7-parquet-v6scale-v001/right"
+  },
+  "inventory_policy": {
+    "acceptance_window_seconds_after_wrapper_spark_context": 30,
+    "application_start_timeout_seconds": 600,
+    "arrival_window_seconds_after_wrapper_spark_context": 45,
+    "cloud_logging_ingestion_grace_seconds": 15,
+    "required_registered_spark_executors": 4
+  },
+  "limits": {
+    "batch_ttl": "2h",
+    "poll_seconds": 5
+  },
+  "partitions": 256,
+  "repetitions": 3,
+  "state": "frozen_before_submit",
+  "wrapper": {
+    "sha256": "74669e730d5e34e9606557423cef64ce93d3fc937aa27c87a02cb6ac5709e304",
+    "uri": "gs://rapids-spark-industry4-ideal-uc1-260731/assets/repeated-wrapper/74669e730d5e34e9606557423cef64ce93d3fc937aa27c87a02cb6ac5709e304/repeated_workload_wrapper.py"
+  }
+}

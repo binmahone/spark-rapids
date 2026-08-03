@@ -313,6 +313,27 @@ object GpuShuffleExchangeExecBase {
   val METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM = "rapidsShuffleStalledByInputStream"
   val METRIC_DESC_SHUFFLE_STALLED_BY_INPUT_STREAM =
     "RAPIDS shuffle time stalled by input stream operations"
+  val METRIC_SHUFFLE_KUDO_HEADER_READ_TIME = "rapidsShuffleKudoHeaderReadTime"
+  val METRIC_DESC_SHUFFLE_KUDO_HEADER_READ_TIME =
+    "RAPIDS shuffle Kudo header read wall time"
+  val METRIC_SHUFFLE_KUDO_HEADER_READ_CPU_TIME = "rapidsShuffleKudoHeaderReadCpuTime"
+  val METRIC_DESC_SHUFFLE_KUDO_HEADER_READ_CPU_TIME =
+    "RAPIDS shuffle Kudo header read thread CPU time"
+  val METRIC_SHUFFLE_KUDO_BUFFER_ACQUIRE_TIME = "rapidsShuffleKudoBufferAcquireTime"
+  val METRIC_DESC_SHUFFLE_KUDO_BUFFER_ACQUIRE_TIME =
+    "RAPIDS shuffle Kudo host buffer acquire wall time"
+  val METRIC_SHUFFLE_KUDO_BUFFER_ACQUIRE_CPU_TIME = "rapidsShuffleKudoBufferAcquireCpuTime"
+  val METRIC_DESC_SHUFFLE_KUDO_BUFFER_ACQUIRE_CPU_TIME =
+    "RAPIDS shuffle Kudo host buffer acquire thread CPU time"
+  val METRIC_SHUFFLE_KUDO_PAYLOAD_READ_TIME = "rapidsShuffleKudoPayloadReadTime"
+  val METRIC_DESC_SHUFFLE_KUDO_PAYLOAD_READ_TIME =
+    "RAPIDS shuffle Kudo payload read wall time"
+  val METRIC_SHUFFLE_KUDO_PAYLOAD_READ_CPU_TIME = "rapidsShuffleKudoPayloadReadCpuTime"
+  val METRIC_DESC_SHUFFLE_KUDO_PAYLOAD_READ_CPU_TIME =
+    "RAPIDS shuffle Kudo payload read thread CPU time"
+  val METRIC_SHUFFLE_KUDO_PAYLOAD_READ_BYTES = "rapidsShuffleKudoPayloadReadBytes"
+  val METRIC_DESC_SHUFFLE_KUDO_PAYLOAD_READ_BYTES =
+    "RAPIDS shuffle Kudo uncompressed payload bytes read"
   val METRIC_SHUFFLE_KUDO_TASK_SHARED_SAMPLE_COUNT =
     "rapidsShuffleKudoTaskSharedSampleCount"
   val METRIC_DESC_SHUFFLE_KUDO_TASK_SHARED_SAMPLE_COUNT =
@@ -367,6 +388,25 @@ object GpuShuffleExchangeExecBase {
   val METRIC_THREADED_READER_DESER_WAIT_TIME = "rapidsThreadedReaderDeserWaitTime"
   val METRIC_DESC_THREADED_READER_DESER_WAIT_TIME =
     "threaded reader time waiting for background deserialization (future.get + queued.take)"
+  val METRIC_THREADED_READER_FUTURE_WAIT_TIME = "rapidsThreadedReaderFutureWaitTime"
+  val METRIC_DESC_THREADED_READER_FUTURE_WAIT_TIME =
+    "threaded reader time waiting for a background future"
+  val METRIC_THREADED_READER_RESULT_QUEUE_WAIT_TIME =
+    "rapidsThreadedReaderResultQueueWaitTime"
+  val METRIC_DESC_THREADED_READER_RESULT_QUEUE_WAIT_TIME =
+    "threaded reader time waiting for a materialized result"
+  val METRIC_THREADED_READER_WORKER_QUEUE_DELAY = "rapidsThreadedReaderWorkerQueueDelay"
+  val METRIC_DESC_THREADED_READER_WORKER_QUEUE_DELAY =
+    "threaded reader background task scheduling delay"
+  val METRIC_THREADED_READER_WORKER_ACTIVE_TIME = "rapidsThreadedReaderWorkerActiveTime"
+  val METRIC_DESC_THREADED_READER_WORKER_ACTIVE_TIME =
+    "threaded reader background task active wall time"
+  val METRIC_THREADED_READER_WORKER_CPU_TIME = "rapidsThreadedReaderWorkerCpuTime"
+  val METRIC_DESC_THREADED_READER_WORKER_CPU_TIME =
+    "threaded reader background task thread CPU time"
+  val METRIC_THREADED_READER_WORKER_TASK_COUNT = "rapidsThreadedReaderWorkerTaskCount"
+  val METRIC_DESC_THREADED_READER_WORKER_TASK_COUNT =
+    "threaded reader background task count"
   val METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT =
     "rapidsThreadedReaderLimiterAcquireCount"
   val METRIC_DESC_THREADED_READER_LIMITER_ACQUIRE_COUNT =
@@ -398,6 +438,20 @@ object GpuShuffleExchangeExecBase {
         gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_SER_COPY_BUFFER_TIME),
     METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM ->
         gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_STALLED_BY_INPUT_STREAM),
+    METRIC_SHUFFLE_KUDO_HEADER_READ_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_HEADER_READ_TIME),
+    METRIC_SHUFFLE_KUDO_HEADER_READ_CPU_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_HEADER_READ_CPU_TIME),
+    METRIC_SHUFFLE_KUDO_BUFFER_ACQUIRE_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_BUFFER_ACQUIRE_TIME),
+    METRIC_SHUFFLE_KUDO_BUFFER_ACQUIRE_CPU_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_BUFFER_ACQUIRE_CPU_TIME),
+    METRIC_SHUFFLE_KUDO_PAYLOAD_READ_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_PAYLOAD_READ_TIME),
+    METRIC_SHUFFLE_KUDO_PAYLOAD_READ_CPU_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_PAYLOAD_READ_CPU_TIME),
+    METRIC_SHUFFLE_KUDO_PAYLOAD_READ_BYTES ->
+        gpu.createSizeMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_PAYLOAD_READ_BYTES),
     METRIC_SHUFFLE_KUDO_TASK_SHARED_SAMPLE_COUNT ->
         gpu.createMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_TASK_SHARED_SAMPLE_COUNT),
     METRIC_SHUFFLE_KUDO_TASK_SHARED_THRESHOLD_REJECT_COUNT ->
@@ -433,6 +487,24 @@ object GpuShuffleExchangeExecBase {
     METRIC_THREADED_READER_DESER_WAIT_TIME ->
         gpu.createNanoTimingMetric(DEBUG_LEVEL,
           METRIC_DESC_THREADED_READER_DESER_WAIT_TIME),
+    METRIC_THREADED_READER_FUTURE_WAIT_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_FUTURE_WAIT_TIME),
+    METRIC_THREADED_READER_RESULT_QUEUE_WAIT_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_RESULT_QUEUE_WAIT_TIME),
+    METRIC_THREADED_READER_WORKER_QUEUE_DELAY ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_WORKER_QUEUE_DELAY),
+    METRIC_THREADED_READER_WORKER_ACTIVE_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_WORKER_ACTIVE_TIME),
+    METRIC_THREADED_READER_WORKER_CPU_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_WORKER_CPU_TIME),
+    METRIC_THREADED_READER_WORKER_TASK_COUNT ->
+        gpu.createMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_WORKER_TASK_COUNT),
     METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT ->
         gpu.createMetric(DEBUG_LEVEL,
           METRIC_DESC_THREADED_READER_LIMITER_ACQUIRE_COUNT),

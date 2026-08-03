@@ -50,7 +50,7 @@ import org.apache.spark.shuffle.api._
 import org.apache.spark.shuffle.sort.SortShuffleManager
 import org.apache.spark.shuffle.sort.io.{RapidsLocalDiskShuffleDataIO, RapidsLocalDiskShuffleMapOutputWriter}
 import org.apache.spark.sql.execution.metric.SQLMetric
-import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{METRIC_DATA_READ_SIZE, METRIC_DATA_SIZE, METRIC_SHUFFLE_DESERIALIZATION_TIME, METRIC_SHUFFLE_READ_TIME, METRIC_THREADED_READER_DESER_WAIT_TIME, METRIC_THREADED_READER_IO_WAIT_TIME, METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT, METRIC_THREADED_READER_LIMITER_ACQUIRE_FAIL_COUNT, METRIC_THREADED_READER_LIMITER_PENDING_BLOCK_COUNT, METRIC_THREADED_WRITER_INPUT_FETCH_TIME, METRIC_THREADED_WRITER_LIMITER_WAIT_TIME, METRIC_THREADED_WRITER_SERIALIZATION_WAIT_TIME}
+import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{METRIC_DATA_READ_SIZE, METRIC_DATA_SIZE, METRIC_SHUFFLE_DESERIALIZATION_TIME, METRIC_SHUFFLE_READ_TIME, METRIC_THREADED_READER_DESER_WAIT_TIME, METRIC_THREADED_READER_FUTURE_WAIT_TIME, METRIC_THREADED_READER_IO_WAIT_TIME, METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT, METRIC_THREADED_READER_LIMITER_ACQUIRE_FAIL_COUNT, METRIC_THREADED_READER_LIMITER_PENDING_BLOCK_COUNT, METRIC_THREADED_READER_RESULT_QUEUE_WAIT_TIME, METRIC_THREADED_READER_WORKER_ACTIVE_TIME, METRIC_THREADED_READER_WORKER_CPU_TIME, METRIC_THREADED_READER_WORKER_QUEUE_DELAY, METRIC_THREADED_READER_WORKER_TASK_COUNT, METRIC_THREADED_WRITER_INPUT_FETCH_TIME, METRIC_THREADED_WRITER_LIMITER_WAIT_TIME, METRIC_THREADED_WRITER_SERIALIZATION_WAIT_TIME}
 import org.apache.spark.sql.rapids.shims.{GpuShuffleBlockResolver, RapidsShuffleThreadedReader, RapidsShuffleThreadedWriter}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.storage.{RapidsShuffleBlockFetcherIterator, _}
@@ -1348,6 +1348,13 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
   // New metrics for wall time breakdown
   private val ioWaitTimeNs = sqlMetrics.get(METRIC_THREADED_READER_IO_WAIT_TIME)
   private val deserWaitTimeNs = sqlMetrics.get(METRIC_THREADED_READER_DESER_WAIT_TIME)
+  private val futureWaitTimeNs = sqlMetrics.get(METRIC_THREADED_READER_FUTURE_WAIT_TIME)
+  private val resultQueueWaitTimeNs =
+    sqlMetrics.get(METRIC_THREADED_READER_RESULT_QUEUE_WAIT_TIME)
+  private val workerQueueDelayNs = sqlMetrics.get(METRIC_THREADED_READER_WORKER_QUEUE_DELAY)
+  private val workerActiveTimeNs = sqlMetrics.get(METRIC_THREADED_READER_WORKER_ACTIVE_TIME)
+  private val workerCpuTimeNs = sqlMetrics.get(METRIC_THREADED_READER_WORKER_CPU_TIME)
+  private val workerTaskCount = sqlMetrics.get(METRIC_THREADED_READER_WORKER_TASK_COUNT)
   // Limiter metrics
   private val limiterAcquireCount =
     sqlMetrics.get(METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT)
@@ -1582,6 +1589,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
               val futureWaitThisCall = System.nanoTime() - waitTimeStart
               waitTime += futureWaitThisCall
               deserWaitTimeNs.foreach(_ += futureWaitThisCall)
+              futureWaitTimeNs.foreach(_ += futureWaitThisCall)
               // if the future returned a block state, we have more work to do
               pending match {
                 case Some(leftOver@BlockState(_, _, _)) =>
@@ -1611,6 +1619,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
           }
           waitTime += queueWaitThisCall
           deserWaitTimeNs.foreach(_ += queueWaitThisCall)
+          resultQueueWaitTimeNs.foreach(_ += queueWaitThisCall)
           deserializationTimeNs.foreach(_ += waitTime)
           shuffleReadTimeNs.foreach(_ += waitTime)
           res
@@ -1634,7 +1643,12 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
     }
 
     private def deserializeTask(blockState: BlockState, acquiredSize: Long): Unit = {
+      val submittedAt = System.nanoTime()
       futures += RapidsShuffleInternalManagerBase.queueReadTask(() => {
+        val activeStart = System.nanoTime()
+        val cpuStart = ThreadCpuTime.now()
+        workerQueueDelayNs.foreach(_ += activeStart - submittedAt)
+        workerTaskCount.foreach(_ += 1L)
         var success = false
         // Track the size we need to release (starts with the pre-acquired size)
         var sizeToRelease = acquiredSize
@@ -1662,6 +1676,8 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
             None // no further batches
           }
         } finally {
+          workerActiveTimeNs.foreach(_ += System.nanoTime() - activeStart)
+          workerCpuTimeNs.foreach(_ += math.max(0L, ThreadCpuTime.now() - cpuStart))
           // Release limiter immediately after deserialization completes
           limiter.release(sizeToRelease)
           // Close blockState (Netty buffer) immediately if:

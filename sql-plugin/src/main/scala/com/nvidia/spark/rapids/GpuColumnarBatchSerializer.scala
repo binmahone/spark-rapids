@@ -17,6 +17,7 @@
 package com.nvidia.spark.rapids
 
 import java.io._
+import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 
 import scala.collection.mutable.ArrayBuffer
@@ -37,6 +38,13 @@ import org.apache.spark.serializer.{DeserializationStream, SerializationStream, 
 import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{
   METRIC_DATA_SIZE,
   METRIC_SHUFFLE_DESER_STREAM_TIME,
+  METRIC_SHUFFLE_KUDO_BUFFER_ACQUIRE_CPU_TIME,
+  METRIC_SHUFFLE_KUDO_BUFFER_ACQUIRE_TIME,
+  METRIC_SHUFFLE_KUDO_HEADER_READ_CPU_TIME,
+  METRIC_SHUFFLE_KUDO_HEADER_READ_TIME,
+  METRIC_SHUFFLE_KUDO_PAYLOAD_READ_BYTES,
+  METRIC_SHUFFLE_KUDO_PAYLOAD_READ_CPU_TIME,
+  METRIC_SHUFFLE_KUDO_PAYLOAD_READ_TIME,
   METRIC_SHUFFLE_KUDO_TASK_DEDICATED_BUFFER_COUNT,
   METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_BYTES,
   METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_COUNT,
@@ -98,6 +106,19 @@ trait BaseSerializedTableIterator extends Iterator[(Int, ColumnarBatch)] {
    * @return the length of the data to read, or None if the stream is closed or ended
    */
   def peekNextBatchSize(): Option[Long]
+}
+
+object ThreadCpuTime {
+  private val bean = ManagementFactory.getThreadMXBean
+
+  def now(): Long = {
+    if (bean.isCurrentThreadCpuTimeSupported) {
+      val value = bean.getCurrentThreadCpuTime
+      if (value >= 0L) value else 0L
+    } else {
+      0L
+    }
+  }
 }
 
 class SerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric)
@@ -721,7 +742,7 @@ private class KudoSerializerInstance(
         new DataInputStream(new BufferedInputStream(wrappedIn))
 
       override def asKeyValueIterator: Iterator[(Int, ColumnarBatch)] = {
-        new KudoSerializedBatchIterator(dIn, deserTime, taskSharedBuffer)
+        new KudoSerializedBatchIterator(dIn, deserTime, taskSharedBuffer, metrics)
       }
 
       override def asIterator: Iterator[Any] = {
@@ -848,7 +869,7 @@ private class KudoGpuSerializerInstance(
         new DataInputStream(new BufferedInputStream(wrappedIn))
 
       override def asKeyValueIterator: Iterator[(Int, ColumnarBatch)] = {
-        new KudoSerializedBatchIterator(dIn, deserTime, taskSharedBuffer)
+        new KudoSerializedBatchIterator(dIn, deserTime, taskSharedBuffer, metrics)
       }
 
       override def asIterator: Iterator[Any] = {
@@ -940,7 +961,8 @@ object KudoSerializedTableColumn {
 class KudoSerializedBatchIterator(
     dIn: DataInputStream,
     deserTime: GpuMetric,
-    taskSharedBuffer: Option[KudoTaskSharedHostBufferSet] = None)
+    taskSharedBuffer: Option[KudoTaskSharedHostBufferSet] = None,
+    metrics: Map[String, GpuMetric] = Map.empty)
   extends BaseSerializedTableIterator {
   private[this] var nextHeader: Option[KudoTableHeader] = None
   private[this] var streamClosed: Boolean = false
@@ -959,6 +981,26 @@ class KudoSerializedBatchIterator(
   private[this] val sharedBufferMaxSize: Int = 20 << 20 // 20MB maximum
   private[this] var sharedBufferAllocatedSize: Int = 0 // actual allocated size (dynamic)
   private[this] var sharedBufferCurrentUse: Int = 0
+  private[this] val headerReadTime = metrics.get(METRIC_SHUFFLE_KUDO_HEADER_READ_TIME)
+  private[this] val headerReadCpuTime = metrics.get(METRIC_SHUFFLE_KUDO_HEADER_READ_CPU_TIME)
+  private[this] val bufferAcquireTime = metrics.get(METRIC_SHUFFLE_KUDO_BUFFER_ACQUIRE_TIME)
+  private[this] val bufferAcquireCpuTime =
+    metrics.get(METRIC_SHUFFLE_KUDO_BUFFER_ACQUIRE_CPU_TIME)
+  private[this] val payloadReadTime = metrics.get(METRIC_SHUFFLE_KUDO_PAYLOAD_READ_TIME)
+  private[this] val payloadReadCpuTime = metrics.get(METRIC_SHUFFLE_KUDO_PAYLOAD_READ_CPU_TIME)
+  private[this] val payloadReadBytes = metrics.get(METRIC_SHUFFLE_KUDO_PAYLOAD_READ_BYTES)
+
+  private def measureWallAndCpu[T](wallMetric: Option[GpuMetric], cpuMetric: Option[GpuMetric])(
+      operation: => T): T = {
+    val wallStart = System.nanoTime()
+    val cpuStart = ThreadCpuTime.now()
+    try {
+      operation
+    } finally {
+      wallMetric.foreach(_ += System.nanoTime() - wallStart)
+      cpuMetric.foreach(_ += math.max(0L, ThreadCpuTime.now() - cpuStart))
+    }
+  }
 
   // Don't install the callback if in a unit test
   Option(TaskContext.get()).foreach { tc =>
@@ -977,7 +1019,9 @@ class KudoSerializedBatchIterator(
     } else {
       if (nextHeader.isEmpty) {
         NvtxRegistry.READ_HEADER {
-          val header = Option(KudoTableHeader.readFrom(dIn).orElse(null))
+          val header = measureWallAndCpu(headerReadTime, headerReadCpuTime) {
+            Option(KudoTableHeader.readFrom(dIn).orElse(null))
+          }
           if (header.isDefined) {
             nextHeader = header
           } else {
@@ -1010,51 +1054,56 @@ class KudoSerializedBatchIterator(
         // When allocation fails, will roll back to the beginning of this withRetryNoSplit,
         // with previous batches saved in HostCoalesceIteratorBase.serializedTables.
         // The previous batches should be able to be spilled by itself.
-        val buffer = taskSharedBuffer.map(_.acquire(header.getTotalDataLen)).getOrElse {
-          if (sharedBuffer.isEmpty) {
-            closeOnExcept(allocateHostWithRetry(header.getTotalDataLen)) { allocated =>
+        val buffer = measureWallAndCpu(bufferAcquireTime, bufferAcquireCpuTime) {
+          taskSharedBuffer.map(_.acquire(header.getTotalDataLen)).getOrElse {
+            if (sharedBuffer.isEmpty) {
+              closeOnExcept(allocateHostWithRetry(header.getTotalDataLen)) { allocated =>
 
-              if (firstBatchesSizes.length < sharedBufferSampleCount) {
-                firstBatchesSizes += header.getTotalDataLen
-                if (firstBatchesSizes.length == sharedBufferSampleCount) {
-                  // After seeing enough samples, decide if to use a shared buffer.
-                  val maxSize = firstBatchesSizes.max
-                  if (maxSize < sharedBufferTriggerSize) {
-                    // All sampled batches are small, use shared buffer with dynamic size.
-                    // Estimate buffer size: 10 * average batch size, clamped to [1MB, 20MB].
-                    val avgSize = firstBatchesSizes.sum / firstBatchesSizes.length
-                    sharedBufferAllocatedSize = math.min(sharedBufferMaxSize,
-                      math.max(sharedBufferMinSize, (avgSize * 10).toInt))
-                    sharedBuffer = Some(allocateHostWithRetry(sharedBufferAllocatedSize))
-                    sharedBufferCurrentUse = 0
+                if (firstBatchesSizes.length < sharedBufferSampleCount) {
+                  firstBatchesSizes += header.getTotalDataLen
+                  if (firstBatchesSizes.length == sharedBufferSampleCount) {
+                    // After seeing enough samples, decide if to use a shared buffer.
+                    val maxSize = firstBatchesSizes.max
+                    if (maxSize < sharedBufferTriggerSize) {
+                      // All sampled batches are small, use shared buffer with dynamic size.
+                      // Estimate buffer size: 10 * average batch size, clamped to [1MB, 20MB].
+                      val avgSize = firstBatchesSizes.sum / firstBatchesSizes.length
+                      sharedBufferAllocatedSize = math.min(sharedBufferMaxSize,
+                        math.max(sharedBufferMinSize, (avgSize * 10).toInt))
+                      sharedBuffer = Some(allocateHostWithRetry(sharedBufferAllocatedSize))
+                      sharedBufferCurrentUse = 0
+                    }
                   }
                 }
-              }
 
-              allocated
-            }
-          } else {
-            if (header.getTotalDataLen > sharedBufferAllocatedSize / 2) {
-              // Too big to use shared buffer, this should rarely happen since
-              // sampled batches were all much smaller.
-              allocateHostWithRetry(header.getTotalDataLen)
-            } else {
-              if (sharedBufferCurrentUse + header.getTotalDataLen > sharedBufferAllocatedSize) {
-                // If not enough room left, we need to allocate a new shared buffer.
-                sharedBuffer.get.close()
-                sharedBufferCurrentUse = 0
-                sharedBuffer = Some(allocateHostWithRetry(sharedBufferAllocatedSize))
+                allocated
               }
-              val ret = sharedBuffer.get.slice(sharedBufferCurrentUse,
-                header.getTotalDataLen)
-              sharedBufferCurrentUse += header.getTotalDataLen
-              ret
+            } else {
+              if (header.getTotalDataLen > sharedBufferAllocatedSize / 2) {
+                // Too big to use shared buffer, this should rarely happen since
+                // sampled batches were all much smaller.
+                allocateHostWithRetry(header.getTotalDataLen)
+              } else {
+                if (sharedBufferCurrentUse + header.getTotalDataLen > sharedBufferAllocatedSize) {
+                  // If not enough room left, we need to allocate a new shared buffer.
+                  sharedBuffer.get.close()
+                  sharedBufferCurrentUse = 0
+                  sharedBuffer = Some(allocateHostWithRetry(sharedBufferAllocatedSize))
+                }
+                val ret = sharedBuffer.get.slice(sharedBufferCurrentUse,
+                  header.getTotalDataLen)
+                sharedBufferCurrentUse += header.getTotalDataLen
+                ret
+              }
             }
           }
         }
 
         closeOnExcept(buffer) { _ =>
-          buffer.copyFromStream(0, dIn, header.getTotalDataLen)
+          measureWallAndCpu(payloadReadTime, payloadReadCpuTime) {
+            buffer.copyFromStream(0, dIn, header.getTotalDataLen)
+          }
+          payloadReadBytes.foreach(_ += header.getTotalDataLen)
           KudoSerializedTableColumn.from(header, buffer)
         }
       } else {

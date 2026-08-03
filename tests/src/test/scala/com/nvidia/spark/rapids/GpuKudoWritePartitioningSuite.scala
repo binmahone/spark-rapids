@@ -36,6 +36,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, ExprId}
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.rapids.GpuShuffleEnv
 import org.apache.spark.sql.rapids.execution.{GpuShuffleExchangeExecBase, TrampolineUtil}
+import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase._
 import org.apache.spark.sql.types.{DataType, IntegerType, StringType}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
@@ -188,10 +189,52 @@ class GpuKudoWritePartitioningSuite extends AnyFunSuite with BeforeAndAfterEach
   /**
    * Creates a GPU Kudo serializer for the test data types
    */
-  private def createSerializer(): GpuColumnarBatchSerializer = {
-    val serializerMetrics = Map[String, GpuMetric]().withDefaultValue(NoopMetric)
+  private def createSerializer(
+      serializerMetrics: Map[String, GpuMetric] =
+        Map[String, GpuMetric]().withDefaultValue(NoopMetric)):
+      GpuColumnarBatchSerializer = {
     new GpuColumnarBatchSerializer(serializerMetrics, GpuKudoWritePartitioningSuite.dataTypes,
       ShuffleKudoMode.GPU, useKudo = true, kudoMeasureBufferCopy = false)
+  }
+
+  test("Kudo read pipeline metrics measure the exercised path") {
+    val measuredNames = Seq(
+      METRIC_SHUFFLE_KUDO_HEADER_READ_TIME,
+      METRIC_SHUFFLE_KUDO_HEADER_READ_CPU_TIME,
+      METRIC_SHUFFLE_KUDO_BUFFER_ACQUIRE_TIME,
+      METRIC_SHUFFLE_KUDO_BUFFER_ACQUIRE_CPU_TIME,
+      METRIC_SHUFFLE_KUDO_PAYLOAD_READ_TIME,
+      METRIC_SHUFFLE_KUDO_PAYLOAD_READ_CPU_TIME,
+      METRIC_SHUFFLE_KUDO_PAYLOAD_READ_BYTES)
+    val metrics = measuredNames.map(_ -> new LocalGpuMetric).toMap
+      .withDefaultValue(NoopMetric)
+    val serializer = createSerializer(metrics)
+    val bytes = new ByteArrayOutputStream()
+
+    withResource(GpuKudoWritePartitioningSuite.buildBatchInPartition()) { batch =>
+      withResource(serializer.newInstance().serializeStream(bytes)) { stream =>
+        stream.writeKey(0)
+        stream.writeValue(batch)
+      }
+    }
+
+    withResource(serializer.newInstance().deserializeStream(
+        new ByteArrayInputStream(bytes.toByteArray))) { stream =>
+      val iterator = stream.asKeyValueIterator
+      assert(iterator.hasNext)
+      withResource(iterator.next()._2.asInstanceOf[ColumnarBatch]) { batch =>
+        assertResult(GpuKudoWritePartitioningSuite.testIntValues.length)(batch.numRows())
+      }
+      assert(!iterator.hasNext)
+    }
+
+    assert(metrics(METRIC_SHUFFLE_KUDO_HEADER_READ_TIME).value > 0L)
+    assert(metrics(METRIC_SHUFFLE_KUDO_BUFFER_ACQUIRE_TIME).value > 0L)
+    assert(metrics(METRIC_SHUFFLE_KUDO_PAYLOAD_READ_TIME).value > 0L)
+    assert(metrics(METRIC_SHUFFLE_KUDO_PAYLOAD_READ_BYTES).value > 0L)
+    assert(metrics(METRIC_SHUFFLE_KUDO_HEADER_READ_CPU_TIME).value >= 0L)
+    assert(metrics(METRIC_SHUFFLE_KUDO_BUFFER_ACQUIRE_CPU_TIME).value >= 0L)
+    assert(metrics(METRIC_SHUFFLE_KUDO_PAYLOAD_READ_CPU_TIME).value >= 0L)
   }
 
   /**

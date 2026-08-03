@@ -391,10 +391,6 @@ object GpuShuffleExchangeExecBase {
   val METRIC_THREADED_READER_FUTURE_WAIT_TIME = "rapidsThreadedReaderFutureWaitTime"
   val METRIC_DESC_THREADED_READER_FUTURE_WAIT_TIME =
     "threaded reader time waiting for a background future"
-  val METRIC_THREADED_READER_FUTURE_WAIT_BYPASS_COUNT =
-    "rapidsThreadedReaderFutureWaitBypassCount"
-  val METRIC_DESC_THREADED_READER_FUTURE_WAIT_BYPASS_COUNT =
-    "threaded reader background future waits bypassed by a ready result"
   val METRIC_THREADED_READER_RESULT_QUEUE_WAIT_TIME =
     "rapidsThreadedReaderResultQueueWaitTime"
   val METRIC_DESC_THREADED_READER_RESULT_QUEUE_WAIT_TIME =
@@ -494,9 +490,6 @@ object GpuShuffleExchangeExecBase {
     METRIC_THREADED_READER_FUTURE_WAIT_TIME ->
         gpu.createNanoTimingMetric(DEBUG_LEVEL,
           METRIC_DESC_THREADED_READER_FUTURE_WAIT_TIME),
-    METRIC_THREADED_READER_FUTURE_WAIT_BYPASS_COUNT ->
-        gpu.createMetric(DEBUG_LEVEL,
-          METRIC_DESC_THREADED_READER_FUTURE_WAIT_BYPASS_COUNT),
     METRIC_THREADED_READER_RESULT_QUEUE_WAIT_TIME ->
         gpu.createNanoTimingMetric(DEBUG_LEVEL,
           METRIC_DESC_THREADED_READER_RESULT_QUEUE_WAIT_TIME),

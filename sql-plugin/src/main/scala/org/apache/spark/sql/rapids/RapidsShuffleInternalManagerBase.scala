@@ -50,7 +50,7 @@ import org.apache.spark.shuffle.api._
 import org.apache.spark.shuffle.sort.SortShuffleManager
 import org.apache.spark.shuffle.sort.io.{RapidsLocalDiskShuffleDataIO, RapidsLocalDiskShuffleMapOutputWriter}
 import org.apache.spark.sql.execution.metric.SQLMetric
-import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{METRIC_DATA_READ_SIZE, METRIC_DATA_SIZE, METRIC_SHUFFLE_DESERIALIZATION_TIME, METRIC_SHUFFLE_READ_TIME, METRIC_THREADED_READER_DESER_WAIT_TIME, METRIC_THREADED_READER_FUTURE_WAIT_BYPASS_COUNT, METRIC_THREADED_READER_FUTURE_WAIT_TIME, METRIC_THREADED_READER_IO_WAIT_TIME, METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT, METRIC_THREADED_READER_LIMITER_ACQUIRE_FAIL_COUNT, METRIC_THREADED_READER_LIMITER_PENDING_BLOCK_COUNT, METRIC_THREADED_READER_RESULT_QUEUE_WAIT_TIME, METRIC_THREADED_READER_WORKER_ACTIVE_TIME, METRIC_THREADED_READER_WORKER_CPU_TIME, METRIC_THREADED_READER_WORKER_QUEUE_DELAY, METRIC_THREADED_READER_WORKER_TASK_COUNT, METRIC_THREADED_WRITER_INPUT_FETCH_TIME, METRIC_THREADED_WRITER_LIMITER_WAIT_TIME, METRIC_THREADED_WRITER_SERIALIZATION_WAIT_TIME}
+import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{METRIC_DATA_READ_SIZE, METRIC_DATA_SIZE, METRIC_SHUFFLE_DESERIALIZATION_TIME, METRIC_SHUFFLE_READ_TIME, METRIC_THREADED_READER_DESER_WAIT_TIME, METRIC_THREADED_READER_FUTURE_WAIT_TIME, METRIC_THREADED_READER_IO_WAIT_TIME, METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT, METRIC_THREADED_READER_LIMITER_ACQUIRE_FAIL_COUNT, METRIC_THREADED_READER_LIMITER_PENDING_BLOCK_COUNT, METRIC_THREADED_READER_RESULT_QUEUE_WAIT_TIME, METRIC_THREADED_READER_WORKER_ACTIVE_TIME, METRIC_THREADED_READER_WORKER_CPU_TIME, METRIC_THREADED_READER_WORKER_QUEUE_DELAY, METRIC_THREADED_READER_WORKER_TASK_COUNT, METRIC_THREADED_WRITER_INPUT_FETCH_TIME, METRIC_THREADED_WRITER_LIMITER_WAIT_TIME, METRIC_THREADED_WRITER_SERIALIZATION_WAIT_TIME}
 import org.apache.spark.sql.rapids.shims.{GpuShuffleBlockResolver, RapidsShuffleThreadedReader, RapidsShuffleThreadedWriter}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.storage.{RapidsShuffleBlockFetcherIterator, _}
@@ -153,12 +153,6 @@ class ThreadSafeShuffleWriteMetricsReporter(val wrapped: ShuffleWriteMetricsRepo
 
 object RapidsShuffleInternalManagerBase extends Logging {
   private val poolUnavailable = "unavailable"
-
-  private[rapids] def shouldWaitForBackgroundFuture(
-      hasPendingFuture: Boolean,
-      hasReadyResult: Boolean): Boolean = {
-    hasPendingFuture && !hasReadyResult
-  }
 
   def unwrapHandle(handle: ShuffleHandle): ShuffleHandle = handle match {
     case gh: GpuShuffleHandle[_, _] => gh.wrapped
@@ -1355,8 +1349,6 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
   private val ioWaitTimeNs = sqlMetrics.get(METRIC_THREADED_READER_IO_WAIT_TIME)
   private val deserWaitTimeNs = sqlMetrics.get(METRIC_THREADED_READER_DESER_WAIT_TIME)
   private val futureWaitTimeNs = sqlMetrics.get(METRIC_THREADED_READER_FUTURE_WAIT_TIME)
-  private val futureWaitBypassCount =
-    sqlMetrics.get(METRIC_THREADED_READER_FUTURE_WAIT_BYPASS_COUNT)
   private val resultQueueWaitTimeNs =
     sqlMetrics.get(METRIC_THREADED_READER_RESULT_QUEUE_WAIT_TIME)
   private val workerQueueDelayNs = sqlMetrics.get(METRIC_THREADED_READER_WORKER_QUEUE_DELAY)
@@ -1590,8 +1582,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
           var waitTimeStart: Long = 0L
           popFetchedIfAvailable()
           waitTime = 0L
-          if (RapidsShuffleInternalManagerBase.shouldWaitForBackgroundFuture(
-              futures.nonEmpty, !queued.isEmpty)) {
+          if (futures.nonEmpty) {
             NvtxRegistry.BATCH_WAIT {
               waitTimeStart = System.nanoTime()
               val pending = futures.dequeue().get // wait for one future
@@ -1606,8 +1597,6 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
                 case _ => // done
               }
             }
-          } else if (futures.nonEmpty) {
-            futureWaitBypassCount.foreach(_ += 1)
           }
 
           if (pendingIts.nonEmpty) {

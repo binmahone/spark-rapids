@@ -43,6 +43,7 @@ import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{
   METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_TIME,
   METRIC_SHUFFLE_KUDO_TASK_SHARED_BUFFER_CREATE_COUNT,
   METRIC_SHUFFLE_KUDO_TASK_SHARED_BUFFER_SLICE_COUNT,
+  METRIC_SHUFFLE_KUDO_TASK_SHARED_LOCK_WAIT_TIME,
   METRIC_SHUFFLE_KUDO_TASK_SHARED_SAMPLE_COUNT,
   METRIC_SHUFFLE_KUDO_TASK_SHARED_THRESHOLD_REJECT_COUNT,
   METRIC_SHUFFLE_SER_COPY_BUFFER_TIME,
@@ -183,17 +184,21 @@ class GpuColumnarBatchSerializer(metrics: Map[String, GpuMetric], dataTypes: Arr
                                  kudoMode: ShuffleKudoMode.Value, useKudo: Boolean,
                                  kudoMeasureBufferCopy: Boolean,
                                  kudoTaskSharedBufferEnabled: Boolean = false,
-                                 kudoTaskSharedBufferTriggerSize: Int = 1 << 20)
+                                 kudoTaskSharedBufferTriggerSize: Int = 1 << 20,
+                                 kudoTaskSharedBufferTargetTableCount: Int = 10,
+                                 kudoTaskSharedBufferMaxSize: Int = 20 << 20)
   extends Serializer with Serializable {
 
   override def newInstance(): SerializerInstance = {
     if (useKudo) {
       if (kudoMode == ShuffleKudoMode.GPU) {
         new KudoGpuSerializerInstance(
-          metrics, dataTypes, kudoTaskSharedBufferEnabled, kudoTaskSharedBufferTriggerSize)
+          metrics, dataTypes, kudoTaskSharedBufferEnabled, kudoTaskSharedBufferTriggerSize,
+          kudoTaskSharedBufferTargetTableCount, kudoTaskSharedBufferMaxSize)
       } else {
         new KudoSerializerInstance(metrics, dataTypes, kudoMeasureBufferCopy,
-          kudoTaskSharedBufferEnabled, kudoTaskSharedBufferTriggerSize)
+          kudoTaskSharedBufferEnabled, kudoTaskSharedBufferTriggerSize,
+          kudoTaskSharedBufferTargetTableCount, kudoTaskSharedBufferMaxSize)
       }
     } else {
       new GpuColumnarBatchSerializerInstance(metrics)
@@ -407,12 +412,14 @@ private[rapids] class KudoTaskSharedHostBuffer(
     sampleCount: Int = 5,
     minBufferSize: Int = 1 << 20,
     maxBufferSize: Int = 20 << 20,
+    targetTableCount: Int = 10,
     testHostAllocator: Option[Int => HostMemoryBuffer] = None) extends AutoCloseable {
   require(triggerSize > 0, "triggerSize must be positive")
   require(sampleCount > 0, "sampleCount must be positive")
   require(minBufferSize > 0, "minBufferSize must be positive")
   require(maxBufferSize >= minBufferSize,
     "maxBufferSize must be greater than or equal to minBufferSize")
+  require(targetTableCount > 0, "targetTableCount must be positive")
 
   private[this] val sampledMetric =
     metrics.getOrElse(METRIC_SHUFFLE_KUDO_TASK_SHARED_SAMPLE_COUNT, NoopMetric)
@@ -430,6 +437,8 @@ private[rapids] class KudoTaskSharedHostBuffer(
     metrics.getOrElse(METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_BYTES, NoopMetric)
   private[this] val hostAllocationTimeMetric =
     metrics.getOrElse(METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_TIME, NoopMetric)
+  private[this] val lockWaitTimeMetric =
+    metrics.getOrElse(METRIC_SHUFFLE_KUDO_TASK_SHARED_LOCK_WAIT_TIME, NoopMetric)
 
   private[this] val samples = new ArrayBuffer[Int](sampleCount)
   private[this] var decisionMade = false
@@ -477,7 +486,8 @@ private[rapids] class KudoTaskSharedHostBuffer(
     if (maxSample < triggerSize) {
       val average = samples.foldLeft(0L)(_ + _) / samples.length
       sharedBufferSize = math.min(maxBufferSize,
-        math.max(minBufferSize, math.min(Int.MaxValue.toLong, average * 10L).toInt))
+        math.max(minBufferSize,
+          math.min(Int.MaxValue.toLong, average * targetTableCount).toInt))
       sharingEnabled = true
     } else {
       thresholdRejectMetric += 1
@@ -493,7 +503,15 @@ private[rapids] class KudoTaskSharedHostBuffer(
     currentOffset = 0
   }
 
-  def acquire(size: Int): HostMemoryBuffer = synchronized {
+  def acquire(size: Int): HostMemoryBuffer = {
+    val waitStart = System.nanoTime()
+    synchronized {
+      lockWaitTimeMetric += System.nanoTime() - waitStart
+      acquireLocked(size)
+    }
+  }
+
+  private def acquireLocked(size: Int): HostMemoryBuffer = {
     require(size >= 0, "buffer size must be non-negative")
     if (closed) {
       throw new IllegalStateException("Kudo task shared host buffer is closed")
@@ -543,7 +561,9 @@ private class KudoSerializerInstance(
     val dataTypes: Array[DataType],
     val measureBufferCopyTime: Boolean,
     val taskSharedBufferEnabled: Boolean,
-    val taskSharedBufferTriggerSize: Int
+    val taskSharedBufferTriggerSize: Int,
+    val taskSharedBufferTargetTableCount: Int,
+    val taskSharedBufferMaxSize: Int
 ) extends SerializerInstance {
   private val dataSize = metrics(METRIC_DATA_SIZE)
   private val serTime = metrics(METRIC_SHUFFLE_SER_STREAM_TIME)
@@ -551,7 +571,9 @@ private class KudoSerializerInstance(
   private val deserTime = metrics(METRIC_SHUFFLE_DESER_STREAM_TIME)
   private val stalledByInputStream = metrics(METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM)
   private val taskSharedBuffer = if (taskSharedBufferEnabled) {
-    Some(new KudoTaskSharedHostBuffer(metrics, taskSharedBufferTriggerSize))
+    Some(new KudoTaskSharedHostBuffer(metrics, taskSharedBufferTriggerSize,
+      targetTableCount = taskSharedBufferTargetTableCount,
+      maxBufferSize = taskSharedBufferMaxSize))
   } else {
     None
   }
@@ -712,13 +734,17 @@ private class KudoGpuSerializerInstance(
     val dataTypes: Array[DataType],
     val taskSharedBufferEnabled: Boolean,
     val taskSharedBufferTriggerSize: Int,
+    val taskSharedBufferTargetTableCount: Int,
+    val taskSharedBufferMaxSize: Int,
 ) extends SerializerInstance {
   private val dataSize = metrics(METRIC_DATA_SIZE)
   private val serTime = metrics(METRIC_SHUFFLE_SER_STREAM_TIME)
   private val deserTime = metrics(METRIC_SHUFFLE_DESER_STREAM_TIME)
   private val stalledByInputStream = metrics(METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM)
   private val taskSharedBuffer = if (taskSharedBufferEnabled) {
-    Some(new KudoTaskSharedHostBuffer(metrics, taskSharedBufferTriggerSize))
+    Some(new KudoTaskSharedHostBuffer(metrics, taskSharedBufferTriggerSize,
+      targetTableCount = taskSharedBufferTargetTableCount,
+      maxBufferSize = taskSharedBufferMaxSize))
   } else {
     None
   }

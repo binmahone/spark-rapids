@@ -2527,6 +2527,25 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
         "Kudo task shared-buffer trigger size must be in (0, 2 GiB)")
       .createWithDefault(1L << 20)
 
+  val SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_TARGET_TABLE_COUNT =
+    conf("spark.rapids.shuffle.kudo.serializer.taskSharedBuffer.targetTableCount")
+      .doc("Target number of sampled Kudo tables to fit in one task-scoped host buffer.")
+      .internal()
+      .startupOnly()
+      .integerConf
+      .checkValue(_ > 0, "Kudo task shared-buffer target table count must be positive")
+      .createWithDefault(10)
+
+  val SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_MAX_SIZE =
+    conf("spark.rapids.shuffle.kudo.serializer.taskSharedBuffer.maxSize")
+      .doc("Maximum size of one task-scoped Kudo host buffer.")
+      .internal()
+      .startupOnly()
+      .bytesConf(ByteUnit.BYTE)
+      .checkValue(value => value > 0 && value <= Int.MaxValue,
+        "Kudo task shared-buffer maximum size must be in (0, 2 GiB)")
+      .createWithDefault(20L << 20)
+
   val SHUFFLE_ASYNC_READ_ENABLED = conf("spark.rapids.sql.asyncRead.shuffle.enabled")
     .doc("Enable or disable the asynchronous read for Shuffle. If you turn this on you should " +
       "also consider increasing spark.rapids.sql.asyncRead.maxInFlightHostMemoryBytes so that " +

@@ -241,7 +241,9 @@ abstract class GpuShuffleExchangeExecBase(
   private lazy val serializer: Serializer = new GpuColumnarBatchSerializer(
     allMetrics, sparkTypes, kudoMode, useKudo, kudoBufferCopyMeasurementEnabled,
     RapidsConf.SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_ENABLED.get(child.conf),
-    RapidsConf.SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_TRIGGER_SIZE.get(child.conf).toInt)
+    RapidsConf.SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_TRIGGER_SIZE.get(child.conf).toInt,
+    RapidsConf.SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_TARGET_TABLE_COUNT.get(child.conf),
+    RapidsConf.SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_MAX_SIZE.get(child.conf).toInt)
 
   @transient lazy val inputBatchRDD: RDD[ColumnarBatch] = child.executeColumnar()
 
@@ -342,6 +344,10 @@ object GpuShuffleExchangeExecBase {
     "rapidsShuffleKudoTaskHostAllocationTime"
   val METRIC_DESC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_TIME =
     "RAPIDS shuffle Kudo task-scoped host allocation time"
+  val METRIC_SHUFFLE_KUDO_TASK_SHARED_LOCK_WAIT_TIME =
+    "rapidsShuffleKudoTaskSharedLockWaitTime"
+  val METRIC_DESC_SHUFFLE_KUDO_TASK_SHARED_LOCK_WAIT_TIME =
+    "RAPIDS shuffle Kudo task-scoped allocator lock wait time"
   val METRIC_THREADED_WRITER_LIMITER_WAIT_TIME = "rapidsThreadedWriterLimiterWaitTime"
   val METRIC_DESC_THREADED_WRITER_LIMITER_WAIT_TIME =
     "threaded writer limiter wait time"
@@ -408,6 +414,9 @@ object GpuShuffleExchangeExecBase {
         gpu.createSizeMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_BYTES),
     METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_TIME ->
         gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_TIME),
+    METRIC_SHUFFLE_KUDO_TASK_SHARED_LOCK_WAIT_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_SHUFFLE_KUDO_TASK_SHARED_LOCK_WAIT_TIME),
     METRIC_THREADED_WRITER_LIMITER_WAIT_TIME ->
         gpu.createNanoTimingMetric(DEBUG_LEVEL,
           METRIC_DESC_THREADED_WRITER_LIMITER_WAIT_TIME),

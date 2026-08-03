@@ -35,7 +35,8 @@ class KudoTaskSharedHostBufferSuite extends AnyFunSuite {
     METRIC_SHUFFLE_KUDO_TASK_DEDICATED_BUFFER_COUNT -> new LocalGpuMetric,
     METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_COUNT -> new LocalGpuMetric,
     METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_BYTES -> new LocalGpuMetric,
-    METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_TIME -> new LocalGpuMetric)
+    METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_TIME -> new LocalGpuMetric,
+    METRIC_SHUFFLE_KUDO_TASK_SHARED_LOCK_WAIT_TIME -> new LocalGpuMetric)
 
   private def closeAll(buffers: scala.collection.Seq[HostMemoryBuffer]): Unit = {
     buffers.foreach(_.close())

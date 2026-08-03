@@ -130,4 +130,17 @@ class KudoTaskSharedHostBufferSuite extends AnyFunSuite {
       closeAll(buffers)
     }
   }
+
+  test("maps reader threads deterministically across configured stripes") {
+    val allocator = new KudoTaskSharedHostBufferSet(
+      metricMap, triggerSize = 4 << 20, targetTableCount = 32,
+      maxBufferSize = 64 << 20, stripeCount = 4)
+    try {
+      assertResult(Seq(0, 1, 2, 3, 0, 1, 2, 3)) {
+        (0L until 8L).map(allocator.stripeIndex)
+      }
+    } finally {
+      allocator.close()
+    }
+  }
 }

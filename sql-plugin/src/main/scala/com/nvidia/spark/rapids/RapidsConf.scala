@@ -2546,6 +2546,16 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
         "Kudo task shared-buffer maximum size must be in (0, 2 GiB)")
       .createWithDefault(20L << 20)
 
+  val SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_STRIPE_COUNT =
+    conf("spark.rapids.shuffle.kudo.serializer.taskSharedBuffer.stripeCount")
+      .doc("Number of independently locked task-scoped Kudo host-buffer stripes.")
+      .internal()
+      .startupOnly()
+      .integerConf
+      .checkValue(value => value > 0 && value <= 32,
+        "Kudo task shared-buffer stripe count must be in [1, 32]")
+      .createWithDefault(1)
+
   val SHUFFLE_ASYNC_READ_ENABLED = conf("spark.rapids.sql.asyncRead.shuffle.enabled")
     .doc("Enable or disable the asynchronous read for Shuffle. If you turn this on you should " +
       "also consider increasing spark.rapids.sql.asyncRead.maxInFlightHostMemoryBytes so that " +

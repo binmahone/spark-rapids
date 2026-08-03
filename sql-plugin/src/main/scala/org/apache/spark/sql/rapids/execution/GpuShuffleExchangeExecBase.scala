@@ -243,7 +243,8 @@ abstract class GpuShuffleExchangeExecBase(
     RapidsConf.SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_ENABLED.get(child.conf),
     RapidsConf.SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_TRIGGER_SIZE.get(child.conf).toInt,
     RapidsConf.SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_TARGET_TABLE_COUNT.get(child.conf),
-    RapidsConf.SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_MAX_SIZE.get(child.conf).toInt)
+    RapidsConf.SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_MAX_SIZE.get(child.conf).toInt,
+    RapidsConf.SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_STRIPE_COUNT.get(child.conf))
 
   @transient lazy val inputBatchRDD: RDD[ColumnarBatch] = child.executeColumnar()
 

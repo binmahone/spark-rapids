@@ -239,7 +239,9 @@ abstract class GpuShuffleExchangeExecBase(
   // This value must be lazy because the child's output may not have been resolved
   // yet in all cases.
   private lazy val serializer: Serializer = new GpuColumnarBatchSerializer(
-    allMetrics, sparkTypes, kudoMode, useKudo, kudoBufferCopyMeasurementEnabled)
+    allMetrics, sparkTypes, kudoMode, useKudo, kudoBufferCopyMeasurementEnabled,
+    RapidsConf.SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_ENABLED.get(child.conf),
+    RapidsConf.SHUFFLE_KUDO_SERIALIZER_TASK_SHARED_BUFFER_TRIGGER_SIZE.get(child.conf).toInt)
 
   @transient lazy val inputBatchRDD: RDD[ColumnarBatch] = child.executeColumnar()
 
@@ -308,6 +310,38 @@ object GpuShuffleExchangeExecBase {
   val METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM = "rapidsShuffleStalledByInputStream"
   val METRIC_DESC_SHUFFLE_STALLED_BY_INPUT_STREAM =
     "RAPIDS shuffle time stalled by input stream operations"
+  val METRIC_SHUFFLE_KUDO_TASK_SHARED_SAMPLE_COUNT =
+    "rapidsShuffleKudoTaskSharedSampleCount"
+  val METRIC_DESC_SHUFFLE_KUDO_TASK_SHARED_SAMPLE_COUNT =
+    "RAPIDS shuffle Kudo tables sampled by the task-scoped host buffer allocator"
+  val METRIC_SHUFFLE_KUDO_TASK_SHARED_THRESHOLD_REJECT_COUNT =
+    "rapidsShuffleKudoTaskSharedThresholdRejectCount"
+  val METRIC_DESC_SHUFFLE_KUDO_TASK_SHARED_THRESHOLD_REJECT_COUNT =
+    "RAPIDS shuffle Kudo task-scoped allocator threshold rejections"
+  val METRIC_SHUFFLE_KUDO_TASK_SHARED_BUFFER_CREATE_COUNT =
+    "rapidsShuffleKudoTaskSharedBufferCreateCount"
+  val METRIC_DESC_SHUFFLE_KUDO_TASK_SHARED_BUFFER_CREATE_COUNT =
+    "RAPIDS shuffle Kudo task-scoped host buffers created"
+  val METRIC_SHUFFLE_KUDO_TASK_SHARED_BUFFER_SLICE_COUNT =
+    "rapidsShuffleKudoTaskSharedBufferSliceCount"
+  val METRIC_DESC_SHUFFLE_KUDO_TASK_SHARED_BUFFER_SLICE_COUNT =
+    "RAPIDS shuffle Kudo tables materialized as task-scoped host buffer slices"
+  val METRIC_SHUFFLE_KUDO_TASK_DEDICATED_BUFFER_COUNT =
+    "rapidsShuffleKudoTaskDedicatedBufferCount"
+  val METRIC_DESC_SHUFFLE_KUDO_TASK_DEDICATED_BUFFER_COUNT =
+    "RAPIDS shuffle Kudo tables materialized in dedicated host buffers"
+  val METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_COUNT =
+    "rapidsShuffleKudoTaskHostAllocationCount"
+  val METRIC_DESC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_COUNT =
+    "RAPIDS shuffle Kudo task-scoped host allocation attempts"
+  val METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_BYTES =
+    "rapidsShuffleKudoTaskHostAllocationBytes"
+  val METRIC_DESC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_BYTES =
+    "RAPIDS shuffle Kudo task-scoped host allocation bytes"
+  val METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_TIME =
+    "rapidsShuffleKudoTaskHostAllocationTime"
+  val METRIC_DESC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_TIME =
+    "RAPIDS shuffle Kudo task-scoped host allocation time"
   val METRIC_THREADED_WRITER_LIMITER_WAIT_TIME = "rapidsThreadedWriterLimiterWaitTime"
   val METRIC_DESC_THREADED_WRITER_LIMITER_WAIT_TIME =
     "threaded writer limiter wait time"
@@ -357,6 +391,23 @@ object GpuShuffleExchangeExecBase {
         gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_SER_COPY_BUFFER_TIME),
     METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM ->
         gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_STALLED_BY_INPUT_STREAM),
+    METRIC_SHUFFLE_KUDO_TASK_SHARED_SAMPLE_COUNT ->
+        gpu.createMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_TASK_SHARED_SAMPLE_COUNT),
+    METRIC_SHUFFLE_KUDO_TASK_SHARED_THRESHOLD_REJECT_COUNT ->
+        gpu.createMetric(DEBUG_LEVEL,
+          METRIC_DESC_SHUFFLE_KUDO_TASK_SHARED_THRESHOLD_REJECT_COUNT),
+    METRIC_SHUFFLE_KUDO_TASK_SHARED_BUFFER_CREATE_COUNT ->
+        gpu.createMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_TASK_SHARED_BUFFER_CREATE_COUNT),
+    METRIC_SHUFFLE_KUDO_TASK_SHARED_BUFFER_SLICE_COUNT ->
+        gpu.createMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_TASK_SHARED_BUFFER_SLICE_COUNT),
+    METRIC_SHUFFLE_KUDO_TASK_DEDICATED_BUFFER_COUNT ->
+        gpu.createMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_TASK_DEDICATED_BUFFER_COUNT),
+    METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_COUNT ->
+        gpu.createMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_COUNT),
+    METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_BYTES ->
+        gpu.createSizeMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_BYTES),
+    METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL, METRIC_DESC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_TIME),
     METRIC_THREADED_WRITER_LIMITER_WAIT_TIME ->
         gpu.createNanoTimingMetric(DEBUG_LEVEL,
           METRIC_DESC_THREADED_WRITER_LIMITER_WAIT_TIME),

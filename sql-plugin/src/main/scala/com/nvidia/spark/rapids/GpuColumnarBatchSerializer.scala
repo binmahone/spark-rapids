@@ -34,7 +34,20 @@ import com.nvidia.spark.rapids.jni.kudo.{KudoSerializer, KudoTableHeader, WriteI
 
 import org.apache.spark.TaskContext
 import org.apache.spark.serializer.{DeserializationStream, SerializationStream, Serializer, SerializerInstance}
-import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{METRIC_DATA_SIZE, METRIC_SHUFFLE_DESER_STREAM_TIME, METRIC_SHUFFLE_SER_COPY_BUFFER_TIME, METRIC_SHUFFLE_SER_STREAM_TIME, METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM}
+import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{
+  METRIC_DATA_SIZE,
+  METRIC_SHUFFLE_DESER_STREAM_TIME,
+  METRIC_SHUFFLE_KUDO_TASK_DEDICATED_BUFFER_COUNT,
+  METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_BYTES,
+  METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_COUNT,
+  METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_TIME,
+  METRIC_SHUFFLE_KUDO_TASK_SHARED_BUFFER_CREATE_COUNT,
+  METRIC_SHUFFLE_KUDO_TASK_SHARED_BUFFER_SLICE_COUNT,
+  METRIC_SHUFFLE_KUDO_TASK_SHARED_SAMPLE_COUNT,
+  METRIC_SHUFFLE_KUDO_TASK_SHARED_THRESHOLD_REJECT_COUNT,
+  METRIC_SHUFFLE_SER_COPY_BUFFER_TIME,
+  METRIC_SHUFFLE_SER_STREAM_TIME,
+  METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM}
 import org.apache.spark.sql.types.{DataType, NullType}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
@@ -168,15 +181,19 @@ class SerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric)
  */
 class GpuColumnarBatchSerializer(metrics: Map[String, GpuMetric], dataTypes: Array[DataType],
                                  kudoMode: ShuffleKudoMode.Value, useKudo: Boolean,
-                                 kudoMeasureBufferCopy: Boolean)
+                                 kudoMeasureBufferCopy: Boolean,
+                                 kudoTaskSharedBufferEnabled: Boolean = false,
+                                 kudoTaskSharedBufferTriggerSize: Int = 1 << 20)
   extends Serializer with Serializable {
 
   override def newInstance(): SerializerInstance = {
     if (useKudo) {
       if (kudoMode == ShuffleKudoMode.GPU) {
-        new KudoGpuSerializerInstance(metrics, dataTypes)
+        new KudoGpuSerializerInstance(
+          metrics, dataTypes, kudoTaskSharedBufferEnabled, kudoTaskSharedBufferTriggerSize)
       } else {
-        new KudoSerializerInstance(metrics, dataTypes, kudoMeasureBufferCopy)
+        new KudoSerializerInstance(metrics, dataTypes, kudoMeasureBufferCopy,
+          kudoTaskSharedBufferEnabled, kudoTaskSharedBufferTriggerSize)
       }
     } else {
       new GpuColumnarBatchSerializerInstance(metrics)
@@ -376,6 +393,145 @@ object SerializedTableColumn {
 }
 
 /**
+ * Allocates host buffers across all Kudo block iterators owned by one serializer instance.
+ *
+ * A threaded shuffle reader creates one serializer instance per Spark task but one
+ * deserialization stream per shuffle block. Keeping the sampling and active root buffer here
+ * allows single-table block streams to share allocations without sharing memory across tasks.
+ * Slices retain the root buffer through the cudf reference count, so rotating or closing the
+ * allocator root does not invalidate batches that are still owned by downstream consumers.
+ */
+private[rapids] class KudoTaskSharedHostBuffer(
+    metrics: Map[String, GpuMetric],
+    triggerSize: Int,
+    sampleCount: Int = 5,
+    minBufferSize: Int = 1 << 20,
+    maxBufferSize: Int = 20 << 20,
+    testHostAllocator: Option[Int => HostMemoryBuffer] = None) extends AutoCloseable {
+  require(triggerSize > 0, "triggerSize must be positive")
+  require(sampleCount > 0, "sampleCount must be positive")
+  require(minBufferSize > 0, "minBufferSize must be positive")
+  require(maxBufferSize >= minBufferSize,
+    "maxBufferSize must be greater than or equal to minBufferSize")
+
+  private[this] val sampledMetric =
+    metrics.getOrElse(METRIC_SHUFFLE_KUDO_TASK_SHARED_SAMPLE_COUNT, NoopMetric)
+  private[this] val thresholdRejectMetric =
+    metrics.getOrElse(METRIC_SHUFFLE_KUDO_TASK_SHARED_THRESHOLD_REJECT_COUNT, NoopMetric)
+  private[this] val sharedBufferCreateMetric =
+    metrics.getOrElse(METRIC_SHUFFLE_KUDO_TASK_SHARED_BUFFER_CREATE_COUNT, NoopMetric)
+  private[this] val sharedBufferSliceMetric =
+    metrics.getOrElse(METRIC_SHUFFLE_KUDO_TASK_SHARED_BUFFER_SLICE_COUNT, NoopMetric)
+  private[this] val dedicatedBufferMetric =
+    metrics.getOrElse(METRIC_SHUFFLE_KUDO_TASK_DEDICATED_BUFFER_COUNT, NoopMetric)
+  private[this] val hostAllocationCountMetric =
+    metrics.getOrElse(METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_COUNT, NoopMetric)
+  private[this] val hostAllocationBytesMetric =
+    metrics.getOrElse(METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_BYTES, NoopMetric)
+  private[this] val hostAllocationTimeMetric =
+    metrics.getOrElse(METRIC_SHUFFLE_KUDO_TASK_HOST_ALLOCATION_TIME, NoopMetric)
+
+  private[this] val samples = new ArrayBuffer[Int](sampleCount)
+  private[this] var decisionMade = false
+  private[this] var sharingEnabled = false
+  private[this] var sharedBufferSize = 0
+  private[this] var currentRoot: HostMemoryBuffer = null
+  private[this] var currentOffset = 0
+  private[this] var closed = false
+
+  Option(TaskContext.get()).foreach { tc =>
+    onTaskCompletion(tc) {
+      close()
+    }
+  }
+
+  private def allocateHostWithRetry(size: Int): HostMemoryBuffer = {
+    val startNs = System.nanoTime()
+    try {
+      testHostAllocator.map { allocator =>
+        hostAllocationCountMetric += 1
+        hostAllocationBytesMetric += size
+        allocator(size)
+      }.getOrElse {
+        withRetryNoSplit[HostMemoryBuffer] {
+          hostAllocationCountMetric += 1
+          hostAllocationBytesMetric += size
+          // These buffers are concatenated before reaching the GPU, so pinned memory is
+          // unnecessary.
+          HostMemoryBuffer.allocate(size, false)
+        }
+      }
+    } finally {
+      hostAllocationTimeMetric += System.nanoTime() - startNs
+    }
+  }
+
+  private def allocateDedicated(size: Int): HostMemoryBuffer = {
+    dedicatedBufferMetric += 1
+    allocateHostWithRetry(size)
+  }
+
+  private def finishSampling(): Unit = {
+    decisionMade = true
+    val maxSample = samples.max
+    if (maxSample < triggerSize) {
+      val average = samples.foldLeft(0L)(_ + _) / samples.length
+      sharedBufferSize = math.min(maxBufferSize,
+        math.max(minBufferSize, math.min(Int.MaxValue.toLong, average * 10L).toInt))
+      sharingEnabled = true
+    } else {
+      thresholdRejectMetric += 1
+    }
+  }
+
+  private def rotateRoot(): Unit = {
+    if (currentRoot != null) {
+      currentRoot.close()
+    }
+    currentRoot = allocateHostWithRetry(sharedBufferSize)
+    sharedBufferCreateMetric += 1
+    currentOffset = 0
+  }
+
+  def acquire(size: Int): HostMemoryBuffer = synchronized {
+    require(size >= 0, "buffer size must be non-negative")
+    if (closed) {
+      throw new IllegalStateException("Kudo task shared host buffer is closed")
+    }
+
+    if (!decisionMade) {
+      val result = allocateDedicated(size)
+      samples += size
+      sampledMetric += 1
+      if (samples.length == sampleCount) {
+        finishSampling()
+      }
+      result
+    } else if (!sharingEnabled || size == 0 || size > sharedBufferSize / 2) {
+      allocateDedicated(size)
+    } else {
+      if (currentRoot == null || currentOffset + size > sharedBufferSize) {
+        rotateRoot()
+      }
+      val result = currentRoot.slice(currentOffset, size)
+      currentOffset += size
+      sharedBufferSliceMetric += 1
+      result
+    }
+  }
+
+  override def close(): Unit = synchronized {
+    if (!closed) {
+      if (currentRoot != null) {
+        currentRoot.close()
+        currentRoot = null
+      }
+      closed = true
+    }
+  }
+}
+
+/**
  * Serializer instance for serializing `ColumnarBatch`s for use during shuffle with
  * [[KudoSerializer]]
  * @param metrics map of GpuMetric contains serializer specific metrics
@@ -385,13 +541,20 @@ object SerializedTableColumn {
 private class KudoSerializerInstance(
     val metrics: Map[String, GpuMetric],
     val dataTypes: Array[DataType],
-    val measureBufferCopyTime: Boolean
+    val measureBufferCopyTime: Boolean,
+    val taskSharedBufferEnabled: Boolean,
+    val taskSharedBufferTriggerSize: Int
 ) extends SerializerInstance {
   private val dataSize = metrics(METRIC_DATA_SIZE)
   private val serTime = metrics(METRIC_SHUFFLE_SER_STREAM_TIME)
   private val serCopyBufferTime = metrics(METRIC_SHUFFLE_SER_COPY_BUFFER_TIME)
   private val deserTime = metrics(METRIC_SHUFFLE_DESER_STREAM_TIME)
   private val stalledByInputStream = metrics(METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM)
+  private val taskSharedBuffer = if (taskSharedBufferEnabled) {
+    Some(new KudoTaskSharedHostBuffer(metrics, taskSharedBufferTriggerSize))
+  } else {
+    None
+  }
 
   private lazy val kudo = if (dataTypes.nonEmpty) {
     Some(new KudoSerializer(GpuColumnVector.from(dataTypes)))
@@ -504,7 +667,7 @@ private class KudoSerializerInstance(
         new DataInputStream(new BufferedInputStream(wrappedIn))
 
       override def asKeyValueIterator: Iterator[(Int, ColumnarBatch)] = {
-        new KudoSerializedBatchIterator(dIn, deserTime)
+        new KudoSerializedBatchIterator(dIn, deserTime, taskSharedBuffer)
       }
 
       override def asIterator: Iterator[Any] = {
@@ -547,11 +710,18 @@ private class KudoSerializerInstance(
 private class KudoGpuSerializerInstance(
     val metrics: Map[String, GpuMetric],
     val dataTypes: Array[DataType],
+    val taskSharedBufferEnabled: Boolean,
+    val taskSharedBufferTriggerSize: Int,
 ) extends SerializerInstance {
   private val dataSize = metrics(METRIC_DATA_SIZE)
   private val serTime = metrics(METRIC_SHUFFLE_SER_STREAM_TIME)
   private val deserTime = metrics(METRIC_SHUFFLE_DESER_STREAM_TIME)
   private val stalledByInputStream = metrics(METRIC_SHUFFLE_STALLED_BY_INPUT_STREAM)
+  private val taskSharedBuffer = if (taskSharedBufferEnabled) {
+    Some(new KudoTaskSharedHostBuffer(metrics, taskSharedBufferTriggerSize))
+  } else {
+    None
+  }
 
   override def serializeStream(out: OutputStream): SerializationStream = new SerializationStream {
 
@@ -618,7 +788,7 @@ private class KudoGpuSerializerInstance(
         new DataInputStream(new BufferedInputStream(wrappedIn))
 
       override def asKeyValueIterator: Iterator[(Int, ColumnarBatch)] = {
-        new KudoSerializedBatchIterator(dIn, deserTime)
+        new KudoSerializedBatchIterator(dIn, deserTime, taskSharedBuffer)
       }
 
       override def asIterator: Iterator[Any] = {
@@ -707,7 +877,10 @@ object KudoSerializedTableColumn {
     java.lang.Boolean.getBoolean("ai.rapids.kudo.debug.ser.checkSchema")
 }
 
-class KudoSerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric)
+class KudoSerializedBatchIterator(
+    dIn: DataInputStream,
+    deserTime: GpuMetric,
+    taskSharedBuffer: Option[KudoTaskSharedHostBuffer] = None)
   extends BaseSerializedTableIterator {
   private[this] var nextHeader: Option[KudoTableHeader] = None
   private[this] var streamClosed: Boolean = false
@@ -777,7 +950,7 @@ class KudoSerializedBatchIterator(dIn: DataInputStream, deserTime: GpuMetric)
         // When allocation fails, will roll back to the beginning of this withRetryNoSplit,
         // with previous batches saved in HostCoalesceIteratorBase.serializedTables.
         // The previous batches should be able to be spilled by itself.
-        val buffer = {
+        val buffer = taskSharedBuffer.map(_.acquire(header.getTotalDataLen)).getOrElse {
           if (sharedBuffer.isEmpty) {
             closeOnExcept(allocateHostWithRetry(header.getTotalDataLen)) { allocated =>
 

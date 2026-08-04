@@ -2480,6 +2480,67 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
       .checkValue(_ >= 0, "The maximum concurrent reader task count must be non-negative.")
       .createWithDefault(0)
 
+  val SHUFFLE_MULTITHREADED_READER_ADAPTIVE_ADMISSION_ENABLED =
+    conf("spark.rapids.shuffle.multiThreaded.reader.adaptiveAdmission.enabled")
+      .doc("Enable bounded adaptive task admission for the multi-threaded shuffle reader.")
+      .internal()
+      .startupOnly()
+      .booleanConf
+      .createWithDefault(false)
+
+  val SHUFFLE_MULTITHREADED_READER_ADAPTIVE_INITIAL_CONCURRENT_TASKS =
+    conf("spark.rapids.shuffle.multiThreaded.reader.adaptiveAdmission.initialConcurrentTasks")
+      .doc("Initial concurrent reader task count for bounded adaptive admission.")
+      .internal()
+      .startupOnly()
+      .integerConf
+      .checkValue(_ > 0, "The initial adaptive reader task count must be positive.")
+      .createWithDefault(4)
+
+  val SHUFFLE_MULTITHREADED_READER_ADAPTIVE_MIN_CONCURRENT_TASKS =
+    conf("spark.rapids.shuffle.multiThreaded.reader.adaptiveAdmission.minConcurrentTasks")
+      .doc("Minimum concurrent reader task count for bounded adaptive admission.")
+      .internal()
+      .startupOnly()
+      .integerConf
+      .checkValue(_ > 0, "The minimum adaptive reader task count must be positive.")
+      .createWithDefault(2)
+
+  val SHUFFLE_MULTITHREADED_READER_ADAPTIVE_MAX_CONCURRENT_TASKS =
+    conf("spark.rapids.shuffle.multiThreaded.reader.adaptiveAdmission.maxConcurrentTasks")
+      .doc("Maximum concurrent reader task count for bounded adaptive admission.")
+      .internal()
+      .startupOnly()
+      .integerConf
+      .checkValue(_ > 0, "The maximum adaptive reader task count must be positive.")
+      .createWithDefault(16)
+
+  val SHUFFLE_MULTITHREADED_READER_ADAPTIVE_GPU_CONCURRENCY_MULTIPLIER =
+    conf("spark.rapids.shuffle.multiThreaded.reader.adaptiveAdmission.gpuConcurrencyMultiplier")
+      .doc("Multiplier applied to estimated dynamic GPU concurrency to bound reader admission.")
+      .internal()
+      .startupOnly()
+      .doubleConf
+      .checkValue(_ > 0.0, "The adaptive reader GPU concurrency multiplier must be positive.")
+      .createWithDefault(2.0)
+
+  val SHUFFLE_MULTITHREADED_READER_ADAPTIVE_DECISION_WINDOW_TASKS =
+    conf("spark.rapids.shuffle.multiThreaded.reader.adaptiveAdmission.decisionWindowTasks")
+      .doc("Completed reader tasks per bounded adaptive admission decision window.")
+      .internal()
+      .startupOnly()
+      .integerConf
+      .checkValue(_ > 0, "The adaptive reader decision window must be positive.")
+      .createWithDefault(4)
+
+  val SHUFFLE_MULTITHREADED_READER_ADAPTIVE_DETAILED_LOGGING_ENABLED =
+    conf("spark.rapids.shuffle.multiThreaded.reader.adaptiveAdmission.detailedLogging.enabled")
+      .doc("Emit detailed executor logs for bounded adaptive reader admission decisions.")
+      .internal()
+      .startupOnly()
+      .booleanConf
+      .createWithDefault(false)
+
   val SHUFFLE_KUDO_SERIALIZER_ENABLED = conf("spark.rapids.shuffle.kudo.serializer.enabled")
     .doc("Enable or disable the Kudo serializer for the shuffle.")
     .internal()
@@ -3945,6 +4006,27 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val shuffleMultiThreadedReaderMaxConcurrentTasks: Int =
     get(SHUFFLE_MULTITHREADED_READER_MAX_CONCURRENT_TASKS)
+
+  lazy val shuffleMultiThreadedReaderAdaptiveAdmissionEnabled: Boolean =
+    get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_ADMISSION_ENABLED)
+
+  lazy val shuffleMultiThreadedReaderAdaptiveInitialConcurrentTasks: Int =
+    get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_INITIAL_CONCURRENT_TASKS)
+
+  lazy val shuffleMultiThreadedReaderAdaptiveMinConcurrentTasks: Int =
+    get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_MIN_CONCURRENT_TASKS)
+
+  lazy val shuffleMultiThreadedReaderAdaptiveMaxConcurrentTasks: Int =
+    get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_MAX_CONCURRENT_TASKS)
+
+  lazy val shuffleMultiThreadedReaderAdaptiveGpuConcurrencyMultiplier: Double =
+    get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_GPU_CONCURRENCY_MULTIPLIER)
+
+  lazy val shuffleMultiThreadedReaderAdaptiveDecisionWindowTasks: Int =
+    get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_DECISION_WINDOW_TASKS)
+
+  lazy val shuffleMultiThreadedReaderAdaptiveDetailedLoggingEnabled: Boolean =
+    get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_DETAILED_LOGGING_ENABLED)
 
   lazy val shuffleParitioningMaxCpuBatchSize: Long = get(SHUFFLE_PARTITIONING_MAX_CPU_BATCH_SIZE)
 

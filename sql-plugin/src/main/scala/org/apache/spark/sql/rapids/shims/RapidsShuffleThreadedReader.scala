@@ -21,7 +21,8 @@ import com.nvidia.spark.rapids.NvtxRegistry
 import org.apache.spark.{MapOutputTracker, SparkEnv, TaskContext}
 import org.apache.spark.serializer.SerializerManager
 import org.apache.spark.shuffle.ShuffleReadMetricsReporter
-import org.apache.spark.sql.rapids.{RapidsShuffleThreadedReaderBase, ShuffleHandleWithMetrics}
+import org.apache.spark.sql.rapids.{RapidsShuffleThreadedReaderBase, ReaderTaskAdmissionConfig,
+  ShuffleHandleWithMetrics}
 import org.apache.spark.storage.BlockManager
 
 class RapidsShuffleThreadedReader[K, C] (
@@ -38,7 +39,7 @@ class RapidsShuffleThreadedReader[K, C] (
     mapOutputTracker: MapOutputTracker = SparkEnv.get.mapOutputTracker,
     canUseBatchFetch: Boolean = false,
     numReaderThreads: Int = 0,
-    maxConcurrentReaderTasks: Int = 0)
+    readerTaskAdmissionConfig: Option[ReaderTaskAdmissionConfig] = None)
     extends RapidsShuffleThreadedReaderBase[K, C](
       handle,
       context,
@@ -49,7 +50,7 @@ class RapidsShuffleThreadedReader[K, C] (
       mapOutputTracker = mapOutputTracker,
       canUseBatchFetch = canUseBatchFetch,
       numReaderThreads = numReaderThreads,
-      maxConcurrentReaderTasks = maxConcurrentReaderTasks) {
+      readerTaskAdmissionConfig = readerTaskAdmissionConfig) {
 
   override protected def getMapSizes: GetMapSizesResult = {
     NvtxRegistry.GET_MAP_SIZES_BY_EXEC_ID {

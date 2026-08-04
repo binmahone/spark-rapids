@@ -51,6 +51,15 @@ case object SemaphoreAcquired extends TryAcquireResult
  */
 case class AcquireFailed(numWaitingTasks: Int) extends TryAcquireResult
 
+case class GpuConcurrencySnapshot(
+    estimatedCapacity: Int,
+    activeTasks: Long,
+    waitingTasks: Int,
+    occupiedPermits: Long,
+    maxPermits: Long,
+    taskPermitsEstimate: Long,
+    hardTaskLimit: Int)
+
 private object GpuTaskMemoryEstimator {
   private val TIME_WINDOW: Double = TimeUnit.MILLISECONDS.toNanos(100).toDouble
 }
@@ -250,6 +259,11 @@ object GpuSemaphore {
     if (context != null) {
       getInstance.releaseIfNecessary(context)
     }
+  }
+
+  /** Return an instantaneous executor-local view of GPU task concurrency. */
+  def concurrencySnapshot(context: TaskContext): GpuConcurrencySnapshot = {
+    getInstance.concurrencySnapshot(context)
   }
 
   /**
@@ -607,6 +621,29 @@ private final class GpuSemaphore(val maxConcurrentGpuTasksLimit: Int) extends Lo
         taskInfo.releaseSemaphore(semaphore)
       }
     }
+  }
+
+  def concurrencySnapshot(context: TaskContext): GpuConcurrencySnapshot = {
+    val stageEstimate = stageEstimators.computeIfAbsent(context.stageId(), _ => {
+      new GpuStageMemoryEstimator(
+        context.stageId(), computeDefaultMemory(SQLConf.get), isDynamicEnabled(SQLConf.get))
+    })
+    val taskPermits = memToPermitsWithMax(stageEstimate.estimate())
+    val semaphoreSnapshot = semaphore.snapshot
+    val memoryCapacity = math.max(1L, semaphoreSnapshot.maxPermits / taskPermits)
+    val estimatedCapacity = if (semaphoreSnapshot.hardTaskLimit > 0) {
+      math.min(memoryCapacity, semaphoreSnapshot.hardTaskLimit.toLong)
+    } else {
+      memoryCapacity
+    }
+    GpuConcurrencySnapshot(
+      math.min(Int.MaxValue.toLong, estimatedCapacity).toInt,
+      semaphoreSnapshot.activeTasks,
+      semaphoreSnapshot.waitingTasks,
+      semaphoreSnapshot.occupiedPermits,
+      semaphoreSnapshot.maxPermits,
+      taskPermits,
+      semaphoreSnapshot.hardTaskLimit)
   }
 
   def completeTask(context: TaskContext): Unit = {

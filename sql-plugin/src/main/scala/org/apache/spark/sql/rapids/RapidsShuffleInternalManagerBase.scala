@@ -19,8 +19,9 @@ package org.apache.spark.sql.rapids
 import java.io.{IOException, OutputStream}
 import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, ConcurrentLinkedQueue,
   ExecutionException, Executors, ExecutorService, Future, FutureTask, LinkedBlockingQueue,
-  ScheduledFuture, Semaphore, ThreadFactory, ThreadPoolExecutor, TimeoutException, TimeUnit}
+  ScheduledFuture, ThreadFactory, ThreadPoolExecutor, TimeoutException, TimeUnit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicLong, AtomicReference}
+import java.util.concurrent.locks.ReentrantLock
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -51,6 +52,7 @@ import org.apache.spark.shuffle.sort.SortShuffleManager
 import org.apache.spark.shuffle.sort.io.{RapidsLocalDiskShuffleDataIO, RapidsLocalDiskShuffleMapOutputWriter}
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{METRIC_DATA_READ_SIZE, METRIC_DATA_SIZE, METRIC_SHUFFLE_DESERIALIZATION_TIME, METRIC_SHUFFLE_READ_TIME, METRIC_THREADED_READER_ADMISSION_ACQUIRE_COUNT, METRIC_THREADED_READER_ADMISSION_WAIT_TIME, METRIC_THREADED_READER_DESER_WAIT_TIME, METRIC_THREADED_READER_FUTURE_WAIT_TIME, METRIC_THREADED_READER_IO_WAIT_TIME, METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT, METRIC_THREADED_READER_LIMITER_ACQUIRE_FAIL_COUNT, METRIC_THREADED_READER_LIMITER_PENDING_BLOCK_COUNT, METRIC_THREADED_READER_RESULT_QUEUE_WAIT_TIME, METRIC_THREADED_READER_WORKER_ACTIVE_TIME, METRIC_THREADED_READER_WORKER_CPU_TIME, METRIC_THREADED_READER_WORKER_QUEUE_DELAY, METRIC_THREADED_READER_WORKER_TASK_COUNT, METRIC_THREADED_WRITER_INPUT_FETCH_TIME, METRIC_THREADED_WRITER_LIMITER_WAIT_TIME, METRIC_THREADED_WRITER_SERIALIZATION_WAIT_TIME}
+import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{METRIC_THREADED_READER_ADMISSION_DECISION_COUNT, METRIC_THREADED_READER_ADMISSION_DECREASE_COUNT, METRIC_THREADED_READER_ADMISSION_DESIRED_PERMITS_SUM, METRIC_THREADED_READER_ADMISSION_GPU_CEILING_SUM, METRIC_THREADED_READER_ADMISSION_GPU_CLAMP_COUNT, METRIC_THREADED_READER_ADMISSION_HOLD_COUNT, METRIC_THREADED_READER_ADMISSION_INCREASE_COUNT}
 import org.apache.spark.sql.rapids.shims.{GpuShuffleBlockResolver, RapidsShuffleThreadedReader, RapidsShuffleThreadedWriter}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.storage.{RapidsShuffleBlockFetcherIterator, _}
@@ -153,18 +155,66 @@ class ThreadSafeShuffleWriteMetricsReporter(val wrapped: ShuffleWriteMetricsRepo
 
 private[rapids] case class ReaderTaskAdmissionResult(acquired: Boolean, waitTimeNs: Long)
 
+private[rapids] case class ReaderTaskObservation(
+    workerQueueDelayNs: Long,
+    workerActiveNs: Long,
+    limiterAcquires: Long,
+    limiterFailures: Long)
+
+private[rapids] case class ReaderTaskAdmissionConfig(
+    initialConcurrentTasks: Int,
+    adaptiveEnabled: Boolean,
+    minConcurrentTasks: Int,
+    maxConcurrentTasks: Int,
+    gpuConcurrencyMultiplier: Double,
+    decisionWindowTasks: Int,
+    detailedLoggingEnabled: Boolean) {
+  require(initialConcurrentTasks > 0)
+  require(minConcurrentTasks > 0 && minConcurrentTasks <= initialConcurrentTasks)
+  require(maxConcurrentTasks >= initialConcurrentTasks)
+  require(gpuConcurrencyMultiplier > 0.0)
+  require(decisionWindowTasks > 0)
+}
+
+private[rapids] case class ReaderTaskAdmissionDecision(
+    oldPermits: Int,
+    newPermits: Int,
+    reason: String,
+    gpuSnapshot: GpuConcurrencySnapshot,
+    gpuCeiling: Int,
+    queueDelayRatio: Double,
+    limiterFailureRatio: Double)
+
 private[rapids] class ReaderTaskAdmissionGate(
-    val maxConcurrentTasks: Int,
+    val config: ReaderTaskAdmissionConfig,
     releaseGpu: TaskContext => Unit =
-      (context: TaskContext) => GpuSemaphore.releaseIfNecessary(context)) {
-  require(maxConcurrentTasks > 0, "Reader task admission requires a positive permit count")
+      (context: TaskContext) => GpuSemaphore.releaseIfNecessary(context),
+    gpuSnapshot: TaskContext => GpuConcurrencySnapshot =
+      (context: TaskContext) => GpuSemaphore.concurrencySnapshot(context)) extends Logging {
 
   private class TaskAdmission {
     val references = new AtomicInteger(1)
     val permitReleased = new AtomicBoolean(false)
+    val workerQueueDelayNs = new AtomicLong()
+    val workerActiveNs = new AtomicLong()
+    val limiterAcquires = new AtomicLong()
+    val limiterFailures = new AtomicLong()
   }
 
-  private val semaphore = new Semaphore(maxConcurrentTasks, true)
+  private val lock = new ReentrantLock(true)
+  private val permitsChanged = lock.newCondition()
+  private var activeTasks = 0
+  private var waitingTasks = 0
+  private var desiredPermits = config.initialConcurrentTasks
+  private var completedInWindow = 0
+  private var windowWorkerQueueDelayNs = 0L
+  private var windowWorkerActiveNs = 0L
+  private var windowLimiterAcquires = 0L
+  private var windowLimiterFailures = 0L
+  private val highQueueDelayRatio = 0.25
+  private val lowQueueDelayRatio = 0.05
+  private val highLimiterFailureRatio = 0.25
+  private val lowLimiterFailureRatio = 0.10
   private val admittedTasks = new ConcurrentHashMap[Long, TaskAdmission]()
 
   def acquire(context: TaskContext): ReaderTaskAdmissionResult = {
@@ -178,11 +228,22 @@ private[rapids] class ReaderTaskAdmissionGate(
       // Reader admission must never park a task while it owns GPU execution capacity.
       releaseGpu(context)
       val start = System.nanoTime()
+      var lockAcquired = false
       try {
-        semaphore.acquire()
+        lock.lockInterruptibly()
+        lockAcquired = true
+        waitingTasks += 1
+        try {
+          while (activeTasks >= desiredPermits) {
+            permitsChanged.await()
+          }
+        } finally {
+          waitingTasks -= 1
+        }
+        activeTasks += 1
         val waitTimeNs = System.nanoTime() - start
         onTaskCompletion(context) {
-          releaseAll(taskAttemptId, newAdmission)
+          releaseAll(taskAttemptId, newAdmission, context, adapt = false)
         }
         ReaderTaskAdmissionResult(acquired = true, waitTimeNs)
       } catch {
@@ -190,32 +251,125 @@ private[rapids] class ReaderTaskAdmissionGate(
           admittedTasks.remove(taskAttemptId, newAdmission)
           Thread.currentThread().interrupt()
           throw e
+      } finally {
+        if (lockAcquired) {
+          lock.unlock()
+        }
       }
     }
   }
 
-  def releaseReference(taskAttemptId: Long): Unit = {
+  def releaseReference(
+      context: TaskContext,
+      observation: ReaderTaskObservation): Option[ReaderTaskAdmissionDecision] = {
+    val taskAttemptId = context.taskAttemptId()
     val admission = admittedTasks.get(taskAttemptId)
-    if (admission != null && admission.references.decrementAndGet() == 0) {
-      releaseAll(taskAttemptId, admission)
+    if (admission == null) {
+      None
+    } else {
+      admission.workerQueueDelayNs.addAndGet(observation.workerQueueDelayNs)
+      admission.workerActiveNs.addAndGet(observation.workerActiveNs)
+      admission.limiterAcquires.addAndGet(observation.limiterAcquires)
+      admission.limiterFailures.addAndGet(observation.limiterFailures)
+      if (admission.references.decrementAndGet() == 0) {
+        releaseAll(taskAttemptId, admission, context, adapt = true)
+      } else {
+        None
+      }
     }
   }
 
-  private def releaseAll(taskAttemptId: Long, admission: TaskAdmission): Unit = {
+  private def releaseAll(
+      taskAttemptId: Long,
+      admission: TaskAdmission,
+      context: TaskContext,
+      adapt: Boolean): Option[ReaderTaskAdmissionDecision] = {
     if (admission.permitReleased.compareAndSet(false, true)) {
       admittedTasks.remove(taskAttemptId, admission)
-      semaphore.release()
+      lock.lock()
+      try {
+        activeTasks -= 1
+        val decision = if (adapt) observeAndDecide(admission, context) else None
+        permitsChanged.signalAll()
+        decision
+      } finally {
+        lock.unlock()
+      }
+    } else {
+      None
     }
   }
 
-  private[rapids] def availablePermits: Int = semaphore.availablePermits()
-
-  private[rapids] def releaseAllForTests(taskAttemptId: Long): Unit = {
-    val admission = admittedTasks.get(taskAttemptId)
-    if (admission != null) {
-      releaseAll(taskAttemptId, admission)
+  private def observeAndDecide(
+      admission: TaskAdmission,
+      context: TaskContext): Option[ReaderTaskAdmissionDecision] = {
+    if (!config.adaptiveEnabled) {
+      return None
     }
+    completedInWindow += 1
+    windowWorkerQueueDelayNs += admission.workerQueueDelayNs.get()
+    windowWorkerActiveNs += admission.workerActiveNs.get()
+    windowLimiterAcquires += admission.limiterAcquires.get()
+    windowLimiterFailures += admission.limiterFailures.get()
+    if (completedInWindow < config.decisionWindowTasks) {
+      return None
+    }
+
+    val snapshot = gpuSnapshot(context)
+    val gpuCeiling = math.max(config.minConcurrentTasks,
+      math.min(config.maxConcurrentTasks,
+        math.floor(snapshot.estimatedCapacity * config.gpuConcurrencyMultiplier).toInt))
+    val queueRatio = if (windowWorkerActiveNs == 0L) 0.0 else {
+      windowWorkerQueueDelayNs.toDouble / windowWorkerActiveNs
+    }
+    val limiterRatio = if (windowLimiterAcquires == 0L) 0.0 else {
+      windowLimiterFailures.toDouble / windowLimiterAcquires
+    }
+    val oldPermits = desiredPermits
+    val (nextPermits, reason) = if (desiredPermits > gpuCeiling) {
+      (gpuCeiling, "gpu-ceiling-clamp")
+    } else if (windowWorkerActiveNs == 0L || windowLimiterAcquires == 0L) {
+      (desiredPermits, "insufficient-observation-hold")
+    } else if (queueRatio >= highQueueDelayRatio || limiterRatio >= highLimiterFailureRatio) {
+      (math.max(config.minConcurrentTasks, desiredPermits - 1), "reader-pressure-decrease")
+    } else if (queueRatio <= lowQueueDelayRatio && limiterRatio <= lowLimiterFailureRatio &&
+        snapshot.waitingTasks == 0 && desiredPermits < gpuCeiling) {
+      (desiredPermits + 1, "low-pressure-increase")
+    } else {
+      (desiredPermits, "hold")
+    }
+    desiredPermits = nextPermits
+    completedInWindow = 0
+    windowWorkerQueueDelayNs = 0L
+    windowWorkerActiveNs = 0L
+    windowLimiterAcquires = 0L
+    windowLimiterFailures = 0L
+    val decision = ReaderTaskAdmissionDecision(
+      oldPermits, nextPermits, reason, snapshot, gpuCeiling, queueRatio, limiterRatio)
+    if (config.detailedLoggingEnabled) {
+      logInfo(s"ReaderTaskAdmissionDecision stageId=${context.stageId()} " +
+        s"oldPermits=$oldPermits newPermits=$nextPermits reason=$reason " +
+        s"activeReaders=$activeTasks waitingReaders=$waitingTasks gpuCeiling=$gpuCeiling " +
+        f"gpuConcurrencyMultiplier=${config.gpuConcurrencyMultiplier}%.3f " +
+        s"gpuEstimatedCapacity=${snapshot.estimatedCapacity} " +
+        s"gpuActiveTasks=${snapshot.activeTasks} gpuWaitingTasks=${snapshot.waitingTasks} " +
+        f"queueDelayRatio=$queueRatio%.6f limiterFailureRatio=$limiterRatio%.6f " +
+        f"queueThresholds=$lowQueueDelayRatio%.3f/$highQueueDelayRatio%.3f " +
+        f"limiterThresholds=$lowLimiterFailureRatio%.3f/$highLimiterFailureRatio%.3f")
+    }
+    Some(decision)
   }
+
+  private[rapids] def availablePermits: Int = {
+    lock.lock()
+    try math.max(0, desiredPermits - activeTasks) finally lock.unlock()
+  }
+
+  private[rapids] def currentDesiredPermits: Int = {
+    lock.lock()
+    try desiredPermits finally lock.unlock()
+  }
+
 }
 
 object RapidsShuffleInternalManagerBase extends Logging {
@@ -271,35 +425,39 @@ object RapidsShuffleInternalManagerBase extends Logging {
 
   def acquireReaderTaskAdmission(
       context: TaskContext,
-      maxConcurrentTasks: Int): ReaderTaskAdmissionResult = {
-    if (maxConcurrentTasks == 0) {
+      config: Option[ReaderTaskAdmissionConfig]): ReaderTaskAdmissionResult = {
+    config match {
+      case None =>
       ReaderTaskAdmissionResult(acquired = false, waitTimeNs = 0L)
-    } else {
+      case Some(admissionConfig) =>
       val gate = readerTaskAdmissionGate match {
         case existing if existing != null => existing
         case _ => synchronized {
           if (readerTaskAdmissionGate == null) {
-            readerTaskAdmissionGate = new ReaderTaskAdmissionGate(maxConcurrentTasks)
-            logInfo(s"Configured threaded shuffle reader task admission with " +
-              s"$maxConcurrentTasks permits per executor")
+            readerTaskAdmissionGate = new ReaderTaskAdmissionGate(admissionConfig)
+            logInfo(s"Configured threaded shuffle reader task admission: $admissionConfig")
           }
           readerTaskAdmissionGate
         }
       }
-      require(gate.maxConcurrentTasks == maxConcurrentTasks,
-        s"Threaded shuffle reader task admission was configured with " +
-          s"${gate.maxConcurrentTasks} permits and cannot be changed to $maxConcurrentTasks")
+      require(gate.config == admissionConfig,
+        s"Threaded shuffle reader task admission was configured with ${gate.config} " +
+          s"and cannot be changed to $admissionConfig")
       gate.acquire(context)
     }
   }
 
-  def releaseReaderTaskAdmission(context: TaskContext, maxConcurrentTasks: Int): Unit = {
-    if (maxConcurrentTasks > 0) {
+  def releaseReaderTaskAdmission(
+      context: TaskContext,
+      config: Option[ReaderTaskAdmissionConfig],
+      observation: ReaderTaskObservation): Option[ReaderTaskAdmissionDecision] = {
+    if (config.nonEmpty) {
       val gate = readerTaskAdmissionGate
       if (gate != null) {
-        gate.releaseReference(context.taskAttemptId())
+        return gate.releaseReference(context, observation)
       }
     }
+    None
   }
 
   def executeMergerTask(task: Runnable): Unit = mergerPool.execute(task)
@@ -1428,7 +1586,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
     mapOutputTracker: MapOutputTracker = SparkEnv.get.mapOutputTracker,
     canUseBatchFetch: Boolean = false,
     numReaderThreads: Int = 0,
-    maxConcurrentReaderTasks: Int = 0)
+    readerTaskAdmissionConfig: Option[ReaderTaskAdmissionConfig] = None)
   extends ShuffleReader[K, C] with Logging {
 
   case class GetMapSizesResult(
@@ -1469,6 +1627,24 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
     sqlMetrics.get(METRIC_THREADED_READER_ADMISSION_WAIT_TIME)
   private val admissionAcquireCount =
     sqlMetrics.get(METRIC_THREADED_READER_ADMISSION_ACQUIRE_COUNT)
+  private val admissionDecisionCount =
+    sqlMetrics.get(METRIC_THREADED_READER_ADMISSION_DECISION_COUNT)
+  private val admissionIncreaseCount =
+    sqlMetrics.get(METRIC_THREADED_READER_ADMISSION_INCREASE_COUNT)
+  private val admissionDecreaseCount =
+    sqlMetrics.get(METRIC_THREADED_READER_ADMISSION_DECREASE_COUNT)
+  private val admissionHoldCount =
+    sqlMetrics.get(METRIC_THREADED_READER_ADMISSION_HOLD_COUNT)
+  private val admissionGpuClampCount =
+    sqlMetrics.get(METRIC_THREADED_READER_ADMISSION_GPU_CLAMP_COUNT)
+  private val admissionDesiredPermitsSum =
+    sqlMetrics.get(METRIC_THREADED_READER_ADMISSION_DESIRED_PERMITS_SUM)
+  private val admissionGpuCeilingSum =
+    sqlMetrics.get(METRIC_THREADED_READER_ADMISSION_GPU_CEILING_SUM)
+  private val localWorkerQueueDelayNs = new AtomicLong()
+  private val localWorkerActiveTimeNs = new AtomicLong()
+  private val localLimiterAcquireCount = new AtomicLong()
+  private val localLimiterFailureCount = new AtomicLong()
 
   private var shuffleReadRange: NvtxId = NvtxRegistry.THREADED_READER_READ.push()
 
@@ -1755,6 +1931,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
         val activeStart = System.nanoTime()
         val cpuStart = ThreadCpuTime.now()
         workerQueueDelayNs.foreach(_ += activeStart - submittedAt)
+        localWorkerQueueDelayNs.addAndGet(activeStart - submittedAt)
         workerTaskCount.foreach(_ += 1L)
         var success = false
         // Track the size we need to release (starts with the pre-acquired size)
@@ -1783,7 +1960,9 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
             None // no further batches
           }
         } finally {
-          workerActiveTimeNs.foreach(_ += System.nanoTime() - activeStart)
+          val activeTimeNs = System.nanoTime() - activeStart
+          workerActiveTimeNs.foreach(_ += activeTimeNs)
+          localWorkerActiveTimeNs.addAndGet(activeTimeNs)
           workerCpuTimeNs.foreach(_ += math.max(0L, ThreadCpuTime.now() - cpuStart))
           // Release limiter immediately after deserialization completes
           limiter.release(sizeToRelease)
@@ -1807,12 +1986,14 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
           // check if we can handle the head batch now
           val nextBatchSize = blockState.getNextBatchSize
           limiterAcquireCount.foreach(_ += 1)
+          localLimiterAcquireCount.incrementAndGet()
           if (limiter.acquire(nextBatchSize)) {
             // kick off deserialization task
             pendingIts.dequeue()
             deserializeTask(blockState, nextBatchSize)
           } else {
             limiterAcquireFailCount.foreach(_ += 1)
+            localLimiterFailureCount.incrementAndGet()
             continue = false
           }
         }
@@ -1849,6 +2030,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
               // get the next known batch size (there could be multiple batches)
               val nextBatchSize = blockState.getNextBatchSize
               limiterAcquireCount.foreach(_ += 1)
+              localLimiterAcquireCount.incrementAndGet()
               if (limiter.acquire(nextBatchSize)) {
                 // we can fit at least the first batch in this block
                 // kick off a deserialization task
@@ -1857,6 +2039,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
                 // first batch didn't fit, put iterator aside and stop asking for results
                 // from the fetcher
                 limiterAcquireFailCount.foreach(_ += 1)
+                localLimiterFailureCount.incrementAndGet()
                 limiterPendingBlockCount.foreach(_ += 1)
                 pendingIts.enqueue(blockState)
                 didFit = false
@@ -1875,7 +2058,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
   /** Read the combined key-values for this reduce task */
   override def read(): Iterator[Product2[K, C]] = {
     val admission = RapidsShuffleInternalManagerBase.acquireReaderTaskAdmission(
-      context, maxConcurrentReaderTasks)
+      context, readerTaskAdmissionConfig)
     if (admission.acquired) {
       admissionWaitTimeNs.foreach(_ += admission.waitTimeNs)
       admissionAcquireCount.foreach(_ += 1L)
@@ -1899,11 +2082,27 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
         readMetrics.incRecordsRead(1)
         record
       }
-    val admittedIter = if (maxConcurrentReaderTasks > 0) {
+    val admittedIter = if (readerTaskAdmissionConfig.nonEmpty) {
       CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
         recordMetricIter,
         RapidsShuffleInternalManagerBase.releaseReaderTaskAdmission(
-          context, maxConcurrentReaderTasks))
+          context,
+          readerTaskAdmissionConfig,
+          ReaderTaskObservation(
+            localWorkerQueueDelayNs.get(),
+            localWorkerActiveTimeNs.get(),
+            localLimiterAcquireCount.get(),
+            localLimiterFailureCount.get())).foreach { decision =>
+          admissionDecisionCount.foreach(_ += 1L)
+          admissionDesiredPermitsSum.foreach(_ += decision.newPermits.toLong)
+          admissionGpuCeilingSum.foreach(_ += decision.gpuCeiling.toLong)
+          decision.reason match {
+            case "low-pressure-increase" => admissionIncreaseCount.foreach(_ += 1L)
+            case "reader-pressure-decrease" => admissionDecreaseCount.foreach(_ += 1L)
+            case "gpu-ceiling-clamp" => admissionGpuClampCount.foreach(_ += 1L)
+            case _ => admissionHoldCount.foreach(_ += 1L)
+          }
+        })
     } else {
       recordMetricIter
     }
@@ -2398,8 +2597,34 @@ class RapidsShuffleInternalManagerBase(conf: SparkConf, val isDriver: Boolean)
               rapidsConf.shuffleMultiThreadedMaxBytesInFlight,
               canUseBatchFetch = canUseBatchFetch,
               numReaderThreads = rapidsConf.shuffleMultiThreadedReaderThreads,
-              maxConcurrentReaderTasks =
-                rapidsConf.shuffleMultiThreadedReaderMaxConcurrentTasks)
+              readerTaskAdmissionConfig = {
+                val adaptive = rapidsConf.shuffleMultiThreadedReaderAdaptiveAdmissionEnabled
+                val fixed = rapidsConf.shuffleMultiThreadedReaderMaxConcurrentTasks
+                if (!adaptive && fixed == 0) {
+                  None
+                } else {
+                  val initial = if (adaptive) {
+                    rapidsConf.shuffleMultiThreadedReaderAdaptiveInitialConcurrentTasks
+                  } else {
+                    fixed
+                  }
+                  Some(ReaderTaskAdmissionConfig(
+                    initialConcurrentTasks = initial,
+                    adaptiveEnabled = adaptive,
+                    minConcurrentTasks = if (adaptive) {
+                      rapidsConf.shuffleMultiThreadedReaderAdaptiveMinConcurrentTasks
+                    } else initial,
+                    maxConcurrentTasks = if (adaptive) {
+                      rapidsConf.shuffleMultiThreadedReaderAdaptiveMaxConcurrentTasks
+                    } else initial,
+                    gpuConcurrencyMultiplier =
+                      rapidsConf.shuffleMultiThreadedReaderAdaptiveGpuConcurrencyMultiplier,
+                    decisionWindowTasks =
+                      rapidsConf.shuffleMultiThreadedReaderAdaptiveDecisionWindowTasks,
+                    detailedLoggingEnabled =
+                      rapidsConf.shuffleMultiThreadedReaderAdaptiveDetailedLoggingEnabled))
+                }
+              })
           case _ =>
             val shuffleHandle = RapidsShuffleInternalManagerBase.unwrapHandle(other)
             ShuffleManagerShims.getReader(wrapped, shuffleHandle, startMapIndex, endMapIndex,

@@ -23,6 +23,13 @@ import scala.collection.JavaConverters.asScalaIteratorConverter
 
 import org.apache.spark.sql.rapids.GpuTaskMetrics
 
+case class PrioritySemaphoreSnapshot(
+    maxPermits: Long,
+    occupiedPermits: Long,
+    activeTasks: Long,
+    waitingTasks: Int,
+    hardTaskLimit: Int)
+
 class PrioritySemaphore[T](val maxPermits: Long, val maxConcurrentGpuTasksLimit: Int)
   (implicit ordering: Ordering[T]) {
   // This lock is used to generate condition variables, which affords us the flexibility to notify
@@ -147,5 +154,19 @@ class PrioritySemaphore[T](val maxPermits: Long, val maxConcurrentGpuTasksLimit:
     val withinTaskLimit = maxConcurrentGpuTasksLimit <= 0 ||
       currentConcurrentGpuTasksNum < maxConcurrentGpuTasksLimit
     hasPermits && withinTaskLimit
+  }
+
+  def snapshot: PrioritySemaphoreSnapshot = {
+    lock.lock()
+    try {
+      PrioritySemaphoreSnapshot(
+        maxPermits,
+        occupiedSlots,
+        currentConcurrentGpuTasksNum,
+        waitingQueue.size(),
+        maxConcurrentGpuTasksLimit)
+    } finally {
+      lock.unlock()
+    }
   }
 }

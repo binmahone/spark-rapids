@@ -2470,6 +2470,16 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
         .integerConf
         .createWithDefault(20)
 
+  val SHUFFLE_MULTITHREADED_READER_MAX_CONCURRENT_TASKS =
+    conf("spark.rapids.shuffle.multiThreaded.reader.maxConcurrentTasks")
+      .doc("The maximum number of Spark tasks per executor that may enter the multi-threaded " +
+        "shuffle reader concurrently. A value of 0 disables reader task admission control.")
+      .internal()
+      .startupOnly()
+      .integerConf
+      .checkValue(_ >= 0, "The maximum concurrent reader task count must be non-negative.")
+      .createWithDefault(0)
+
   val SHUFFLE_KUDO_SERIALIZER_ENABLED = conf("spark.rapids.shuffle.kudo.serializer.enabled")
     .doc("Enable or disable the Kudo serializer for the shuffle.")
     .internal()
@@ -3932,6 +3942,9 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val shuffleMultiThreadedWriterThreads: Int = get(SHUFFLE_MULTITHREADED_WRITER_THREADS)
 
   lazy val shuffleMultiThreadedReaderThreads: Int = get(SHUFFLE_MULTITHREADED_READER_THREADS)
+
+  lazy val shuffleMultiThreadedReaderMaxConcurrentTasks: Int =
+    get(SHUFFLE_MULTITHREADED_READER_MAX_CONCURRENT_TASKS)
 
   lazy val shuffleParitioningMaxCpuBatchSize: Long = get(SHUFFLE_PARTITIONING_MAX_CPU_BATCH_SIZE)
 

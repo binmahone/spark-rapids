@@ -37,7 +37,8 @@ class RapidsShuffleThreadedReader[K, C] (
     blockManager: BlockManager = SparkEnv.get.blockManager,
     mapOutputTracker: MapOutputTracker = SparkEnv.get.mapOutputTracker,
     canUseBatchFetch: Boolean = false,
-    numReaderThreads: Int = 0)
+    numReaderThreads: Int = 0,
+    maxConcurrentReaderTasks: Int = 0)
     extends RapidsShuffleThreadedReaderBase[K, C](
       handle,
       context,
@@ -47,7 +48,8 @@ class RapidsShuffleThreadedReader[K, C] (
       blockManager = blockManager,
       mapOutputTracker = mapOutputTracker,
       canUseBatchFetch = canUseBatchFetch,
-      numReaderThreads = numReaderThreads) {
+      numReaderThreads = numReaderThreads,
+      maxConcurrentReaderTasks = maxConcurrentReaderTasks) {
 
   override protected def getMapSizes: GetMapSizesResult = {
     NvtxRegistry.GET_MAP_SIZES_BY_EXEC_ID {

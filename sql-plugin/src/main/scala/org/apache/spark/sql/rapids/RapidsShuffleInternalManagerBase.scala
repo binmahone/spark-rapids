@@ -19,7 +19,7 @@ package org.apache.spark.sql.rapids
 import java.io.{IOException, OutputStream}
 import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, ConcurrentLinkedQueue,
   ExecutionException, Executors, ExecutorService, Future, FutureTask, LinkedBlockingQueue,
-  ScheduledFuture, ThreadFactory, ThreadPoolExecutor, TimeoutException, TimeUnit}
+  ScheduledFuture, Semaphore, ThreadFactory, ThreadPoolExecutor, TimeoutException, TimeUnit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicLong, AtomicReference}
 
 import scala.collection.JavaConverters._
@@ -50,7 +50,7 @@ import org.apache.spark.shuffle.api._
 import org.apache.spark.shuffle.sort.SortShuffleManager
 import org.apache.spark.shuffle.sort.io.{RapidsLocalDiskShuffleDataIO, RapidsLocalDiskShuffleMapOutputWriter}
 import org.apache.spark.sql.execution.metric.SQLMetric
-import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{METRIC_DATA_READ_SIZE, METRIC_DATA_SIZE, METRIC_SHUFFLE_DESERIALIZATION_TIME, METRIC_SHUFFLE_READ_TIME, METRIC_THREADED_READER_DESER_WAIT_TIME, METRIC_THREADED_READER_IO_WAIT_TIME, METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT, METRIC_THREADED_READER_LIMITER_ACQUIRE_FAIL_COUNT, METRIC_THREADED_READER_LIMITER_PENDING_BLOCK_COUNT, METRIC_THREADED_WRITER_COMPRESSION_QUEUE_WAIT_TIME, METRIC_THREADED_WRITER_COMPRESSION_TASK_COUNT, METRIC_THREADED_WRITER_COMPRESSION_TIME, METRIC_THREADED_WRITER_INPUT_FETCH_TIME, METRIC_THREADED_WRITER_LIMITER_WAIT_TIME, METRIC_THREADED_WRITER_MERGER_WRITE_TIME, METRIC_THREADED_WRITER_PARTIAL_FILE_MERGE_TIME, METRIC_THREADED_WRITER_SERIALIZATION_WAIT_TIME}
+import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{METRIC_DATA_READ_SIZE, METRIC_DATA_SIZE, METRIC_SHUFFLE_DESERIALIZATION_TIME, METRIC_SHUFFLE_READ_TIME, METRIC_THREADED_READER_ADMISSION_ACQUIRE_COUNT, METRIC_THREADED_READER_ADMISSION_WAIT_TIME, METRIC_THREADED_READER_DESER_WAIT_TIME, METRIC_THREADED_READER_FUTURE_WAIT_TIME, METRIC_THREADED_READER_IO_WAIT_TIME, METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT, METRIC_THREADED_READER_LIMITER_ACQUIRE_FAIL_COUNT, METRIC_THREADED_READER_LIMITER_PENDING_BLOCK_COUNT, METRIC_THREADED_READER_RESULT_QUEUE_WAIT_TIME, METRIC_THREADED_READER_WORKER_ACTIVE_TIME, METRIC_THREADED_READER_WORKER_CPU_TIME, METRIC_THREADED_READER_WORKER_QUEUE_DELAY, METRIC_THREADED_READER_WORKER_TASK_COUNT, METRIC_THREADED_WRITER_COMPRESSION_QUEUE_WAIT_TIME, METRIC_THREADED_WRITER_COMPRESSION_TASK_COUNT, METRIC_THREADED_WRITER_COMPRESSION_TIME, METRIC_THREADED_WRITER_INPUT_FETCH_TIME, METRIC_THREADED_WRITER_LIMITER_WAIT_TIME, METRIC_THREADED_WRITER_MERGER_WRITE_TIME, METRIC_THREADED_WRITER_PARTIAL_FILE_MERGE_TIME, METRIC_THREADED_WRITER_SERIALIZATION_WAIT_TIME}
 import org.apache.spark.sql.rapids.shims.{GpuShuffleBlockResolver, RapidsShuffleThreadedReader, RapidsShuffleThreadedWriter}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.storage.{RapidsShuffleBlockFetcherIterator, _}
@@ -151,6 +151,73 @@ class ThreadSafeShuffleWriteMetricsReporter(val wrapped: ShuffleWriteMetricsRepo
   }
 }
 
+private[rapids] case class ReaderTaskAdmissionResult(acquired: Boolean, waitTimeNs: Long)
+
+private[rapids] class ReaderTaskAdmissionGate(
+    val maxConcurrentTasks: Int,
+    releaseGpu: TaskContext => Unit =
+      (context: TaskContext) => GpuSemaphore.releaseIfNecessary(context)) {
+  require(maxConcurrentTasks > 0, "Reader task admission requires a positive permit count")
+
+  private class TaskAdmission {
+    val references = new AtomicInteger(1)
+    val permitReleased = new AtomicBoolean(false)
+  }
+
+  private val semaphore = new Semaphore(maxConcurrentTasks, true)
+  private val admittedTasks = new ConcurrentHashMap[Long, TaskAdmission]()
+
+  def acquire(context: TaskContext): ReaderTaskAdmissionResult = {
+    val taskAttemptId = context.taskAttemptId()
+    val newAdmission = new TaskAdmission
+    val existingAdmission = admittedTasks.putIfAbsent(taskAttemptId, newAdmission)
+    if (existingAdmission != null) {
+      existingAdmission.references.incrementAndGet()
+      ReaderTaskAdmissionResult(acquired = false, waitTimeNs = 0L)
+    } else {
+      // Reader admission must never park a task while it owns GPU execution capacity.
+      releaseGpu(context)
+      val start = System.nanoTime()
+      try {
+        semaphore.acquire()
+        val waitTimeNs = System.nanoTime() - start
+        onTaskCompletion(context) {
+          releaseAll(taskAttemptId, newAdmission)
+        }
+        ReaderTaskAdmissionResult(acquired = true, waitTimeNs)
+      } catch {
+        case e: InterruptedException =>
+          admittedTasks.remove(taskAttemptId, newAdmission)
+          Thread.currentThread().interrupt()
+          throw e
+      }
+    }
+  }
+
+  def releaseReference(taskAttemptId: Long): Unit = {
+    val admission = admittedTasks.get(taskAttemptId)
+    if (admission != null && admission.references.decrementAndGet() == 0) {
+      releaseAll(taskAttemptId, admission)
+    }
+  }
+
+  private def releaseAll(taskAttemptId: Long, admission: TaskAdmission): Unit = {
+    if (admission.permitReleased.compareAndSet(false, true)) {
+      admittedTasks.remove(taskAttemptId, admission)
+      semaphore.release()
+    }
+  }
+
+  private[rapids] def availablePermits: Int = semaphore.availablePermits()
+
+  private[rapids] def releaseAllForTests(taskAttemptId: Long): Unit = {
+    val admission = admittedTasks.get(taskAttemptId)
+    if (admission != null) {
+      releaseAll(taskAttemptId, admission)
+    }
+  }
+}
+
 object RapidsShuffleInternalManagerBase extends Logging {
   private val poolUnavailable = "unavailable"
 
@@ -166,6 +233,7 @@ object RapidsShuffleInternalManagerBase extends Logging {
   private var writerPool: ThreadPoolExecutor = _
   private var readerPool: ExecutorService = _
   private var mergerPool: ExecutorService = _
+  @volatile private var readerTaskAdmissionGate: ReaderTaskAdmissionGate = _
 
   private val hangDiagnosticScheduler = Executors.newSingleThreadScheduledExecutor(
     new ThreadFactory {
@@ -199,6 +267,39 @@ object RapidsShuffleInternalManagerBase extends Logging {
   /** Send a deserialization task to the shared reader pool. */
   def queueReadTask[T](task: Callable[T]): Future[T] = {
     readerPool.submit(task)
+  }
+
+  def acquireReaderTaskAdmission(
+      context: TaskContext,
+      maxConcurrentTasks: Int): ReaderTaskAdmissionResult = {
+    if (maxConcurrentTasks == 0) {
+      ReaderTaskAdmissionResult(acquired = false, waitTimeNs = 0L)
+    } else {
+      val gate = readerTaskAdmissionGate match {
+        case existing if existing != null => existing
+        case _ => synchronized {
+          if (readerTaskAdmissionGate == null) {
+            readerTaskAdmissionGate = new ReaderTaskAdmissionGate(maxConcurrentTasks)
+            logInfo(s"Configured threaded shuffle reader task admission with " +
+              s"$maxConcurrentTasks permits per executor")
+          }
+          readerTaskAdmissionGate
+        }
+      }
+      require(gate.maxConcurrentTasks == maxConcurrentTasks,
+        s"Threaded shuffle reader task admission was configured with " +
+          s"${gate.maxConcurrentTasks} permits and cannot be changed to $maxConcurrentTasks")
+      gate.acquire(context)
+    }
+  }
+
+  def releaseReaderTaskAdmission(context: TaskContext, maxConcurrentTasks: Int): Unit = {
+    if (maxConcurrentTasks > 0) {
+      val gate = readerTaskAdmissionGate
+      if (gate != null) {
+        gate.releaseReference(context.taskAttemptId())
+      }
+    }
   }
 
   def executeMergerTask(task: Runnable): Unit = mergerPool.execute(task)
@@ -270,6 +371,7 @@ object RapidsShuffleInternalManagerBase extends Logging {
       shutdownNow(mergerPool)
       mergerPool = null
     }
+    readerTaskAdmissionGate = null
   }
 }
 
@@ -1358,7 +1460,8 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
     blockManager: BlockManager = SparkEnv.get.blockManager,
     mapOutputTracker: MapOutputTracker = SparkEnv.get.mapOutputTracker,
     canUseBatchFetch: Boolean = false,
-    numReaderThreads: Int = 0)
+    numReaderThreads: Int = 0,
+    maxConcurrentReaderTasks: Int = 0)
   extends ShuffleReader[K, C] with Logging {
 
   case class GetMapSizesResult(
@@ -1388,6 +1491,10 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
     sqlMetrics.get(METRIC_THREADED_READER_LIMITER_ACQUIRE_FAIL_COUNT)
   private val limiterPendingBlockCount =
     sqlMetrics.get(METRIC_THREADED_READER_LIMITER_PENDING_BLOCK_COUNT)
+  private val admissionWaitTimeNs =
+    sqlMetrics.get(METRIC_THREADED_READER_ADMISSION_WAIT_TIME)
+  private val admissionAcquireCount =
+    sqlMetrics.get(METRIC_THREADED_READER_ADMISSION_ACQUIRE_COUNT)
 
   private var shuffleReadRange: NvtxId = NvtxRegistry.THREADED_READER_READ.push()
 
@@ -1784,6 +1891,13 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
 
   /** Read the combined key-values for this reduce task */
   override def read(): Iterator[Product2[K, C]] = {
+    val admission = RapidsShuffleInternalManagerBase.acquireReaderTaskAdmission(
+      context, maxConcurrentReaderTasks)
+    if (admission.acquired) {
+      admissionWaitTimeNs.foreach(_ += admission.waitTimeNs)
+      admissionAcquireCount.foreach(_ += 1L)
+    }
+
     val wrappedStreams = RapidsShuffleBlockFetcherIterator.makeIterator(
       context,
       blockManager,
@@ -1798,11 +1912,20 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
       dep.serializer.asInstanceOf[GpuColumnarBatchSerializer])
 
     // Update the context task metrics for each record read.
-    val metricIter = CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
-      recordIter.map { record =>
+    val recordMetricIter = recordIter.map { record =>
         readMetrics.incRecordsRead(1)
         record
-      }, context.taskMetrics().mergeShuffleReadMetrics())
+      }
+    val admittedIter = if (maxConcurrentReaderTasks > 0) {
+      CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
+        recordMetricIter,
+        RapidsShuffleInternalManagerBase.releaseReaderTaskAdmission(
+          context, maxConcurrentReaderTasks))
+    } else {
+      recordMetricIter
+    }
+    val metricIter = CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
+      admittedIter, context.taskMetrics().mergeShuffleReadMetrics())
 
     // An interruptible iterator must be used here in order to support task cancellation
     val interruptibleIter = new InterruptibleIterator[(Any, Any)](context, metricIter)
@@ -2291,7 +2414,9 @@ class RapidsShuffleInternalManagerBase(conf: SparkConf, val isDriver: Boolean)
               metrics,
               rapidsConf.shuffleMultiThreadedMaxBytesInFlight,
               canUseBatchFetch = canUseBatchFetch,
-              numReaderThreads = rapidsConf.shuffleMultiThreadedReaderThreads)
+              numReaderThreads = rapidsConf.shuffleMultiThreadedReaderThreads,
+              maxConcurrentReaderTasks =
+                rapidsConf.shuffleMultiThreadedReaderMaxConcurrentTasks)
           case _ =>
             val shuffleHandle = RapidsShuffleInternalManagerBase.unwrapHandle(other)
             ShuffleManagerShims.getReader(wrapped, shuffleHandle, startMapIndex, endMapIndex,

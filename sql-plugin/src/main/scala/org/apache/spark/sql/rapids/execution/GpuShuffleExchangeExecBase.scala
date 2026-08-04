@@ -366,6 +366,34 @@ object GpuShuffleExchangeExecBase {
     "rapidsThreadedReaderAdmissionAcquireCount"
   val METRIC_DESC_THREADED_READER_ADMISSION_ACQUIRE_COUNT =
     "threaded reader task admission acquire count"
+  val METRIC_THREADED_READER_ADMISSION_DECISION_COUNT =
+    "rapidsThreadedReaderAdmissionDecisionCount"
+  val METRIC_DESC_THREADED_READER_ADMISSION_DECISION_COUNT =
+    "threaded reader adaptive admission decision count"
+  val METRIC_THREADED_READER_ADMISSION_INCREASE_COUNT =
+    "rapidsThreadedReaderAdmissionIncreaseCount"
+  val METRIC_DESC_THREADED_READER_ADMISSION_INCREASE_COUNT =
+    "threaded reader adaptive admission increase count"
+  val METRIC_THREADED_READER_ADMISSION_DECREASE_COUNT =
+    "rapidsThreadedReaderAdmissionDecreaseCount"
+  val METRIC_DESC_THREADED_READER_ADMISSION_DECREASE_COUNT =
+    "threaded reader adaptive admission decrease count"
+  val METRIC_THREADED_READER_ADMISSION_HOLD_COUNT =
+    "rapidsThreadedReaderAdmissionHoldCount"
+  val METRIC_DESC_THREADED_READER_ADMISSION_HOLD_COUNT =
+    "threaded reader adaptive admission hold count"
+  val METRIC_THREADED_READER_ADMISSION_GPU_CLAMP_COUNT =
+    "rapidsThreadedReaderAdmissionGpuClampCount"
+  val METRIC_DESC_THREADED_READER_ADMISSION_GPU_CLAMP_COUNT =
+    "threaded reader adaptive admission GPU ceiling clamp count"
+  val METRIC_THREADED_READER_ADMISSION_DESIRED_PERMITS_SUM =
+    "rapidsThreadedReaderAdmissionDesiredPermitsSum"
+  val METRIC_DESC_THREADED_READER_ADMISSION_DESIRED_PERMITS_SUM =
+    "sum of desired reader permits after adaptive decisions"
+  val METRIC_THREADED_READER_ADMISSION_GPU_CEILING_SUM =
+    "rapidsThreadedReaderAdmissionGpuCeilingSum"
+  val METRIC_DESC_THREADED_READER_ADMISSION_GPU_CEILING_SUM =
+    "sum of estimated GPU-derived reader ceilings at adaptive decisions"
 
   def createAdditionalExchangeMetrics(gpu: GpuExec): Map[String, GpuMetric] = Map(
     // dataSize and dataReadSize are uncompressed, one is on write and the other on read
@@ -429,7 +457,28 @@ object GpuShuffleExchangeExecBase {
           METRIC_DESC_THREADED_READER_ADMISSION_WAIT_TIME),
     METRIC_THREADED_READER_ADMISSION_ACQUIRE_COUNT ->
         gpu.createMetric(DEBUG_LEVEL,
-          METRIC_DESC_THREADED_READER_ADMISSION_ACQUIRE_COUNT)
+          METRIC_DESC_THREADED_READER_ADMISSION_ACQUIRE_COUNT),
+    METRIC_THREADED_READER_ADMISSION_DECISION_COUNT ->
+        gpu.createMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_ADMISSION_DECISION_COUNT),
+    METRIC_THREADED_READER_ADMISSION_INCREASE_COUNT ->
+        gpu.createMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_ADMISSION_INCREASE_COUNT),
+    METRIC_THREADED_READER_ADMISSION_DECREASE_COUNT ->
+        gpu.createMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_ADMISSION_DECREASE_COUNT),
+    METRIC_THREADED_READER_ADMISSION_HOLD_COUNT ->
+        gpu.createMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_ADMISSION_HOLD_COUNT),
+    METRIC_THREADED_READER_ADMISSION_GPU_CLAMP_COUNT ->
+        gpu.createMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_ADMISSION_GPU_CLAMP_COUNT),
+    METRIC_THREADED_READER_ADMISSION_DESIRED_PERMITS_SUM ->
+        gpu.createMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_ADMISSION_DESIRED_PERMITS_SUM),
+    METRIC_THREADED_READER_ADMISSION_GPU_CEILING_SUM ->
+        gpu.createMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_ADMISSION_GPU_CEILING_SUM)
   )
 
   def prepareBatchShuffleDependency(

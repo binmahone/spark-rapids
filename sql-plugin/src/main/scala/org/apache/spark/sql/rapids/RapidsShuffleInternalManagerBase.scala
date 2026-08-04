@@ -347,7 +347,7 @@ private[rapids] class ReaderTaskAdmissionGate(
     val decision = ReaderTaskAdmissionDecision(
       oldPermits, nextPermits, reason, snapshot, gpuCeiling, queueRatio, limiterRatio)
     if (config.detailedLoggingEnabled) {
-      logInfo(s"ReaderTaskAdmissionDecision stageId=${context.stageId()} " +
+      logWarning(s"ReaderTaskAdmissionDecision stageId=${context.stageId()} " +
         s"oldPermits=$oldPermits newPermits=$nextPermits reason=$reason " +
         s"activeReaders=$activeTasks waitingReaders=$waitingTasks gpuCeiling=$gpuCeiling " +
         f"gpuConcurrencyMultiplier=${config.gpuConcurrencyMultiplier}%.3f " +

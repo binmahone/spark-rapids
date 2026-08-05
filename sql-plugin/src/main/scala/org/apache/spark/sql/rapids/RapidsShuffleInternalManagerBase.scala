@@ -211,10 +211,12 @@ private[rapids] class ReaderTaskAdmissionGate(
   private var windowWorkerActiveNs = 0L
   private var windowLimiterAcquires = 0L
   private var windowLimiterFailures = 0L
+  private var consecutiveHighPressureWindows = 0
   private val highQueueDelayRatio = 0.25
   private val lowQueueDelayRatio = 0.05
   private val highLimiterFailureRatio = 0.25
   private val lowLimiterFailureRatio = 0.10
+  private val highPressureWindowsBeforeDecrease = 2
   private val admittedTasks = new ConcurrentHashMap[Long, TaskAdmission]()
 
   def acquire(context: TaskContext): ReaderTaskAdmissionResult = {
@@ -325,13 +327,24 @@ private[rapids] class ReaderTaskAdmissionGate(
     val limiterRatio = if (windowLimiterAcquires == 0L) 0.0 else {
       windowLimiterFailures.toDouble / windowLimiterAcquires
     }
+    val highReaderPressure = queueRatio >= highQueueDelayRatio &&
+      limiterRatio >= highLimiterFailureRatio
+    if (highReaderPressure) {
+      consecutiveHighPressureWindows += 1
+    } else {
+      consecutiveHighPressureWindows = 0
+    }
     val oldPermits = desiredPermits
     val (nextPermits, reason) = if (desiredPermits > gpuCeiling) {
       (gpuCeiling, "gpu-ceiling-clamp")
     } else if (windowWorkerActiveNs == 0L || windowLimiterAcquires == 0L) {
       (desiredPermits, "insufficient-observation-hold")
-    } else if (queueRatio >= highQueueDelayRatio || limiterRatio >= highLimiterFailureRatio) {
+    } else if (highReaderPressure &&
+        consecutiveHighPressureWindows >= highPressureWindowsBeforeDecrease) {
+      consecutiveHighPressureWindows = 0
       (math.max(config.minConcurrentTasks, desiredPermits - 1), "reader-pressure-decrease")
+    } else if (highReaderPressure) {
+      (desiredPermits, "reader-pressure-hysteresis-hold")
     } else if (queueRatio <= lowQueueDelayRatio && limiterRatio <= lowLimiterFailureRatio &&
         snapshot.waitingTasks == 0 && desiredPermits < gpuCeiling) {
       (desiredPermits + 1, "low-pressure-increase")
@@ -355,7 +368,9 @@ private[rapids] class ReaderTaskAdmissionGate(
         s"gpuActiveTasks=${snapshot.activeTasks} gpuWaitingTasks=${snapshot.waitingTasks} " +
         f"queueDelayRatio=$queueRatio%.6f limiterFailureRatio=$limiterRatio%.6f " +
         f"queueThresholds=$lowQueueDelayRatio%.3f/$highQueueDelayRatio%.3f " +
-        f"limiterThresholds=$lowLimiterFailureRatio%.3f/$highLimiterFailureRatio%.3f")
+        f"limiterThresholds=$lowLimiterFailureRatio%.3f/$highLimiterFailureRatio%.3f " +
+        s"consecutiveHighPressureWindows=$consecutiveHighPressureWindows " +
+        s"highPressureWindowsBeforeDecrease=$highPressureWindowsBeforeDecrease")
     }
     Some(decision)
   }

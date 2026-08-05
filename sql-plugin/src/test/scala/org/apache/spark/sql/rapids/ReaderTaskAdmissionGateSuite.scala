@@ -154,17 +154,54 @@ class ReaderTaskAdmissionGateSuite extends AnyFunSuite with BeforeAndAfterEach {
     assert(gate.currentDesiredPermits === 5)
 
     assert(complete(3L, ReaderTaskObservation(50L, 100L, 10L, 4L)).isEmpty)
-    val decrease = complete(4L, ReaderTaskObservation(50L, 100L, 10L, 4L)).get
+    val hysteresis = complete(4L, ReaderTaskObservation(50L, 100L, 10L, 4L)).get
+    assert(hysteresis.reason === "reader-pressure-hysteresis-hold")
+    assert(hysteresis.oldPermits === 5)
+    assert(hysteresis.newPermits === 5)
+
+    assert(complete(5L, ReaderTaskObservation(50L, 100L, 10L, 4L)).isEmpty)
+    val decrease = complete(6L, ReaderTaskObservation(50L, 100L, 10L, 4L)).get
     assert(decrease.reason === "reader-pressure-decrease")
     assert(decrease.oldPermits === 5)
     assert(decrease.newPermits === 4)
     assert(gate.currentDesiredPermits === 4)
 
     snapshot.set(gpuSnapshot(1))
-    assert(complete(5L, ReaderTaskObservation(1L, 100L, 10L, 0L)).isEmpty)
-    val clamp = complete(6L, ReaderTaskObservation(1L, 100L, 10L, 0L)).get
+    assert(complete(7L, ReaderTaskObservation(1L, 100L, 10L, 0L)).isEmpty)
+    val clamp = complete(8L, ReaderTaskObservation(1L, 100L, 10L, 0L)).get
     assert(clamp.reason === "gpu-ceiling-clamp")
     assert(clamp.newPermits === 2)
     assert(gate.currentDesiredPermits === 2)
+  }
+
+  test("adaptive admission does not decrease from queue delay alone") {
+    val config = ReaderTaskAdmissionConfig(
+      initialConcurrentTasks = 4,
+      adaptiveEnabled = true,
+      minConcurrentTasks = 2,
+      maxConcurrentTasks = 8,
+      gpuConcurrencyMultiplier = 2.0,
+      decisionWindowTasks = 2,
+      detailedLoggingEnabled = false)
+    val gate = new ReaderTaskAdmissionGate(config, _ => (), _ => gpuSnapshot(4))
+
+    def complete(taskId: Long) = {
+      val context = taskContext(taskId)
+      assert(gate.acquire(context).acquired)
+      gate.releaseReference(context, ReaderTaskObservation(
+        workerQueueDelayNs = 50L,
+        workerActiveNs = 100L,
+        limiterAcquires = 10L,
+        limiterFailures = 0L))
+    }
+
+    assert(complete(1L).isEmpty)
+    val first = complete(2L).get
+    assert(first.reason === "hold")
+    assert(first.newPermits === 4)
+    assert(complete(3L).isEmpty)
+    val second = complete(4L).get
+    assert(second.reason === "hold")
+    assert(second.newPermits === 4)
   }
 }

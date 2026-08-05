@@ -19,6 +19,7 @@ package com.nvidia.spark.rapids
 import java.util
 import java.util.Map
 import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue, TimeUnit}
+import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -50,6 +51,24 @@ case object SemaphoreAcquired extends TryAcquireResult
  *                        Note that this can change very quickly.
  */
 case class AcquireFailed(numWaitingTasks: Int) extends TryAcquireResult
+
+/** A task-scoped, idempotently releasable reservation from the shared GPU permit budget. */
+class GpuMemoryReservation private[rapids](
+    val incrementalMemoryBytes: Long,
+    val observedTaskPeakBytes: Long,
+    val targetPermits: Long,
+    val addedPermits: Long,
+    releaseReservation: () => Unit) extends AutoCloseable {
+  private val closed = new AtomicBoolean(false)
+
+  override def close(): Unit = {
+    if (closed.compareAndSet(false, true)) {
+      releaseReservation()
+    }
+  }
+
+  private[rapids] def isClosed: Boolean = closed.get()
+}
 
 private object GpuTaskMemoryEstimator {
   private val TIME_WINDOW: Double = TimeUnit.MILLISECONDS.toNanos(100).toDouble
@@ -253,6 +272,21 @@ object GpuSemaphore {
   }
 
   /**
+   * Attempts to expand a task's existing GPU reservation to cover a temporary phase peak.
+   * The shared dynamic estimate may already cover some or all of the requested incremental bytes,
+   * so only the uncovered permits are reserved. This never blocks; callers must use a path that
+   * does not need the memory when it returns None.
+   */
+  def tryAcquireTemporaryPeak(
+      context: TaskContext,
+      incrementalMemoryBytes: Long): Option[GpuMemoryReservation] = {
+    require(context != null, "Additional GPU memory reservation requires a task context")
+    require(incrementalMemoryBytes > 0,
+      "Additional GPU memory reservation must be positive")
+    getInstance.tryAcquireTemporaryPeak(context, incrementalMemoryBytes)
+  }
+
+  /**
    * Dumps the stack traces for any tasks that have accessed the GPU semaphore
    * and have not completed. The output includes whether the task has the GPU semaphore
    * held at the time of the stack trace.
@@ -276,6 +310,24 @@ object GpuSemaphore {
   private val PERMIT_MEMORY_SIZE: Long = 32L * 1024 * 1024
 
   def memToPermits(memory: Long): Long = math.max(1, memory / PERMIT_MEMORY_SIZE)
+
+  private[rapids] def additionalPermitsForPeak(
+      currentPermits: Long,
+      observedTaskPeakBytes: Long,
+      incrementalMemoryBytes: Long,
+      maxPermits: Long): Option[(Long, Long)] = {
+    require(currentPermits > 0, "Current GPU permit count must be positive")
+    require(observedTaskPeakBytes >= 0, "Observed GPU memory must be non-negative")
+    require(incrementalMemoryBytes > 0, "Incremental GPU memory must be positive")
+    require(maxPermits >= currentPermits, "Maximum permits must cover current permits")
+    val projectedPeakBytes = Math.addExact(observedTaskPeakBytes, incrementalMemoryBytes)
+    val projectedPermits = 1L + (projectedPeakBytes - 1L) / PERMIT_MEMORY_SIZE
+    if (projectedPermits > maxPermits) {
+      None
+    } else {
+      Some((projectedPermits, math.max(0L, projectedPermits - currentPermits)))
+    }
+  }
 
   def memToPermitsWithMax(memory: Long): Long = math.min(computeMaxPermits(), memToPermits(memory))
 
@@ -335,6 +387,8 @@ private final class SemaphoreTaskInfo(val stageId: Int, val taskAttemptId: Long,
    */
   private val activeThreads = new util.LinkedHashSet[Thread]()
   private var permitsUsed: Long = 0;
+  private val additionalReservations = new util.HashMap[Long, Long]()
+  private var nextAdditionalReservationId: Long = 0L
   private lazy val trackSemaphore = RapidsConf.TRACE_TASK_GPU_OWNERSHIP.get(SQLConf.get)
   /**
    * If this task holds the GPU semaphore or not.
@@ -489,10 +543,59 @@ private final class SemaphoreTaskInfo(val stageId: Int, val taskAttemptId: Long,
     }
   }
 
+  def tryAcquireTemporaryPeak(
+      semaphore: GpuBackingSemaphore,
+      observedTaskPeakBytes: Long,
+      incrementalMemoryBytes: Long,
+      maxPermits: Long): Option[(Long, Long, Long)] = synchronized {
+    require(hasSemaphore,
+      "A task must own the GPU semaphore before reserving additional memory")
+    val reservationIterator = additionalReservations.values().iterator()
+    var outstandingPermits = 0L
+    while (reservationIterator.hasNext) {
+      outstandingPermits = Math.addExact(outstandingPermits, reservationIterator.next())
+    }
+    val effectiveCurrentPermits = Math.addExact(permitsUsed, outstandingPermits)
+    GpuSemaphore.additionalPermitsForPeak(
+      effectiveCurrentPermits, observedTaskPeakBytes, incrementalMemoryBytes, maxPermits).flatMap {
+      case (targetPermits, additionalPermits) =>
+        if (additionalPermits == 0 || semaphore.tryAcquireAdditional(additionalPermits)) {
+          val reservationId = nextAdditionalReservationId
+          nextAdditionalReservationId = Math.addExact(nextAdditionalReservationId, 1L)
+          additionalReservations.put(reservationId, additionalPermits)
+          Some((reservationId, targetPermits, additionalPermits))
+        } else {
+          None
+        }
+    }
+  }
+
+  def releaseAdditional(semaphore: GpuBackingSemaphore, reservationId: Long): Unit = synchronized {
+    if (additionalReservations.containsKey(reservationId)) {
+      val permits = additionalReservations.remove(reservationId)
+      if (permits > 0) {
+        semaphore.releaseAdditional(permits)
+      }
+    }
+  }
+
+  private def releaseAllAdditional(semaphore: GpuBackingSemaphore): Unit = synchronized {
+    val iterator = additionalReservations.values().iterator()
+    var totalPermits = 0L
+    while (iterator.hasNext) {
+      totalPermits = Math.addExact(totalPermits, iterator.next())
+    }
+    additionalReservations.clear()
+    if (totalPermits > 0) {
+      semaphore.releaseAdditional(totalPermits)
+    }
+  }
+
   def releaseSemaphore(semaphore: GpuBackingSemaphore): Unit = synchronized {
     val t = Thread.currentThread()
     activeThreads.remove(t)
     if (hasSemaphore) {
+      releaseAllAdditional(semaphore)
       semaphore.release(permitsUsed)
       hasSemaphore = false
       lastReleased = System.nanoTime()
@@ -606,6 +709,23 @@ private final class GpuSemaphore(val maxConcurrentGpuTasksLimit: Int) extends Lo
       if (taskInfo != null) {
         taskInfo.releaseSemaphore(semaphore)
       }
+    }
+  }
+
+  def tryAcquireTemporaryPeak(
+      context: TaskContext,
+      incrementalMemoryBytes: Long): Option[GpuMemoryReservation] = {
+    val taskAttemptId = context.taskAttemptId()
+    val taskInfo = tasks.get(taskAttemptId)
+    require(taskInfo != null && taskInfo.isHoldingSemaphore,
+      s"Task $taskAttemptId must own the GPU semaphore before reserving additional memory")
+    val observedTaskPeakBytes = RmmSpark.getMaxGpuTaskMemory(taskAttemptId)
+    taskInfo.tryAcquireTemporaryPeak(
+      semaphore, observedTaskPeakBytes, incrementalMemoryBytes, computeMaxPermits()).map {
+      case (reservationId, targetPermits, additionalPermits) =>
+        new GpuMemoryReservation(
+          incrementalMemoryBytes, observedTaskPeakBytes, targetPermits, additionalPermits,
+          () => taskInfo.releaseAdditional(semaphore, reservationId))
     }
   }
 

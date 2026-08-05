@@ -74,6 +74,28 @@ class PrioritySemaphore[T](val maxPermits: Long, val maxConcurrentGpuTasksLimit:
     }
   }
 
+  /**
+   * Attempts to reserve additional permits for a task that already owns the semaphore.
+   *
+   * This operation never blocks and does not increment the concurrent task count. Callers must
+   * fall back to a path that does not need the additional permits when this returns false.
+   */
+  def tryAcquireAdditional(numPermits: Long): Boolean = {
+    require(numPermits > 0, "Additional permit count must be positive")
+    lock.lock()
+    try {
+      // Do not let optional work extend the wait of a task that already needs the GPU.
+      if (waitingQueue.isEmpty && occupiedSlots + numPermits <= maxPermits) {
+        occupiedSlots += numPermits
+        true
+      } else {
+        false
+      }
+    } finally {
+      lock.unlock()
+    }
+  }
+
   def acquire(computePermits: () => Long, wasOnGpuBefore: () => Boolean,
               priority: T, taskAttemptId: Long): Long = {
     lock.lock()
@@ -121,24 +143,42 @@ class PrioritySemaphore[T](val maxPermits: Long, val maxConcurrentGpuTasksLimit:
     try {
       occupiedSlots -= numPermits
       currentConcurrentGpuTasksNum -= 1
-      // acquire and wakeup for all threads that now have enough permits
-      var done = false
-      while (!done && waitingQueue.size() > 0) {
-        val nextThread = waitingQueue.peek()
-        val threadPermits = nextThread.computeNumPermits()
-        if (canAcquire(threadPermits)) {
-          val popped = waitingQueue.poll()
-          assert(popped eq nextThread)
-          commitAcquire(threadPermits)
-          nextThread.signaled = true
-          nextThread.permitsUsed = threadPermits
-          nextThread.condition.signal()
-        } else {
-          done = true
-        }
-      }
+      wakeWaitingTasks()
     } finally {
       lock.unlock()
+    }
+  }
+
+  /** Releases permits added by tryAcquireAdditional without changing the task count. */
+  def releaseAdditional(numPermits: Long): Unit = {
+    require(numPermits > 0, "Additional permit count must be positive")
+    lock.lock()
+    try {
+      require(occupiedSlots >= numPermits,
+        s"Cannot release $numPermits additional permits with only $occupiedSlots occupied")
+      occupiedSlots -= numPermits
+      wakeWaitingTasks()
+    } finally {
+      lock.unlock()
+    }
+  }
+
+  private def wakeWaitingTasks(): Unit = {
+    // acquire and wakeup for all threads that now have enough permits
+    var done = false
+    while (!done && waitingQueue.size() > 0) {
+      val nextThread = waitingQueue.peek()
+      val threadPermits = nextThread.computeNumPermits()
+      if (canAcquire(threadPermits)) {
+        val popped = waitingQueue.poll()
+        assert(popped eq nextThread)
+        commitAcquire(threadPermits)
+        nextThread.signaled = true
+        nextThread.permitsUsed = threadPermits
+        nextThread.condition.signal()
+      } else {
+        done = true
+      }
     }
   }
 

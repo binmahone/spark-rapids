@@ -17,7 +17,7 @@
 package com.nvidia.spark.rapids
 
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicLong, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
 
 import org.apache.spark.TaskContext
 
@@ -48,34 +48,28 @@ case class AdaptiveCompressionPressure(
   def gpuWithinBound(maxGpuSemaphoreWaiters: Int): Boolean =
     gpuSemaphoreWaiters <= maxGpuSemaphoreWaiters
 
-  /** Returns the point-in-time pressure gate used to bootstrap the executor controller. */
+  /** Returns the point-in-time pressure gate used to bootstrap the executor policy. */
   def proposesGpu(maxGpuSemaphoreWaiters: Int): Boolean =
     cpuBacklogged && gpuWithinBound(maxGpuSemaphoreWaiters)
 }
 
 case class AdaptiveGpuCompressionDecision(
     proposeGpu: Boolean,
-    targetConcurrentTasks: Int,
     reason: String)
 
 /**
- * Learns an executor-local GPU compression concurrency target from observed CPU and GPU pressure.
+ * Learns whether GPU compression is useful from observed CPU and GPU pressure.
  *
- * CPU backlog provides the initial evidence that GPU compression is useful. Two consecutive
- * healthy observations double the target until the configured ceiling is reached. Once learned,
- * the controller keeps routing work to the GPU while semaphore pressure remains acceptable,
- * avoiding oscillation when successful offload temporarily drains the CPU queue. A single
- * overloaded observation preserves the learned route. Two consecutive overloaded observations
- * activate backoff and halve the target.
+ * CPU backlog provides the initial evidence that GPU compression is useful. Once learned, the
+ * policy keeps proposing GPU work while semaphore pressure remains acceptable, avoiding
+ * oscillation when successful offload temporarily drains the CPU queue. A single overloaded
+ * observation preserves the learned route; two consecutive overloaded observations back off.
+ * The shared GPU semaphore, not this policy, is the memory-admission authority.
  */
-class AdaptiveGpuCompressionController(
-    val maxConcurrentTasks: Int,
+class AdaptiveGpuCompressionPolicy(
     val maxGpuSemaphoreWaiters: Int) {
-  require(maxConcurrentTasks > 0, "Maximum concurrent GPU compression tasks must be positive")
   require(maxGpuSemaphoreWaiters >= 0, "Maximum GPU semaphore waiters must be non-negative")
 
-  private var targetConcurrentTasks = 1
-  private var consecutiveHealthyObservations = 0
   private var consecutiveOverloadedObservations = 0
   private var learnedGpuRoute = false
   private var gpuPressureBackoffActive = false
@@ -86,33 +80,20 @@ class AdaptiveGpuCompressionController(
       val gpuOverloaded = !gpuWithinBound
 
       if (gpuOverloaded && !pressure.cpuBacklogged) {
-        consecutiveHealthyObservations = 0
         consecutiveOverloadedObservations += 1
         if (consecutiveOverloadedObservations >= 2) {
           gpuPressureBackoffActive = true
-          if (targetConcurrentTasks > 1) {
-            targetConcurrentTasks = math.max(1, (targetConcurrentTasks + 1) / 2)
-          }
-          if (targetConcurrentTasks == 1) {
-            learnedGpuRoute = false
-          }
+          learnedGpuRoute = false
           consecutiveOverloadedObservations = 0
         }
       } else if (pressure.cpuBacklogged || learnedGpuRoute) {
         gpuPressureBackoffActive = false
         consecutiveOverloadedObservations = 0
-        consecutiveHealthyObservations += 1
         if (pressure.cpuBacklogged) {
           learnedGpuRoute = true
         }
-        if (consecutiveHealthyObservations >= 2 &&
-            targetConcurrentTasks < maxConcurrentTasks) {
-          targetConcurrentTasks = math.min(maxConcurrentTasks, targetConcurrentTasks * 2)
-          consecutiveHealthyObservations = 0
-        }
       } else {
         gpuPressureBackoffActive = false
-        consecutiveHealthyObservations = 0
         consecutiveOverloadedObservations = 0
       }
 
@@ -131,97 +112,51 @@ class AdaptiveGpuCompressionController(
         } else {
           "no-cpu-backlog"
         }
-      AdaptiveGpuCompressionDecision(proposeGpu, targetConcurrentTasks, reason)
+      AdaptiveGpuCompressionDecision(proposeGpu, reason)
     }
-
-  private[rapids] def target: Int = synchronized {
-    targetConcurrentTasks
-  }
 }
 
 trait GpuCompressionReservation {
-  def tryAcquire(): Boolean
-  def release(): Unit
+  def tryAcquire(taskContext: TaskContext, memoryBytes: Long): Option[GpuMemoryReservation]
 }
 
-object ExecutorGpuCompressionReservation extends GpuCompressionReservation {
-  private val activeReservations = new AtomicInteger(0)
-  @volatile private var maxConcurrentTasks = 1
-  @volatile private var targetConcurrentTasks = 1
-
-  def configure(maxTasks: Int): Unit = synchronized {
-    require(maxTasks > 0, "GPU compression reservation limit must be positive")
-    require(activeReservations.get() == 0 || maxConcurrentTasks == maxTasks,
-      "GPU compression reservation limit cannot change while reservations are active")
-    maxConcurrentTasks = maxTasks
-    targetConcurrentTasks = math.min(targetConcurrentTasks, maxConcurrentTasks)
+object SharedGpuCompressionReservation extends GpuCompressionReservation {
+  override def tryAcquire(
+      taskContext: TaskContext,
+      memoryBytes: Long): Option[GpuMemoryReservation] = {
+    GpuSemaphore.tryAcquireTemporaryPeak(taskContext, memoryBytes)
   }
-
-  def updateTarget(targetTasks: Int): Unit = synchronized {
-    require(targetTasks > 0 && targetTasks <= maxConcurrentTasks,
-      s"GPU compression target $targetTasks must be between 1 and $maxConcurrentTasks")
-    targetConcurrentTasks = targetTasks
-  }
-
-  override def tryAcquire(): Boolean = synchronized {
-    if (activeReservations.get() < targetConcurrentTasks) {
-      activeReservations.incrementAndGet()
-      true
-    } else {
-      false
-    }
-  }
-
-  override def release(): Unit = synchronized {
-    require(activeReservations.get() > 0,
-      "GPU compression reservation was released without being held")
-    activeReservations.decrementAndGet()
-  }
-
-  private[rapids] def activeCount: Int = activeReservations.get()
-  private[rapids] def targetCount: Int = targetConcurrentTasks
 }
 
-object ExecutorAdaptiveGpuCompressionController {
-  private var controller: AdaptiveGpuCompressionController = _
+object ExecutorAdaptiveGpuCompressionPolicy {
+  private var policy: AdaptiveGpuCompressionPolicy = _
 
-  def configure(maxConcurrentTasks: Int, maxGpuSemaphoreWaiters: Int): Unit = synchronized {
-    if (controller == null ||
-        controller.maxConcurrentTasks != maxConcurrentTasks ||
-        controller.maxGpuSemaphoreWaiters != maxGpuSemaphoreWaiters) {
-      require(ExecutorGpuCompressionReservation.activeCount == 0,
-        "Adaptive GPU compression controller cannot be reconfigured while reservations are active")
-      controller =
-        new AdaptiveGpuCompressionController(maxConcurrentTasks, maxGpuSemaphoreWaiters)
-      ExecutorGpuCompressionReservation.configure(maxConcurrentTasks)
-      ExecutorGpuCompressionReservation.updateTarget(1)
+  def configure(maxGpuSemaphoreWaiters: Int): Unit = synchronized {
+    if (policy == null ||
+        policy.maxGpuSemaphoreWaiters != maxGpuSemaphoreWaiters) {
+      policy = new AdaptiveGpuCompressionPolicy(maxGpuSemaphoreWaiters)
     }
   }
 
   def observe(pressure: AdaptiveCompressionPressure): AdaptiveGpuCompressionDecision =
     synchronized {
-      require(controller != null, "Adaptive GPU compression controller is not configured")
-      val decision = controller.observe(pressure)
-      ExecutorGpuCompressionReservation.updateTarget(decision.targetConcurrentTasks)
-      decision
+      require(policy != null, "Adaptive GPU compression policy is not configured")
+      policy.observe(pressure)
     }
 
   /**
-   * Configures the executor-local controller from serialized task settings before observing
+   * Configures the executor-local policy from serialized task settings before observing
    * pressure. Driver-side singleton state is not available in executor JVMs.
    */
   def observe(
       pressure: AdaptiveCompressionPressure,
-      maxConcurrentTasks: Int,
       maxGpuSemaphoreWaiters: Int): AdaptiveGpuCompressionDecision = synchronized {
-    configure(maxConcurrentTasks, maxGpuSemaphoreWaiters)
+    configure(maxGpuSemaphoreWaiters)
     observe(pressure)
   }
 
   private[rapids] def resetForTests(): Unit = synchronized {
-    require(ExecutorGpuCompressionReservation.activeCount == 0,
-      "Adaptive GPU compression controller cannot be reset while reservations are active")
-    controller = null
+    policy = null
   }
 }
 
@@ -419,14 +354,15 @@ object TaskCompressionPlan {
  *
  * Executor pressure may change while a task is running. Such changes affect later tasks, not
  * records already being produced by this task. When GPU reservations are released after each
- * compression phase, a later phase reacquires a reservation or falls back to CPU compression for
- * that phase. Both backends produce the same wire encoding.
+ * compression phase, a later phase requests the current phase's estimated incremental bytes from
+ * the shared GPU semaphore or falls back to CPU compression. Both backends produce the same wire
+ * encoding.
  */
 class TaskCompressionPlanState(
-    gpuReservation: GpuCompressionReservation = ExecutorGpuCompressionReservation)
+    gpuReservation: GpuCompressionReservation = SharedGpuCompressionReservation)
     extends AutoCloseable {
   private val frozenPlan = new AtomicReference[TaskCompressionPlan]()
-  private val ownsGpuReservation = new AtomicBoolean(false)
+  private val activeGpuReservation = new AtomicReference[GpuMemoryReservation]()
   private val gpuPhaseCompleted = new AtomicBoolean(false)
   private val gpuReservationAcquiredAtNs = new AtomicLong(0L)
   private val decisionLogged = new AtomicBoolean(false)
@@ -439,11 +375,13 @@ class TaskCompressionPlanState(
    * compression. Disabling the feature always preserves the existing Spark CPU path.
    */
   def getOrFreeze(
+      taskContext: TaskContext,
+      memoryBytes: Long,
       adaptiveGpuCompressionEnabled: Boolean,
       proposedBackend: => ShuffleCompressionBackend): TaskCompressionPlan = {
     val existing = frozenPlan.get()
     if (existing != null) {
-      return resumeGpuPlanOrFallback(existing)
+      return resumeGpuPlanOrFallback(taskContext, memoryBytes, existing)
     }
 
     synchronized {
@@ -457,8 +395,8 @@ class TaskCompressionPlanState(
           ShuffleCompressionBackend.SparkCpuZstd
         }
         val reservedBackend = effectiveBackend match {
-          case ShuffleCompressionBackend.NvcompGpuZstd if gpuReservation.tryAcquire() =>
-            ownsGpuReservation.set(true)
+          case ShuffleCompressionBackend.NvcompGpuZstd
+              if acquireGpuReservation(taskContext, memoryBytes) =>
             gpuReservationAcquiredAtNs.set(System.nanoTime())
             ShuffleCompressionBackend.NvcompGpuZstd
           case ShuffleCompressionBackend.NvcompGpuZstd =>
@@ -473,15 +411,16 @@ class TaskCompressionPlanState(
     }
   }
 
-  private def resumeGpuPlanOrFallback(existing: TaskCompressionPlan): TaskCompressionPlan = {
+  private def resumeGpuPlanOrFallback(
+      taskContext: TaskContext,
+      memoryBytes: Long,
+      existing: TaskCompressionPlan): TaskCompressionPlan = {
     if (!existing.useGpuCompressor || !gpuPhaseCompleted.get()) {
       existing
     } else synchronized {
       if (!gpuPhaseCompleted.get()) {
         existing
-      } else if (gpuReservation.tryAcquire()) {
-        require(ownsGpuReservation.compareAndSet(false, true),
-          "GPU compression reservation ownership was not released between phases")
+      } else if (acquireGpuReservation(taskContext, memoryBytes)) {
         gpuReservationAcquiredAtNs.set(System.nanoTime())
         gpuPhaseCompleted.set(false)
         existing
@@ -493,7 +432,23 @@ class TaskCompressionPlanState(
     }
   }
 
+  private def acquireGpuReservation(taskContext: TaskContext, memoryBytes: Long): Boolean = {
+    require(taskContext != null, "GPU compression reservation requires a task context")
+    require(memoryBytes > 0, "GPU compression reservation requires a positive byte estimate")
+    gpuReservation.tryAcquire(taskContext, memoryBytes).exists { reservation =>
+      if (activeGpuReservation.compareAndSet(null, reservation)) {
+        true
+      } else {
+        reservation.close()
+        throw new IllegalStateException("GPU compression reservation is already active")
+      }
+    }
+  }
+
   def get: Option[TaskCompressionPlan] = Option(frozenPlan.get())
+
+  def activeReservation: Option[GpuMemoryReservation] =
+    Option(activeGpuReservation.get())
 
   def markDecisionForLogging(): Boolean =
     decisionLogged.compareAndSet(false, true)
@@ -511,8 +466,9 @@ class TaskCompressionPlanState(
       "only a GPU compression plan may release its reservation after compression")
     require(gpuPhaseCompleted.compareAndSet(false, true),
       "a GPU compression phase completed without an active phase")
-    if (ownsGpuReservation.compareAndSet(true, false)) {
-      gpuReservation.release()
+    val reservation = activeGpuReservation.getAndSet(null)
+    if (reservation != null) {
+      reservation.close()
     } else {
       throw new IllegalStateException(
         "GPU compression completed without an active compression reservation")
@@ -520,8 +476,9 @@ class TaskCompressionPlanState(
   }
 
   override def close(): Unit = {
-    if (ownsGpuReservation.compareAndSet(true, false)) {
-      gpuReservation.release()
+    val reservation = activeGpuReservation.getAndSet(null)
+    if (reservation != null) {
+      reservation.close()
     }
   }
 }

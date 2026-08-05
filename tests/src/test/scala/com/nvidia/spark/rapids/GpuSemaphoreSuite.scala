@@ -121,4 +121,28 @@ class GpuSemaphoreSuite extends AnyFunSuite
       GpuSemaphore.releaseIfNecessary(context2)
     }
   }
+
+  test("additional memory reservation shares and releases GPU semaphore capacity") {
+    GpuDeviceManager.setRmmTaskInitEnabled(false)
+    SparkSession.getActiveSession.get.conf
+      .set("spark.rapids.sql.concurrentGpuTasks", "2")
+    SparkSession.getActiveSession.get.conf
+      .set("spark.rapids.sql.concurrentGpuTasks.dynamic", "false")
+    val context1 = mockContext(1)
+    val context2 = mockContext(2)
+    try {
+      assertAcquired(GpuSemaphore.tryAcquire(context1))
+      val reservation = GpuSemaphore.tryAcquireTemporaryPeak(
+        context1, GpuDeviceManager.getMemorySize)
+      assert(reservation.isDefined)
+      assertNotAcquired(0, GpuSemaphore.tryAcquire(context2))
+
+      reservation.get.close()
+      reservation.get.close()
+      assertAcquired(GpuSemaphore.tryAcquire(context2))
+    } finally {
+      GpuSemaphore.releaseIfNecessary(context1)
+      GpuSemaphore.releaseIfNecessary(context2)
+    }
+  }
 }

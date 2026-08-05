@@ -120,6 +120,19 @@ private[rapids] class CoalescingBatchRunner[T: ClassTag, R](
 private[rapids] object NvcompZstdStreamLayout {
   val CompressedSizeBytesPerChunk: Long = java.lang.Long.BYTES
 
+  /** Zstandard's documented compress-bound formula. */
+  def zstdCompressBound(uncompressedBytes: Long): Long = {
+    require(uncompressedBytes > 0, "uncompressedBytes must be positive")
+    val lowSizeOverhead = if (uncompressedBytes < 128L * 1024) {
+      (128L * 1024 - uncompressedBytes) >> 11
+    } else {
+      0L
+    }
+    Math.addExact(
+      Math.addExact(uncompressedBytes, uncompressedBytes >> 8),
+      lowSizeOverhead)
+  }
+
   def chunkCount(uncompressedBytes: Long, chunkSize: Long): Int = {
     require(uncompressedBytes > 0, "uncompressedBytes must be positive")
     require(chunkSize > 0, "chunkSize must be positive")
@@ -180,7 +193,13 @@ class GpuZstdStreamCompressor(
     chunkSize: Long,
     maxIntermediateBufferSize: Long) {
 
-  private val compressor = new BatchedZstdCompressor(chunkSize, maxIntermediateBufferSize)
+  private class MemoryEstimatingBatchedZstdCompressor
+      extends BatchedZstdCompressor(chunkSize, maxIntermediateBufferSize) {
+    def tempSize(numChunks: Long, uncompressedBytes: Long): Long =
+      batchedCompressGetTempSize(numChunks, chunkSize, uncompressedBytes)
+  }
+
+  private val compressor = new MemoryEstimatingBatchedZstdCompressor
   private val batchRunner = new CoalescingBatchRunner[HostMemoryBuffer, HostMemoryBuffer](
     maxBatchSize = 32,
     collectWaitMillis = 1,
@@ -219,6 +238,31 @@ class GpuZstdStreamCompressor(
         copyStandardFramesToHost(stitchedOutput, input, stream)
       }
     }
+  }
+
+  /**
+   * Returns a conservative bound for device allocations created by nvCOMP compression.
+   * Input buffers are already live and therefore are not included in this incremental estimate.
+   */
+  def estimateAdditionalDeviceMemory(inputs: Array[BaseDeviceMemoryBuffer]): Long = {
+    require(inputs.nonEmpty, "GPU Zstd memory estimation requires at least one input")
+    val uncompressedBytes = inputs.foldLeft(0L) { (total, input) =>
+      Math.addExact(total, input.getLength)
+    }
+    val numChunks = inputs.foldLeft(0L) { (total, input) =>
+      Math.addExact(total, NvcompZstdStreamLayout.chunkCount(
+        input.getLength, chunkSize).toLong)
+    }
+    val maxOutputPerChunk = NvcompZstdStreamLayout.zstdCompressBound(chunkSize)
+    val intermediateOutputBytes = Math.multiplyExact(numChunks, maxOutputPerChunk)
+    val compressionPeak = Math.addExact(
+      Math.addExact(intermediateOutputBytes,
+        compressor.tempSize(numChunks, uncompressedBytes)),
+      Math.multiplyExact(numChunks, 32L))
+    val stitchPeak = Math.addExact(
+      Math.multiplyExact(intermediateOutputBytes, 2L),
+      Math.multiplyExact(Math.addExact(numChunks, inputs.length.toLong), 32L))
+    math.max(compressionPeak, stitchPeak)
   }
 
   private def copyStandardFramesToHost(

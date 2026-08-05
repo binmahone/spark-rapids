@@ -17,28 +17,35 @@
 package com.nvidia.spark.rapids
 
 import org.scalatest.funsuite.AnyFunSuite
+import org.scalatestplus.mockito.MockitoSugar
 
-class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
+import org.apache.spark.TaskContext
+
+class AdaptiveShuffleCompressionSuite extends AnyFunSuite with MockitoSugar {
+
+  private def taskContext: TaskContext = mock[TaskContext]
 
   private class TestGpuReservation extends GpuCompressionReservation {
     private var held = false
     var acquireCount = 0
     var releaseCount = 0
 
-    override def tryAcquire(): Boolean = synchronized {
+    override def tryAcquire(
+        taskContext: TaskContext,
+        memoryBytes: Long): Option[GpuMemoryReservation] = synchronized {
       acquireCount += 1
       if (held) {
-        false
+        None
       } else {
         held = true
-        true
+        Some(new GpuMemoryReservation(memoryBytes, 0L, 0L, 0L, () => {
+          TestGpuReservation.this.synchronized {
+            assert(held)
+            held = false
+            releaseCount += 1
+          }
+        }))
       }
-    }
-
-    override def release(): Unit = synchronized {
-      assert(held)
-      held = false
-      releaseCount += 1
     }
   }
 
@@ -59,11 +66,13 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     var proposalCount = 0
 
     val first = state.getOrFreeze(
+      taskContext, 64L,
       adaptiveGpuCompressionEnabled = true, {
         proposalCount += 1
         ShuffleCompressionBackend.NvcompGpuZstd
       })
     val afterPressureChanged = state.getOrFreeze(
+      taskContext, 64L,
       adaptiveGpuCompressionEnabled = true, {
         proposalCount += 1
         ShuffleCompressionBackend.SparkCpuZstd
@@ -84,6 +93,7 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     var evaluatedProposal = false
 
     val plan = state.getOrFreeze(
+      taskContext, 64L,
       adaptiveGpuCompressionEnabled = false, {
         evaluatedProposal = true
         ShuffleCompressionBackend.NvcompGpuZstd
@@ -104,29 +114,17 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
 
   test("adaptive GPU compression is disabled by default and can be enabled") {
     val key = RapidsConf.MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION.key
-    val maxTasksKey =
-      RapidsConf.MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_MAX_CONCURRENT_TASKS.key
     val maxWaitersKey =
       RapidsConf.MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_MAX_GPU_SEMAPHORE_WAITERS.key
-    val releaseAfterGpuPhaseKey =
-      RapidsConf.MULTITHREADED_SHUFFLE_ADAPTIVE_GPU_COMPRESSION_RELEASE_AFTER_GPU_PHASE.key
 
     assert(!new RapidsConf(Map.empty[String, String])
       .isMultithreadedShuffleAdaptiveGpuCompressionEnabled)
     assert(new RapidsConf(Map(key -> "true"))
       .isMultithreadedShuffleAdaptiveGpuCompressionEnabled)
-    assertResult(1)(new RapidsConf(Map.empty[String, String])
-      .multithreadedShuffleAdaptiveGpuCompressionMaxConcurrentTasks)
-    assertResult(2)(new RapidsConf(Map(maxTasksKey -> "2"))
-      .multithreadedShuffleAdaptiveGpuCompressionMaxConcurrentTasks)
     assertResult(0)(new RapidsConf(Map.empty[String, String])
       .multithreadedShuffleAdaptiveGpuCompressionMaxGpuSemaphoreWaiters)
     assertResult(16)(new RapidsConf(Map(maxWaitersKey -> "16"))
       .multithreadedShuffleAdaptiveGpuCompressionMaxGpuSemaphoreWaiters)
-    assert(!new RapidsConf(Map.empty[String, String])
-      .multithreadedShuffleAdaptiveGpuCompressionReleaseAfterGpuPhase)
-    assert(new RapidsConf(Map(releaseAfterGpuPhaseKey -> "true"))
-      .multithreadedShuffleAdaptiveGpuCompressionReleaseAfterGpuPhase)
   }
 
   test("GPU-phase release reacquires a reservation for a second phase in one task") {
@@ -134,6 +132,7 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     val state = new TaskCompressionPlanState(reservation)
 
     val plan = state.getOrFreeze(
+      taskContext, 64L,
       adaptiveGpuCompressionEnabled = true,
       ShuffleCompressionBackend.NvcompGpuZstd)
     assert(plan.useGpuCompressor)
@@ -141,6 +140,7 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     state.releaseGpuReservationAfterCompression()
     assertResult(1)(reservation.releaseCount)
     val secondPlan = state.getOrFreeze(
+      taskContext, 96L,
       adaptiveGpuCompressionEnabled = true,
       ShuffleCompressionBackend.NvcompGpuZstd)
     assert(secondPlan.useGpuCompressor)
@@ -159,17 +159,20 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     val blockingTask = new TaskCompressionPlanState(reservation)
 
     val firstPlan = firstTask.getOrFreeze(
+      taskContext, 64L,
       adaptiveGpuCompressionEnabled = true,
       ShuffleCompressionBackend.NvcompGpuZstd)
     assert(firstPlan.useGpuCompressor)
     firstTask.releaseGpuReservationAfterCompression()
 
     val blockingPlan = blockingTask.getOrFreeze(
+      taskContext, 64L,
       adaptiveGpuCompressionEnabled = true,
       ShuffleCompressionBackend.NvcompGpuZstd)
     assert(blockingPlan.useGpuCompressor)
 
     val fallbackPlan = firstTask.getOrFreeze(
+      taskContext, 96L,
       adaptiveGpuCompressionEnabled = true,
       ShuffleCompressionBackend.NvcompGpuZstd)
     assert(fallbackPlan.useSparkCompressionWrapper)
@@ -177,6 +180,7 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
 
     blockingTask.close()
     val resumedPlan = firstTask.getOrFreeze(
+      taskContext, 128L,
       adaptiveGpuCompressionEnabled = true,
       ShuffleCompressionBackend.NvcompGpuZstd)
     assert(resumedPlan.useGpuCompressor)
@@ -207,61 +211,44 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
       .proposesGpu(maxGpuSemaphoreWaiters = 16))
   }
 
-  test("executor controller ramps up, holds its learned route, and backs off") {
-    val controller = new AdaptiveGpuCompressionController(
-      maxConcurrentTasks = 8,
-      maxGpuSemaphoreWaiters = 2)
+  test("executor policy holds its learned route and backs off") {
+    val policy = new AdaptiveGpuCompressionPolicy(maxGpuSemaphoreWaiters = 2)
     val healthy = AdaptiveCompressionPressure(
       writerPoolSize = 20,
       activeWriterThreads = 20,
       queuedWriterTasks = 3,
       gpuSemaphoreWaiters = 0)
 
-    assertResult(1)(controller.observe(healthy).targetConcurrentTasks)
-    assertResult(2)(controller.observe(healthy).targetConcurrentTasks)
-    assertResult(2)(controller.observe(healthy).targetConcurrentTasks)
-    assertResult(4)(controller.observe(healthy).targetConcurrentTasks)
-    assertResult(4)(controller.observe(healthy).targetConcurrentTasks)
-    assertResult(8)(controller.observe(healthy).targetConcurrentTasks)
+    assert(policy.observe(healthy).proposeGpu)
 
     val drainedCpuQueue = healthy.copy(activeWriterThreads = 4, queuedWriterTasks = 0)
-    val learned = controller.observe(drainedCpuQueue)
+    val learned = policy.observe(drainedCpuQueue)
     assert(learned.proposeGpu)
     assertResult("learned-gpu-route")(learned.reason)
-    assertResult(8)(learned.targetConcurrentTasks)
 
     val overloaded = drainedCpuQueue.copy(gpuSemaphoreWaiters = 3)
-    val transientOverload = controller.observe(overloaded)
+    val transientOverload = policy.observe(overloaded)
     assert(transientOverload.proposeGpu)
     assertResult("learned-gpu-route-transient-overload")(transientOverload.reason)
-    assertResult(8)(transientOverload.targetConcurrentTasks)
-    val firstBackoff = controller.observe(overloaded)
+    val firstBackoff = policy.observe(overloaded)
     assert(!firstBackoff.proposeGpu)
-    assertResult(4)(firstBackoff.targetConcurrentTasks)
-    controller.observe(overloaded)
-    assertResult(2)(controller.observe(overloaded).targetConcurrentTasks)
   }
 
-  test("executor controller does not learn a GPU route without CPU backlog") {
-    val controller = new AdaptiveGpuCompressionController(
-      maxConcurrentTasks = 8,
-      maxGpuSemaphoreWaiters = 2)
+  test("executor policy does not learn a GPU route without CPU backlog") {
+    val policy = new AdaptiveGpuCompressionPolicy(maxGpuSemaphoreWaiters = 2)
     val idle = AdaptiveCompressionPressure(
       writerPoolSize = 20,
       activeWriterThreads = 4,
       queuedWriterTasks = 0,
       gpuSemaphoreWaiters = 0)
 
-    val decision = controller.observe(idle)
+    val decision = policy.observe(idle)
     assert(!decision.proposeGpu)
-    assertResult(1)(decision.targetConcurrentTasks)
     assertResult("no-cpu-backlog")(decision.reason)
   }
 
-  test("executor controller continues exploring after GPU offload drains the CPU queue") {
-    val controller = new AdaptiveGpuCompressionController(
-      maxConcurrentTasks = 8,
-      maxGpuSemaphoreWaiters = 2)
+  test("executor policy continues exploring after GPU offload drains the CPU queue") {
+    val policy = new AdaptiveGpuCompressionPolicy(maxGpuSemaphoreWaiters = 2)
     val healthy = AdaptiveCompressionPressure(
       writerPoolSize = 20,
       activeWriterThreads = 20,
@@ -269,40 +256,33 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
       gpuSemaphoreWaiters = 0)
     val drainedCpuQueue = healthy.copy(activeWriterThreads = 4, queuedWriterTasks = 0)
 
-    controller.observe(healthy)
-    assertResult(2)(controller.observe(healthy).targetConcurrentTasks)
-    assertResult(2)(controller.observe(drainedCpuQueue).targetConcurrentTasks)
-    val explored = controller.observe(drainedCpuQueue)
+    policy.observe(healthy)
+    policy.observe(drainedCpuQueue)
+    val explored = policy.observe(drainedCpuQueue)
 
     assert(explored.proposeGpu)
     assertResult("learned-gpu-route")(explored.reason)
-    assertResult(4)(explored.targetConcurrentTasks)
   }
 
   test("CPU backlog takes precedence over GPU waiter pressure") {
-    val controller = new AdaptiveGpuCompressionController(
-      maxConcurrentTasks = 8,
-      maxGpuSemaphoreWaiters = 2)
+    val policy = new AdaptiveGpuCompressionPolicy(maxGpuSemaphoreWaiters = 2)
     val cpuAndGpuBacklogged = AdaptiveCompressionPressure(
       writerPoolSize = 20,
       activeWriterThreads = 20,
       queuedWriterTasks = 3,
       gpuSemaphoreWaiters = 3)
 
-    val first = controller.observe(cpuAndGpuBacklogged)
-    val second = controller.observe(cpuAndGpuBacklogged)
+    val first = policy.observe(cpuAndGpuBacklogged)
+    val second = policy.observe(cpuAndGpuBacklogged)
 
     assert(first.proposeGpu)
     assert(second.proposeGpu)
     assertResult("cpu-backlogged")(first.reason)
     assertResult("cpu-backlogged")(second.reason)
-    assertResult(2)(second.targetConcurrentTasks)
   }
 
   test("GPU waiter pressure backs off a learned route after CPU backlog drains") {
-    val controller = new AdaptiveGpuCompressionController(
-      maxConcurrentTasks = 8,
-      maxGpuSemaphoreWaiters = 2)
+    val policy = new AdaptiveGpuCompressionPolicy(maxGpuSemaphoreWaiters = 2)
     val cpuBacklogged = AdaptiveCompressionPressure(
       writerPoolSize = 20,
       activeWriterThreads = 20,
@@ -313,40 +293,34 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
       queuedWriterTasks = 0,
       gpuSemaphoreWaiters = 3)
 
-    controller.observe(cpuBacklogged)
-    assertResult(2)(controller.observe(cpuBacklogged).targetConcurrentTasks)
-    val firstBackoff = controller.observe(gpuBacklogged)
-    val secondBackoff = controller.observe(gpuBacklogged)
+    policy.observe(cpuBacklogged)
+    val firstBackoff = policy.observe(gpuBacklogged)
+    val secondBackoff = policy.observe(gpuBacklogged)
 
     assert(firstBackoff.proposeGpu)
     assert(!secondBackoff.proposeGpu)
     assertResult("learned-gpu-route-transient-overload")(firstBackoff.reason)
     assertResult("gpu-overloaded")(secondBackoff.reason)
-    assertResult(1)(secondBackoff.targetConcurrentTasks)
   }
 
-  test("executor controller initializes from task settings before its first observation") {
-    ExecutorAdaptiveGpuCompressionController.resetForTests()
+  test("executor policy initializes from task settings before its first observation") {
+    ExecutorAdaptiveGpuCompressionPolicy.resetForTests()
     val healthy = AdaptiveCompressionPressure(
       writerPoolSize = 20,
       activeWriterThreads = 20,
       queuedWriterTasks = 3,
       gpuSemaphoreWaiters = 0)
 
-    val first = ExecutorAdaptiveGpuCompressionController.observe(
+    val first = ExecutorAdaptiveGpuCompressionPolicy.observe(
       healthy,
-      maxConcurrentTasks = 8,
       maxGpuSemaphoreWaiters = 2)
-    val second = ExecutorAdaptiveGpuCompressionController.observe(
+    val second = ExecutorAdaptiveGpuCompressionPolicy.observe(
       healthy,
-      maxConcurrentTasks = 8,
       maxGpuSemaphoreWaiters = 2)
 
     assert(first.proposeGpu)
-    assertResult(1)(first.targetConcurrentTasks)
-    assertResult(2)(second.targetConcurrentTasks)
-    assertResult(2)(ExecutorGpuCompressionReservation.targetCount)
-    ExecutorAdaptiveGpuCompressionController.resetForTests()
+    assert(second.proposeGpu)
+    ExecutorAdaptiveGpuCompressionPolicy.resetForTests()
   }
 
   test("only one task reserves GPU compression and other tasks stay on CPU") {
@@ -358,9 +332,11 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     val secondTask = new TaskCompressionPlanState(reservation)
 
     val firstPlan = firstTask.getOrFreeze(
+      taskContext, 64L,
       adaptiveGpuCompressionEnabled = true,
       ShuffleCompressionBackend.NvcompGpuZstd)
     val secondPlan = secondTask.getOrFreeze(
+      taskContext, 64L,
       adaptiveGpuCompressionEnabled = true,
       ShuffleCompressionBackend.NvcompGpuZstd)
     AdaptiveShuffleCompressionMetrics.record(shuffleId, firstPlan)
@@ -396,6 +372,7 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
 
     val firstTask = new TaskCompressionPlanState(reservation)
     val firstPlan = firstTask.getOrFreeze(
+      taskContext, 64L,
       adaptiveGpuCompressionEnabled = true,
       ShuffleCompressionBackend.SparkCpuZstd)
     AdaptiveShuffleCompressionMetrics.record(shuffleId, firstPlan)
@@ -417,6 +394,7 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
 
     val secondTask = new TaskCompressionPlanState(reservation)
     val secondPlan = secondTask.getOrFreeze(
+      taskContext, 64L,
       adaptiveGpuCompressionEnabled = true,
       ShuffleCompressionBackend.SparkCpuZstd)
     AdaptiveShuffleCompressionMetrics.record(shuffleId, secondPlan)
@@ -441,45 +419,4 @@ class AdaptiveShuffleCompressionSuite extends AnyFunSuite {
     AdaptiveShuffleCompressionMetrics.clearShuffle(shuffleId)
   }
 
-  test("executor GPU compression reservation enforces its configured limit") {
-    ExecutorGpuCompressionReservation.configure(2)
-    try {
-      ExecutorGpuCompressionReservation.updateTarget(2)
-      assert(ExecutorGpuCompressionReservation.tryAcquire())
-      assert(ExecutorGpuCompressionReservation.tryAcquire())
-      assert(!ExecutorGpuCompressionReservation.tryAcquire())
-      assertResult(2)(ExecutorGpuCompressionReservation.activeCount)
-      ExecutorGpuCompressionReservation.release()
-      assert(ExecutorGpuCompressionReservation.tryAcquire())
-      ExecutorGpuCompressionReservation.release()
-      ExecutorGpuCompressionReservation.release()
-      assertResult(0)(ExecutorGpuCompressionReservation.activeCount)
-    } finally {
-      ExecutorGpuCompressionReservation.configure(1)
-      ExecutorGpuCompressionReservation.updateTarget(1)
-    }
-  }
-
-  test("executor GPU compression reservation follows a dynamic target below its ceiling") {
-    ExecutorGpuCompressionReservation.configure(4)
-    try {
-      ExecutorGpuCompressionReservation.updateTarget(2)
-      assert(ExecutorGpuCompressionReservation.tryAcquire())
-      assert(ExecutorGpuCompressionReservation.tryAcquire())
-      assert(!ExecutorGpuCompressionReservation.tryAcquire())
-      assertResult(2)(ExecutorGpuCompressionReservation.activeCount)
-      assertResult(2)(ExecutorGpuCompressionReservation.targetCount)
-
-      ExecutorGpuCompressionReservation.updateTarget(1)
-      assert(!ExecutorGpuCompressionReservation.tryAcquire())
-      ExecutorGpuCompressionReservation.release()
-      assert(!ExecutorGpuCompressionReservation.tryAcquire())
-      ExecutorGpuCompressionReservation.release()
-      assert(ExecutorGpuCompressionReservation.tryAcquire())
-      ExecutorGpuCompressionReservation.release()
-    } finally {
-      ExecutorGpuCompressionReservation.configure(1)
-      ExecutorGpuCompressionReservation.updateTarget(1)
-    }
-  }
 }

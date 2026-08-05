@@ -37,6 +37,13 @@ class NvcompZstdStreamLayoutSuite extends AnyFunSuite {
     assertResult(84)(NvcompZstdStreamLayout.frameBytes(100, 64 * 1024 + 1, 64 * 1024))
   }
 
+  test("Zstd compression bound includes incompressible-data overhead") {
+    assert(NvcompZstdStreamLayout.zstdCompressBound(1) >= 1)
+    assert(NvcompZstdStreamLayout.zstdCompressBound(64 * 1024) > 64 * 1024)
+    assertResult(128L * 1024 + 512L)(
+      NvcompZstdStreamLayout.zstdCompressBound(128L * 1024))
+  }
+
   test("reject invalid sizes") {
     assertThrows[IllegalArgumentException] {
       NvcompZstdStreamLayout.chunkCount(0, 64 * 1024)
@@ -216,6 +223,13 @@ class GpuZstdStreamCompressorSuite extends AnyFunSuite with BeforeAndAfterAll {
           assertResult(expected.toSeq)(decompressWithSparkZstd(actual).toSeq)
         }
       }
+    }
+  }
+
+  test("device compression memory estimate covers more than the live input") {
+    withResource(DeviceMemoryBuffer.allocate(5 * chunkSize, Cuda.DEFAULT_STREAM)) { input =>
+      val estimate = compressor.estimateAdditionalDeviceMemory(Array(input))
+      assert(estimate > input.getLength)
     }
   }
 

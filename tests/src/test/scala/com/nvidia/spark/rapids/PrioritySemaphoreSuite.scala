@@ -168,4 +168,77 @@ class PrioritySemaphoreSuite extends AnyFunSuite {
     semaphore.release(10)
     semaphore.release(10)
   }
+
+  test("additional permits share capacity without changing task count") {
+    val semaphore = new TestPrioritySemaphore(10, 1)
+
+    assert(semaphore.tryAcquire(4, 0, () => false, 0))
+    assert(semaphore.tryAcquireAdditional(6))
+    assert(!semaphore.tryAcquireAdditional(1))
+
+    // Releasing additional permits must not release the task-count slot.
+    semaphore.releaseAdditional(6)
+    assert(!semaphore.tryAcquire(1, 0, () => false, 1))
+
+    semaphore.release(4)
+    assert(semaphore.tryAcquire(1, 0, () => false, 1))
+    semaphore.release(1)
+  }
+
+  test("additional permit acquisition is non-blocking") {
+    val semaphore = new TestPrioritySemaphore(10, 0)
+
+    assert(semaphore.tryAcquire(8, 0, () => false, 0))
+    assert(!semaphore.tryAcquireAdditional(3))
+    assert(semaphore.tryAcquireAdditional(2))
+    semaphore.releaseAdditional(2)
+    semaphore.release(8)
+  }
+
+  test("additional permits do not bypass a waiting GPU task") {
+    val semaphore = new TestPrioritySemaphore(10, 0)
+    assert(semaphore.tryAcquire(8, 0, () => false, 0))
+
+    val waiting = new Thread(() => {
+      semaphore.acquire(() => 5, () => false, 1, 1)
+      semaphore.release(5)
+    })
+    waiting.start()
+    Thread.sleep(100)
+
+    assert(!semaphore.tryAcquireAdditional(2))
+    semaphore.release(8)
+    waiting.join(1000)
+    assert(!waiting.isAlive)
+  }
+
+  test("additional reservation release is idempotent at the reservation boundary") {
+    var releases = 0
+    val reservation = new GpuMemoryReservation(33L, 64L, 2L, 1L, () => releases += 1)
+
+    reservation.close()
+    reservation.close()
+
+    assert(reservation.isClosed)
+    assert(releases == 1)
+  }
+
+  test("temporary peak reservation only adds permits not covered by the task reservation") {
+    val permitBytes = 32L * 1024 * 1024
+    assertResult(Some((4L, 2L)))(GpuSemaphore.additionalPermitsForPeak(
+      currentPermits = 2,
+      observedTaskPeakBytes = 2 * permitBytes,
+      incrementalMemoryBytes = 2 * permitBytes,
+      maxPermits = 16))
+    assertResult(Some((4L, 0L)))(GpuSemaphore.additionalPermitsForPeak(
+      currentPermits = 4,
+      observedTaskPeakBytes = 2 * permitBytes,
+      incrementalMemoryBytes = 2 * permitBytes,
+      maxPermits = 16))
+    assertResult(None)(GpuSemaphore.additionalPermitsForPeak(
+      currentPermits = 4,
+      observedTaskPeakBytes = 15 * permitBytes,
+      incrementalMemoryBytes = 2 * permitBytes,
+      maxPermits = 16))
+  }
 }

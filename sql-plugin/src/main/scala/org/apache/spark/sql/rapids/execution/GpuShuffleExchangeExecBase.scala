@@ -318,6 +318,26 @@ object GpuShuffleExchangeExecBase {
   val METRIC_THREADED_WRITER_INPUT_FETCH_TIME = "rapidsThreadedWriterInputFetchTime"
   val METRIC_DESC_THREADED_WRITER_INPUT_FETCH_TIME =
     "threaded writer input fetch time (records.hasNext/next)"
+  val METRIC_THREADED_WRITER_COMPRESSION_QUEUE_WAIT_TIME =
+    "rapidsThreadedWriterCompressionQueueWaitTime"
+  val METRIC_DESC_THREADED_WRITER_COMPRESSION_QUEUE_WAIT_TIME =
+    "threaded writer compression task queue wait time"
+  val METRIC_THREADED_WRITER_COMPRESSION_TIME =
+    "rapidsThreadedWriterCompressionTime"
+  val METRIC_DESC_THREADED_WRITER_COMPRESSION_TIME =
+    "threaded writer compression task execution time"
+  val METRIC_THREADED_WRITER_MERGER_WRITE_TIME =
+    "rapidsThreadedWriterMergerWriteTime"
+  val METRIC_DESC_THREADED_WRITER_MERGER_WRITE_TIME =
+    "threaded writer merger output-stream write time"
+  val METRIC_THREADED_WRITER_PARTIAL_FILE_MERGE_TIME =
+    "rapidsThreadedWriterPartialFileMergeTime"
+  val METRIC_DESC_THREADED_WRITER_PARTIAL_FILE_MERGE_TIME =
+    "threaded writer partial-file final merge time"
+  val METRIC_THREADED_WRITER_COMPRESSION_TASK_COUNT =
+    "rapidsThreadedWriterCompressionTaskCount"
+  val METRIC_DESC_THREADED_WRITER_COMPRESSION_TASK_COUNT =
+    "threaded writer compression task count"
 
   // New metrics for shuffle read wall time breakdown
   val METRIC_THREADED_READER_IO_WAIT_TIME = "rapidsThreadedReaderIoWaitTime"
@@ -366,6 +386,21 @@ object GpuShuffleExchangeExecBase {
     METRIC_THREADED_WRITER_INPUT_FETCH_TIME ->
         gpu.createNanoTimingMetric(DEBUG_LEVEL,
           METRIC_DESC_THREADED_WRITER_INPUT_FETCH_TIME),
+    METRIC_THREADED_WRITER_COMPRESSION_QUEUE_WAIT_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_WRITER_COMPRESSION_QUEUE_WAIT_TIME),
+    METRIC_THREADED_WRITER_COMPRESSION_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_WRITER_COMPRESSION_TIME),
+    METRIC_THREADED_WRITER_MERGER_WRITE_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_WRITER_MERGER_WRITE_TIME),
+    METRIC_THREADED_WRITER_PARTIAL_FILE_MERGE_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_WRITER_PARTIAL_FILE_MERGE_TIME),
+    METRIC_THREADED_WRITER_COMPRESSION_TASK_COUNT ->
+        gpu.createMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_WRITER_COMPRESSION_TASK_COUNT),
     METRIC_THREADED_READER_IO_WAIT_TIME ->
         gpu.createNanoTimingMetric(DEBUG_LEVEL,
           METRIC_DESC_THREADED_READER_IO_WAIT_TIME),

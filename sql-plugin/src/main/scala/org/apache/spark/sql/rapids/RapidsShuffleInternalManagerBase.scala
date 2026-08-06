@@ -50,7 +50,7 @@ import org.apache.spark.shuffle.api._
 import org.apache.spark.shuffle.sort.SortShuffleManager
 import org.apache.spark.shuffle.sort.io.{RapidsLocalDiskShuffleDataIO, RapidsLocalDiskShuffleMapOutputWriter}
 import org.apache.spark.sql.execution.metric.SQLMetric
-import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{METRIC_DATA_READ_SIZE, METRIC_DATA_SIZE, METRIC_SHUFFLE_DESERIALIZATION_TIME, METRIC_SHUFFLE_READ_TIME, METRIC_THREADED_READER_DESER_WAIT_TIME, METRIC_THREADED_READER_IO_WAIT_TIME, METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT, METRIC_THREADED_READER_LIMITER_ACQUIRE_FAIL_COUNT, METRIC_THREADED_READER_LIMITER_PENDING_BLOCK_COUNT, METRIC_THREADED_WRITER_INPUT_FETCH_TIME, METRIC_THREADED_WRITER_LIMITER_WAIT_TIME, METRIC_THREADED_WRITER_SERIALIZATION_WAIT_TIME}
+import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.{METRIC_DATA_READ_SIZE, METRIC_DATA_SIZE, METRIC_SHUFFLE_DESERIALIZATION_TIME, METRIC_SHUFFLE_READ_TIME, METRIC_THREADED_READER_DESER_WAIT_TIME, METRIC_THREADED_READER_IO_WAIT_TIME, METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT, METRIC_THREADED_READER_LIMITER_ACQUIRE_FAIL_COUNT, METRIC_THREADED_READER_LIMITER_PENDING_BLOCK_COUNT, METRIC_THREADED_WRITER_COMPRESSION_QUEUE_WAIT_TIME, METRIC_THREADED_WRITER_COMPRESSION_TASK_COUNT, METRIC_THREADED_WRITER_COMPRESSION_TIME, METRIC_THREADED_WRITER_INPUT_FETCH_TIME, METRIC_THREADED_WRITER_LIMITER_WAIT_TIME, METRIC_THREADED_WRITER_MERGER_WRITE_TIME, METRIC_THREADED_WRITER_PARTIAL_FILE_MERGE_TIME, METRIC_THREADED_WRITER_SERIALIZATION_WAIT_TIME}
 import org.apache.spark.sql.rapids.shims.{GpuShuffleBlockResolver, RapidsShuffleThreadedReader, RapidsShuffleThreadedWriter}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.storage.{RapidsShuffleBlockFetcherIterator, _}
@@ -316,10 +316,21 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
     handle.metrics.get(METRIC_THREADED_WRITER_SERIALIZATION_WAIT_TIME)
   private val inputFetchTimeMetric =
     handle.metrics.get(METRIC_THREADED_WRITER_INPUT_FETCH_TIME)
+  private val compressionQueueWaitTimeMetric =
+    handle.metrics.get(METRIC_THREADED_WRITER_COMPRESSION_QUEUE_WAIT_TIME)
+  private val compressionTimeMetric =
+    handle.metrics.get(METRIC_THREADED_WRITER_COMPRESSION_TIME)
+  private val mergerWriteTimeMetric =
+    handle.metrics.get(METRIC_THREADED_WRITER_MERGER_WRITE_TIME)
+  private val partialFileMergeTimeMetric =
+    handle.metrics.get(METRIC_THREADED_WRITER_PARTIAL_FILE_MERGE_TIME)
+  private val compressionTaskCountMetric =
+    handle.metrics.get(METRIC_THREADED_WRITER_COMPRESSION_TASK_COUNT)
   private val compressionTasksSubmitted = new AtomicLong(0L)
   private val compressionTasksStarted = new AtomicLong(0L)
   private val compressionTasksCompleted = new AtomicLong(0L)
   private val compressionTasksFailed = new AtomicLong(0L)
+  private val mergerWriteTimeNs = new AtomicLong(0L)
   private val mergerWaitDiagnosticIntervalSeconds = 30L
 
   private var shuffleWriteRange: NvtxId = NvtxRegistry.THREADED_WRITER_WRITE.push()
@@ -539,11 +550,16 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
     private def hasReadyWork: Boolean = currentWorkState != NotReady
 
     private def writeRecord(record: CompressedRecord): Unit = {
-      if (record.compressedSize > 0) {
-        outputStream.write(record.buffer.getBuf, 0, record.compressedSize.toInt)
+      val writeStartNs = System.nanoTime()
+      try {
+        if (record.compressedSize > 0) {
+          outputStream.write(record.buffer.getBuf, 0, record.compressedSize.toInt)
+        }
+      } finally {
+        mergerWriteTimeNs.addAndGet(System.nanoTime() - writeStartNs)
+        record.buffer.close()
+        limiter.release(record.remainingQuota)
       }
-      record.buffer.close()
-      limiter.release(record.remainingQuota)
     }
 
     private def closeOutputStream(): Unit = {
@@ -731,8 +747,11 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
     val writeStartTime = System.nanoTime()
     // Track total written size (compressed size)
     val totalCompressedSize = new AtomicLong(0L)
+    val compressionQueueWaitTimeNs = new AtomicLong(0L)
+    val compressionExecutionTimeNs = new AtomicLong(0L)
     var waitTimeOnLimiterNs: Long = 0L
     var inputFetchTimeNs: Long = 0L
+    var partialFileMergeTimeNs: Long = 0L
 
     val taskContext = TaskContext.get()
     val taskThread = Thread.currentThread()
@@ -843,8 +862,12 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
         waitTimeOnLimiterNs += System.nanoTime() - waitOnLimiterStart
 
         val batchForRecord = currentBatch
+        val compressionQueuedNs = System.nanoTime()
         val compressionTask = new FutureTask[CompressedRecord](new Callable[CompressedRecord] {
           override def call(): CompressedRecord = {
+            val compressionExecutionStartNs = System.nanoTime()
+            compressionQueueWaitTimeNs.addAndGet(
+              compressionExecutionStartNs - compressionQueuedNs)
             compressionTasksStarted.incrementAndGet()
             var releasedQuota = 0L
             try {
@@ -947,6 +970,9 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                 compressionTasksFailed.incrementAndGet()
                 limiter.release(recordSize - releasedQuota)
                 throw t
+            } finally {
+              compressionExecutionTimeNs.addAndGet(
+                System.nanoTime() - compressionExecutionStartNs)
             }
           }
         }) {
@@ -1037,6 +1063,10 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
       limiterWaitTimeMetric.foreach(_ += waitTimeOnLimiterNs)
       serializationWaitTimeMetric.foreach(_ += totalSerializationWaitTimeNs)
       inputFetchTimeMetric.foreach(_ += inputFetchTimeNs)
+      compressionQueueWaitTimeMetric.foreach(_ += compressionQueueWaitTimeNs.get())
+      compressionTimeMetric.foreach(_ += compressionExecutionTimeNs.get())
+      mergerWriteTimeMetric.foreach(_ += mergerWriteTimeNs.get())
+      compressionTaskCountMetric.foreach(_ += compressionTasksSubmitted.get())
 
     } finally {
       hangDiagnostic.cancel(false)
@@ -1105,7 +1135,9 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
             }
 
             // mergePartialFiles closes handles in its finally block
+            val partialFileMergeStartNs = System.nanoTime()
             val lengths = mergePartialFiles(partialFiles.toSeq, finalMergeWriter)
+            partialFileMergeTimeNs += System.nanoTime() - partialFileMergeStartNs
             handlesTransferred = true
             lengths
           } else {
@@ -1116,6 +1148,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
       // Update write time: total time from start minus input fetch time
       val totalWriteTime = System.nanoTime() - writeStartTime
       writeMetrics.incWriteTime(totalWriteTime - inputFetchTimeNs)
+      partialFileMergeTimeMetric.foreach(_ += partialFileMergeTimeNs)
       result
     } finally {
       // Clean up handles if they weren't transferred to catalog or merged

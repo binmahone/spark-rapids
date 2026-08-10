@@ -221,7 +221,10 @@ class RapidsShuffleThreadedWriterSuite extends AnyFunSuite
   private val numWriterThreads = 2
 
   private def createTestBatch(value: Int): ColumnarBatch = {
-    val bufferSize = 64 + (value % 64)
+    createTestBatch(value, 64 + (value % 64))
+  }
+
+  private def createTestBatch(value: Int, bufferSize: Int): ColumnarBatch = {
     val hmb = HostMemoryBuffer.allocate(bufferSize)
     for (i <- 0 until bufferSize) {
       hmb.setByte(i, (value + i).toByte)
@@ -986,6 +989,59 @@ class RapidsShuffleThreadedWriterSuite extends AnyFunSuite
         s"Expected IOException, got ${Option(writeFailure).map(_.getClass.getName)}")
       assert(writer.getBytesInFlight == 0,
         "exceptional compression future leaked bytes-in-flight quota")
+    } finally {
+      releaseBlockers.countDown()
+      writerBlockers.foreach(_.get(5, TimeUnit.SECONDS))
+      writer.stop(false)
+      if (writeThread.isAlive) {
+        writeThread.join(5000)
+      }
+    }
+  }
+
+  test("compression failure wakes a producer blocked on bytes-in-flight quota") {
+    val blockersStarted = new CountDownLatch(numWriterThreads)
+    val releaseBlockers = new CountDownLatch(1)
+    val writerBlockers = (0 until numWriterThreads).map { _ =>
+      submitWriterTask {
+        blockersStarted.countDown()
+        releaseBlockers.await()
+      }
+    }
+    assert(blockersStarted.await(5, TimeUnit.SECONDS), "writer blockers did not start")
+
+    when(dependency.serializer).thenReturn(new FailingTestColumnarBatchSerializer())
+    val writer = createWriter()
+    val largeRecordSize = 700 * 1024
+    val records = Iterator(
+      (0, createTestBatch(0, largeRecordSize)),
+      (1, createTestBatch(1, largeRecordSize)))
+    @volatile var writeFailure: Throwable = null
+    val writeThread = new Thread(() => {
+      try {
+        writer.write(records)
+      } catch {
+        case t: Throwable => writeFailure = t
+      }
+    })
+
+    try {
+      writeThread.start()
+      val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+      while (writer.getBytesInFlight == 0 && System.nanoTime() < deadline) {
+        Thread.sleep(10)
+      }
+      assert(writer.getBytesInFlight == largeRecordSize,
+        "first record did not hold bytes-in-flight quota")
+
+      releaseBlockers.countDown()
+      writeThread.join(5000)
+      assert(!writeThread.isAlive,
+        "compression failure did not wake the producer blocked on bytes-in-flight quota")
+      assert(writeFailure.isInstanceOf[IOException],
+        s"Expected IOException, got ${Option(writeFailure).map(_.getClass.getName)}")
+      assert(writer.getBytesInFlight == 0,
+        "compression failure leaked bytes-in-flight quota")
     } finally {
       releaseBlockers.countDown()
       writerBlockers.foreach(_.get(5, TimeUnit.SECONDS))

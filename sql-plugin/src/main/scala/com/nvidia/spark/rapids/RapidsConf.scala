@@ -2498,7 +2498,8 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
 
   val SHUFFLE_MULTITHREADED_READER_ADAPTIVE_GPU_CONCURRENCY_MULTIPLIER =
     conf("spark.rapids.shuffle.multiThreaded.reader.adaptiveAdmission.gpuConcurrencyMultiplier")
-      .doc("Multiplier applied to estimated dynamic GPU concurrency to bound reader admission.")
+      .doc("Multiplier applied to estimated dynamic GPU concurrency to derive the reader " +
+        "admission target.")
       .internal()
       .startupOnly()
       .doubleConf
@@ -2513,6 +2514,16 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
       .integerConf
       .checkValue(_ > 0, "The adaptive reader decision window must be positive.")
       .createWithDefault(4)
+
+  val SHUFFLE_MULTITHREADED_READER_ADAPTIVE_STABLE_TARGET_WINDOWS =
+    conf("spark.rapids.shuffle.multiThreaded.reader.adaptiveAdmission.stableTargetWindows")
+      .doc("Consecutive decision windows that must report the same GPU-derived target before " +
+        "reader admission moves one permit toward it.")
+      .internal()
+      .startupOnly()
+      .integerConf
+      .checkValue(_ > 0, "The adaptive reader stable target window count must be positive.")
+      .createWithDefault(2)
 
   val SHUFFLE_MULTITHREADED_READER_ADAPTIVE_DETAILED_LOGGING_ENABLED =
     conf("spark.rapids.shuffle.multiThreaded.reader.adaptiveAdmission.detailedLogging.enabled")
@@ -3956,6 +3967,9 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val shuffleMultiThreadedReaderAdaptiveDecisionWindowTasks: Int =
     get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_DECISION_WINDOW_TASKS)
+
+  lazy val shuffleMultiThreadedReaderAdaptiveStableTargetWindows: Int =
+    get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_STABLE_TARGET_WINDOWS)
 
   lazy val shuffleMultiThreadedReaderAdaptiveDetailedLoggingEnabled: Boolean =
     get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_DETAILED_LOGGING_ENABLED)

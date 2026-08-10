@@ -346,6 +346,25 @@ object GpuShuffleExchangeExecBase {
   val METRIC_THREADED_READER_DESER_WAIT_TIME = "rapidsThreadedReaderDeserWaitTime"
   val METRIC_DESC_THREADED_READER_DESER_WAIT_TIME =
     "threaded reader time waiting for background deserialization (future.get + queued.take)"
+  val METRIC_THREADED_READER_FUTURE_WAIT_TIME = "rapidsThreadedReaderFutureWaitTime"
+  val METRIC_DESC_THREADED_READER_FUTURE_WAIT_TIME =
+    "threaded reader time waiting for a background future"
+  val METRIC_THREADED_READER_RESULT_QUEUE_WAIT_TIME =
+    "rapidsThreadedReaderResultQueueWaitTime"
+  val METRIC_DESC_THREADED_READER_RESULT_QUEUE_WAIT_TIME =
+    "threaded reader time waiting for a materialized result"
+  val METRIC_THREADED_READER_WORKER_QUEUE_DELAY = "rapidsThreadedReaderWorkerQueueDelay"
+  val METRIC_DESC_THREADED_READER_WORKER_QUEUE_DELAY =
+    "threaded reader background task scheduling delay"
+  val METRIC_THREADED_READER_WORKER_ACTIVE_TIME = "rapidsThreadedReaderWorkerActiveTime"
+  val METRIC_DESC_THREADED_READER_WORKER_ACTIVE_TIME =
+    "threaded reader background task active wall time"
+  val METRIC_THREADED_READER_WORKER_CPU_TIME = "rapidsThreadedReaderWorkerCpuTime"
+  val METRIC_DESC_THREADED_READER_WORKER_CPU_TIME =
+    "threaded reader background task thread CPU time"
+  val METRIC_THREADED_READER_WORKER_TASK_COUNT = "rapidsThreadedReaderWorkerTaskCount"
+  val METRIC_DESC_THREADED_READER_WORKER_TASK_COUNT =
+    "threaded reader background task count"
   val METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT =
     "rapidsThreadedReaderLimiterAcquireCount"
   val METRIC_DESC_THREADED_READER_LIMITER_ACQUIRE_COUNT =
@@ -382,18 +401,14 @@ object GpuShuffleExchangeExecBase {
     "rapidsThreadedReaderAdmissionHoldCount"
   val METRIC_DESC_THREADED_READER_ADMISSION_HOLD_COUNT =
     "threaded reader adaptive admission hold count"
-  val METRIC_THREADED_READER_ADMISSION_GPU_CLAMP_COUNT =
-    "rapidsThreadedReaderAdmissionGpuClampCount"
-  val METRIC_DESC_THREADED_READER_ADMISSION_GPU_CLAMP_COUNT =
-    "threaded reader adaptive admission GPU ceiling clamp count"
   val METRIC_THREADED_READER_ADMISSION_DESIRED_PERMITS_SUM =
     "rapidsThreadedReaderAdmissionDesiredPermitsSum"
   val METRIC_DESC_THREADED_READER_ADMISSION_DESIRED_PERMITS_SUM =
     "sum of desired reader permits after adaptive decisions"
-  val METRIC_THREADED_READER_ADMISSION_GPU_CEILING_SUM =
-    "rapidsThreadedReaderAdmissionGpuCeilingSum"
-  val METRIC_DESC_THREADED_READER_ADMISSION_GPU_CEILING_SUM =
-    "sum of estimated GPU-derived reader ceilings at adaptive decisions"
+  val METRIC_THREADED_READER_ADMISSION_GPU_TARGET_SUM =
+    "rapidsThreadedReaderAdmissionGpuTargetSum"
+  val METRIC_DESC_THREADED_READER_ADMISSION_GPU_TARGET_SUM =
+    "sum of stable GPU-derived reader targets at adaptive decisions"
 
   def createAdditionalExchangeMetrics(gpu: GpuExec): Map[String, GpuMetric] = Map(
     // dataSize and dataReadSize are uncompressed, one is on write and the other on read
@@ -443,6 +458,24 @@ object GpuShuffleExchangeExecBase {
     METRIC_THREADED_READER_DESER_WAIT_TIME ->
         gpu.createNanoTimingMetric(DEBUG_LEVEL,
           METRIC_DESC_THREADED_READER_DESER_WAIT_TIME),
+    METRIC_THREADED_READER_FUTURE_WAIT_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_FUTURE_WAIT_TIME),
+    METRIC_THREADED_READER_RESULT_QUEUE_WAIT_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_RESULT_QUEUE_WAIT_TIME),
+    METRIC_THREADED_READER_WORKER_QUEUE_DELAY ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_WORKER_QUEUE_DELAY),
+    METRIC_THREADED_READER_WORKER_ACTIVE_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_WORKER_ACTIVE_TIME),
+    METRIC_THREADED_READER_WORKER_CPU_TIME ->
+        gpu.createNanoTimingMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_WORKER_CPU_TIME),
+    METRIC_THREADED_READER_WORKER_TASK_COUNT ->
+        gpu.createMetric(DEBUG_LEVEL,
+          METRIC_DESC_THREADED_READER_WORKER_TASK_COUNT),
     METRIC_THREADED_READER_LIMITER_ACQUIRE_COUNT ->
         gpu.createMetric(DEBUG_LEVEL,
           METRIC_DESC_THREADED_READER_LIMITER_ACQUIRE_COUNT),
@@ -470,15 +503,12 @@ object GpuShuffleExchangeExecBase {
     METRIC_THREADED_READER_ADMISSION_HOLD_COUNT ->
         gpu.createMetric(DEBUG_LEVEL,
           METRIC_DESC_THREADED_READER_ADMISSION_HOLD_COUNT),
-    METRIC_THREADED_READER_ADMISSION_GPU_CLAMP_COUNT ->
-        gpu.createMetric(DEBUG_LEVEL,
-          METRIC_DESC_THREADED_READER_ADMISSION_GPU_CLAMP_COUNT),
     METRIC_THREADED_READER_ADMISSION_DESIRED_PERMITS_SUM ->
         gpu.createMetric(DEBUG_LEVEL,
           METRIC_DESC_THREADED_READER_ADMISSION_DESIRED_PERMITS_SUM),
-    METRIC_THREADED_READER_ADMISSION_GPU_CEILING_SUM ->
+    METRIC_THREADED_READER_ADMISSION_GPU_TARGET_SUM ->
         gpu.createMetric(DEBUG_LEVEL,
-          METRIC_DESC_THREADED_READER_ADMISSION_GPU_CEILING_SUM)
+          METRIC_DESC_THREADED_READER_ADMISSION_GPU_TARGET_SUM)
   )
 
   def prepareBatchShuffleDependency(

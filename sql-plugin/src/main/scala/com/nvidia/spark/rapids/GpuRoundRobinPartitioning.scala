@@ -59,7 +59,9 @@ case class GpuRoundRobinPartitioning(numPartitions: Int)
         withResource(GpuColumnVector.from(b)) { table =>
           withResource(table.
             roundRobinPartition(numPartitions, getStartPartition)) { partedTable =>
-            val parts = partedTable.getPartitions
+            // Table.roundRobinPartition returns one boundary per partition plus the total row
+            // count. Downstream slicing expects only the partition start boundaries.
+            val parts = partedTable.getPartitions.dropRight(1)
             val columns = (0 until partedTable.getNumberOfColumns.toInt).zip(sparkTypes).map {
               case (idx, sparkType) =>
                 GpuColumnVector

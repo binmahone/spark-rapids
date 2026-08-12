@@ -467,11 +467,12 @@ trait GpuFileFormatWriterBase extends Serializable with Logging {
       .collectFirst { case t: GpuWriteJobStatsTracker => t.writerInitTimeMetric }
       .getOrElse(NoopMetric)
 
+    val taskInputIterator = iterator
     val timedIterator = new Iterator[ColumnarBatch] {
       override def hasNext: Boolean = {
         val start = System.nanoTime()
         try {
-          iterator.hasNext
+          taskInputIterator.hasNext
         } finally {
           inputIteratorTimeMetric += System.nanoTime() - start
         }
@@ -480,7 +481,7 @@ trait GpuFileFormatWriterBase extends Serializable with Logging {
       override def next(): ColumnarBatch = {
         val start = System.nanoTime()
         try {
-          iterator.next()
+          taskInputIterator.next()
         } finally {
           inputIteratorTimeMetric += System.nanoTime() - start
         }

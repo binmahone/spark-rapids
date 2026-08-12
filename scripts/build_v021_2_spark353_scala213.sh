@@ -11,7 +11,7 @@ cd "$ROOT"
 mvn --offline -f scala2.13/pom.xml \
   -Prelease353 \
   -Dbuildver=353 \
-  -pl sql-plugin -am \
+  -pl dist -am \
   -DskipTests \
   package \
   2>&1 | tee "$LOG_DIR/${TIMESTAMP}-compile.log"

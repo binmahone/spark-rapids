@@ -140,7 +140,17 @@ abstract class GpuFileFormatDataWriter(
         val closeStart = System.nanoTime()
         try {
           writer.close()
-          statsTrackers.foreach(_.closeFile(writer.path()))
+          val statsCloseStart = System.nanoTime()
+          try {
+            statsTrackers.foreach(_.closeFile(writer.path()))
+          } finally {
+            val statsCloseTime = System.nanoTime() - statsCloseStart
+            statsTrackers.foreach {
+              case gpuTracker: GpuWriteTaskStatsTracker =>
+                gpuTracker.addStatsCloseFileTime(statsCloseTime)
+              case _ =>
+            }
+          }
         } finally {
           val closeTime = System.nanoTime() - closeStart
           statsTrackers.foreach {

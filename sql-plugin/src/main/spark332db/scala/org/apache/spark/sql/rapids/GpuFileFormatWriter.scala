@@ -460,10 +460,38 @@ trait GpuFileFormatWriterBase extends Serializable with Logging {
     val opTimeMetric: GpuMetric = description.statsTrackers
       .collectFirst { case t: GpuWriteJobStatsTracker => t.opTimeNewMetric }
       .getOrElse(NoopMetric)
+    val inputIteratorTimeMetric: GpuMetric = description.statsTrackers
+      .collectFirst { case t: GpuWriteJobStatsTracker => t.inputIteratorTimeMetric }
+      .getOrElse(NoopMetric)
+    val writerInitTimeMetric: GpuMetric = description.statsTrackers
+      .collectFirst { case t: GpuWriteJobStatsTracker => t.writerInitTimeMetric }
+      .getOrElse(NoopMetric)
+
+    val timedIterator = new Iterator[ColumnarBatch] {
+      override def hasNext: Boolean = {
+        val start = System.nanoTime()
+        try {
+          iterator.hasNext
+        } finally {
+          inputIteratorTimeMetric += System.nanoTime() - start
+        }
+      }
+
+      override def next(): ColumnarBatch = {
+        val start = System.nanoTime()
+        try {
+          iterator.next()
+        } finally {
+          inputIteratorTimeMetric += System.nanoTime() - start
+        }
+      }
+    }
 
     opTimeMetric.ns(excludeMetrics) {
-      val dataWriter =
-        if (sparkPartitionId != 0 && !iterator.hasNext) {
+      val isEmptyPartition = sparkPartitionId != 0 && !timedIterator.hasNext
+      val writerInitStart = System.nanoTime()
+      val dataWriter = try {
+        if (isEmptyPartition) {
           // In case of empty job, leave first partition to save meta for file format like parquet.
           new GpuEmptyDirectoryDataWriter(description, taskAttemptContext, committer)
         } else if (description.partitionColumns.isEmpty && description.bucketSpec.isEmpty) {
@@ -479,11 +507,14 @@ trait GpuFileFormatWriterBase extends Serializable with Logging {
                 baseDebugOutputPath)
           }
         }
+      } finally {
+        writerInitTimeMetric += System.nanoTime() - writerInitStart
+      }
 
       try {
         Utils.tryWithSafeFinallyAndFailureCallbacks(block = {
           // Execute the task to write rows out and commit the task.
-          dataWriter.writeWithIterator(iterator)
+          dataWriter.writeWithIterator(timedIterator)
           dataWriter.commit()
         })(catchBlock = {
           // If there is an error, abort the task

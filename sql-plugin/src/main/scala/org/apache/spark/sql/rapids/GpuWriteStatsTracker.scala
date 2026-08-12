@@ -51,6 +51,18 @@ class GpuWriteTaskStatsTracker(
     taskMetrics(GpuWriteJobStatsTracker.WRITE_IO_TIME_KEY) += nanos
   }
 
+  def addInputIteratorTime(nanos: Long): Unit = {
+    taskMetrics(GpuWriteJobStatsTracker.INPUT_ITERATOR_TIME_KEY) += nanos
+  }
+
+  def addWriterInitTime(nanos: Long): Unit = {
+    taskMetrics(GpuWriteJobStatsTracker.WRITER_INIT_TIME_KEY) += nanos
+  }
+
+  def addWriterCloseTime(nanos: Long): Unit = {
+    taskMetrics(GpuWriteJobStatsTracker.WRITER_CLOSE_TIME_KEY) += nanos
+  }
+
   def setAsyncWriteThrottleTimes(numTasks: Int, accumulatedThrottleTimeNs: Long, minNs: Long,
       maxNs: Long): Unit = {
     val avg = if (numTasks > 0) {
@@ -93,6 +105,12 @@ class GpuWriteJobStatsTracker(
    */
   def opTimeNewMetric: GpuMetric =
     taskMetrics.getOrElse(GpuWriteJobStatsTracker.OP_TIME_NEW_KEY, NoopMetric)
+
+  def inputIteratorTimeMetric: GpuMetric =
+    taskMetrics.getOrElse(GpuWriteJobStatsTracker.INPUT_ITERATOR_TIME_KEY, NoopMetric)
+
+  def writerInitTimeMetric: GpuMetric =
+    taskMetrics.getOrElse(GpuWriteJobStatsTracker.WRITER_INIT_TIME_KEY, NoopMetric)
 }
 
 object GpuWriteJobStatsTracker {
@@ -101,6 +119,9 @@ object GpuWriteJobStatsTracker {
   val SORT_TIME_KEY = "writeSortTime"
   val SORT_OP_TIME_KEY = "writeSortOpTime"
   val WRITE_IO_TIME_KEY = "writeIOTime"
+  val INPUT_ITERATOR_TIME_KEY = "inputIteratorTime"
+  val WRITER_INIT_TIME_KEY = "writerInitTime"
+  val WRITER_CLOSE_TIME_KEY = "writerCloseTime"
   val OP_TIME_NEW_KEY = "operatorTime"
   val ASYNC_WRITE_TOTAL_THROTTLE_TIME_KEY = "asyncWriteTotalThrottleTime"
   val ASYNC_WRITE_AVG_THROTTLE_TIME_KEY = "asyncWriteAvgThrottleTime"
@@ -125,6 +146,12 @@ object GpuWriteJobStatsTracker {
         "GPU sort time"),
       WRITE_IO_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
         "write I/O time"),
+      INPUT_ITERATOR_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
+        "input iterator time"),
+      WRITER_INIT_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
+        "writer initialization time"),
+      WRITER_CLOSE_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
+        "writer close time"),
       OP_TIME_NEW_KEY -> metricFactory.createNanoTiming(GpuMetric.MODERATE_LEVEL,
         "op time"),
       TASK_COMMIT_TIME -> basicMetrics(TASK_COMMIT_TIME),

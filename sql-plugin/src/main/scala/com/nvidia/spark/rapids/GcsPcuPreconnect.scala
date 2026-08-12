@@ -34,6 +34,9 @@ private[rapids] object GcsPcuPreconnect extends Logging {
   val ROOT_KEY = "spark.rapids.gcs.pcu.preconnect.root"
   val BYTES_KEY = "spark.rapids.gcs.pcu.preconnect.bytes"
 
+  private val SparkHadoopPrefix = "spark.hadoop."
+  private val GcsUploadTypeKey = "fs.gs.client.upload.type"
+  private val PcuUploadType = "PARALLEL_COMPOSITE_UPLOAD"
   private val DefaultBytes = 1
   private val MaxBytes = 1024 * 1024
 
@@ -48,10 +51,14 @@ private[rapids] object GcsPcuPreconnect extends Logging {
 
       val safeExecutorId = executorId.replaceAll("[^A-Za-z0-9_.-]", "_")
       val path = new Path(root.stripSuffix("/"), s"executor-$safeExecutorId/preconnect.bin")
+      val effectiveHadoopConf = buildEffectiveHadoopConf(sparkConf, hadoopConf)
+      requirePcuUploadType(path, effectiveHadoopConf)
       val totalStart = System.nanoTime()
       val fsStart = System.nanoTime()
-      val fs = path.getFileSystem(hadoopConf)
+      val fs = path.getFileSystem(effectiveHadoopConf)
       val fsMs = elapsedMs(fsStart)
+      val effectiveUploadType = Option(fs.getConf.get(GcsUploadTypeKey)).getOrElse("<unset>")
+      requirePcuUploadType(path, fs.getConf)
       val createStart = System.nanoTime()
       val out = fs.create(path, false)
       val createMs = elapsedMs(createStart)
@@ -69,7 +76,26 @@ private[rapids] object GcsPcuPreconnect extends Logging {
       val totalMs = elapsedMs(totalStart)
       logInfo(s"RAPIDS_GCS_PCU_PRECONNECT_METRIC executor_id=$executorId bytes=$byteCount " +
         s"fs_ms=$fsMs create_ms=$createMs write_ms=$writeMs close_ms=$closeMs " +
-        s"total_ms=$totalMs path=$path success=true")
+        s"total_ms=$totalMs path=$path upload_type=$effectiveUploadType " +
+        s"fs_impl=${fs.getClass.getName} success=true")
+    }
+  }
+
+  private[rapids] def buildEffectiveHadoopConf(
+      sparkConf: SparkConf,
+      baseHadoopConf: Configuration): Configuration = {
+    val effective = new Configuration(baseHadoopConf)
+    sparkConf.getAllWithPrefix(SparkHadoopPrefix).foreach { case (key, value) =>
+      effective.set(key, value)
+    }
+    effective
+  }
+
+  private[rapids] def requirePcuUploadType(path: Path, conf: Configuration): Unit = {
+    if (Option(path.toUri.getScheme).exists(_.equalsIgnoreCase("gs"))) {
+      val observed = Option(conf.get(GcsUploadTypeKey)).getOrElse("<unset>")
+      require(observed.equalsIgnoreCase(PcuUploadType),
+        s"$GcsUploadTypeKey must be $PcuUploadType for GCS preconnect, observed $observed")
     }
   }
 

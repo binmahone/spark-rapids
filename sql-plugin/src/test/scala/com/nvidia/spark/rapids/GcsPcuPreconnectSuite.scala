@@ -59,4 +59,38 @@ class GcsPcuPreconnectSuite extends AnyFunSuite {
       expected.getFileSystem(hadoopConf).delete(new Path(root), true)
     }
   }
+
+  test("effective Hadoop configuration includes and prioritizes spark.hadoop settings") {
+    val base = new Configuration(false)
+    base.set("fs.gs.client.upload.type", "RESUMABLE_UPLOAD")
+    base.set("base.only", "retained")
+    val sparkConf = new SparkConf(false)
+      .set("spark.hadoop.fs.gs.client.upload.type", "PARALLEL_COMPOSITE_UPLOAD")
+      .set("spark.hadoop.fs.gs.impl", "example.PcuFileSystem")
+
+    val effective = GcsPcuPreconnect.buildEffectiveHadoopConf(sparkConf, base)
+
+    assert(effective.get("fs.gs.client.upload.type") === "PARALLEL_COMPOSITE_UPLOAD")
+    assert(effective.get("fs.gs.impl") === "example.PcuFileSystem")
+    assert(effective.get("base.only") === "retained")
+    assert(base.get("fs.gs.client.upload.type") === "RESUMABLE_UPLOAD")
+  }
+
+  test("GCS preconnect requires parallel composite upload") {
+    val path = new Path("gs://bucket/preconnect/executor-1/preconnect.bin")
+    val conf = new Configuration(false)
+    val missing = intercept[IllegalArgumentException] {
+      GcsPcuPreconnect.requirePcuUploadType(path, conf)
+    }
+    assert(missing.getMessage.contains("observed <unset>"))
+
+    conf.set("fs.gs.client.upload.type", "RESUMABLE_UPLOAD")
+    val wrong = intercept[IllegalArgumentException] {
+      GcsPcuPreconnect.requirePcuUploadType(path, conf)
+    }
+    assert(wrong.getMessage.contains("observed RESUMABLE_UPLOAD"))
+
+    conf.set("fs.gs.client.upload.type", "PARALLEL_COMPOSITE_UPLOAD")
+    GcsPcuPreconnect.requirePcuUploadType(path, conf)
+  }
 }

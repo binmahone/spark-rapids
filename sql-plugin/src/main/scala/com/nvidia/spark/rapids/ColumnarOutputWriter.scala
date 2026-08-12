@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2026, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -286,10 +286,40 @@ abstract class ColumnarOutputWriter(context: TaskAttemptContext,
       // This prevents writing out bad files
       bufferBatchAndClose(GpuColumnVector.emptyBatch(dataSchema))
     }
-    tableWriter.close()
+    val tableWriterCloseStart = System.nanoTime()
+    try {
+      tableWriter.close()
+    } finally {
+      val tableWriterCloseTime = System.nanoTime() - tableWriterCloseStart
+      statsTrackers.foreach {
+        case gpuTracker: GpuWriteTaskStatsTracker =>
+          gpuTracker.addTableWriterCloseTime(tableWriterCloseTime)
+        case _ =>
+      }
+    }
     GpuSemaphore.releaseIfNecessary(TaskContext.get())
-    writeBufferedData()
-    outputStream.close()
+    val bufferedWriteStart = System.nanoTime()
+    try {
+      writeBufferedData()
+    } finally {
+      val bufferedWriteTime = System.nanoTime() - bufferedWriteStart
+      statsTrackers.foreach {
+        case gpuTracker: GpuWriteTaskStatsTracker =>
+          gpuTracker.addCloseBufferedWriteTime(bufferedWriteTime)
+        case _ =>
+      }
+    }
+    val outputStreamCloseStart = System.nanoTime()
+    try {
+      outputStream.close()
+    } finally {
+      val outputStreamCloseTime = System.nanoTime() - outputStreamCloseStart
+      statsTrackers.foreach {
+        case gpuTracker: GpuWriteTaskStatsTracker =>
+          gpuTracker.addOutputStreamCloseTime(outputStreamCloseTime)
+        case _ =>
+      }
+    }
     debugDumpOutputStream.foreach { os =>
       os.close()
     }

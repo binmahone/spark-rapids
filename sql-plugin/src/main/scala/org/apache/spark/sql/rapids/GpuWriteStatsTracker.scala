@@ -63,6 +63,22 @@ class GpuWriteTaskStatsTracker(
     taskMetrics(GpuWriteJobStatsTracker.WRITER_CLOSE_TIME_KEY) += nanos
   }
 
+  def addTableWriterCloseTime(nanos: Long): Unit = {
+    taskMetrics(GpuWriteJobStatsTracker.TABLE_WRITER_CLOSE_TIME_KEY) += nanos
+  }
+
+  def addCloseBufferedWriteTime(nanos: Long): Unit = {
+    taskMetrics(GpuWriteJobStatsTracker.CLOSE_BUFFERED_WRITE_TIME_KEY) += nanos
+  }
+
+  def addOutputStreamCloseTime(nanos: Long): Unit = {
+    taskMetrics(GpuWriteJobStatsTracker.OUTPUT_STREAM_CLOSE_TIME_KEY) += nanos
+  }
+
+  def addStatsCloseFileTime(nanos: Long): Unit = {
+    taskMetrics(GpuWriteJobStatsTracker.STATS_CLOSE_FILE_TIME_KEY) += nanos
+  }
+
   def setAsyncWriteThrottleTimes(numTasks: Int, accumulatedThrottleTimeNs: Long, minNs: Long,
       maxNs: Long): Unit = {
     val avg = if (numTasks > 0) {
@@ -122,6 +138,10 @@ object GpuWriteJobStatsTracker {
   val INPUT_ITERATOR_TIME_KEY = "inputIteratorTime"
   val WRITER_INIT_TIME_KEY = "writerInitTime"
   val WRITER_CLOSE_TIME_KEY = "writerCloseTime"
+  val TABLE_WRITER_CLOSE_TIME_KEY = "tableWriterCloseTime"
+  val CLOSE_BUFFERED_WRITE_TIME_KEY = "closeBufferedWriteTime"
+  val OUTPUT_STREAM_CLOSE_TIME_KEY = "outputStreamCloseTime"
+  val STATS_CLOSE_FILE_TIME_KEY = "statsCloseFileTime"
   val OP_TIME_NEW_KEY = "operatorTime"
   val ASYNC_WRITE_TOTAL_THROTTLE_TIME_KEY = "asyncWriteTotalThrottleTime"
   val ASYNC_WRITE_AVG_THROTTLE_TIME_KEY = "asyncWriteAvgThrottleTime"
@@ -152,6 +172,14 @@ object GpuWriteJobStatsTracker {
         "writer initialization time"),
       WRITER_CLOSE_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
         "writer close time"),
+      TABLE_WRITER_CLOSE_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
+        "table writer close time"),
+      CLOSE_BUFFERED_WRITE_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
+        "close buffered write time"),
+      OUTPUT_STREAM_CLOSE_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
+        "output stream close time"),
+      STATS_CLOSE_FILE_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
+        "stats close file time"),
       OP_TIME_NEW_KEY -> metricFactory.createNanoTiming(GpuMetric.MODERATE_LEVEL,
         "op time"),
       TASK_COMMIT_TIME -> basicMetrics(TASK_COMMIT_TIME),

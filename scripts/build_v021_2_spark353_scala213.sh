@@ -11,9 +11,11 @@ cd "$ROOT"
 mvn --offline -f scala2.13/pom.xml \
   -Prelease353 \
   -Dbuildver=353 \
+  -Drapids.iceberg.artifactId=rapids-4-spark-iceberg-stub \
+  -Drapids.iceberg.artifactId2=rapids-4-spark-iceberg-stub \
   -pl dist -am \
   -DskipTests \
-  package \
+  clean package \
   2>&1 | tee "$LOG_DIR/${TIMESTAMP}-compile.log"
 
 mvn --offline --non-recursive \

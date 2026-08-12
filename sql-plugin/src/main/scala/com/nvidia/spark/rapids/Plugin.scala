@@ -744,6 +744,12 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
       timeExecutorInitPhase("traffic_controller_init") {
         TrafficController.initialize(conf)
       }
+      timeExecutorInitPhase("gcs_pcu_preconnect") {
+        GcsPcuPreconnect.run(
+          sparkConf,
+          org.apache.spark.sql.rapids.execution.TrampolineUtil.getSparkHadoopUtilConf,
+          pluginContext.executorID())
+      }
       val executorInitDurationMs = (System.nanoTime() - executorInitStartNanos) / 1000000L
       logInfo(s"RAPIDS_EXECUTOR_INIT_METRIC phase=total duration_ms=$executorInitDurationMs " +
         s"start_epoch_ms=$executorInitStartEpochMs end_epoch_ms=${System.currentTimeMillis()}")

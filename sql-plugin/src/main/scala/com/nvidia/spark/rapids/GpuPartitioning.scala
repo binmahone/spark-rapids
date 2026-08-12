@@ -425,10 +425,9 @@ trait GpuPartitioning extends Partitioning with Logging {
                       partitionRows,
                       partitionBytes,
                       previousByteOffset)
-                  } else {
-                    require(partitionBytes == 0,
-                      s"empty shuffle partition $partitionId has $partitionBytes serialized bytes")
                   }
+                  // Kudo may emit framing bytes for an empty partition. Advancing the byte
+                  // boundary while omitting the partition keeps that framing out of shuffle.
                   previousRowIndex = nextRowIndex
                   previousByteOffset = nextByteOffset
                   partitionId += 1

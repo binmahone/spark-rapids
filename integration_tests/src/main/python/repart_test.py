@@ -234,6 +234,25 @@ def test_round_robin_kudo_gpu_compression_partition_boundaries():
         lambda spark: gen_df(spark, [('a', long_gen)], length=4096).repartition(64),
         conf=conf)
 
+
+@ignore_order(local=True)
+def test_kudo_gpu_compression_empty_hash_partitions():
+    conf = {
+        'spark.io.compression.codec': 'zstd',
+        'spark.rapids.shuffle.kudo.serializer.enabled': 'true',
+        'spark.rapids.shuffle.kudo.serializer.write.mode': 'GPU',
+        'spark.rapids.shuffle.mode': 'MULTITHREADED',
+        'spark.rapids.shuffle.multithreaded.adaptiveGpuCompression.enabled': 'true',
+        'spark.rapids.shuffle.multithreaded.skipMerge': 'true',
+        'spark.shuffle.compress': 'true',
+        'spark.sql.adaptive.enabled': 'false',
+    }
+    assert_gpu_and_cpu_are_equal_collect(
+        lambda spark: gen_df(spark, [('a', long_gen)], length=4096)
+            .repartition(512, f.col('a') % 2),
+        conf=conf)
+
+
 @allow_non_gpu('ShuffleExchangeExec', 'RoundRobinPartitioning')
 @pytest.mark.parametrize('data_gen', [[('a', simple_string_to_string_map_gen)]], ids=idfn)
 @ignore_order(local=True) # To avoid extra data shuffle by 'sort on Spark' for this repartition test.

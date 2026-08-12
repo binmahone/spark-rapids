@@ -596,9 +596,23 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
 
   private var isAsyncProfilerEnabled = false
 
+  private def timeExecutorInitPhase[T](phase: String)(body: => T): T = {
+    val startNanos = System.nanoTime()
+    try {
+      body
+    } finally {
+      val durationMs = (System.nanoTime() - startNanos) / 1000000L
+      logInfo(s"RAPIDS_EXECUTOR_INIT_METRIC phase=$phase duration_ms=$durationMs")
+    }
+  }
+
   override def init(
       pluginContext: PluginContext,
       extraConf: java.util.Map[String, String]): Unit = {
+    val executorInitStartNanos = System.nanoTime()
+    val executorInitStartEpochMs = System.currentTimeMillis()
+    logInfo(s"RAPIDS_EXECUTOR_INIT_METRIC phase=started duration_ms=0 " +
+      s"start_epoch_ms=$executorInitStartEpochMs")
     try {
       // if configured, re-register checking leaks hook.
       reRegisterCheckLeakHook()
@@ -609,7 +623,9 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
 
       isAsyncProfilerEnabled = conf.asyncProfilerPathPrefix.nonEmpty
 
-      ProfilerOnExecutor.init(pluginContext, conf)
+      timeExecutorInitPhase("profiler_init") {
+        ProfilerOnExecutor.init(pluginContext, conf)
+      }
       if (isAsyncProfilerEnabled) {
         val schedulerMode = sparkConf.get("spark.scheduler.mode", "FIFO")
         if (!schedulerMode.equalsIgnoreCase("FIFO")) {
@@ -617,11 +633,15 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
             s"'$schedulerMode'. It's recommended to use FIFO scheduler mode when async " +
             "profiler is enabled for better profiling accuracy.")
         }
-        AsyncProfilerOnExecutor.init(pluginContext, conf)
+        timeExecutorInitPhase("async_profiler_init") {
+          AsyncProfilerOnExecutor.init(pluginContext, conf)
+        }
       }
 
       // Fail if there are multiple plugin jars in the classpath.
-      RapidsPluginUtils.detectMultipleJars(conf)
+      timeExecutorInitPhase("multiple_jar_check") {
+        RapidsPluginUtils.detectMultipleJars(conf)
+      }
 
       // Check Hybrid jar if needed.
       if (conf.loadHybridBackend) {
@@ -631,8 +651,10 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
       // Compare if the cudf version mentioned in the classpath is equal to the version which
       // plugin expects. If there is a version mismatch, throw error. This check can be disabled
       // by setting this config spark.rapids.cudfVersionOverride=true
-      checkCudfVersion(conf)
-      checkJniConstants()
+      timeExecutorInitPhase("cudf_jni_validation") {
+        checkCudfVersion(conf)
+        checkJniConstants()
+      }
 
       // Validate driver and executor time zone are same if the driver time zone is supported by
       // the plugin.
@@ -648,18 +670,26 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
       }
 
       // Initialize timezone database cache asynchronously on executor startup
-      GpuTimeZoneDB.cacheDatabaseAsync()
+      timeExecutorInitPhase("timezone_cache_submit") {
+        GpuTimeZoneDB.cacheDatabaseAsync()
+      }
 
-      GpuCoreDumpHandler.executorInit(conf, pluginContext)
+      timeExecutorInitPhase("core_dump_handler_init") {
+        GpuCoreDumpHandler.executorInit(conf, pluginContext)
+      }
 
       // we rely on the Rapids Plugin being run with 1 GPU per executor so we can initialize
       // on executor startup.
       if (!GpuDeviceManager.rmmTaskInitEnabled) {
         logInfo("Initializing memory from Executor Plugin")
-        GpuDeviceManager.initializeGpuAndMemory(pluginContext.resources().asScala.toMap, conf,
-          numCores)
+        timeExecutorInitPhase("gpu_and_rmm_init") {
+          GpuDeviceManager.initializeGpuAndMemory(pluginContext.resources().asScala.toMap, conf,
+            numCores)
+        }
         if (GpuShuffleEnv.isRapidsShuffleAvailable(conf)) {
-          GpuShuffleEnv.initShuffleManager()
+          timeExecutorInitPhase("shuffle_manager_init") {
+            GpuShuffleEnv.initShuffleManager()
+          }
         }
         // Mirror the driver-side fix: use isRapidsShuffleConfigured (SparkConf-only) so
         // heartbeat endpoint creation does not depend on SparkEnv being initialized.
@@ -676,8 +706,10 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
           if (conf.isMultiThreadedShuffleManagerMode && conf.isMultithreadedShuffleSkipMergeEnabled
               && !GpuShuffleEnv.isExternalShuffleEnabled && conf.offHeapLimitEnabled) {
             logInfo("Initializing shuffle cleanup endpoint for MULTITHREADED mode")
-            shuffleCleanupEndpoint = new ShuffleCleanupEndpoint(pluginContext)
-            shuffleCleanupEndpoint.start()
+            timeExecutorInitPhase("shuffle_cleanup_endpoint_init") {
+              shuffleCleanupEndpoint = new ShuffleCleanupEndpoint(pluginContext)
+              shuffleCleanupEndpoint.start()
+            }
           } else if (conf.isMultiThreadedShuffleManagerMode &&
               conf.isMultithreadedShuffleSkipMergeEnabled &&
               GpuShuffleEnv.isExternalShuffleEnabled) {
@@ -693,15 +725,28 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
       // spark-rapids-jni and cuDF libraries.
       // Note: We allow this check to be skipped for off-chance cases.
       if (!conf.skipGpuArchCheck && conf.isSqlExecuteOnGPU) {
-        RapidsPluginUtils.validateGpuArchitecture()
+        timeExecutorInitPhase("gpu_architecture_validation") {
+          RapidsPluginUtils.validateGpuArchitecture()
+        }
       }
 
       logDebug("Loading extra executor plugins: " +
         s"${extraExecutorPlugins.map(_.getClass.getName).mkString(",")}")
-      extraExecutorPlugins.foreach(_.init(pluginContext, extraConf))
-      GpuSemaphore.initialize(conf.maxConcurrentGpuTasks)
-      FileCache.init(pluginContext)
-      TrafficController.initialize(conf)
+      timeExecutorInitPhase("extra_executor_plugins_init") {
+        extraExecutorPlugins.foreach(_.init(pluginContext, extraConf))
+      }
+      timeExecutorInitPhase("gpu_semaphore_init") {
+        GpuSemaphore.initialize(conf.maxConcurrentGpuTasks)
+      }
+      timeExecutorInitPhase("file_cache_init") {
+        FileCache.init(pluginContext)
+      }
+      timeExecutorInitPhase("traffic_controller_init") {
+        TrafficController.initialize(conf)
+      }
+      val executorInitDurationMs = (System.nanoTime() - executorInitStartNanos) / 1000000L
+      logInfo(s"RAPIDS_EXECUTOR_INIT_METRIC phase=total duration_ms=$executorInitDurationMs " +
+        s"start_epoch_ms=$executorInitStartEpochMs end_epoch_ms=${System.currentTimeMillis()}")
     } catch {
       // Exceptions in executor plugin can cause a single thread to die but the executor process
       // sticks around without any useful info until it hearbeat times out. Print what happened

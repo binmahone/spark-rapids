@@ -305,7 +305,9 @@ abstract class ColumnarOutputWriter(context: TaskAttemptContext,
     timeAndRecord((tracker, nanos) => tracker.addTableWriterCloseTime(nanos)) {
       tableWriter.close()
     }
-    GpuSemaphore.releaseIfNecessary(TaskContext.get())
+    timeAndRecord((tracker, nanos) => tracker.addGpuSemaphoreReleaseTime(nanos)) {
+      GpuSemaphore.releaseIfNecessary(TaskContext.get())
+    }
     timeAndRecord((tracker, nanos) => tracker.addFinalBufferedWriteTime(nanos)) {
       writeBufferedData()
     }

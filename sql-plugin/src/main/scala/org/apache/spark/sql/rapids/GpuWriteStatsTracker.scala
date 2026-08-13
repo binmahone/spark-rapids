@@ -59,6 +59,10 @@ class GpuWriteTaskStatsTracker(
     taskMetrics(GpuWriteJobStatsTracker.TABLE_WRITER_CLOSE_TIME_KEY) += nanos
   }
 
+  def addGpuSemaphoreReleaseTime(nanos: Long): Unit = {
+    taskMetrics(GpuWriteJobStatsTracker.GPU_SEMAPHORE_RELEASE_TIME_KEY) += nanos
+  }
+
   def addFinalBufferedWriteTime(nanos: Long): Unit = {
     taskMetrics(GpuWriteJobStatsTracker.FINAL_BUFFERED_WRITE_TIME_KEY) += nanos
   }
@@ -131,6 +135,7 @@ object GpuWriteJobStatsTracker {
   val DATA_WRITER_CLOSE_TIME_KEY = "dataWriterCloseTime"
   val WRITER_EMPTY_BATCH_TIME_KEY = "writerEmptyBatchTime"
   val TABLE_WRITER_CLOSE_TIME_KEY = "tableWriterCloseTime"
+  val GPU_SEMAPHORE_RELEASE_TIME_KEY = "gpuSemaphoreReleaseTime"
   val FINAL_BUFFERED_WRITE_TIME_KEY = "finalBufferedWriteTime"
   val OUTPUT_STREAM_CLOSE_TIME_KEY = "outputStreamCloseTime"
   val STATS_TRACKER_CLOSE_FILE_TIME_KEY = "statsTrackerCloseFileTime"
@@ -173,6 +178,8 @@ object GpuWriteJobStatsTracker {
         "writer empty-batch finalization time"),
       TABLE_WRITER_CLOSE_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
         "table writer close time"),
+      GPU_SEMAPHORE_RELEASE_TIME_KEY -> metricFactory.createNanoTiming(
+        GpuMetric.DEBUG_LEVEL, "GPU semaphore release time"),
       FINAL_BUFFERED_WRITE_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
         "final buffered write time"),
       OUTPUT_STREAM_CLOSE_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,

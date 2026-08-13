@@ -149,6 +149,20 @@ abstract class ColumnarOutputWriter(context: TaskAttemptContext,
   private[this] var anythingWritten = false
   private[this] val buffers = mutable.Queue[(HostMemoryBuffer, Long)]()
 
+  private def timeAndRecord(
+      record: (GpuWriteTaskStatsTracker, Long) => Unit)(operation: => Unit): Unit = {
+    val start = System.nanoTime()
+    try {
+      operation
+    } finally {
+      val elapsed = System.nanoTime() - start
+      statsTrackers.foreach {
+        case tracker: GpuWriteTaskStatsTracker => record(tracker, elapsed)
+        case _ =>
+      }
+    }
+  }
+
   override
   def handleBuffer(buffer: HostMemoryBuffer, len: Long): Unit = {
     buffers += Tuple2(buffer, len)
@@ -284,12 +298,20 @@ abstract class ColumnarOutputWriter(context: TaskAttemptContext,
   def close(): Unit = {
     if (!anythingWritten) {
       // This prevents writing out bad files
-      bufferBatchAndClose(GpuColumnVector.emptyBatch(dataSchema))
+      timeAndRecord((tracker, nanos) => tracker.addWriterEmptyBatchTime(nanos)) {
+        bufferBatchAndClose(GpuColumnVector.emptyBatch(dataSchema))
+      }
     }
-    tableWriter.close()
+    timeAndRecord((tracker, nanos) => tracker.addTableWriterCloseTime(nanos)) {
+      tableWriter.close()
+    }
     GpuSemaphore.releaseIfNecessary(TaskContext.get())
-    writeBufferedData()
-    outputStream.close()
+    timeAndRecord((tracker, nanos) => tracker.addFinalBufferedWriteTime(nanos)) {
+      writeBufferedData()
+    }
+    timeAndRecord((tracker, nanos) => tracker.addOutputStreamCloseTime(nanos)) {
+      outputStream.close()
+    }
     debugDumpOutputStream.foreach { os =>
       os.close()
     }

@@ -75,6 +75,26 @@ class GpuWriteTaskStatsTracker(
     taskMetrics(GpuWriteJobStatsTracker.STATS_TRACKER_CLOSE_FILE_TIME_KEY) += nanos
   }
 
+  def addWriterCountUpdateTime(nanos: Long): Unit = {
+    taskMetrics(GpuWriteJobStatsTracker.WRITER_COUNT_UPDATE_TIME_KEY) += nanos
+  }
+
+  def addReleaseResourcesTime(nanos: Long): Unit = {
+    taskMetrics(GpuWriteJobStatsTracker.RELEASE_RESOURCES_TIME_KEY) += nanos
+  }
+
+  def addCommitTaskCallTime(nanos: Long): Unit = {
+    taskMetrics(GpuWriteJobStatsTracker.COMMIT_TASK_CALL_TIME_KEY) += nanos
+  }
+
+  def addGetFinalStatsTime(nanos: Long): Unit = {
+    taskMetrics(GpuWriteJobStatsTracker.GET_FINAL_STATS_TIME_KEY) += nanos
+  }
+
+  def addCreateWriteSummaryTime(nanos: Long): Unit = {
+    taskMetrics(GpuWriteJobStatsTracker.CREATE_WRITE_SUMMARY_TIME_KEY) += nanos
+  }
+
   def setAsyncWriteThrottleTimes(numTasks: Int, accumulatedThrottleTimeNs: Long, minNs: Long,
       maxNs: Long): Unit = {
     val avg = if (numTasks > 0) {
@@ -139,6 +159,11 @@ object GpuWriteJobStatsTracker {
   val FINAL_BUFFERED_WRITE_TIME_KEY = "finalBufferedWriteTime"
   val OUTPUT_STREAM_CLOSE_TIME_KEY = "outputStreamCloseTime"
   val STATS_TRACKER_CLOSE_FILE_TIME_KEY = "statsTrackerCloseFileTime"
+  val WRITER_COUNT_UPDATE_TIME_KEY = "writerCountUpdateTime"
+  val RELEASE_RESOURCES_TIME_KEY = "releaseResourcesTime"
+  val COMMIT_TASK_CALL_TIME_KEY = "commitTaskCallTime"
+  val GET_FINAL_STATS_TIME_KEY = "getFinalStatsTime"
+  val CREATE_WRITE_SUMMARY_TIME_KEY = "createWriteSummaryTime"
   val ASYNC_WRITE_TOTAL_THROTTLE_TIME_KEY = "asyncWriteTotalThrottleTime"
   val ASYNC_WRITE_AVG_THROTTLE_TIME_KEY = "asyncWriteAvgThrottleTime"
   val ASYNC_WRITE_MIN_THROTTLE_TIME_KEY = "asyncWriteMinThrottleTime"
@@ -186,6 +211,16 @@ object GpuWriteJobStatsTracker {
         "output stream close time"),
       STATS_TRACKER_CLOSE_FILE_TIME_KEY -> metricFactory.createNanoTiming(
         GpuMetric.DEBUG_LEVEL, "stats tracker close-file time"),
+      WRITER_COUNT_UPDATE_TIME_KEY -> metricFactory.createNanoTiming(
+        GpuMetric.DEBUG_LEVEL, "writer count update time"),
+      RELEASE_RESOURCES_TIME_KEY -> metricFactory.createNanoTiming(
+        GpuMetric.DEBUG_LEVEL, "release resources time"),
+      COMMIT_TASK_CALL_TIME_KEY -> metricFactory.createNanoTiming(
+        GpuMetric.DEBUG_LEVEL, "commit task call time"),
+      GET_FINAL_STATS_TIME_KEY -> metricFactory.createNanoTiming(
+        GpuMetric.DEBUG_LEVEL, "get final stats time"),
+      CREATE_WRITE_SUMMARY_TIME_KEY -> metricFactory.createNanoTiming(
+        GpuMetric.DEBUG_LEVEL, "create write summary time"),
       TASK_COMMIT_TIME -> basicMetrics(TASK_COMMIT_TIME),
       ASYNC_WRITE_TOTAL_THROTTLE_TIME_KEY -> metricFactory.createNanoTiming(
         GpuMetric.DEBUG_LEVEL, "total throttle time"),

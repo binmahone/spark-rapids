@@ -180,6 +180,20 @@ abstract class GpuFileFormatDataWriter(
     writerStatus.recordsInFile += writerStatus.writer.writeSpillableAndClose(scb)
   }
 
+  private def timeCommitPhase[T](record: (GpuWriteTaskStatsTracker, Long) => Unit)
+      (body: => T): T = {
+    val start = System.nanoTime()
+    try {
+      body
+    } finally {
+      val elapsed = System.nanoTime() - start
+      statsTrackers.foreach {
+        case tracker: GpuWriteTaskStatsTracker => record(tracker, elapsed)
+        case _ =>
+      }
+    }
+  }
+
   /** Release all resources. Public for testing */
   def releaseResources(): Unit = {
     // Release current writer by default, as this is the only resource to be released.
@@ -222,15 +236,27 @@ abstract class GpuFileFormatDataWriter(
    * driver too and used to e.g. update the metrics in UI.
    */
   override def commit(): WriteTaskResult = {
-    updateWritersNumber()
-    releaseResources()
-    val (taskCommitMessage, taskCommitTime) = TimingUtils.timeTakenMs {
-      committer.commitTask(taskAttemptContext)
+    timeCommitPhase((tracker, nanos) => tracker.addWriterCountUpdateTime(nanos)) {
+      updateWritersNumber()
     }
-    val summary = GpuFileFormatDataWriterShim.createWriteSummary(
-      updatedPartitions = updatedPartitions.toSet,
-      stats = statsTrackers.map(_.getFinalStats(taskCommitTime))
-    )
+    timeCommitPhase((tracker, nanos) => tracker.addReleaseResourcesTime(nanos)) {
+      releaseResources()
+    }
+    val (taskCommitMessage, taskCommitTime) =
+      timeCommitPhase((tracker, nanos) => tracker.addCommitTaskCallTime(nanos)) {
+        TimingUtils.timeTakenMs {
+          committer.commitTask(taskAttemptContext)
+        }
+      }
+    val finalStats = timeCommitPhase((tracker, nanos) => tracker.addGetFinalStatsTime(nanos)) {
+      statsTrackers.map(_.getFinalStats(taskCommitTime))
+    }
+    val summary =
+      timeCommitPhase((tracker, nanos) => tracker.addCreateWriteSummaryTime(nanos)) {
+        GpuFileFormatDataWriterShim.createWriteSummary(
+          updatedPartitions = updatedPartitions.toSet,
+          stats = finalStats)
+      }
     WriteTaskResult(taskCommitMessage, summary)
   }
 

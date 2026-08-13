@@ -28,6 +28,8 @@ import com.nvidia.spark.rapids.jni.fileio.{RapidsInputFile, SeekableInputStream}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 
+import org.apache.spark.sql.rapids.GpuTaskMetrics
+
 /**
  * GCS-backed {@link RapidsInputFile} for Hadoop-conf-driven (non-iceberg) reads.
  * {@code readVectored} issues batched byte-range reads through the optimized
@@ -57,9 +59,17 @@ class GCSInputFile private (
     val ranges = copyRanges.asScala.map { r =>
       IntRangeWithOffset(r.getInputOffset, r.getLength, r.getOutputOffset)
     }.toSeq
-    require(
-      PerfIO.readToHostMemory(hadoopConf, output, fileUri, ranges).isDefined,
-      "expected to use PerfIO to read")
+    val requestedBytes = copyRanges.asScala.map(_.getLength.toLong).sum
+    val startNs = System.nanoTime()
+    var failed = true
+    try {
+      val result = PerfIO.readToHostMemory(hadoopConf, output, fileUri, ranges)
+      failed = result.isEmpty
+      require(result.isDefined, "expected to use PerfIO to read")
+    } finally {
+      GpuTaskMetrics.get.recordPerfioGcsVectored(
+        ranges.size, requestedBytes, System.nanoTime() - startNs, failed)
+    }
   }
 
   /**
@@ -76,9 +86,15 @@ class GCSInputFile private (
       throw new IllegalArgumentException("length must be non-negative")
     }
     val ranges = Seq[RangeWithOffset](SuffixRangeWithOffset(length, /*destOffset*/ 0L))
-    require(
-      PerfIO.readToHostMemory(hadoopConf, output, fileUri, ranges).isDefined,
-      "expected to use PerfIO to read")
+    val startNs = System.nanoTime()
+    var failed = true
+    try {
+      val result = PerfIO.readToHostMemory(hadoopConf, output, fileUri, ranges)
+      failed = result.isEmpty
+      require(result.isDefined, "expected to use PerfIO to read")
+    } finally {
+      GpuTaskMetrics.get.recordPerfioGcsTail(length, System.nanoTime() - startNs, failed)
+    }
   }
 }
 

@@ -287,6 +287,21 @@ class GpuTaskMetrics extends Serializable with Logging {
   private val perfioS3CrtExecutors = new LongAccumulator
   private val perfioS3S3aExecutors = new LongAccumulator
 
+  private val perfioGcsVectoredCalls = new LongAccumulator
+  private val perfioGcsVectoredRanges = new LongAccumulator
+  private val perfioGcsVectoredRequestedBytes = new SizeInBytesAccumulator
+  private val perfioGcsVectoredTimeNs = new NanoSecondAccumulator
+  private val perfioGcsVectoredFailures = new LongAccumulator
+  private val perfioGcsTailCalls = new LongAccumulator
+  private val perfioGcsTailRequestedBytes = new SizeInBytesAccumulator
+  private val perfioGcsTailTimeNs = new NanoSecondAccumulator
+  private val perfioGcsTailFailures = new LongAccumulator
+  private val perfioParquetFooterCalls = new LongAccumulator
+  private val perfioParquetFooterHits = new LongAccumulator
+  private val perfioParquetFooterFallbacks = new LongAccumulator
+  private val perfioParquetFooterFailures = new LongAccumulator
+  private val perfioParquetFooterTimeNs = new NanoSecondAccumulator
+
   private var maxHostBytesAllocated: Long = 0
   private var maxPageableBytesAllocated: Long = 0
   private var maxPinnedBytesAllocated: Long = 0
@@ -352,7 +367,21 @@ class GpuTaskMetrics extends Serializable with Logging {
     "gpuDiskWriteSavedBytes" -> diskWriteSavedBytes,
     "perfio.s3.netty.executors" -> perfioS3NettyExecutors,
     "perfio.s3.crt.executors" -> perfioS3CrtExecutors,
-    "perfio.s3.s3a.executors" -> perfioS3S3aExecutors
+    "perfio.s3.s3a.executors" -> perfioS3S3aExecutors,
+    "perfio.gcs.vectored.calls" -> perfioGcsVectoredCalls,
+    "perfio.gcs.vectored.ranges" -> perfioGcsVectoredRanges,
+    "perfio.gcs.vectored.requestedBytes" -> perfioGcsVectoredRequestedBytes,
+    "perfio.gcs.vectored.time" -> perfioGcsVectoredTimeNs,
+    "perfio.gcs.vectored.failures" -> perfioGcsVectoredFailures,
+    "perfio.gcs.tail.calls" -> perfioGcsTailCalls,
+    "perfio.gcs.tail.requestedBytes" -> perfioGcsTailRequestedBytes,
+    "perfio.gcs.tail.time" -> perfioGcsTailTimeNs,
+    "perfio.gcs.tail.failures" -> perfioGcsTailFailures,
+    "perfio.parquet.footer.calls" -> perfioParquetFooterCalls,
+    "perfio.parquet.footer.hits" -> perfioParquetFooterHits,
+    "perfio.parquet.footer.fallbacks" -> perfioParquetFooterFallbacks,
+    "perfio.parquet.footer.failures" -> perfioParquetFooterFailures,
+    "perfio.parquet.footer.time" -> perfioParquetFooterTimeNs
   )
 
   def register(sc: SparkContext): Unit = {
@@ -524,6 +553,41 @@ class GpuTaskMetrics extends Serializable with Logging {
       }
     } catch {
       case _: IllegalArgumentException => // accumulator not yet registered; no-op
+    }
+  }
+
+  def recordPerfioGcsVectored(
+      rangeCount: Long,
+      requestedBytes: Long,
+      durationNs: Long,
+      failed: Boolean): Unit = {
+    perfioGcsVectoredCalls.add(1L)
+    perfioGcsVectoredRanges.add(rangeCount)
+    perfioGcsVectoredRequestedBytes.add(requestedBytes)
+    perfioGcsVectoredTimeNs.add(durationNs)
+    if (failed) {
+      perfioGcsVectoredFailures.add(1L)
+    }
+  }
+
+  def recordPerfioGcsTail(requestedBytes: Long, durationNs: Long, failed: Boolean): Unit = {
+    perfioGcsTailCalls.add(1L)
+    perfioGcsTailRequestedBytes.add(requestedBytes)
+    perfioGcsTailTimeNs.add(durationNs)
+    if (failed) {
+      perfioGcsTailFailures.add(1L)
+    }
+  }
+
+  def recordPerfioParquetFooter(durationNs: Long, hit: Boolean, failed: Boolean): Unit = {
+    perfioParquetFooterCalls.add(1L)
+    perfioParquetFooterTimeNs.add(durationNs)
+    if (hit) {
+      perfioParquetFooterHits.add(1L)
+    } else if (failed) {
+      perfioParquetFooterFailures.add(1L)
+    } else {
+      perfioParquetFooterFallbacks.add(1L)
     }
   }
 }

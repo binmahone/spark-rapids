@@ -349,13 +349,28 @@ object GpuFileFormatWriter extends Logging {
     // operator's `.ns` wrap *outside* the Insert wrap, so the descendant
     // op_time those wraps accumulate is never subtracted from Insert's
     // op_time.
-    val opTimeMetric: GpuMetric = description.statsTrackers
-      .collectFirst { case t: GpuWriteJobStatsTracker => t.opTimeNewMetric }
-      .getOrElse(NoopMetric)
+    val writeStatsTracker = description.statsTrackers
+      .collectFirst { case t: GpuWriteJobStatsTracker => t }
+    val opTimeMetric = writeStatsTracker.map(_.opTimeNewMetric).getOrElse(NoopMetric)
+    def taskMetric(key: String): GpuMetric =
+      writeStatsTracker.map(_.taskMetric(key)).getOrElse(NoopMetric)
+    val iteratorWaitMetric = taskMetric(GpuWriteJobStatsTracker.ITERATOR_WAIT_TIME_KEY)
+    val creationMetric = taskMetric(GpuWriteJobStatsTracker.DATA_WRITER_CREATION_TIME_KEY)
+    val writeLoopMetric = taskMetric(GpuWriteJobStatsTracker.DATA_WRITER_WRITE_LOOP_TIME_KEY)
+    val commitMetric = taskMetric(GpuWriteJobStatsTracker.DATA_WRITER_COMMIT_TIME_KEY)
+    val closeMetric = taskMetric(GpuWriteJobStatsTracker.DATA_WRITER_CLOSE_TIME_KEY)
+
+    val inputIterator = iterator
+    val timedIterator = new Iterator[ColumnarBatch] {
+      override def hasNext: Boolean = iteratorWaitMetric.ns(excludeMetrics)(inputIterator.hasNext)
+      override def next(): ColumnarBatch =
+        iteratorWaitMetric.ns(excludeMetrics)(inputIterator.next())
+    }
 
     opTimeMetric.ns(excludeMetrics) {
-      val dataWriter =
-        if (sparkPartitionId != 0 && !iterator.hasNext) {
+      val isEmptyPartition = sparkPartitionId != 0 && !timedIterator.hasNext
+      val dataWriter = creationMetric.ns {
+        if (isEmptyPartition) {
           // In case of empty job, leave first partition to save meta for file format like parquet.
           new GpuEmptyDirectoryDataWriter(description, taskAttemptContext, committer)
         } else if (description.partitionColumns.isEmpty && description.bucketSpec.isEmpty) {
@@ -371,18 +386,21 @@ object GpuFileFormatWriter extends Logging {
                 baseDebugOutputPath)
           }
         }
+      }
 
       try {
         Utils.tryWithSafeFinallyAndFailureCallbacks(block = {
           // Execute the task to write rows out and commit the task.
-          dataWriter.writeWithIterator(iterator)
-          dataWriter.commit()
+          writeLoopMetric.ns(excludeMetrics :+ iteratorWaitMetric) {
+            dataWriter.writeWithIterator(timedIterator)
+          }
+          commitMetric.ns(dataWriter.commit())
         })(catchBlock = {
           // If there is an error, abort the task
           dataWriter.abort()
           logError(s"Job $jobId aborted.")
         }, finallyBlock = {
-          dataWriter.close()
+          closeMetric.ns(dataWriter.close())
         })
       } catch {
         case e: FetchFailedException =>

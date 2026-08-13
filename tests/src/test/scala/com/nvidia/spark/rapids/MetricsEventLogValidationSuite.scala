@@ -223,9 +223,19 @@ class MetricsEventLogValidationSuite extends AnyFunSuite with BeforeAndAfterEach
                   val value = (acc \ "Update").extractOpt[String]
 
                   (name, value) match {
-                    case (Some(n), Some(v)) if n.equals("op time") => {
+                    case (Some(n), Some(v)) if Set(
+                        "op time",
+                        "writer iterator wait time",
+                        "data writer creation time",
+                        "data writer write-loop time",
+                        "data writer commit time",
+                        "data writer close time",
+                        "perfio.parquet.footer.calls",
+                        "perfio.parquet.footer.hits",
+                        "perfio.parquet.footer.fallbacks",
+                        "perfio.parquet.footer.failures",
+                        "perfio.parquet.footer.time").contains(n) =>
                       metrics += MetricRecord(n, v.toLong, stageId)
-                    }
                     case _ => // Ignore other metrics
                   }
                 }
@@ -434,6 +444,7 @@ class MetricsEventLogValidationSuite extends AnyFunSuite with BeforeAndAfterEach
     try {
       // Enable OpTimeTracking for this test
       spark.conf.set("spark.rapids.sql.exec.opTimeTrackingRDD.enabled", "true")
+      spark.conf.set("spark.rapids.sql.metrics.level", "DEBUG")
 
       // Configure slow filesystem for testing and disable cache to prevent pollution
       val slowFsWriteDelayMs = 100L
@@ -484,6 +495,12 @@ class MetricsEventLogValidationSuite extends AnyFunSuite with BeforeAndAfterEach
       // Parse event logs to find metrics and task times
       val (metrics, taskTimes) = parseEventLogs()
       val operatorTimeMetrics = metrics.filter(_.name.equals("op time"))
+      val writerPhaseMetricNames = Seq(
+        "writer iterator wait time",
+        "data writer creation time",
+        "data writer write-loop time",
+        "data writer commit time",
+        "data writer close time")
 
       assert(operatorTimeMetrics.nonEmpty,
         s"Should find operator time metrics for parquet write job. " +
@@ -491,6 +508,13 @@ class MetricsEventLogValidationSuite extends AnyFunSuite with BeforeAndAfterEach
 
       assert(taskTimes.nonEmpty,
         s"Should find executor run times in event logs. Found ${taskTimes.length} tasks")
+
+      writerPhaseMetricNames.foreach { metricName =>
+        val phaseMetrics = metrics.filter(_.name == metricName)
+        assert(phaseMetrics.nonEmpty, s"Should find $metricName in parquet write event log")
+        assert(phaseMetrics.map(_.value).sum > 0L,
+          s"Expected positive aggregate $metricName in parquet write event log")
+      }
 
       // Calculate total operator time (in nanoseconds)
       val totalOperatorTime = operatorTimeMetrics.map(_.value).sum
@@ -576,6 +600,36 @@ class MetricsEventLogValidationSuite extends AnyFunSuite with BeforeAndAfterEach
         case _: Exception => // Ignore cleanup failures to avoid breaking tests
       }
     }
+  }
+
+  test("PerfIO parquet footer metrics are emitted") {
+    val sparkSession = spark
+    import sparkSession.implicits._
+
+    spark.conf.set("spark.rapids.sql.metrics.level", "DEBUG")
+    val parquetOutputPath = new File(tempDir, "perfio_footer_parquet").getAbsolutePath
+    spark.range(0, 10000, 1, 4)
+      .select($"id", ($"id" % 10).as("bucket"))
+      .write
+      .mode("overwrite")
+      .parquet(parquetOutputPath)
+
+    val rowCount = spark.read.schema("id long, bucket long").parquet(parquetOutputPath).count()
+    assert(rowCount == 10000L)
+
+    flushEventLogsByStoppingSpark()
+    val (metrics, _) = parseEventLogs()
+    val calls = metrics.filter(_.name == "perfio.parquet.footer.calls").map(_.value).sum
+    val hits = metrics.filter(_.name == "perfio.parquet.footer.hits").map(_.value).sum
+    val fallbacks = metrics.filter(_.name == "perfio.parquet.footer.fallbacks").map(_.value).sum
+    val failures = metrics.filter(_.name == "perfio.parquet.footer.failures").map(_.value).sum
+    val timeNs = metrics.filter(_.name == "perfio.parquet.footer.time").map(_.value).sum
+
+    assert(calls > 0L, "Expected at least one PerfIO parquet footer attempt")
+    assert(calls == hits + fallbacks + failures,
+      s"Expected every footer call to be classified: calls=$calls hits=$hits " +
+        s"fallbacks=$fallbacks failures=$failures")
+    assert(timeNs > 0L, "Expected positive PerfIO parquet footer time")
   }
 
   test("no operator time metrics when OpTimeTracking is disabled") {

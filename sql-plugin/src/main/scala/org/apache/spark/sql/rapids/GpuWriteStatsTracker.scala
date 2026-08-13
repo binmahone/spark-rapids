@@ -93,6 +93,8 @@ class GpuWriteJobStatsTracker(
    */
   def opTimeNewMetric: GpuMetric =
     taskMetrics.getOrElse(GpuWriteJobStatsTracker.OP_TIME_NEW_KEY, NoopMetric)
+
+  def taskMetric(key: String): GpuMetric = taskMetrics.getOrElse(key, NoopMetric)
 }
 
 object GpuWriteJobStatsTracker {
@@ -102,6 +104,11 @@ object GpuWriteJobStatsTracker {
   val SORT_OP_TIME_KEY = "writeSortOpTime"
   val WRITE_IO_TIME_KEY = "writeIOTime"
   val OP_TIME_NEW_KEY = "operatorTime"
+  val ITERATOR_WAIT_TIME_KEY = "writerIteratorWaitTime"
+  val DATA_WRITER_CREATION_TIME_KEY = "dataWriterCreationTime"
+  val DATA_WRITER_WRITE_LOOP_TIME_KEY = "dataWriterWriteLoopTime"
+  val DATA_WRITER_COMMIT_TIME_KEY = "dataWriterCommitTime"
+  val DATA_WRITER_CLOSE_TIME_KEY = "dataWriterCloseTime"
   val ASYNC_WRITE_TOTAL_THROTTLE_TIME_KEY = "asyncWriteTotalThrottleTime"
   val ASYNC_WRITE_AVG_THROTTLE_TIME_KEY = "asyncWriteAvgThrottleTime"
   val ASYNC_WRITE_MIN_THROTTLE_TIME_KEY = "asyncWriteMinThrottleTime"
@@ -127,6 +134,16 @@ object GpuWriteJobStatsTracker {
         "write I/O time"),
       OP_TIME_NEW_KEY -> metricFactory.createNanoTiming(GpuMetric.MODERATE_LEVEL,
         "op time"),
+      ITERATOR_WAIT_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
+        "writer iterator wait time"),
+      DATA_WRITER_CREATION_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
+        "data writer creation time"),
+      DATA_WRITER_WRITE_LOOP_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
+        "data writer write-loop time"),
+      DATA_WRITER_COMMIT_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
+        "data writer commit time"),
+      DATA_WRITER_CLOSE_TIME_KEY -> metricFactory.createNanoTiming(GpuMetric.DEBUG_LEVEL,
+        "data writer close time"),
       TASK_COMMIT_TIME -> basicMetrics(TASK_COMMIT_TIME),
       ASYNC_WRITE_TOTAL_THROTTLE_TIME_KEY -> metricFactory.createNanoTiming(
         GpuMetric.DEBUG_LEVEL, "total throttle time"),

@@ -164,7 +164,7 @@ for phase in gpu_device_init rmm_memory_init RAPIDS_MEMORY_INIT_METRIC \
   grep -Fq "${phase}" "${LOG_ROOT}/executor-init-metric-keys.txt"
 done
 unzip -p "${EXPECTED_JAR}" \
-  spark-shared/org/apache/spark/sql/rapids/ColdStartQueryPlanningListener.class \
+  org/apache/spark/sql/rapids/ColdStartQueryPlanningListener.class \
   | strings > "${LOG_ROOT}/query-planning-metric-keys.txt"
 for metric_key in RAPIDS_QUERY_PLANNING_METRIC RAPIDS_FILE_INDEX_METRIC \
     phase_ input_plan_identity_hash metadata_ops_time_ns root_paths input_files; do

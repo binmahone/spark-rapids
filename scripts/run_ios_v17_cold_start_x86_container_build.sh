@@ -32,6 +32,7 @@ docker run --rm \
   --user "$(id -u):$(id -g)" \
   --env HOME=/work/home \
   --env JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 \
+  --env PATH=/usr/lib/jvm/java-17-openjdk-amd64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
   --env EXPECTED_SOURCE_COMMIT="${EXPECTED_SOURCE_COMMIT}" \
   --env MAVEN_ROOT_OVERRIDE="/work/maven/isolated-${EXPECTED_SOURCE_COMMIT}" \
   --env EVIDENCE_ROOT_OVERRIDE="/work/evidence/build-${EXPECTED_SOURCE_COMMIT}" \

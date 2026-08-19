@@ -58,6 +58,27 @@ object GpuDeviceManager extends Logging {
       body
     }
 
+  private def timeMemoryInitPhase[T](phase: String)(body: => T): T =
+    timeMemoryInitPhase(
+      phase,
+      () => System.nanoTime(),
+      (completedPhase, durationMs) =>
+        logInfo(s"RAPIDS_MEMORY_INIT_METRIC phase=$completedPhase duration_ms=$durationMs")) {
+      body
+    }
+
+  private[rapids] def timeMemoryInitPhase[T](
+      phase: String,
+      nanoTime: () => Long,
+      record: (String, Long) => Unit)(body: => T): T = {
+    val startNanos = nanoTime()
+    try {
+      body
+    } finally {
+      record(phase, (nanoTime() - startNanos) / 1000000L)
+    }
+  }
+
   /**
    * Get an approximate count on the number of cores this executor will use.
    */
@@ -679,12 +700,20 @@ object GpuDeviceManager extends Logging {
           val gpu = gpuId.getOrElse(findGpuAndAcquire())
           val sparkConf = SparkEnv.get.conf
           val conf = rapidsConf.getOrElse(new RapidsConf(sparkConf))
-          initializePinnedPoolAndOffHeapLimits(gpu, conf, sparkConf)
-          initializeRmmGpuPool(gpu, conf)
+          timeMemoryInitPhase("pinned_pool_and_offheap_limits_init") {
+            initializePinnedPoolAndOffHeapLimits(gpu, conf, sparkConf)
+          }
+          timeMemoryInitPhase("rmm_gpu_pool_init") {
+            initializeRmmGpuPool(gpu, conf)
+          }
           // we want to initialize this last because we want to take advantage
           // of pinned memory if it is configured
-          initializeSpillAndMemoryEvents(conf)
-          GpuShuffleEnv.init(conf)
+          timeMemoryInitPhase("spill_and_memory_events_init") {
+            initializeSpillAndMemoryEvents(conf)
+          }
+          timeMemoryInitPhase("gpu_shuffle_env_init") {
+            GpuShuffleEnv.init(conf)
+          }
           singletonMemoryInitialized = Initialized
         }
       }

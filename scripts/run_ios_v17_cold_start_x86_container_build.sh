@@ -8,7 +8,7 @@ fi
 
 readonly SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly WORK_ROOT="${WORK_ROOT_OVERRIDE:-/raid/mahonem/ios-v17-cold-start-instrumentation-20260819}"
-readonly SEED_REPOSITORY="${SEED_REPOSITORY_OVERRIDE:-/home/nfs/mahonem/.m2/repository}"
+readonly SEED_REPOSITORY="${SEED_REPOSITORY_OVERRIDE:-${WORK_ROOT}/seed-repository}"
 readonly BUILD_IMAGE="${BUILD_IMAGE_OVERRIDE:-vsc-spark-gluten-233dddf04a9b42d03aa48197379a844b66b0aac2d316dcc634a0b0d0962586ce-uid:latest}"
 readonly MAVEN_PARENT="${WORK_ROOT}/maven"
 readonly EVIDENCE_PARENT="${WORK_ROOT}/evidence"

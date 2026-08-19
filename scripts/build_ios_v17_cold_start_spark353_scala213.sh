@@ -91,10 +91,10 @@ mvn "${maven_common[@]}" --non-recursive \
 
 mvn "${maven_common[@]}" -f scala2.13/pom.xml \
   -pl tests -am \
-  -DwildcardSuites=com.nvidia.spark.rapids.RapidsExecutorPluginSuite,org.apache.spark.sql.rapids.GpuFileFormatDataWriterSuite \
+  -DwildcardSuites=com.nvidia.spark.rapids.RapidsExecutorPluginSuite,org.apache.spark.sql.rapids.GpuWriteInstrumentationSuite \
   clean test 2>&1 | tee "${LOG_ROOT}/targeted-tests.log"
 grep -Fq 'RapidsExecutorPluginSuite:' "${LOG_ROOT}/targeted-tests.log"
-grep -Fq 'GpuFileFormatDataWriterSuite:' "${LOG_ROOT}/targeted-tests.log"
+grep -Fq 'GpuWriteInstrumentationSuite:' "${LOG_ROOT}/targeted-tests.log"
 grep -Eq 'Tests: succeeded [1-9][0-9]*, failed 0' "${LOG_ROOT}/targeted-tests.log"
 
 mvn "${maven_common[@]}" -f scala2.13/pom.xml \
@@ -124,6 +124,16 @@ unzip -p "${EXPECTED_JAR}" cudf-java-version-info.properties \
   | grep -Fx "revision=${CUDF_REVISION}"
 unzip -p "${EXPECTED_JAR}" spark-shared/rapids4spark-private-version-info.properties \
   | grep -Fx "revision=${PRIVATE_REVISION}"
+unzip -p "${EXPECTED_JAR}" \
+  org/apache/spark/sql/rapids/GpuWriteJobStatsTracker\$.class \
+  | strings > "${LOG_ROOT}/gpu-write-metric-keys.txt"
+for metric_key in inputIteratorTime writerInitTime writerCloseTime tableWriterCloseTime \
+    closeBufferedWriteTime outputStreamCloseTime statsCloseFileTime; do
+  grep -Fxq "${metric_key}" "${LOG_ROOT}/gpu-write-metric-keys.txt"
+done
+unzip -p "${EXPECTED_JAR}" com/nvidia/spark/rapids/RapidsExecutorPlugin.class \
+  | strings \
+  | grep -Fq 'RAPIDS_EXECUTOR_INIT_METRIC phase='
 if find "${MAVEN_REPOSITORY}" -type f -name '*.lastUpdated' -print -quit | grep -q .; then
   echo "Unresolved Maven dependency marker observed" >&2
   exit 1

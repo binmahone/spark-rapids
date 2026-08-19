@@ -19,6 +19,37 @@ package com.nvidia.spark.rapids
 import org.scalatest.funsuite.AnyFunSuite
 
 class RapidsExecutorPluginSuite extends AnyFunSuite {
+  test("executor initialization phase records elapsed time") {
+    val clockValues = Iterator(1000000L, 8500000L)
+    var recorded: Option[(String, Long)] = None
+
+    val result = RapidsExecutorPlugin.timeExecutorInitPhase(
+      "test_phase",
+      () => clockValues.next(),
+      (phase, durationMs) => recorded = Some((phase, durationMs))) {
+      "result"
+    }
+
+    assert(result === "result")
+    assert(recorded.contains(("test_phase", 7L)))
+  }
+
+  test("executor initialization phase records failures") {
+    val clockValues = Iterator(0L, 3000000L)
+    var recorded: Option[(String, Long)] = None
+
+    intercept[IllegalStateException] {
+      RapidsExecutorPlugin.timeExecutorInitPhase(
+        "failed_phase",
+        () => clockValues.next(),
+        (phase, durationMs) => recorded = Some((phase, durationMs))) {
+        throw new IllegalStateException("expected")
+      }
+    }
+
+    assert(recorded.contains(("failed_phase", 3L)))
+  }
+
   test("cudf version check") {
     assert(RapidsExecutorPlugin.cudfVersionSatisfied("7", "7"))
     assert(!RapidsExecutorPlugin.cudfVersionSatisfied("7", "8"))

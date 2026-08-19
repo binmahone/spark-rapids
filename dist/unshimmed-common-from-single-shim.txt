@@ -49,5 +49,6 @@ org/apache/iceberg/spark/source/GpuSparkScanAccess.class
 org/apache/iceberg/spark/source/GpuSparkWriteAccess.class
 org/apache/iceberg/spark/source/GpuStructInternalRow.class
 org/apache/spark/sql/rapids/AdaptiveSparkPlanHelperShim*
+org/apache/spark/sql/rapids/ColdStartQueryPlanningListener*
 org/apache/spark/sql/rapids/ExecutionPlanCaptureCallback*
 rapids/*.py

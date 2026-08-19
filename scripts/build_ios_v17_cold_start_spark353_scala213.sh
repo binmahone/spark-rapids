@@ -110,9 +110,10 @@ mvn "${maven_common[@]}" --non-recursive \
 
 mvn "${maven_common[@]}" -f scala2.13/pom.xml \
   -pl tests -am \
-  -DwildcardSuites=com.nvidia.spark.rapids.ExecutorInitInstrumentationSuite,org.apache.spark.sql.rapids.GpuWriteInstrumentationSuite \
+  -DwildcardSuites=com.nvidia.spark.rapids.ExecutorInitInstrumentationSuite,org.apache.spark.sql.rapids.ColdStartQueryPlanningListenerSuite,org.apache.spark.sql.rapids.GpuWriteInstrumentationSuite \
   clean test 2>&1 | tee "${LOG_ROOT}/targeted-tests.log"
 grep -Fq 'ExecutorInitInstrumentationSuite:' "${LOG_ROOT}/targeted-tests.log"
+grep -Fq 'ColdStartQueryPlanningListenerSuite:' "${LOG_ROOT}/targeted-tests.log"
 grep -Fq 'GpuWriteInstrumentationSuite:' "${LOG_ROOT}/targeted-tests.log"
 grep -Eq 'Tests: succeeded [1-9][0-9]*, failed 0' "${LOG_ROOT}/targeted-tests.log"
 
@@ -157,8 +158,17 @@ for phase in RAPIDS_EXECUTOR_INIT_METRIC cudf_version_check jni_constants_check;
 done
 unzip -p "${EXPECTED_JAR}" spark-shared/com/nvidia/spark/rapids/GpuDeviceManager\$.class \
   | strings >> "${LOG_ROOT}/executor-init-metric-keys.txt"
-for phase in gpu_device_init rmm_memory_init; do
+for phase in gpu_device_init rmm_memory_init RAPIDS_MEMORY_INIT_METRIC \
+    pinned_pool_and_offheap_limits_init rmm_gpu_pool_init spill_and_memory_events_init \
+    gpu_shuffle_env_init; do
   grep -Fq "${phase}" "${LOG_ROOT}/executor-init-metric-keys.txt"
+done
+unzip -p "${EXPECTED_JAR}" \
+  spark-shared/org/apache/spark/sql/rapids/ColdStartQueryPlanningListener.class \
+  | strings > "${LOG_ROOT}/query-planning-metric-keys.txt"
+for metric_key in RAPIDS_QUERY_PLANNING_METRIC RAPIDS_FILE_INDEX_METRIC \
+    phase_analysis_ms input_plan_identity_hash metadata_ops_time_ns root_paths input_files; do
+  grep -Fq "${metric_key}" "${LOG_ROOT}/query-planning-metric-keys.txt"
 done
 if find "${MAVEN_REPOSITORY}" -type f -name '*.lastUpdated' -print -quit | grep -q .; then
   echo "Unresolved Maven dependency marker observed" >&2

@@ -49,4 +49,35 @@ class ExecutorInitInstrumentationSuite extends AnyFunSuite {
 
     assert(recorded.contains(("failed_phase", 3L)))
   }
+
+  test("memory initialization phase records elapsed time") {
+    val clockValues = Iterator(2000000L, 11200000L)
+    var recorded: Option[(String, Long)] = None
+
+    val result = GpuDeviceManager.timeMemoryInitPhase(
+      "test_memory_phase",
+      () => clockValues.next(),
+      (phase, durationMs) => recorded = Some((phase, durationMs))) {
+      "result"
+    }
+
+    assert(result === "result")
+    assert(recorded.contains(("test_memory_phase", 9L)))
+  }
+
+  test("memory initialization phase records failures") {
+    val clockValues = Iterator(0L, 4000000L)
+    var recorded: Option[(String, Long)] = None
+
+    intercept[IllegalArgumentException] {
+      GpuDeviceManager.timeMemoryInitPhase(
+        "failed_memory_phase",
+        () => clockValues.next(),
+        (phase, durationMs) => recorded = Some((phase, durationMs))) {
+        throw new IllegalArgumentException("expected")
+      }
+    }
+
+    assert(recorded.contains(("failed_memory_phase", 4L)))
+  }
 }

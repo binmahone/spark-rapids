@@ -86,8 +86,10 @@ maven_common=(
 } | tee "${LOG_ROOT}/input-identity.log"
 
 cd "${SOURCE_ROOT}"
-mvn "${maven_common[@]}" -f scala2.13/pom.xml spotless:check \
-  2>&1 | tee "${LOG_ROOT}/spotless-check.log"
+mvn "${maven_common[@]}" --non-recursive \
+  -Dspark.rapids.source.basedir="${SOURCE_ROOT}" \
+  antrun:run@scalastyle-all-modules \
+  2>&1 | tee "${LOG_ROOT}/scalastyle.log"
 
 mvn "${maven_common[@]}" -f scala2.13/pom.xml \
   -pl tests -am \

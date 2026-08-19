@@ -8,9 +8,9 @@ fi
 
 readonly SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly SEED_REPOSITORY="/home/vscode/.m2/repository"
-readonly MAVEN_ROOT="/home/vscode/.m2-ios-v17-cold-start-20260819"
+readonly MAVEN_ROOT="${MAVEN_ROOT_OVERRIDE:-/home/vscode/.m2-ios-v17-cold-start-20260819}"
 readonly MAVEN_REPOSITORY="${MAVEN_ROOT}/repository"
-readonly EVIDENCE_ROOT="/home/nvidia/mahone_gluten/industry-workloads/evidence/container-builds/ios-v17-cold-start-instrumentation-spark353-scala213-20260819"
+readonly EVIDENCE_ROOT="${EVIDENCE_ROOT_OVERRIDE:-/home/nvidia/mahone_gluten/industry-workloads/evidence/container-builds/ios-v17-cold-start-instrumentation-spark353-scala213-20260819}"
 readonly LOG_ROOT="${EVIDENCE_ROOT}/logs"
 readonly SETTINGS_PATH="${EVIDENCE_ROOT}/seed-only-settings.xml"
 readonly JNI_VERSION="26.08.0-20260806.042042-62"
@@ -151,8 +151,15 @@ for metric_key in inputIteratorTime writerInitTime writerCloseTime tableWriterCl
   grep -Fxq "${metric_key}" "${LOG_ROOT}/gpu-write-metric-keys.txt"
 done
 unzip -p "${EXPECTED_JAR}" spark-shared/com/nvidia/spark/rapids/RapidsExecutorPlugin.class \
-  | strings \
-  | grep -Fq 'RAPIDS_EXECUTOR_INIT_METRIC phase='
+  | strings > "${LOG_ROOT}/executor-init-metric-keys.txt"
+for phase in RAPIDS_EXECUTOR_INIT_METRIC cudf_version_check jni_constants_check; do
+  grep -Fq "${phase}" "${LOG_ROOT}/executor-init-metric-keys.txt"
+done
+unzip -p "${EXPECTED_JAR}" spark-shared/com/nvidia/spark/rapids/GpuDeviceManager\$.class \
+  | strings >> "${LOG_ROOT}/executor-init-metric-keys.txt"
+for phase in gpu_device_init rmm_memory_init; do
+  grep -Fq "${phase}" "${LOG_ROOT}/executor-init-metric-keys.txt"
+done
 if find "${MAVEN_REPOSITORY}" -type f -name '*.lastUpdated' -print -quit | grep -q .; then
   echo "Unresolved Maven dependency marker observed" >&2
   exit 1

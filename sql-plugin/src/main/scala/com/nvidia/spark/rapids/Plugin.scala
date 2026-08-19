@@ -650,8 +650,10 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
       // Compare if the cudf version mentioned in the classpath is equal to the version which
       // plugin expects. If there is a version mismatch, throw error. This check can be disabled
       // by setting this config spark.rapids.cudfVersionOverride=true
-      timeExecutorInitPhase("cudf_jni_validation") {
+      timeExecutorInitPhase("cudf_version_check") {
         checkCudfVersion(conf)
+      }
+      timeExecutorInitPhase("jni_constants_check") {
         checkJniConstants()
       }
 

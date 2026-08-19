@@ -66,8 +66,6 @@ maven_common=(
   -Dcuda.version=cuda12
   -Djni.classifier=cuda12
   -Dspark-rapids-jni.version="${JNI_SNAPSHOT}"
-  -Drapids.iceberg.artifactId=rapids-4-spark-iceberg-stub
-  -Drapids.iceberg.artifactId2=rapids-4-spark-iceberg-stub
 )
 
 {
@@ -94,10 +92,16 @@ mvn "${maven_common[@]}" --non-recursive \
 mvn "${maven_common[@]}" -f scala2.13/pom.xml \
   -pl tests -am \
   -DwildcardSuites=com.nvidia.spark.rapids.RapidsExecutorPluginSuite,org.apache.spark.sql.rapids.GpuFileFormatDataWriterSuite \
-  test 2>&1 | tee "${LOG_ROOT}/targeted-tests.log"
+  clean test 2>&1 | tee "${LOG_ROOT}/targeted-tests.log"
+grep -Fq 'RapidsExecutorPluginSuite:' "${LOG_ROOT}/targeted-tests.log"
+grep -Fq 'GpuFileFormatDataWriterSuite:' "${LOG_ROOT}/targeted-tests.log"
+grep -Eq 'Tests: succeeded [1-9][0-9]*, failed 0' "${LOG_ROOT}/targeted-tests.log"
 
 mvn "${maven_common[@]}" -f scala2.13/pom.xml \
-  -pl dist -am -DskipTests clean package \
+  -pl dist -am \
+  -Drapids.iceberg.artifactId=rapids-4-spark-iceberg-stub \
+  -Drapids.iceberg.artifactId2=rapids-4-spark-iceberg-stub \
+  -DskipTests clean package \
   2>&1 | tee "${LOG_ROOT}/package.log"
 
 [[ -f "${EXPECTED_JAR}" ]]

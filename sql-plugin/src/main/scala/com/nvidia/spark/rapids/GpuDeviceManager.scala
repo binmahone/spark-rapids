@@ -49,6 +49,15 @@ object GpuDeviceManager extends Logging {
 
   private var numCores = 0
 
+  private def timeExecutorInitPhase[T](phase: String)(body: => T): T =
+    RapidsExecutorPlugin.timeExecutorInitPhase(
+      phase,
+      () => System.nanoTime(),
+      (completedPhase, durationMs) =>
+        logInfo(s"RAPIDS_EXECUTOR_INIT_METRIC phase=$completedPhase duration_ms=$durationMs")) {
+      body
+    }
+
   /**
    * Get an approximate count on the number of cores this executor will use.
    */
@@ -188,8 +197,12 @@ object GpuDeviceManager extends Logging {
       // uses that GPU. We only need to initialize RMM once per Executor because we are relying on
       // only 1 GPU per executor.
       // If Spark didn't provide the address we just use the default GPU.
-      val addr = initializeGpu(resources, conf)
-      initializeMemory(addr)
+      val addr = timeExecutorInitPhase("gpu_device_init") {
+        initializeGpu(resources, conf)
+      }
+      timeExecutorInitPhase("rmm_memory_init") {
+        initializeMemory(addr)
+      }
     }
   }
 

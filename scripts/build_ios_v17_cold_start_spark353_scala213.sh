@@ -22,7 +22,6 @@ readonly CUDF_REVISION="ff5b362d7c06ae5837fd7a7337e2ae20895f324d"
 readonly PRIVATE_REVISION="d3dbdee582f0d84ebe5bb8fadd766682e924962a"
 readonly EXPECTED_JAR="${SOURCE_ROOT}/scala2.13/dist/target/rapids-4-spark_2.13-26.08.0-SNAPSHOT-cuda12.jar"
 
-[[ "$(uname -m)" == "x86_64" ]]
 [[ -d "${SEED_REPOSITORY}" ]]
 [[ "$(git -C "${SOURCE_ROOT}" rev-parse HEAD)" == "${EXPECTED_SOURCE_COMMIT}" ]]
 [[ -z "$(git -C "${SOURCE_ROOT}" status --short)" ]]
@@ -65,6 +64,7 @@ maven_common=(
   -Dmaven.repo.local="${MAVEN_REPOSITORY}"
   -Dbuildver=353
   -Dcuda.version=cuda12
+  -Djni.classifier=cuda12
   -Dspark-rapids-jni.version="${JNI_SNAPSHOT}"
   -Drapids.iceberg.artifactId=rapids-4-spark-iceberg-stub
   -Drapids.iceberg.artifactId2=rapids-4-spark-iceberg-stub
@@ -72,6 +72,7 @@ maven_common=(
 
 {
   echo "source_commit=${EXPECTED_SOURCE_COMMIT}"
+  echo "build_host_architecture=$(uname -m)"
   echo "buildver=353"
   echo "scala_version=2.13.18"
   echo "cuda_version=cuda12"
@@ -99,6 +100,12 @@ mvn "${maven_common[@]}" -f scala2.13/pom.xml \
 
 [[ -f "${EXPECTED_JAR}" ]]
 jar tf "${EXPECTED_JAR}" | grep -Fq 'spark353/'
+jar tf "${EXPECTED_JAR}" | grep -Fq 'amd64/Linux/libcudf.so'
+jar tf "${EXPECTED_JAR}" | grep -Fq 'amd64/Linux/libcudfjni.so'
+if jar tf "${EXPECTED_JAR}" | grep -Fq 'aarch64/Linux/'; then
+  echo "Unexpected aarch64 native library found in the diagnostic JAR" >&2
+  exit 1
+fi
 if jar tf "${EXPECTED_JAR}" | grep -Eq 'spark35[1245678]/'; then
   echo "Unexpected Spark shim found in the diagnostic JAR" >&2
   exit 1

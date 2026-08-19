@@ -36,6 +36,8 @@ docker run --rm \
   --env EXPECTED_SOURCE_COMMIT="${EXPECTED_SOURCE_COMMIT}" \
   --env MAVEN_ROOT_OVERRIDE="/work/maven/isolated-${EXPECTED_SOURCE_COMMIT}" \
   --env EVIDENCE_ROOT_OVERRIDE="/work/evidence/build-${EXPECTED_SOURCE_COMMIT}" \
+  --volume /etc/passwd:/etc/passwd:ro \
+  --volume /etc/group:/etc/group:ro \
   --volume "${SOURCE_ROOT}:${SOURCE_ROOT}" \
   --volume "${SEED_REPOSITORY}:/home/vscode/.m2/repository:ro" \
   --volume "${MAVEN_PARENT}:/work/maven" \

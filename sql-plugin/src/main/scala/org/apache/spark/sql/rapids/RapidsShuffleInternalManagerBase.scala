@@ -17,9 +17,10 @@
 package org.apache.spark.sql.rapids
 
 import java.io.{IOException, OutputStream}
-import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, ConcurrentLinkedQueue,
-  ExecutionException, Executors, ExecutorService, Future, FutureTask, LinkedBlockingQueue,
-  ScheduledFuture, ThreadFactory, ThreadPoolExecutor, TimeoutException, TimeUnit}
+import java.util.concurrent.{Callable, CancellationException, CompletableFuture, ConcurrentHashMap,
+  ConcurrentLinkedQueue, ExecutionException, Executors, ExecutorService, Future, FutureTask,
+  LinkedBlockingQueue, ScheduledFuture, ThreadFactory, ThreadPoolExecutor, TimeoutException,
+  TimeUnit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicLong, AtomicReference}
 
 import scala.collection.JavaConverters._
@@ -27,7 +28,7 @@ import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 import com.nvidia.spark.rapids._
-import com.nvidia.spark.rapids.Arm.withResource
+import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.NvtxRegistry
 import com.nvidia.spark.rapids.RapidsConf
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
@@ -378,6 +379,9 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
     }
 
     def cancel(): Unit = {
+      if (!completionFuture.isDone) {
+        limiter.abort(new CancellationException("shuffle batch merger cancelled"))
+      }
       completionFuture.cancel(true)
       Option(stepFuture.get()).foreach(_.cancel(true))
       synchronized {
@@ -418,9 +422,9 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
         }
       } catch {
         case ee: ExecutionException => fail(ee.getCause)
-        case _: InterruptedException =>
+        case ie: InterruptedException =>
           Thread.currentThread().interrupt()
-          completionFuture.cancel(true)
+          fail(ie)
         case t: Throwable => fail(t)
       } finally {
         mergerStepsCompleted.incrementAndGet()
@@ -498,11 +502,14 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
     private def hasReadyWork: Boolean = currentWorkState != NotReady
 
     private def writeRecord(record: CompressedRecord): Unit = {
-      if (record.compressedSize > 0) {
-        outputStream.write(record.buffer.getBuf, 0, record.compressedSize.toInt)
+      try {
+        if (record.compressedSize > 0) {
+          outputStream.write(record.buffer.getBuf, 0, record.compressedSize.toInt)
+        }
+      } finally {
+        record.buffer.close()
+        limiter.release(record.remainingQuota)
       }
-      record.buffer.close()
-      limiter.release(record.remainingQuota)
     }
 
     private def closeOutputStream(): Unit = {
@@ -522,6 +529,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
 
     private def fail(t: Throwable): Unit = {
       closeOutputStreamQuietly()
+      limiter.abort(t)
       completionFuture.completeExceptionally(t)
     }
   }
@@ -798,7 +806,13 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
         // Acquire limiter and process compression task immediately
         val waitOnLimiterStart = System.nanoTime()
         markDiagnosticProgress("limiter_acquire")
-        limiter.acquireOrBlock(recordSize)
+        try {
+          limiter.acquireOrBlock(recordSize)
+        } catch {
+          case t: Throwable =>
+            cb.close()
+            throw t
+        }
         waitTimeOnLimiterNs += System.nanoTime() - waitOnLimiterStart
 
         val batchForRecord = currentBatch
@@ -811,36 +825,37 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                 // Create a new buffer for this record.
                 // The buffer is closed by the merger thread after writing to disk.
                 val buffer = new OpenByteArrayOutputStream()
+                closeOnExcept(buffer) { _ =>
+                  // Serialize + compress + encryption to memory buffer
+                  val compressedOutputStream = blockManager.serializerManager.wrapStream(
+                    ShuffleBlockId(shuffleId, mapId, reducePartitionId), buffer)
 
-                // Serialize + compress + encryption to memory buffer
-                val compressedOutputStream = blockManager.serializerManager.wrapStream(
-                  ShuffleBlockId(shuffleId, mapId, reducePartitionId), buffer)
+                  val serializationStream = serializerInstance.serializeStream(
+                    compressedOutputStream)
+                  withResource(serializationStream) { serializer =>
+                    serializer.writeKey(key.asInstanceOf[Any])
+                    serializer.writeValue(value.asInstanceOf[Any])
+                  }
 
-                val serializationStream = serializerInstance.serializeStream(
-                  compressedOutputStream)
-                withResource(serializationStream) { serializer =>
-                  serializer.writeKey(key.asInstanceOf[Any])
-                  serializer.writeValue(value.asInstanceOf[Any])
+                  // Track total written data size (compressed size)
+                  val compressedSize = buffer.getCount.toLong
+                  totalCompressedSize.addAndGet(compressedSize)
+
+                  // Release excess quota immediately after compression.
+                  // Data is now in OpenByteArrayOutputStream (heap), only need to hold
+                  // compressedSize quota until Merger writes to disk.
+                  // Note: excessQuota can be 0 if compression doesn't reduce size (or expands)
+                  val excessQuota = math.max(0L, recordSize - compressedSize)
+                  if (excessQuota > 0) {
+                    limiter.release(excessQuota)
+                    releasedQuota = excessQuota
+                  }
+
+                  // Return CompressedRecord with buffer and remaining quota for Merger
+                  // Total released = excessQuota + remainingQuota should equal recordSize
+                  val remainingQuota = recordSize - excessQuota
+                  CompressedRecord(buffer, compressedSize, remainingQuota)
                 }
-
-                // Track total written data size (compressed size)
-                val compressedSize = buffer.getCount.toLong
-                totalCompressedSize.addAndGet(compressedSize)
-
-                // Release excess quota immediately after compression.
-                // Data is now in OpenByteArrayOutputStream (heap), only need to hold
-                // compressedSize quota until Merger writes to disk.
-                // Note: excessQuota can be 0 if compression doesn't reduce size (or expands)
-                val excessQuota = math.max(0L, recordSize - compressedSize)
-                if (excessQuota > 0) {
-                  limiter.release(excessQuota)
-                  releasedQuota = excessQuota
-                }
-
-                // Return CompressedRecord with buffer and remaining quota for Merger
-                // Total released = excessQuota + remainingQuota should equal recordSize
-                val remainingQuota = recordSize - excessQuota
-                CompressedRecord(buffer, compressedSize, remainingQuota)
               }
               compressionTasksCompleted.incrementAndGet()
               result
@@ -958,10 +973,13 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
           var future = recordQueue.poll()
           while (future != null) {
             future.cancel(true)
-            // If future already completed, try to close the buffer
+            // If future already completed, close the buffer and release the quota that
+            // would otherwise have been released by the merger after writing the record.
             if (future.isDone && !future.isCancelled) {
               try {
-                future.get().buffer.close()
+                val record = future.get()
+                record.buffer.close()
+                limiter.release(record.remainingQuota)
               } catch {
                 case _: Exception => // Ignore cleanup errors
               }
@@ -1183,6 +1201,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
 
 class BytesInFlightLimiter(maxBytesInFlight: Long) {
   private var inFlight: Long = 0L
+  private var abortCause: Throwable = _
 
   def acquire(sz: Long): Boolean = {
     if (sz == 0) {
@@ -1200,17 +1219,26 @@ class BytesInFlightLimiter(maxBytesInFlight: Long) {
   }
 
   def acquireOrBlock(sz: Long): Unit = {
-    var acquired = acquire(sz)
-    if (!acquired) {
-      synchronized {
-        while (!acquired) {
-          acquired = acquire(sz)
-          if (!acquired) {
-            wait()
-          }
+    synchronized {
+      var acquired = acquire(sz)
+      while (!acquired && abortCause == null) {
+        wait()
+        acquired = acquire(sz)
+      }
+      if (abortCause != null) {
+        if (acquired) {
+          inFlight -= sz
         }
+        throw abortCause
       }
     }
+  }
+
+  def abort(cause: Throwable): Unit = synchronized {
+    if (abortCause == null) {
+      abortCause = cause
+    }
+    notifyAll()
   }
 
   def release(sz: Long): Unit = synchronized {

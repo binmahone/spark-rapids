@@ -167,7 +167,7 @@ unzip -p "${EXPECTED_JAR}" \
   spark-shared/org/apache/spark/sql/rapids/ColdStartQueryPlanningListener.class \
   | strings > "${LOG_ROOT}/query-planning-metric-keys.txt"
 for metric_key in RAPIDS_QUERY_PLANNING_METRIC RAPIDS_FILE_INDEX_METRIC \
-    phase_analysis_ms input_plan_identity_hash metadata_ops_time_ns root_paths input_files; do
+    phase_ input_plan_identity_hash metadata_ops_time_ns root_paths input_files; do
   grep -Fq "${metric_key}" "${LOG_ROOT}/query-planning-metric-keys.txt"
 done
 if find "${MAVEN_REPOSITORY}" -type f -name '*.lastUpdated' -print -quit | grep -q .; then

@@ -13,6 +13,7 @@ readonly BUILD_IMAGE="${BUILD_IMAGE_OVERRIDE:-vsc-spark-gluten-233dddf04a9b42d03
 readonly MAVEN_PARENT="${WORK_ROOT}/maven"
 readonly EVIDENCE_PARENT="${WORK_ROOT}/evidence"
 readonly CONTAINER_HOME="${WORK_ROOT}/container-home"
+readonly CONTAINER_IDENTITY="${WORK_ROOT}/container-identity"
 readonly MAVEN_ROOT="${MAVEN_PARENT}/isolated-${EXPECTED_SOURCE_COMMIT}"
 readonly EVIDENCE_ROOT="${EVIDENCE_PARENT}/build-${EXPECTED_SOURCE_COMMIT}"
 
@@ -25,7 +26,9 @@ if [[ -e "${MAVEN_ROOT}" || -e "${EVIDENCE_ROOT}" ]]; then
   exit 2
 fi
 
-mkdir -p "${MAVEN_PARENT}" "${EVIDENCE_PARENT}" "${CONTAINER_HOME}"
+mkdir -p "${MAVEN_PARENT}" "${EVIDENCE_PARENT}" "${CONTAINER_HOME}" "${CONTAINER_IDENTITY}"
+getent passwd "$(id -u)" > "${CONTAINER_IDENTITY}/passwd"
+getent group "$(id -g)" > "${CONTAINER_IDENTITY}/group"
 
 docker run --rm \
   --name "ios-v17-cold-start-build-${EXPECTED_SOURCE_COMMIT:0:12}" \
@@ -36,8 +39,8 @@ docker run --rm \
   --env EXPECTED_SOURCE_COMMIT="${EXPECTED_SOURCE_COMMIT}" \
   --env MAVEN_ROOT_OVERRIDE="/work/maven/isolated-${EXPECTED_SOURCE_COMMIT}" \
   --env EVIDENCE_ROOT_OVERRIDE="/work/evidence/build-${EXPECTED_SOURCE_COMMIT}" \
-  --volume /etc/passwd:/etc/passwd:ro \
-  --volume /etc/group:/etc/group:ro \
+  --volume "${CONTAINER_IDENTITY}/passwd:/etc/passwd:ro" \
+  --volume "${CONTAINER_IDENTITY}/group:/etc/group:ro" \
   --volume "${SOURCE_ROOT}:${SOURCE_ROOT}" \
   --volume "${SEED_REPOSITORY}:/home/vscode/.m2/repository:ro" \
   --volume "${MAVEN_PARENT}:/work/maven" \

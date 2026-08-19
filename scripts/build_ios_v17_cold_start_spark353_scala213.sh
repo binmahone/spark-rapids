@@ -19,6 +19,10 @@ readonly JNI_JAR_SHA256="dcc488968055819250bb0f28c873016aa42324f2adda3d306de211c
 readonly JNI_POM_SHA256="00e7fe9bd96809f5382adc72943c1b1a0d4089d7714817d3ef6a57defb648588"
 readonly JNI_REVISION="14c6c1e757290ac78330276be9fe122c3ba09811"
 readonly CUDF_REVISION="ff5b362d7c06ae5837fd7a7337e2ae20895f324d"
+readonly PRIVATE_VERSION="26.08.0-20260809.031830-58"
+readonly PRIVATE_SNAPSHOT="26.08.0-SNAPSHOT"
+readonly PRIVATE_JAR_SHA256="f54abc27b59106524817940e91ede19ea95dbf5823e0e5472fb7d33e0e4a1fe1"
+readonly PRIVATE_POM_SHA256="44363e882d165fce1fe9dee39411b64810e991f346e051d2409e77f23d01273c"
 readonly PRIVATE_REVISION="d3dbdee582f0d84ebe5bb8fadd766682e924962a"
 readonly EXPECTED_JAR="${SOURCE_ROOT}/scala2.13/dist/target/rapids-4-spark_2.13-26.08.0-SNAPSHOT-cuda12.jar"
 
@@ -44,6 +48,19 @@ cp "${SEED_JNI_JAR}" "${LOCAL_JNI_ROOT}/spark-rapids-jni-${JNI_VERSION}-cuda12.j
 cp "${SEED_JNI_POM}" "${LOCAL_JNI_ROOT}/spark-rapids-jni-${JNI_VERSION}.pom"
 cp "${SEED_JNI_JAR}" "${LOCAL_JNI_ROOT}/spark-rapids-jni-${JNI_SNAPSHOT}-cuda12.jar"
 cp "${SEED_JNI_POM}" "${LOCAL_JNI_ROOT}/spark-rapids-jni-${JNI_SNAPSHOT}.pom"
+
+readonly SEED_PRIVATE_ROOT="${SEED_REPOSITORY}/com/nvidia/rapids-4-spark-private_2.13/${PRIVATE_SNAPSHOT}"
+readonly LOCAL_PRIVATE_ROOT="${MAVEN_REPOSITORY}/com/nvidia/rapids-4-spark-private_2.13/${PRIVATE_SNAPSHOT}"
+readonly SEED_PRIVATE_JAR="${SEED_PRIVATE_ROOT}/rapids-4-spark-private_2.13-${PRIVATE_VERSION}-spark353.jar"
+readonly SEED_PRIVATE_POM="${SEED_PRIVATE_ROOT}/rapids-4-spark-private_2.13-${PRIVATE_VERSION}.pom"
+
+[[ "$(sha256sum "${SEED_PRIVATE_JAR}" | awk '{print $1}')" == "${PRIVATE_JAR_SHA256}" ]]
+[[ "$(sha256sum "${SEED_PRIVATE_POM}" | awk '{print $1}')" == "${PRIVATE_POM_SHA256}" ]]
+mkdir -p "${LOCAL_PRIVATE_ROOT}"
+cp "${SEED_PRIVATE_JAR}" \
+  "${LOCAL_PRIVATE_ROOT}/rapids-4-spark-private_2.13-${PRIVATE_SNAPSHOT}-spark353.jar"
+cp "${SEED_PRIVATE_POM}" \
+  "${LOCAL_PRIVATE_ROOT}/rapids-4-spark-private_2.13-${PRIVATE_SNAPSHOT}.pom"
 
 cat > "${SETTINGS_PATH}" <<EOF
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
@@ -78,6 +95,8 @@ maven_common=(
   echo "jni_jar_sha256=${JNI_JAR_SHA256}"
   echo "jni_revision=${JNI_REVISION}"
   echo "cudf_revision=${CUDF_REVISION}"
+  echo "private_version=${PRIVATE_VERSION}"
+  echo "private_jar_sha256=${PRIVATE_JAR_SHA256}"
   echo "private_revision=${PRIVATE_REVISION}"
   java -version 2>&1
   mvn -version
@@ -125,13 +144,13 @@ unzip -p "${EXPECTED_JAR}" cudf-java-version-info.properties \
 unzip -p "${EXPECTED_JAR}" spark-shared/rapids4spark-private-version-info.properties \
   | grep -Fx "revision=${PRIVATE_REVISION}"
 unzip -p "${EXPECTED_JAR}" \
-  org/apache/spark/sql/rapids/GpuWriteJobStatsTracker\$.class \
+  spark-shared/org/apache/spark/sql/rapids/GpuWriteJobStatsTracker\$.class \
   | strings > "${LOG_ROOT}/gpu-write-metric-keys.txt"
 for metric_key in inputIteratorTime writerInitTime writerCloseTime tableWriterCloseTime \
     closeBufferedWriteTime outputStreamCloseTime statsCloseFileTime; do
   grep -Fxq "${metric_key}" "${LOG_ROOT}/gpu-write-metric-keys.txt"
 done
-unzip -p "${EXPECTED_JAR}" com/nvidia/spark/rapids/RapidsExecutorPlugin.class \
+unzip -p "${EXPECTED_JAR}" spark-shared/com/nvidia/spark/rapids/RapidsExecutorPlugin.class \
   | strings \
   | grep -Fq 'RAPIDS_EXECUTOR_INIT_METRIC phase='
 if find "${MAVEN_REPOSITORY}" -type f -name '*.lastUpdated' -print -quit | grep -q .; then

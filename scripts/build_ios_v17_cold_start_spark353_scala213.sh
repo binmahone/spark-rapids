@@ -91,9 +91,9 @@ mvn "${maven_common[@]}" --non-recursive \
 
 mvn "${maven_common[@]}" -f scala2.13/pom.xml \
   -pl tests -am \
-  -DwildcardSuites=com.nvidia.spark.rapids.RapidsExecutorPluginSuite,org.apache.spark.sql.rapids.GpuWriteInstrumentationSuite \
+  -DwildcardSuites=com.nvidia.spark.rapids.ExecutorInitInstrumentationSuite,org.apache.spark.sql.rapids.GpuWriteInstrumentationSuite \
   clean test 2>&1 | tee "${LOG_ROOT}/targeted-tests.log"
-grep -Fq 'RapidsExecutorPluginSuite:' "${LOG_ROOT}/targeted-tests.log"
+grep -Fq 'ExecutorInitInstrumentationSuite:' "${LOG_ROOT}/targeted-tests.log"
 grep -Fq 'GpuWriteInstrumentationSuite:' "${LOG_ROOT}/targeted-tests.log"
 grep -Eq 'Tests: succeeded [1-9][0-9]*, failed 0' "${LOG_ROOT}/targeted-tests.log"
 

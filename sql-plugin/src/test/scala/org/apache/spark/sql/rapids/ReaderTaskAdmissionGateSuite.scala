@@ -263,6 +263,64 @@ class ReaderTaskAdmissionGateSuite extends AnyFunSuite with BeforeAndAfterEach {
     assert(gate.currentDesiredPermits === 8)
   }
 
+  test("adaptive admission decreases before admitting a task at an idle stage boundary") {
+    val snapshot = new AtomicReference[GpuConcurrencySnapshot](gpuSnapshot(6))
+    val config = ReaderTaskAdmissionConfig(
+      initialConcurrentTasks = 12,
+      adaptiveEnabled = true,
+      minConcurrentTasks = 2,
+      maxConcurrentTasks = 16,
+      gpuConcurrencyMultiplier = 2.0,
+      decisionWindowTasks = 4,
+      stableTargetWindows = 2,
+      maxAdjustmentStep = 2,
+      detailedLoggingEnabled = false,
+      immediateDecreaseEnabled = true,
+      stageBoundaryDecreaseEnabled = true)
+    val gate = new ReaderTaskAdmissionGate(config, _ => (), _ => snapshot.get())
+
+    val stageOne = taskContext(1L, stageId = 1)
+    assert(gate.acquire(stageOne).acquired)
+    gate.releaseReference(stageOne, emptyObservation)
+    assert(gate.currentDesiredPermits === 12)
+
+    snapshot.set(gpuSnapshot(4))
+    val stageTwo = taskContext(2L, stageId = 2)
+    assert(gate.acquire(stageTwo).acquired)
+    assert(gate.currentDesiredPermits === 8)
+    gate.releaseReference(stageTwo, emptyObservation)
+  }
+
+  test("stage boundary decrease does not change permits while another reader is active") {
+    val snapshot = new AtomicReference[GpuConcurrencySnapshot](gpuSnapshot(6))
+    val config = ReaderTaskAdmissionConfig(
+      initialConcurrentTasks = 12,
+      adaptiveEnabled = true,
+      minConcurrentTasks = 2,
+      maxConcurrentTasks = 16,
+      gpuConcurrencyMultiplier = 2.0,
+      decisionWindowTasks = 4,
+      stableTargetWindows = 2,
+      maxAdjustmentStep = 2,
+      detailedLoggingEnabled = false,
+      stageBoundaryDecreaseEnabled = true)
+    val gate = new ReaderTaskAdmissionGate(config, _ => (), _ => snapshot.get())
+
+    val stageOne = taskContext(1L, stageId = 1)
+    assert(gate.acquire(stageOne).acquired)
+    snapshot.set(gpuSnapshot(4))
+    val overlappingStageTwo = taskContext(2L, stageId = 2)
+    assert(gate.acquire(overlappingStageTwo).acquired)
+    assert(gate.currentDesiredPermits === 12)
+
+    gate.releaseReference(stageOne, emptyObservation)
+    gate.releaseReference(overlappingStageTwo, emptyObservation)
+    val laterStageTwo = taskContext(3L, stageId = 2)
+    assert(gate.acquire(laterStageTwo).acquired)
+    assert(gate.currentDesiredPermits === 8)
+    gate.releaseReference(laterStageTwo, emptyObservation)
+  }
+
   test("bounded adjustment reaches FINRA-sized stage targets") {
     val snapshot = new AtomicReference[GpuConcurrencySnapshot](gpuSnapshot(4))
     val config = ReaderTaskAdmissionConfig(

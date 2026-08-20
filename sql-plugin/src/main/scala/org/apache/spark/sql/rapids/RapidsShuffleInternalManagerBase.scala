@@ -185,7 +185,8 @@ private[rapids] case class ReaderTaskAdmissionConfig(
     stableTargetWindows: Int,
     maxAdjustmentStep: Int,
     detailedLoggingEnabled: Boolean,
-    immediateDecreaseEnabled: Boolean = false) {
+    immediateDecreaseEnabled: Boolean = false,
+    stageBoundaryDecreaseEnabled: Boolean = false) {
   require(initialConcurrentTasks > 0)
   require(minConcurrentTasks > 0 && minConcurrentTasks <= initialConcurrentTasks)
   require(maxConcurrentTasks >= initialConcurrentTasks)
@@ -235,6 +236,7 @@ private[rapids] class ReaderTaskAdmissionGate(
   private var lastDecisionStageId = -1
   private var lastGpuTarget = -1
   private var consecutiveStableTargetWindows = 0
+  private var admissionStageId = -1
   private val admittedTasks = new ConcurrentHashMap[Long, TaskAdmission]()
 
   def acquire(context: TaskContext): ReaderTaskAdmissionResult = {
@@ -252,10 +254,12 @@ private[rapids] class ReaderTaskAdmissionGate(
       try {
         lock.lockInterruptibly()
         lockAcquired = true
+        maybeDecreaseAtStageBoundary(context)
         waitingTasks += 1
         try {
           while (activeTasks >= desiredPermits) {
             permitsChanged.await()
+            maybeDecreaseAtStageBoundary(context)
           }
         } finally {
           waitingTasks -= 1
@@ -274,6 +278,35 @@ private[rapids] class ReaderTaskAdmissionGate(
       } finally {
         if (lockAcquired) {
           lock.unlock()
+        }
+      }
+    }
+  }
+
+  private def maybeDecreaseAtStageBoundary(context: TaskContext): Unit = {
+    if (activeTasks == 0 && admissionStageId != context.stageId()) {
+      val oldStageId = admissionStageId
+      admissionStageId = context.stageId()
+      resetObservationWindow()
+      lastDecisionStageId = context.stageId()
+      lastGpuTarget = -1
+      consecutiveStableTargetWindows = 0
+      if (config.adaptiveEnabled && config.stageBoundaryDecreaseEnabled) {
+        val snapshot = gpuSnapshot(context)
+        val gpuTarget = gpuTargetFor(snapshot)
+        if (desiredPermits > gpuTarget) {
+          val oldPermits = desiredPermits
+          desiredPermits = gpuTarget
+          if (config.detailedLoggingEnabled) {
+            logWarning(s"ReaderTaskAdmissionStageBoundaryDecision " +
+              s"oldStageId=$oldStageId stageId=${context.stageId()} " +
+              s"oldPermits=$oldPermits newPermits=$desiredPermits " +
+              s"reason=gpu-target-stage-boundary-decrease gpuTarget=$gpuTarget " +
+              s"gpuEstimatedCapacity=${snapshot.estimatedCapacity} " +
+              s"gpuActiveTasks=${snapshot.activeTasks} " +
+              s"gpuWaitingTasks=${snapshot.waitingTasks}")
+          }
+          permitsChanged.signalAll()
         }
       }
     }
@@ -342,9 +375,7 @@ private[rapids] class ReaderTaskAdmissionGate(
     }
 
     val snapshot = gpuSnapshot(context)
-    val gpuTarget = math.max(config.minConcurrentTasks,
-      math.min(config.maxConcurrentTasks,
-        math.floor(snapshot.estimatedCapacity * config.gpuConcurrencyMultiplier).toInt))
+    val gpuTarget = gpuTargetFor(snapshot)
     val queueRatio = if (windowWorkerActiveNs == 0L) 0.0 else {
       windowWorkerQueueDelayNs.toDouble / windowWorkerActiveNs
     }
@@ -393,10 +424,17 @@ private[rapids] class ReaderTaskAdmissionGate(
         f"queueDelayRatio=$queueRatio%.6f limiterFailureRatio=$limiterRatio%.6f " +
         s"maxAdjustmentStep=${config.maxAdjustmentStep} " +
         s"immediateDecreaseEnabled=${config.immediateDecreaseEnabled} " +
+        s"stageBoundaryDecreaseEnabled=${config.stageBoundaryDecreaseEnabled} " +
         s"stableTargetWindows=$consecutiveStableTargetWindows/" +
         s"${config.stableTargetWindows}")
     }
     Some(decision)
+  }
+
+  private def gpuTargetFor(snapshot: GpuConcurrencySnapshot): Int = {
+    math.max(config.minConcurrentTasks,
+      math.min(config.maxConcurrentTasks,
+        math.floor(snapshot.estimatedCapacity * config.gpuConcurrencyMultiplier).toInt))
   }
 
   private def resetObservationWindow(): Unit = {
@@ -2731,7 +2769,9 @@ class RapidsShuffleInternalManagerBase(conf: SparkConf, val isDriver: Boolean)
                     detailedLoggingEnabled =
                       rapidsConf.shuffleMultiThreadedReaderAdaptiveDetailedLoggingEnabled,
                     immediateDecreaseEnabled =
-                      rapidsConf.shuffleMultiThreadedReaderAdaptiveImmediateDecreaseEnabled))
+                      rapidsConf.shuffleMultiThreadedReaderAdaptiveImmediateDecreaseEnabled,
+                    stageBoundaryDecreaseEnabled =
+                      rapidsConf.shuffleMultiThreadedReaderAdaptiveStageBoundaryDecreaseEnabled))
                 }
               })
           case _ =>

@@ -2537,9 +2537,21 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
 
   val SHUFFLE_MULTITHREADED_READER_ADAPTIVE_IMMEDIATE_DECREASE_ENABLED =
     conf("spark.rapids.shuffle.multiThreaded.reader.adaptiveAdmission.immediateDecrease.enabled")
-      .doc("Immediately reduce reader permits to a lower GPU-derived target without waiting " +
-        "for target stabilization. Increases still require target stabilization and remain " +
-        "bounded by maxAdjustmentStep.")
+      .doc("At an adaptive decision window, reduce reader permits to a lower GPU-derived " +
+        "target without waiting for target stabilization. This does not make a decision " +
+        "before the configured number of reader tasks complete. Increases still require " +
+        "target stabilization and remain bounded by maxAdjustmentStep.")
+      .internal()
+      .startupOnly()
+      .booleanConf
+      .createWithDefault(false)
+
+  val SHUFFLE_MULTITHREADED_READER_ADAPTIVE_STAGE_BOUNDARY_DECREASE_ENABLED =
+    conf("spark.rapids.shuffle.multiThreaded.reader.adaptiveAdmission" +
+      ".stageBoundaryDecrease.enabled")
+      .doc("At a reader stage boundary with no active admitted reader task, immediately " +
+        "reduce inherited reader permits to a lower GPU-derived target. This does not " +
+        "increase permits or interrupt active reader tasks.")
       .internal()
       .startupOnly()
       .booleanConf
@@ -3996,6 +4008,9 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val shuffleMultiThreadedReaderAdaptiveImmediateDecreaseEnabled: Boolean =
     get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_IMMEDIATE_DECREASE_ENABLED)
+
+  lazy val shuffleMultiThreadedReaderAdaptiveStageBoundaryDecreaseEnabled: Boolean =
+    get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_STAGE_BOUNDARY_DECREASE_ENABLED)
 
   lazy val shuffleMultiThreadedReaderAdaptiveDetailedLoggingEnabled: Boolean =
     get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_DETAILED_LOGGING_ENABLED)

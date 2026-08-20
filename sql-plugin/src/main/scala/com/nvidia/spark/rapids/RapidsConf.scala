@@ -2535,6 +2535,16 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
       .checkValue(_ > 0, "The adaptive reader maximum adjustment step must be positive.")
       .createWithDefault(2)
 
+  val SHUFFLE_MULTITHREADED_READER_ADAPTIVE_IMMEDIATE_DECREASE_ENABLED =
+    conf("spark.rapids.shuffle.multiThreaded.reader.adaptiveAdmission.immediateDecrease.enabled")
+      .doc("Immediately reduce reader permits to a lower GPU-derived target without waiting " +
+        "for target stabilization. Increases still require target stabilization and remain " +
+        "bounded by maxAdjustmentStep.")
+      .internal()
+      .startupOnly()
+      .booleanConf
+      .createWithDefault(false)
+
   val SHUFFLE_MULTITHREADED_READER_ADAPTIVE_DETAILED_LOGGING_ENABLED =
     conf("spark.rapids.shuffle.multiThreaded.reader.adaptiveAdmission.detailedLogging.enabled")
       .doc("Emit detailed executor logs for bounded adaptive reader admission decisions.")
@@ -3983,6 +3993,9 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val shuffleMultiThreadedReaderAdaptiveMaxAdjustmentStep: Int =
     get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_MAX_ADJUSTMENT_STEP)
+
+  lazy val shuffleMultiThreadedReaderAdaptiveImmediateDecreaseEnabled: Boolean =
+    get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_IMMEDIATE_DECREASE_ENABLED)
 
   lazy val shuffleMultiThreadedReaderAdaptiveDetailedLoggingEnabled: Boolean =
     get(SHUFFLE_MULTITHREADED_READER_ADAPTIVE_DETAILED_LOGGING_ENABLED)

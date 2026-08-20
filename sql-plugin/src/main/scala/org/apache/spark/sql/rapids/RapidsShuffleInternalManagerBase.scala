@@ -184,7 +184,8 @@ private[rapids] case class ReaderTaskAdmissionConfig(
     decisionWindowTasks: Int,
     stableTargetWindows: Int,
     maxAdjustmentStep: Int,
-    detailedLoggingEnabled: Boolean) {
+    detailedLoggingEnabled: Boolean,
+    immediateDecreaseEnabled: Boolean = false) {
   require(initialConcurrentTasks > 0)
   require(minConcurrentTasks > 0 && minConcurrentTasks <= initialConcurrentTasks)
   require(maxConcurrentTasks >= initialConcurrentTasks)
@@ -363,6 +364,9 @@ private[rapids] class ReaderTaskAdmissionGate(
     }
     val oldPermits = desiredPermits
     val (nextPermits, reason) = if (
+        config.immediateDecreaseEnabled && desiredPermits > gpuTarget) {
+      (gpuTarget, "gpu-target-immediate-decrease")
+    } else if (
         consecutiveStableTargetWindows < config.stableTargetWindows) {
       (desiredPermits, "gpu-target-stabilizing")
     } else if (desiredPermits < gpuTarget) {
@@ -388,6 +392,7 @@ private[rapids] class ReaderTaskAdmissionGate(
         s"gpuActiveTasks=${snapshot.activeTasks} gpuWaitingTasks=${snapshot.waitingTasks} " +
         f"queueDelayRatio=$queueRatio%.6f limiterFailureRatio=$limiterRatio%.6f " +
         s"maxAdjustmentStep=${config.maxAdjustmentStep} " +
+        s"immediateDecreaseEnabled=${config.immediateDecreaseEnabled} " +
         s"stableTargetWindows=$consecutiveStableTargetWindows/" +
         s"${config.stableTargetWindows}")
     }
@@ -2724,7 +2729,9 @@ class RapidsShuffleInternalManagerBase(conf: SparkConf, val isDriver: Boolean)
                     maxAdjustmentStep =
                       rapidsConf.shuffleMultiThreadedReaderAdaptiveMaxAdjustmentStep,
                     detailedLoggingEnabled =
-                      rapidsConf.shuffleMultiThreadedReaderAdaptiveDetailedLoggingEnabled))
+                      rapidsConf.shuffleMultiThreadedReaderAdaptiveDetailedLoggingEnabled,
+                    immediateDecreaseEnabled =
+                      rapidsConf.shuffleMultiThreadedReaderAdaptiveImmediateDecreaseEnabled))
                 }
               })
           case _ =>

@@ -228,6 +228,41 @@ class ReaderTaskAdmissionGateSuite extends AnyFunSuite with BeforeAndAfterEach {
     assert(firstDecrease.newPermits === 6)
   }
 
+  test("adaptive admission immediately decreases to a lower GPU target when enabled") {
+    val snapshot = new AtomicReference[GpuConcurrencySnapshot](gpuSnapshot(6))
+    val config = ReaderTaskAdmissionConfig(
+      initialConcurrentTasks = 12,
+      adaptiveEnabled = true,
+      minConcurrentTasks = 2,
+      maxConcurrentTasks = 16,
+      gpuConcurrencyMultiplier = 2.0,
+      decisionWindowTasks = 4,
+      stableTargetWindows = 2,
+      maxAdjustmentStep = 2,
+      detailedLoggingEnabled = false,
+      immediateDecreaseEnabled = true)
+    val gate = new ReaderTaskAdmissionGate(config, _ => (), _ => snapshot.get())
+
+    def complete(taskId: Long, stageId: Int) = {
+      val context = taskContext(taskId, stageId)
+      assert(gate.acquire(context).acquired)
+      gate.releaseReference(context, emptyObservation)
+    }
+
+    (1L to 8L).foreach(taskId => complete(taskId, stageId = 1))
+    assert(gate.currentDesiredPermits === 12)
+
+    snapshot.set(gpuSnapshot(4))
+    (9L to 11L).foreach(taskId => assert(complete(taskId, stageId = 2).isEmpty))
+    val decrease = complete(12L, stageId = 2).get
+    assert(decrease.reason === "gpu-target-immediate-decrease")
+    assert(decrease.stableTargetWindows === 1)
+    assert(decrease.oldPermits === 12)
+    assert(decrease.gpuTarget === 8)
+    assert(decrease.newPermits === 8)
+    assert(gate.currentDesiredPermits === 8)
+  }
+
   test("bounded adjustment reaches FINRA-sized stage targets") {
     val snapshot = new AtomicReference[GpuConcurrencySnapshot](gpuSnapshot(4))
     val config = ReaderTaskAdmissionConfig(

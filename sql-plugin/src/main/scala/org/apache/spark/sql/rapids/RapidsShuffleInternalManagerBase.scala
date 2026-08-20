@@ -183,6 +183,7 @@ private[rapids] case class ReaderTaskAdmissionConfig(
     gpuConcurrencyMultiplier: Double,
     decisionWindowTasks: Int,
     stableTargetWindows: Int,
+    maxAdjustmentStep: Int,
     detailedLoggingEnabled: Boolean) {
   require(initialConcurrentTasks > 0)
   require(minConcurrentTasks > 0 && minConcurrentTasks <= initialConcurrentTasks)
@@ -190,6 +191,7 @@ private[rapids] case class ReaderTaskAdmissionConfig(
   require(gpuConcurrencyMultiplier > 0.0)
   require(decisionWindowTasks > 0)
   require(stableTargetWindows > 0)
+  require(maxAdjustmentStep > 0)
 }
 
 private[rapids] case class ReaderTaskAdmissionDecision(
@@ -364,9 +366,11 @@ private[rapids] class ReaderTaskAdmissionGate(
         consecutiveStableTargetWindows < config.stableTargetWindows) {
       (desiredPermits, "gpu-target-stabilizing")
     } else if (desiredPermits < gpuTarget) {
-      (desiredPermits + 1, "gpu-target-increase")
+      (math.min(gpuTarget, desiredPermits + config.maxAdjustmentStep),
+        "gpu-target-increase")
     } else if (desiredPermits > gpuTarget) {
-      (desiredPermits - 1, "gpu-target-decrease")
+      (math.max(gpuTarget, desiredPermits - config.maxAdjustmentStep),
+        "gpu-target-decrease")
     } else {
       (desiredPermits, "gpu-target-hold")
     }
@@ -383,6 +387,7 @@ private[rapids] class ReaderTaskAdmissionGate(
         s"gpuEstimatedCapacity=${snapshot.estimatedCapacity} " +
         s"gpuActiveTasks=${snapshot.activeTasks} gpuWaitingTasks=${snapshot.waitingTasks} " +
         f"queueDelayRatio=$queueRatio%.6f limiterFailureRatio=$limiterRatio%.6f " +
+        s"maxAdjustmentStep=${config.maxAdjustmentStep} " +
         s"stableTargetWindows=$consecutiveStableTargetWindows/" +
         s"${config.stableTargetWindows}")
     }
@@ -2716,6 +2721,8 @@ class RapidsShuffleInternalManagerBase(conf: SparkConf, val isDriver: Boolean)
                       rapidsConf.shuffleMultiThreadedReaderAdaptiveDecisionWindowTasks,
                     stableTargetWindows =
                       rapidsConf.shuffleMultiThreadedReaderAdaptiveStableTargetWindows,
+                    maxAdjustmentStep =
+                      rapidsConf.shuffleMultiThreadedReaderAdaptiveMaxAdjustmentStep,
                     detailedLoggingEnabled =
                       rapidsConf.shuffleMultiThreadedReaderAdaptiveDetailedLoggingEnabled))
                 }

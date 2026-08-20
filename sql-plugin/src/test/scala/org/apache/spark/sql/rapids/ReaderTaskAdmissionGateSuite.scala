@@ -33,7 +33,8 @@ class ReaderTaskAdmissionGateSuite extends AnyFunSuite with BeforeAndAfterEach {
   private def fixedConfig(permits: Int): ReaderTaskAdmissionConfig = {
     ReaderTaskAdmissionConfig(
       permits, adaptiveEnabled = false, permits, permits, 2.0,
-      decisionWindowTasks = 4, stableTargetWindows = 2, detailedLoggingEnabled = false)
+      decisionWindowTasks = 4, stableTargetWindows = 2, maxAdjustmentStep = 1,
+      detailedLoggingEnabled = false)
   }
 
   private def taskContext(taskAttemptId: Long, stageId: Int = 1): TaskContext = {
@@ -137,6 +138,7 @@ class ReaderTaskAdmissionGateSuite extends AnyFunSuite with BeforeAndAfterEach {
       gpuConcurrencyMultiplier = 1.5,
       decisionWindowTasks = 2,
       stableTargetWindows = 2,
+      maxAdjustmentStep = 1,
       detailedLoggingEnabled = false)
     val gate = new ReaderTaskAdmissionGate(config, _ => (), _ => snapshot.get())
 
@@ -177,6 +179,93 @@ class ReaderTaskAdmissionGateSuite extends AnyFunSuite with BeforeAndAfterEach {
     assert(firstDecrease.newPermits === 5)
   }
 
+  test("adaptive admission converges with a bounded multi-permit adjustment") {
+    val snapshot = new AtomicReference[GpuConcurrencySnapshot](gpuSnapshot(4))
+    val config = ReaderTaskAdmissionConfig(
+      initialConcurrentTasks = 4,
+      adaptiveEnabled = true,
+      minConcurrentTasks = 2,
+      maxConcurrentTasks = 8,
+      gpuConcurrencyMultiplier = 2.0,
+      decisionWindowTasks = 2,
+      stableTargetWindows = 2,
+      maxAdjustmentStep = 2,
+      detailedLoggingEnabled = false)
+    val gate = new ReaderTaskAdmissionGate(config, _ => (), _ => snapshot.get())
+
+    def complete(taskId: Long) = {
+      val context = taskContext(taskId)
+      assert(gate.acquire(context).acquired)
+      gate.releaseReference(context, emptyObservation)
+    }
+
+    assert(complete(1L).isEmpty)
+    val stabilizing = complete(2L).get
+    assert(stabilizing.reason === "gpu-target-stabilizing")
+    assert(stabilizing.oldPermits === 4)
+    assert(stabilizing.newPermits === 4)
+
+    assert(complete(3L).isEmpty)
+    val firstIncrease = complete(4L).get
+    assert(firstIncrease.reason === "gpu-target-increase")
+    assert(firstIncrease.oldPermits === 4)
+    assert(firstIncrease.newPermits === 6)
+
+    assert(complete(5L).isEmpty)
+    val secondIncrease = complete(6L).get
+    assert(secondIncrease.oldPermits === 6)
+    assert(secondIncrease.newPermits === 8)
+
+    snapshot.set(gpuSnapshot(1))
+    assert(complete(7L).isEmpty)
+    val newTarget = complete(8L).get
+    assert(newTarget.reason === "gpu-target-stabilizing")
+    assert(newTarget.newPermits === 8)
+    assert(complete(9L).isEmpty)
+    val firstDecrease = complete(10L).get
+    assert(firstDecrease.reason === "gpu-target-decrease")
+    assert(firstDecrease.oldPermits === 8)
+    assert(firstDecrease.newPermits === 6)
+  }
+
+  test("bounded adjustment reaches FINRA-sized stage targets") {
+    val snapshot = new AtomicReference[GpuConcurrencySnapshot](gpuSnapshot(4))
+    val config = ReaderTaskAdmissionConfig(
+      initialConcurrentTasks = 4,
+      adaptiveEnabled = true,
+      minConcurrentTasks = 2,
+      maxConcurrentTasks = 16,
+      gpuConcurrencyMultiplier = 2.0,
+      decisionWindowTasks = 4,
+      stableTargetWindows = 2,
+      maxAdjustmentStep = 2,
+      detailedLoggingEnabled = false)
+    val gate = new ReaderTaskAdmissionGate(config, _ => (), _ => snapshot.get())
+    var taskId = 0L
+
+    def completeStage(stageId: Int, gpuCapacity: Int): Seq[ReaderTaskAdmissionDecision] = {
+      snapshot.set(gpuSnapshot(gpuCapacity))
+      (1 to 16).flatMap { _ =>
+        taskId += 1
+        val context = taskContext(taskId, stageId)
+        assert(gate.acquire(context).acquired)
+        gate.releaseReference(context, emptyObservation)
+      }
+    }
+
+    val stageFour = completeStage(stageId = 4, gpuCapacity = 4)
+    assert(stageFour.map(_.newPermits) === Seq(4, 6, 8, 8))
+
+    val stageEight = completeStage(stageId = 8, gpuCapacity = 6)
+    assert(stageEight.map(_.newPermits) === Seq(8, 10, 12, 12))
+
+    val stageSixteen = completeStage(stageId = 16, gpuCapacity = 4)
+    assert(stageSixteen.map(_.newPermits) === Seq(12, 10, 8, 8))
+
+    val stageTwenty = completeStage(stageId = 20, gpuCapacity = 6)
+    assert(stageTwenty.map(_.newPermits) === Seq(8, 10, 12, 12))
+  }
+
   test("adaptive admission discards mixed-stage decision windows") {
     val config = ReaderTaskAdmissionConfig(
       initialConcurrentTasks = 4,
@@ -186,6 +275,7 @@ class ReaderTaskAdmissionGateSuite extends AnyFunSuite with BeforeAndAfterEach {
       gpuConcurrencyMultiplier = 2.0,
       decisionWindowTasks = 2,
       stableTargetWindows = 1,
+      maxAdjustmentStep = 1,
       detailedLoggingEnabled = false)
     val gate = new ReaderTaskAdmissionGate(config, _ => (), _ => gpuSnapshot(3))
 
@@ -212,6 +302,7 @@ class ReaderTaskAdmissionGateSuite extends AnyFunSuite with BeforeAndAfterEach {
       gpuConcurrencyMultiplier = 2.0,
       decisionWindowTasks = 2,
       stableTargetWindows = 2,
+      maxAdjustmentStep = 1,
       detailedLoggingEnabled = false)
     val gate = new ReaderTaskAdmissionGate(config, _ => (), _ => gpuSnapshot(3))
 

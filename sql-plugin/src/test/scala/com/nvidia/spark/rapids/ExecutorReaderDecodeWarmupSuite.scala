@@ -16,6 +16,11 @@
 
 package com.nvidia.spark.rapids
 
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicBoolean
+
+import scala.collection.mutable.ArrayBuffer
+
 import org.scalatest.funsuite.AnyFunSuite
 
 import org.apache.spark.SparkConf
@@ -63,5 +68,17 @@ class ExecutorReaderDecodeWarmupSuite extends AnyFunSuite {
       ExecutorReaderDecodeWarmup.parseSettings(conf)
     }
     assert(error.getMessage.contains(ExecutorReaderDecodeWarmup.WORKER_COUNT_KEY))
+  }
+
+  test("only the first task start performs cancellation and waiting") {
+    val handle = new ExecutorReaderDecodeWarmup.AsyncHandle(
+      cancelOnTaskStart = true,
+      new CountDownLatch(1),
+      new AtomicBoolean(false),
+      new Thread(),
+      ArrayBuffer.empty)
+
+    assert(!handle.cancelOnFirstTaskAndAwait("first", 1L))
+    assert(handle.cancelOnFirstTaskAndAwait("second", 1L))
   }
 }

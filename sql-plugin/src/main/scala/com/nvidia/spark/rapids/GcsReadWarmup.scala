@@ -118,20 +118,27 @@ private[rapids] object GcsReadWarmup extends Logging {
       val safeExecutorId = metricValue(executorId)
 
       val worker = new Thread(() => {
+        val totalStart = System.nanoTime()
         try {
           val configurationStart = System.nanoTime()
           val settings = parseSettings(confSnapshot)
           logPhase(executorId, "configuration", elapsedMs(configurationStart))
-          val result = run(confSnapshot, hadoopConf(), executorId, settings, cancelled, input)
+          val hadoopConfStart = System.nanoTime()
+          val baseHadoopConf = hadoopConf()
+          logPhase(executorId, "hadoop_conf_supplier", elapsedMs(hadoopConfStart))
+          val result = run(confSnapshot, baseHadoopConf, executorId, settings, cancelled, input,
+            totalStart)
           logResult(result)
         } catch {
           case e: InterruptedException =>
             logInfo(s"RAPIDS_EXECUTOR_GCS_READ_WARMUP_METRIC event=completed status=cancelled " +
-              s"executor_id=$safeExecutorId detail=${metricValue(errorDetail(e))}")
+              s"executor_id=$safeExecutorId total_ms=${elapsedMs(totalStart)} " +
+              s"detail=${metricValue(errorDetail(e))}")
           case NonFatal(e) =>
             val status = if (cancelled.get()) "cancelled" else "failed"
             logInfo(s"RAPIDS_EXECUTOR_GCS_READ_WARMUP_METRIC event=completed status=$status " +
-              s"executor_id=$safeExecutorId detail=${metricValue(errorDetail(e))}")
+              s"executor_id=$safeExecutorId total_ms=${elapsedMs(totalStart)} " +
+              s"detail=${metricValue(errorDetail(e))}")
         } finally {
           done.countDown()
         }
@@ -161,7 +168,7 @@ private[rapids] object GcsReadWarmup extends Logging {
       executorId: String): Result = {
     val settings = parseSettings(sparkConf)
     run(sparkConf, baseHadoopConf, executorId, settings,
-      new AtomicBoolean(false), new AtomicReference[FSDataInputStream]())
+      new AtomicBoolean(false), new AtomicReference[FSDataInputStream](), System.nanoTime())
   }
 
   private def run(
@@ -170,8 +177,8 @@ private[rapids] object GcsReadWarmup extends Logging {
       executorId: String,
       settings: Settings,
       cancelled: AtomicBoolean,
-      inputRef: AtomicReference[FSDataInputStream]): Result = {
-    val totalStart = System.nanoTime()
+      inputRef: AtomicReference[FSDataInputStream],
+      totalStart: Long): Result = {
     val configurationStart = System.nanoTime()
     val effectiveHadoopConf = buildEffectiveHadoopConf(sparkConf, baseHadoopConf)
     val uriIndex = Math.floorMod(executorId.hashCode, settings.uris.size)

@@ -83,6 +83,7 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
       private val cancelled: AtomicBoolean,
       private val coordinator: Thread,
       private val futures: ArrayBuffer[Future[_]]) {
+    private val taskStartHandled = new AtomicBoolean(false)
 
     def cancel(reason: String): Boolean = synchronized {
       if (done.getCount > 0 && cancelled.compareAndSet(false, true)) {
@@ -99,13 +100,17 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
     private[rapids] def await(timeoutMs: Long): Boolean =
       done.await(timeoutMs, TimeUnit.MILLISECONDS)
 
-    private[rapids] def cancelAndAwait(reason: String, timeoutMs: Long): Boolean = {
-      val start = System.nanoTime()
-      cancel(reason)
-      val completed = await(timeoutMs)
-      logInfo(s"RAPIDS_EXECUTOR_READER_DECODE_WARMUP_METRIC event=cancel_wait " +
-        s"reason=${metricValue(reason)} completed=$completed duration_ms=${elapsedMs(start)}")
-      completed
+    private[rapids] def cancelOnFirstTaskAndAwait(reason: String, timeoutMs: Long): Boolean = {
+      if (taskStartHandled.compareAndSet(false, true)) {
+        val start = System.nanoTime()
+        cancel(reason)
+        val completed = await(timeoutMs)
+        logInfo(s"RAPIDS_EXECUTOR_READER_DECODE_WARMUP_METRIC event=cancel_wait " +
+          s"reason=${metricValue(reason)} completed=$completed duration_ms=${elapsedMs(start)}")
+        completed
+      } else {
+        true
+      }
     }
   }
 

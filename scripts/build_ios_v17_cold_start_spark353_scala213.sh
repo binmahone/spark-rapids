@@ -110,10 +110,11 @@ mvn "${maven_common[@]}" --non-recursive \
 
 mvn "${maven_common[@]}" -f scala2.13/pom.xml \
   -pl tests -am \
-  -DwildcardSuites=com.nvidia.spark.rapids.ExecutorInitInstrumentationSuite,com.nvidia.spark.rapids.GcsReadWarmupSuite,org.apache.spark.sql.rapids.ColdStartQueryPlanningListenerSuite,org.apache.spark.sql.rapids.GpuWriteInstrumentationSuite \
+  -DwildcardSuites=com.nvidia.spark.rapids.ExecutorInitInstrumentationSuite,com.nvidia.spark.rapids.GcsReadWarmupSuite,com.nvidia.spark.rapids.ExecutorReaderDecodeWarmupSuite,org.apache.spark.sql.rapids.ColdStartQueryPlanningListenerSuite,org.apache.spark.sql.rapids.GpuWriteInstrumentationSuite \
   clean test 2>&1 | tee "${LOG_ROOT}/targeted-tests.log"
 grep -Fq 'ExecutorInitInstrumentationSuite:' "${LOG_ROOT}/targeted-tests.log"
 grep -Fq 'GcsReadWarmupSuite:' "${LOG_ROOT}/targeted-tests.log"
+grep -Fq 'ExecutorReaderDecodeWarmupSuite:' "${LOG_ROOT}/targeted-tests.log"
 grep -Fq 'ColdStartQueryPlanningListenerSuite:' "${LOG_ROOT}/targeted-tests.log"
 grep -Fq 'GpuWriteInstrumentationSuite:' "${LOG_ROOT}/targeted-tests.log"
 grep -Eq 'Tests: succeeded [1-9][0-9]*, failed 0' "${LOG_ROOT}/targeted-tests.log"
@@ -163,6 +164,16 @@ unzip -p "${EXPECTED_JAR}" \
 for metric_key in RAPIDS_EXECUTOR_GCS_READ_WARMUP_METRIC get_file_system first_byte \
     read_remaining com.nvidia.v017.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem; do
   grep -Fq "${metric_key}" "${LOG_ROOT}/gcs-read-warmup-metric-keys.txt"
+done
+unzip -p "${EXPECTED_JAR}" \
+  spark-shared/com/nvidia/spark/rapids/ExecutorReaderDecodeWarmup\$.class \
+  | strings > "${LOG_ROOT}/reader-decode-warmup-metric-keys.txt"
+unzip -p "${EXPECTED_JAR}" \
+  spark-shared/com/nvidia/spark/rapids/MultiFileReaderThreadPool\$.class \
+  | strings >> "${LOG_ROOT}/reader-decode-warmup-metric-keys.txt"
+for metric_key in RAPIDS_EXECUTOR_READER_DECODE_WARMUP_METRIC pool_identity worker_thread \
+    decoded_rows decoded_columns production_pool_access same_pool; do
+  grep -Fq "${metric_key}" "${LOG_ROOT}/reader-decode-warmup-metric-keys.txt"
 done
 unzip -p "${EXPECTED_JAR}" spark-shared/com/nvidia/spark/rapids/GpuDeviceManager\$.class \
   | strings >> "${LOG_ROOT}/executor-init-metric-keys.txt"

@@ -596,6 +596,7 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
 
   private var isAsyncProfilerEnabled = false
   @volatile private var gcsReadWarmup: Option[GcsReadWarmup.AsyncHandle] = None
+  @volatile private var readerDecodeWarmup: Option[ExecutorReaderDecodeWarmup.AsyncHandle] = None
 
   private def timeExecutorInitPhase[T](phase: String)(body: => T): T =
     RapidsExecutorPlugin.timeExecutorInitPhase(
@@ -752,6 +753,14 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
           () => TrampolineUtil.getSparkHadoopUtilConf,
           pluginContext.executorID())
       }
+      timeExecutorInitPhase("reader_decode_warmup_submit") {
+        readerDecodeWarmup = ExecutorReaderDecodeWarmup.startAsync(
+          sparkConf,
+          conf,
+          () => TrampolineUtil.getSparkHadoopUtilConf,
+          pluginContext.executorID(),
+          gcsReadWarmup)
+      }
       val executorInitDurationMs = (System.nanoTime() - executorInitStartNanos) / 1000000L
       logInfo(s"RAPIDS_EXECUTOR_INIT_METRIC phase=total duration_ms=$executorInitDurationMs " +
         s"start_epoch_ms=$executorInitStartEpochMs end_epoch_ms=${System.currentTimeMillis()}")
@@ -857,6 +866,7 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
   }
 
   override def shutdown(): Unit = {
+    readerDecodeWarmup.foreach(_.cancel("executor_shutdown"))
     gcsReadWarmup.foreach(_.cancel("executor_shutdown"))
     GpuTimeZoneDB.shutdown()
     GpuSemaphore.shutdown()
@@ -902,6 +912,8 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
   }
 
   override def onTaskStart(): Unit = {
+    readerDecodeWarmup.filter(_.cancelOnTaskStart).foreach(
+      _.cancelAndAwait("first_task_start", ExecutorReaderDecodeWarmup.TaskStartCancelAwaitMs))
     gcsReadWarmup.filter(_.cancelOnTaskStart).foreach(_.cancel("first_task_start"))
     val tc = TaskContext.get
     startTaskNvtx(tc)

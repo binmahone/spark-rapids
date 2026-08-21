@@ -19,7 +19,7 @@ package com.nvidia.spark.rapids
 import java.io.{File, IOException}
 import java.net.{URI, URISyntaxException}
 import java.util.concurrent.{CompletionService, ConcurrentLinkedQueue, ExecutorCompletionService, Future, ThreadPoolExecutor, TimeUnit}
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
@@ -253,6 +253,8 @@ trait MultiFileReaderFunctions {
 object MultiFileReaderThreadPool extends Logging {
   @volatile
   private var threadPool: Option[ThreadPoolExecutor] = None
+  private val warmupPool = new AtomicReference[ThreadPoolExecutor]()
+  private val productionPoolAccessLogged = new AtomicBoolean(false)
 
   private def initThreadPool(conf: ThreadPoolConf): ThreadPoolExecutor = synchronized {
     if (threadPool.isEmpty) {
@@ -295,7 +297,7 @@ object MultiFileReaderThreadPool extends Logging {
    *       if it is not the right size compared to the number of cores available.
    */
   def getOrCreateThreadPool(tpc: ThreadPoolConf): ThreadPoolExecutor = {
-    if (tpc.stageLevelPool) {
+    val pool = if (tpc.stageLevelPool) {
       val stageId = TaskContext.get().stageId()
       getOrCreateStageThreadPool(stageId, tpc)
     } else {
@@ -303,6 +305,24 @@ object MultiFileReaderThreadPool extends Logging {
       threadPool.getOrElse {
         initThreadPool(tpc)
       }
+    }
+    logProductionPoolIdentity(pool)
+    pool
+  }
+
+  private[rapids] def recordWarmupPool(pool: ThreadPoolExecutor): Unit = {
+    warmupPool.compareAndSet(null, pool)
+  }
+
+  private def logProductionPoolIdentity(pool: ThreadPoolExecutor): Unit = {
+    val expected = warmupPool.get()
+    val taskContext = TaskContext.get()
+    if (expected != null && taskContext != null &&
+        productionPoolAccessLogged.compareAndSet(false, true)) {
+      logInfo(s"RAPIDS_EXECUTOR_READER_DECODE_WARMUP_METRIC event=production_pool_access " +
+        s"warmup_pool_identity=${System.identityHashCode(expected)} " +
+        s"production_pool_identity=${System.identityHashCode(pool)} " +
+        s"same_pool=${expected eq pool} task_id=${taskContext.taskAttemptId()}")
     }
   }
 

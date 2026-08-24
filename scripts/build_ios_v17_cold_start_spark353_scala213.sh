@@ -163,7 +163,7 @@ unzip -p "${EXPECTED_JAR}" \
   spark-shared/com/nvidia/spark/rapids/FirstTaskStackSampler\$.class \
   | strings > "${LOG_ROOT}/first-task-stack-sampler-metric-keys.txt"
 unzip -p "${EXPECTED_JAR}" \
-  spark-shared/com/nvidia/spark/rapids/FirstTaskStackSampler.class \
+  spark-shared/com/nvidia/spark/rapids/FirstTaskStackSampler\$Sampler.class \
   | strings >> "${LOG_ROOT}/first-task-stack-sampler-metric-keys.txt"
 for metric_key in RAPIDS_FIRST_TASK_STACK_METRIC broadcast_block_manager gpu_semaphore \
     production_scan registration_window_ms; do

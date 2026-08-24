@@ -16,12 +16,11 @@
 
 package com.nvidia.spark.rapids
 
+import org.mockito.Mockito.when
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatestplus.mockito.MockitoSugar
 
 import org.apache.spark.{SparkConf, TaskContext}
-
-import org.mockito.Mockito.when
 
 class FirstTaskStackSamplerSuite extends AnyFunSuite with MockitoSugar {
   test("diagnostic sampler settings are bounded and disabled by default") {

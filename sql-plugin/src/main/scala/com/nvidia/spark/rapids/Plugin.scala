@@ -597,6 +597,7 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
   private var isAsyncProfilerEnabled = false
   @volatile private var gcsReadWarmup: Option[GcsReadWarmup.AsyncHandle] = None
   @volatile private var readerDecodeWarmup: Option[ExecutorReaderDecodeWarmup.AsyncHandle] = None
+  @volatile private var firstTaskStackSampler: Option[FirstTaskStackSampler.Sampler] = None
 
   private def timeExecutorInitPhase[T](phase: String)(body: => T): T =
     RapidsExecutorPlugin.timeExecutorInitPhase(
@@ -621,6 +622,8 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
       val sparkConf = pluginContext.conf()
       val numCores = RapidsPluginUtils.estimateCoresOnExec(sparkConf)
       val conf = new RapidsConf(extraConf.asScala.toMap)
+      firstTaskStackSampler = FirstTaskStackSampler.create(
+        sparkConf, pluginContext.executorID())
 
       isAsyncProfilerEnabled = conf.asyncProfilerPathPrefix.nonEmpty
 
@@ -866,6 +869,7 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
   }
 
   override def shutdown(): Unit = {
+    firstTaskStackSampler.foreach(_.shutdown())
     readerDecodeWarmup.foreach(_.cancel("executor_shutdown"))
     gcsReadWarmup.foreach(_.cancel("executor_shutdown"))
     GpuTimeZoneDB.shutdown()
@@ -908,10 +912,12 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
         logDebug(s"Executor onTaskFailed: ${other.toString}")
     }
     extraExecutorPlugins.foreach(_.onTaskFailed(failureReason))
+    firstTaskStackSampler.foreach(_.onTaskEnd())
     endTaskNvtx()
   }
 
   override def onTaskStart(): Unit = {
+    firstTaskStackSampler.foreach(_.onTaskStart(TaskContext.get()))
     readerDecodeWarmup.filter(_.cancelOnTaskStart).foreach(
       _.cancelOnFirstTaskAndAwait(
         "first_task_start", ExecutorReaderDecodeWarmup.TaskStartCancelAwaitMs))
@@ -936,6 +942,7 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
 
   override def onTaskSucceeded(): Unit = {
     extraExecutorPlugins.foreach(_.onTaskSucceeded())
+    firstTaskStackSampler.foreach(_.onTaskEnd())
     endTaskNvtx()
   }
 

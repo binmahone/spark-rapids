@@ -110,11 +110,12 @@ mvn "${maven_common[@]}" --non-recursive \
 
 mvn "${maven_common[@]}" -f scala2.13/pom.xml \
   -pl tests -am \
-  -DwildcardSuites=com.nvidia.spark.rapids.ExecutorInitInstrumentationSuite,com.nvidia.spark.rapids.GcsReadWarmupSuite,com.nvidia.spark.rapids.ExecutorReaderDecodeWarmupSuite,org.apache.spark.sql.rapids.ColdStartQueryPlanningListenerSuite,org.apache.spark.sql.rapids.GpuWriteInstrumentationSuite \
+  -DwildcardSuites=com.nvidia.spark.rapids.ExecutorInitInstrumentationSuite,com.nvidia.spark.rapids.GcsReadWarmupSuite,com.nvidia.spark.rapids.ExecutorReaderDecodeWarmupSuite,com.nvidia.spark.rapids.FirstTaskStackSamplerSuite,org.apache.spark.sql.rapids.ColdStartQueryPlanningListenerSuite,org.apache.spark.sql.rapids.GpuWriteInstrumentationSuite \
   clean test 2>&1 | tee "${LOG_ROOT}/targeted-tests.log"
 grep -Fq 'ExecutorInitInstrumentationSuite:' "${LOG_ROOT}/targeted-tests.log"
 grep -Fq 'GcsReadWarmupSuite:' "${LOG_ROOT}/targeted-tests.log"
 grep -Fq 'ExecutorReaderDecodeWarmupSuite:' "${LOG_ROOT}/targeted-tests.log"
+grep -Fq 'FirstTaskStackSamplerSuite:' "${LOG_ROOT}/targeted-tests.log"
 grep -Fq 'ColdStartQueryPlanningListenerSuite:' "${LOG_ROOT}/targeted-tests.log"
 grep -Fq 'GpuWriteInstrumentationSuite:' "${LOG_ROOT}/targeted-tests.log"
 grep -Eq 'Tests: succeeded [1-9][0-9]*, failed 0' "${LOG_ROOT}/targeted-tests.log"
@@ -157,6 +158,13 @@ unzip -p "${EXPECTED_JAR}" spark-shared/com/nvidia/spark/rapids/RapidsExecutorPl
   | strings > "${LOG_ROOT}/executor-init-metric-keys.txt"
 for phase in RAPIDS_EXECUTOR_INIT_METRIC cudf_version_check jni_constants_check; do
   grep -Fq "${phase}" "${LOG_ROOT}/executor-init-metric-keys.txt"
+done
+unzip -p "${EXPECTED_JAR}" \
+  spark-shared/com/nvidia/spark/rapids/FirstTaskStackSampler\$.class \
+  | strings > "${LOG_ROOT}/first-task-stack-sampler-metric-keys.txt"
+for metric_key in RAPIDS_FIRST_TASK_STACK_METRIC broadcast_block_manager gpu_semaphore \
+    production_scan registration_window_ms; do
+  grep -Fq "${metric_key}" "${LOG_ROOT}/first-task-stack-sampler-metric-keys.txt"
 done
 unzip -p "${EXPECTED_JAR}" \
   spark-shared/com/nvidia/spark/rapids/GcsReadWarmup\$.class \

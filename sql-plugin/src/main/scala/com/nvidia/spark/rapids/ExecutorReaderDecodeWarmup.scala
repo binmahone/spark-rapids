@@ -25,6 +25,7 @@ import scala.util.control.NonFatal
 import ai.rapids.cudf.Table
 import com.nvidia.spark.rapids.Arm.withResource
 import com.nvidia.spark.rapids.io.async.UnboundedAsyncRunner
+import com.nvidia.spark.rapids.parquet.ParquetFooterUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 
@@ -34,9 +35,10 @@ import org.apache.spark.internal.Logging
 /**
  * Warms executor-local cloud-reader and cuDF Parquet decode paths without creating a Spark job.
  *
- * File reads are submitted to the singleton pool used by the multi-file readers. The coordinator
- * then decodes one complete Parquet object directly with cuDF. This does not execute Spark scan
- * admission, TaskContext, GPU semaphore, projection, or filtering paths.
+ * File reads are submitted to the singleton pool used by the multi-file readers. A configured
+ * worker can also exercise the PerfIO Parquet-footer path before the coordinator decodes one
+ * complete Parquet object directly with cuDF. This does not execute Spark scan admission,
+ * TaskContext, GPU semaphore, projection, or filtering paths.
  */
 private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
   val ENABLED_KEY = "spark.rapids.executor.readerDecodeWarmup.enabled"
@@ -49,6 +51,7 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
   val EXPECTED_FS_IMPL_KEY = "spark.rapids.executor.readerDecodeWarmup.expectedFsImpl"
   val WAIT_FOR_GCS_WARMUP_KEY =
     "spark.rapids.executor.readerDecodeWarmup.waitForGcsReadWarmup"
+  val PERFIO_FOOTER_KEY = "spark.rapids.executor.readerDecodeWarmup.perfioFooter"
 
   private val DefaultWorkerCount = 1
   private val MaxWorkerCount = 64
@@ -67,7 +70,8 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
       timeoutMs: Long,
       cancelOnTaskStart: Boolean,
       expectedFsImpl: String,
-      waitForGcsReadWarmup: Boolean)
+      waitForGcsReadWarmup: Boolean,
+      perfioFooter: Boolean)
 
   private[rapids] case class ReadResult(
       uri: String,
@@ -75,7 +79,9 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
       bytes: Array[Byte],
       fsImpl: String,
       workerThread: String,
-      readMs: Long)
+      readMs: Long,
+      perfioFooterUsed: Boolean,
+      perfioFooterMs: Long)
 
   private[rapids] final class AsyncHandle(
       val cancelOnTaskStart: Boolean,
@@ -151,7 +157,8 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
 
           val submitted = selected.map { case (uri, uriIndex) =>
             val runner = new ReadRunner(
-              uri, uriIndex, effectiveConf, settings.maxFileBytes, settings.expectedFsImpl)
+              uri, uriIndex, effectiveConf, settings.maxFileBytes, settings.expectedFsImpl,
+              settings.perfioFooter)
             val future = pool.submit(runner)
             futures.synchronized(futures += future)
             future
@@ -207,7 +214,8 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
       uriIndex: Int,
       conf: Configuration,
       maxFileBytes: Int,
-      expectedFsImpl: String) extends UnboundedAsyncRunner[ReadResult] {
+      expectedFsImpl: String,
+      perfioFooter: Boolean) extends UnboundedAsyncRunner[ReadResult] {
 
     override protected def callImpl(): ReadResult = {
       val start = System.nanoTime()
@@ -218,6 +226,18 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
       val fsImpl = fs.getClass.getName
       require(fsImpl == expectedFsImpl,
         s"$EXPECTED_FS_IMPL_KEY expected $expectedFsImpl, observed $fsImpl")
+      val footerStart = System.nanoTime()
+      val perfioFooterUsed = if (perfioFooter) {
+        val footer = PerfIO.readParquetFooterBuffer(
+          path, conf, ParquetFooterUtils.verifyParquetMagic _)
+        require(footer.isDefined,
+          s"$PERFIO_FOOTER_KEY requires an enabled PerfIO backend for $uri")
+        footer.foreach(_.close())
+        footer.isDefined
+      } else {
+        false
+      }
+      val perfioFooterMs = if (perfioFooter) elapsedMs(footerStart) else 0L
       val length = fs.getFileStatus(path).getLen
       require(length > 0 && length <= maxFileBytes,
         s"Parquet warm-up object $uri has $length bytes; expected (0, $maxFileBytes]")
@@ -225,7 +245,8 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
       withResource(fs.open(path)) { in =>
         in.readFully(0L, bytes)
       }
-      ReadResult(uri, uriIndex, bytes, fsImpl, Thread.currentThread().getName, elapsedMs(start))
+      ReadResult(uri, uriIndex, bytes, fsImpl, Thread.currentThread().getName, elapsedMs(start),
+        perfioFooterUsed, perfioFooterMs)
     }
   }
 
@@ -253,7 +274,8 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
       timeoutMs,
       conf.getBoolean(CANCEL_ON_TASK_START_KEY, true),
       expectedFsImpl,
-      conf.getBoolean(WAIT_FOR_GCS_WARMUP_KEY, true))
+      conf.getBoolean(WAIT_FOR_GCS_WARMUP_KEY, true),
+      conf.getBoolean(PERFIO_FOOTER_KEY, false))
   }
 
   private[rapids] def selectUris(
@@ -291,7 +313,9 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
       s"executor_id=${metricValue(executorId)} uri_index=${result.uriIndex} " +
       s"uri=${metricValue(result.uri)} bytes=${result.bytes.length} " +
       s"fs_impl=${metricValue(result.fsImpl)} " +
-      s"worker_thread=${metricValue(result.workerThread)} read_ms=${result.readMs}")
+      s"worker_thread=${metricValue(result.workerThread)} read_ms=${result.readMs} " +
+      s"perfio_footer_used=${result.perfioFooterUsed} " +
+      s"perfio_footer_ms=${result.perfioFooterMs}")
   }
 
   private def logCompletionFailure(

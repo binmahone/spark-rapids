@@ -36,6 +36,7 @@ class ExecutorReaderDecodeWarmupSuite extends AnyFunSuite {
       .set(ExecutorReaderDecodeWarmup.CANCEL_ON_TASK_START_KEY, "false")
       .set(ExecutorReaderDecodeWarmup.EXPECTED_FS_IMPL_KEY, "example.GcsFileSystem")
       .set(ExecutorReaderDecodeWarmup.WAIT_FOR_GCS_WARMUP_KEY, "false")
+      .set(ExecutorReaderDecodeWarmup.PERFIO_FOOTER_KEY, "true")
 
     val settings = ExecutorReaderDecodeWarmup.parseSettings(conf)
 
@@ -46,6 +47,7 @@ class ExecutorReaderDecodeWarmupSuite extends AnyFunSuite {
     assert(!settings.cancelOnTaskStart)
     assert(settings.expectedFsImpl === "example.GcsFileSystem")
     assert(!settings.waitForGcsReadWarmup)
+    assert(settings.perfioFooter)
   }
 
   test("URI selection is deterministic and wraps without duplicates") {

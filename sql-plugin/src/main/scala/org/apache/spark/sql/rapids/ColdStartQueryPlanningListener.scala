@@ -27,14 +27,30 @@ import org.apache.spark.sql.util.QueryExecutionListener
 /** Emits query-planning and file-index timing for the cold-start diagnostic. */
 class ColdStartQueryPlanningListener extends QueryExecutionListener with Logging {
   override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long): Unit = {
-    logQuery("success", funcName, qe, durationNs, None)
+    safelyLogQuery("success", funcName, qe, durationNs, None)
   }
 
   override def onFailure(
       funcName: String,
       qe: QueryExecution,
       exception: Exception): Unit = {
-    logQuery("failure", funcName, qe, -1L, Some(exception.getClass.getName))
+    safelyLogQuery("failure", funcName, qe, -1L, Some(exception.getClass.getName))
+  }
+
+  private def safelyLogQuery(
+      outcome: String,
+      funcName: String,
+      qe: QueryExecution,
+      durationNs: Long,
+      errorClass: Option[String]): Unit = {
+    try {
+      logQuery(outcome, funcName, qe, durationNs, errorClass)
+    } catch {
+      case NonFatal(error) =>
+        emitMetric(s"RAPIDS_QUERY_PLANNING_METRIC outcome=instrumentation_failure " +
+          s"query_execution_id=${qe.id} func=${sanitize(funcName)} " +
+          s"error_class=${sanitize(error.getClass.getName)}")
+    }
   }
 
   private def logQuery(
@@ -99,7 +115,7 @@ class ColdStartQueryPlanningListener extends QueryExecutionListener with Logging
   }
 
   private def emitMetric(metric: String): Unit = {
-    logInfo(metric)
+    logWarning(metric)
     ColdStartQueryPlanningListener.observeMetric(metric)
   }
 

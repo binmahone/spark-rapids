@@ -109,6 +109,11 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
   private var _parquetPartFileTime: Long = 0L
   private var _parquetPartBookkeepingTime: Long = 0L
   private var _parquetResultAssemblyTime: Long = 0L
+  private var _parquetOutputSizeTime: Long = 0L
+  private var _parquetHostBufferAllocTime: Long = 0L
+  private var _parquetBlockCopyTime: Long = 0L
+  private var _parquetFooterWriteTime: Long = 0L
+  private var _parquetSpillableWrapTime: Long = 0L
 
   /**
    * When it is present, it indicates the partition values stored as an array of
@@ -141,6 +146,19 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
     _parquetResultAssemblyTime = resultAssemblyTime
   }
 
+  def setParquetPartFilePhaseTimes(
+      outputSizeTime: Long,
+      hostBufferAllocTime: Long,
+      blockCopyTime: Long,
+      footerWriteTime: Long,
+      spillableWrapTime: Long): Unit = {
+    _parquetOutputSizeTime = outputSizeTime
+    _parquetHostBufferAllocTime = hostBufferAllocTime
+    _parquetBlockCopyTime = blockCopyTime
+    _parquetFooterWriteTime = footerWriteTime
+    _parquetSpillableWrapTime = spillableWrapTime
+  }
+
   def getBufferTime: Long = _bufferTime
   def getFilterTime: Long = _filterTime
   def getScheduleTime: Long = _scheduleTime
@@ -148,6 +166,11 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
   def getParquetPartFileTime: Long = _parquetPartFileTime
   def getParquetPartBookkeepingTime: Long = _parquetPartBookkeepingTime
   def getParquetResultAssemblyTime: Long = _parquetResultAssemblyTime
+  def getParquetOutputSizeTime: Long = _parquetOutputSizeTime
+  def getParquetHostBufferAllocTime: Long = _parquetHostBufferAllocTime
+  def getParquetBlockCopyTime: Long = _parquetBlockCopyTime
+  def getParquetFooterWriteTime: Long = _parquetFooterWriteTime
+  def getParquetSpillableWrapTime: Long = _parquetSpillableWrapTime
 
   def getBufferTimePct: Double = {
     val totalTime = _filterTime + _bufferTime + _scheduleTime
@@ -777,6 +800,23 @@ abstract class MultiFileCloudPartitionReaderBase(
       parquetResultAssemblyTime
     metrics.getOrElse(ASYNC_RAW_PARQUET_BUFFER_RESIDUAL_TIME, NoopMetric) +=
       parquetBufferResidualTime
+    val parquetOutputSizeTime = taskRet.data.getParquetOutputSizeTime
+    val parquetHostBufferAllocTime = taskRet.data.getParquetHostBufferAllocTime
+    val parquetBlockCopyTime = taskRet.data.getParquetBlockCopyTime
+    val parquetFooterWriteTime = taskRet.data.getParquetFooterWriteTime
+    val parquetSpillableWrapTime = taskRet.data.getParquetSpillableWrapTime
+    val parquetPartFileResidualTime = math.max(0L, parquetPartFileTime -
+      parquetOutputSizeTime - parquetHostBufferAllocTime - parquetBlockCopyTime -
+      parquetFooterWriteTime - parquetSpillableWrapTime)
+    metrics.getOrElse(ASYNC_RAW_PARQUET_OUTPUT_SIZE_TIME, NoopMetric) += parquetOutputSizeTime
+    metrics.getOrElse(ASYNC_RAW_PARQUET_HOST_BUFFER_ALLOC_TIME, NoopMetric) +=
+      parquetHostBufferAllocTime
+    metrics.getOrElse(ASYNC_RAW_PARQUET_BLOCK_COPY_TIME, NoopMetric) += parquetBlockCopyTime
+    metrics.getOrElse(ASYNC_RAW_PARQUET_FOOTER_WRITE_TIME, NoopMetric) += parquetFooterWriteTime
+    metrics.getOrElse(ASYNC_RAW_PARQUET_SPILLABLE_WRAP_TIME, NoopMetric) +=
+      parquetSpillableWrapTime
+    metrics.getOrElse(ASYNC_RAW_PARQUET_PART_FILE_RESIDUAL_TIME, NoopMetric) +=
+      parquetPartFileResidualTime
     metrics.getOrElse(ASYNC_FUTURE_WAIT_TIME, NoopMetric) += waitNs
     metrics.getOrElse(ASYNC_FUTURE_WAIT_QUEUE_OVERLAP_TIME, NoopMetric) += queueOverlapNs
     metrics.getOrElse(ASYNC_FUTURE_WAIT_EXECUTION_OVERLAP_TIME, NoopMetric) += executionOverlapNs

@@ -122,6 +122,12 @@ object GpuMetric extends Logging {
   val ASYNC_RAW_PARQUET_PART_BOOKKEEPING_TIME = "asyncRawParquetPartBookkeepingTime"
   val ASYNC_RAW_PARQUET_RESULT_ASSEMBLY_TIME = "asyncRawParquetResultAssemblyTime"
   val ASYNC_RAW_PARQUET_BUFFER_RESIDUAL_TIME = "asyncRawParquetBufferResidualTime"
+  val ASYNC_RAW_PARQUET_OUTPUT_SIZE_TIME = "asyncRawParquetOutputSizeTime"
+  val ASYNC_RAW_PARQUET_HOST_BUFFER_ALLOC_TIME = "asyncRawParquetHostBufferAllocTime"
+  val ASYNC_RAW_PARQUET_BLOCK_COPY_TIME = "asyncRawParquetBlockCopyTime"
+  val ASYNC_RAW_PARQUET_FOOTER_WRITE_TIME = "asyncRawParquetFooterWriteTime"
+  val ASYNC_RAW_PARQUET_SPILLABLE_WRAP_TIME = "asyncRawParquetSpillableWrapTime"
+  val ASYNC_RAW_PARQUET_PART_FILE_RESIDUAL_TIME = "asyncRawParquetPartFileResidualTime"
   val ASYNC_FUTURE_WAIT_TIME = "asyncFutureWaitTime"
   val ASYNC_FUTURE_WAIT_QUEUE_OVERLAP_TIME = "asyncFutureWaitQueueOverlapTime"
   val ASYNC_FUTURE_WAIT_EXECUTION_OVERLAP_TIME = "asyncFutureWaitExecutionOverlapTime"
@@ -207,6 +213,16 @@ object GpuMetric extends Logging {
     "raw async Parquet result assembly time"
   val DESCRIPTION_ASYNC_RAW_PARQUET_BUFFER_RESIDUAL_TIME =
     "raw async Parquet buffer time outside measured subphases"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_OUTPUT_SIZE_TIME =
+    "raw async Parquet output size calculation time"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_HOST_BUFFER_ALLOC_TIME =
+    "raw async Parquet host buffer allocation time"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_BLOCK_COPY_TIME = "raw async Parquet block copy time"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_FOOTER_WRITE_TIME = "raw async Parquet footer write time"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_SPILLABLE_WRAP_TIME =
+    "raw async Parquet spillable buffer wrapping time"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_PART_FILE_RESIDUAL_TIME =
+    "raw async Parquet part file time outside measured subphases"
   val DESCRIPTION_ASYNC_FUTURE_WAIT_TIME = "async reader future wait time"
   val DESCRIPTION_ASYNC_FUTURE_WAIT_QUEUE_OVERLAP_TIME =
     "future wait overlapping async reader queue time"

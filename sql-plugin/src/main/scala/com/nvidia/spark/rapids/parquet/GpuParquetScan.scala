@@ -1563,6 +1563,14 @@ object CpuCompressionConfig {
   def disabled(): CpuCompressionConfig = CpuCompressionConfig(false, false)
 }
 
+private[parquet] final class ParquetPartFilePhaseTimes {
+  var outputSizeTime: Long = 0L
+  var hostBufferAllocTime: Long = 0L
+  var blockCopyTime: Long = 0L
+  var footerWriteTime: Long = 0L
+  var spillableWrapTime: Long = 0L
+}
+
 trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
     with MultiFileReaderFunctions {
   // the size of Parquet magic (at start+end) and footer length values
@@ -2103,7 +2111,9 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
   protected def readPartFile(
       blocks: Seq[BlockMetaData],
       clippedSchema: MessageType,
-      filePath: Path): (SpillableHostBuffer, Seq[BlockMetaData]) = {
+      filePath: Path,
+      phaseTimes: Option[ParquetPartFilePhaseTimes] = None):
+      (SpillableHostBuffer, Seq[BlockMetaData]) = {
     NvtxRegistry.PARQUET_BUFFER_FILE_SPLIT {
       // Track the actual read buffer size, since some columns or partitions may be pruned
       execMetrics.get("readBufferSize").foreach { metric =>
@@ -2114,17 +2124,22 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
         }
       }
 
+      val outputSizeStartTime = System.nanoTime()
       val estTotalSize = execMetrics.getOrElse(PARQUET_OUTPUT_SIZE_TIME, NoopMetric).ns {
         calculateParquetOutputSize(blocks, clippedSchema)
       }
+      phaseTimes.foreach(_.outputSizeTime += System.nanoTime() - outputSizeStartTime)
+      val hostBufferAllocStartTime = System.nanoTime()
       val outHostBuf = execMetrics.getOrElse(PARQUET_HOST_BUFFER_ALLOC_TIME, NoopMetric).ns {
         withRetryNoSplit[HostMemoryBuffer] {
           HostMemoryBuffer.allocate(estTotalSize)
         }
       }
+      phaseTimes.foreach(_.hostBufferAllocTime += System.nanoTime() - hostBufferAllocStartTime)
       closeOnExcept(outHostBuf) { hmb =>
         val out = new HostMemoryOutputStream(hmb)
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
+        val blockCopyStartTime = System.nanoTime()
         val outputBlocks = execMetrics.getOrElse(PARQUET_BLOCK_COPY_TIME, NoopMetric).ns {
           if (compressCfg.decompressAnyCpu) {
             copyAndUncompressBlocksData(filePath, out, blocks, out.getPos, metrics, compressCfg)
@@ -2132,20 +2147,25 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
             copyBlocksData(filePath, out, blocks, out.getPos, metrics)
           }
         }
+        phaseTimes.foreach(_.blockCopyTime += System.nanoTime() - blockCopyStartTime)
+        val footerWriteStartTime = System.nanoTime()
         execMetrics.getOrElse(PARQUET_FOOTER_WRITE_TIME, NoopMetric).ns {
           val footerPos = out.getPos
           writeFooter(out, outputBlocks, clippedSchema)
           BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
         }
+        phaseTimes.foreach(_.footerWriteTime += System.nanoTime() - footerWriteStartTime)
         // check we didn't go over memory
         if (out.getPos > estTotalSize) {
           throw new QueryExecutionException(s"Calculated buffer size $estTotalSize is too " +
               s"small, actual written: ${out.getPos}")
         }
+        val spillableWrapStartTime = System.nanoTime()
         val spillable = execMetrics.getOrElse(PARQUET_SPILLABLE_WRAP_TIME, NoopMetric).ns {
           SpillableHostBuffer(hmb, out.getPos, SpillPriorities.ACTIVE_BATCHING_PRIORITY)
         }
+        phaseTimes.foreach(_.spillableWrapTime += System.nanoTime() - spillableWrapStartTime)
         (spillable, outputBlocks)
       }
     }
@@ -3002,6 +3022,7 @@ abstract class AbstractMultiFileCloudParquetPartitionReader(
       var partFileTime = 0L
       var partBookkeepingTime = 0L
       var resultAssemblyTime = 0L
+      val partFilePhaseTimes = new ParquetPartFilePhaseTimes
       val result = try {
         val filterStartTime = System.nanoTime()
         val fileBlockMeta = filterFunc(file)
@@ -3044,7 +3065,8 @@ abstract class AbstractMultiFileCloudParquetPartitionReader(
                 val partFileStartTime = System.nanoTime()
                 val (dataBuffer, blockMeta) =
                   execMetrics.getOrElse(PARQUET_PART_FILE_TIME, NoopMetric).ns {
-                    readPartFile(blocksToRead, fileBlockMeta.schema, filePath)
+                    readPartFile(blocksToRead, fileBlockMeta.schema, filePath,
+                      Some(partFilePhaseTimes))
                   }
                 partFileTime += System.nanoTime() - partFileStartTime
                 val partBookkeepingStartTime = System.nanoTime()
@@ -3085,6 +3107,12 @@ abstract class AbstractMultiFileCloudParquetPartitionReader(
       result.setExecutionTime(filterTime, bufferTime)
       result.setParquetBufferPhaseTimes(chunkSelectionTime, partFileTime,
         partBookkeepingTime, resultAssemblyTime)
+      result.setParquetPartFilePhaseTimes(
+        partFilePhaseTimes.outputSizeTime,
+        partFilePhaseTimes.hostBufferAllocTime,
+        partFilePhaseTimes.blockCopyTime,
+        partFilePhaseTimes.footerWriteTime,
+        partFilePhaseTimes.spillableWrapTime)
       result
     }
   }

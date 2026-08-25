@@ -192,6 +192,9 @@ trait AsyncRunner[T] extends Callable[AsyncResult[T]] {
     require(result.isEmpty, s"AsyncRunner.call() should only be called once: $this")
 
     val startTime = System.nanoTime()
+    if (submittedNs > 0L) {
+      metricsBuilder.setScheduleTimeMs(startTime - submittedNs)
+    }
     val resultData = try {
       beforeExecuteHooks.foreach { hook => hook() }
       callImpl()
@@ -206,6 +209,14 @@ trait AsyncRunner[T] extends Callable[AsyncResult[T]] {
 
   private val beforeExecuteHooks = mutable.ArrayBuffer.empty[() => Unit]
   private val afterExecuteHooks = mutable.ArrayBuffer.empty[() => Unit]
+
+  def markSubmitted(): this.type = {
+    require(submittedNs == 0L, s"AsyncRunner should only be submitted once: $this")
+    submittedNs = System.nanoTime()
+    this
+  }
+
+  @volatile private var submittedNs: Long = 0L
 
   // Add hook to be executed right before the task execution.
   def addPreHook(hook: () => Unit): Unit = beforeExecuteHooks += hook

@@ -603,14 +603,15 @@ abstract class MultiFileCloudPartitionReaderBase(
     for (i <- 0 until limit) {
       val file = inputFiles(i)
       logDebug(s"MultiFile reader using file $file")
+      val runner = newTaskRunner(file).markSubmitted()
       if (!keepReadsInOrder) {
-        val futureRunner = fcs.submit(newTaskRunner(file))
+        val futureRunner = fcs.submit(runner)
         tasks.add(futureRunner)
       } else {
         // Add these in the order as we got them so that we can make sure
         // we process them in the same order as CPU would.
         val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(poolConf)
-        tasks.add(threadPool.submit(newTaskRunner(file)))
+        tasks.add(threadPool.submit(runner))
       }
     }
     // queue up any left to add once others finish
@@ -949,7 +950,7 @@ abstract class MultiFileCloudPartitionReaderBase(
 
   private def addNextTaskIfNeeded(): Unit = {
     if (tasksToRun.nonEmpty && !isDone) {
-      val runner = tasksToRun.dequeue()
+      val runner = tasksToRun.dequeue().markSubmitted()
       if (!keepReadsInOrder) {
         val futureRunner = fcs.submit(runner)
         tasks.add(futureRunner)
@@ -1472,8 +1473,9 @@ abstract class MultiFileCoalescingPartitionReaderBase(
             // use a single buffer and slice it up for different files if we need
             val outLocal = hmb.slice(offset, fileBlockSize)
             // Third, copy the blocks for each file in parallel using background threads
-            tasks.add(threadPool.submit(
-              getBatchRunner(tc, file, outLocal, blocks, offset, batchContext)))
+            val runner = getBatchRunner(tc, file, outLocal, blocks, offset,
+              batchContext).markSubmitted()
+            tasks.add(threadPool.submit(runner))
             offset += fileBlockSize
           }
 

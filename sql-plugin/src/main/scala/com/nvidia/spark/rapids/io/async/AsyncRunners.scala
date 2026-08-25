@@ -76,11 +76,19 @@ trait AsyncResult[T] extends AutoCloseable {
   }
 }
 
-case class AsyncMetrics(scheduleTimeMs: Long, executionTimeMs: Long)
+case class AsyncMetrics(
+    scheduleTimeMs: Long,
+    executionTimeMs: Long,
+    submittedNs: Long = 0L,
+    startNs: Long = 0L,
+    endNs: Long = 0L)
 
 class AsyncMetricsBuilder {
   private var scheduleTimeMs: Long = 0L
   private var executionTimeMs: Long = 0L
+  private var submittedNs: Long = 0L
+  private var startNs: Long = 0L
+  private var endNs: Long = 0L
 
   def setScheduleTimeMs(time: Long): AsyncMetricsBuilder = {
     this.scheduleTimeMs = time
@@ -92,8 +100,15 @@ class AsyncMetricsBuilder {
     this
   }
 
+  def setLifecycleNs(submitted: Long, start: Long, end: Long): AsyncMetricsBuilder = {
+    submittedNs = submitted
+    startNs = start
+    endNs = end
+    this
+  }
+
   def build(): AsyncMetrics = {
-    AsyncMetrics(scheduleTimeMs, executionTimeMs)
+    AsyncMetrics(scheduleTimeMs, executionTimeMs, submittedNs, startNs, endNs)
   }
 }
 
@@ -201,7 +216,9 @@ trait AsyncRunner[T] extends Callable[AsyncResult[T]] {
     } finally {
       afterExecuteHooks.foreach { hook => hook() }
     }
-    metricsBuilder.setExecutionTimeMs(System.nanoTime() - startTime)
+    val endTime = System.nanoTime()
+    metricsBuilder.setExecutionTimeMs(endTime - startTime)
+    metricsBuilder.setLifecycleNs(submittedNs, startTime, endTime)
 
     result = Some(buildResult(resultData, metricsBuilder.build()))
     result.get

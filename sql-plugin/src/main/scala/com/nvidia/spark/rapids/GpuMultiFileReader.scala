@@ -716,6 +716,57 @@ abstract class MultiFileCloudPartitionReaderBase(
     taskRet.data
   }
 
+  private def intervalOverlapNs(
+      firstStart: Long,
+      firstEnd: Long,
+      secondStart: Long,
+      secondEnd: Long): Long = {
+    math.max(0L, math.min(firstEnd, secondEnd) - math.max(firstStart, secondStart))
+  }
+
+  private def recordFutureWait(taskRet: RunnerResult, waitStartNs: Long, waitEndNs: Long): Unit = {
+    val async = taskRet.metrics
+    val waitNs = waitEndNs - waitStartNs
+    val queueOverlapNs = if (async.submittedNs > 0L && async.startNs > 0L) {
+      intervalOverlapNs(waitStartNs, waitEndNs, async.submittedNs, async.startNs)
+    } else {
+      0L
+    }
+    val executionOverlapNs = if (async.startNs > 0L && async.endNs > 0L) {
+      intervalOverlapNs(waitStartNs, waitEndNs, async.startNs, async.endNs)
+    } else {
+      0L
+    }
+    val residualNs = math.max(0L, waitNs - queueOverlapNs - executionOverlapNs)
+    metrics.getOrElse(ASYNC_RAW_QUEUE_TIME, NoopMetric) += async.scheduleTimeMs
+    metrics.getOrElse(ASYNC_RAW_EXECUTION_TIME, NoopMetric) += async.executionTimeMs
+    metrics.getOrElse(ASYNC_RAW_FILTER_TIME, NoopMetric) += taskRet.data.getFilterTime
+    metrics.getOrElse(ASYNC_RAW_BUFFER_TIME, NoopMetric) += taskRet.data.getBufferTime
+    metrics.getOrElse(ASYNC_FUTURE_WAIT_TIME, NoopMetric) += waitNs
+    metrics.getOrElse(ASYNC_FUTURE_WAIT_QUEUE_OVERLAP_TIME, NoopMetric) += queueOverlapNs
+    metrics.getOrElse(ASYNC_FUTURE_WAIT_EXECUTION_OVERLAP_TIME, NoopMetric) += executionOverlapNs
+    metrics.getOrElse(ASYNC_FUTURE_WAIT_RESIDUAL_TIME, NoopMetric) += residualNs
+  }
+
+  private def awaitFuture(future: Future[RunnerResult]): BufferInfo = {
+    val waitStartNs = System.nanoTime()
+    val taskRet = future.get()
+    val waitEndNs = System.nanoTime()
+    recordFutureWait(taskRet, waitStartNs, waitEndNs)
+    convertAsyncResult(taskRet)
+  }
+
+  private def awaitFuture(
+      future: Future[RunnerResult],
+      timeout: Long,
+      unit: TimeUnit): BufferInfo = {
+    val waitStartNs = System.nanoTime()
+    val taskRet = future.get(timeout, unit)
+    val waitEndNs = System.nanoTime()
+    recordFutureWait(taskRet, waitStartNs, waitEndNs)
+    convertAsyncResult(taskRet)
+  }
+
   /**
    * While there are files already read into host memory buffers, take up to
    * threshold size and append to the results ArrayBuffer.
@@ -740,22 +791,21 @@ abstract class MultiFileCloudPartitionReaderBase(
       if (hmbFuture == null) {
         if (combineConf.combineWaitTime > 0) {
           // no more are ready, wait to see if any finish within wait time
-          val taskResult = if (keepReadsInOrder) {
-            tasks.poll().get(combineConf.combineWaitTime, TimeUnit.MILLISECONDS)
+          val hmbAndMeta = if (keepReadsInOrder) {
+            awaitFuture(tasks.poll(), combineConf.combineWaitTime, TimeUnit.MILLISECONDS)
           } else {
             val fut = fcs.poll(combineConf.combineWaitTime, TimeUnit.MILLISECONDS)
             if (fut == null) {
               null
             } else {
               tasks.remove(fut)
-              fut.get()
+              awaitFuture(fut)
             }
           }
-          if (taskResult == null) {
+          if (hmbAndMeta == null) {
             // no more ready after waiting
             takeMore = false
           } else {
-            val hmbAndMeta = convertAsyncResult(taskResult)
             results.append(hmbAndMeta)
             currSize += hmbAndMeta.memBuffersAndSizes.map(_.bytes).sum
             filesToRead -= 1
@@ -765,7 +815,7 @@ abstract class MultiFileCloudPartitionReaderBase(
           takeMore = false
         }
       } else {
-        val hmbWithMeta = convertAsyncResult(hmbFuture.get())
+        val hmbWithMeta = awaitFuture(hmbFuture)
         results.append(hmbWithMeta)
         currSize += hmbWithMeta.memBuffersAndSizes.map(_.bytes).sum
         currNumRows += hmbWithMeta.memBuffersAndSizes.map(_.numRows).sum
@@ -782,11 +832,11 @@ abstract class MultiFileCloudPartitionReaderBase(
     if (results.isEmpty) {
       // none were ready yet so wait as long as need for first one
       val hostBuffersWithMeta = if (keepReadsInOrder) {
-        convertAsyncResult(tasks.poll().get())
+        awaitFuture(tasks.poll())
       } else {
         val bufMetaFut = fcs.take()
         tasks.remove(bufMetaFut)
-        convertAsyncResult(bufMetaFut.get())
+        awaitFuture(bufMetaFut)
       }
       sizeRead += hostBuffersWithMeta.memBuffersAndSizes.map(_.bytes).sum
       numRowsRead += hostBuffersWithMeta.memBuffersAndSizes.map(_.numRows).sum
@@ -802,14 +852,14 @@ abstract class MultiFileCloudPartitionReaderBase(
 
   private def getNextBuffersAndMetaSingleFile(): HostMemoryBuffersWithMetaDataBase = {
     val taskResult = if (keepReadsInOrder) {
-      tasks.poll().get()
+      awaitFuture(tasks.poll())
     } else {
       val bufMetaFut = fcs.take()
       tasks.remove(bufMetaFut)
-      bufMetaFut.get()
+      awaitFuture(bufMetaFut)
     }
     filesToRead -= 1
-    convertAsyncResult(taskResult)
+    taskResult
   }
 
   private def getNextBuffersAndMeta(): HostMemoryBuffersWithMetaDataBase = {

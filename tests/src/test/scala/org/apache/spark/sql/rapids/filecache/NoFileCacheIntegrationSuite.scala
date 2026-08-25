@@ -62,7 +62,11 @@ class NoFileCacheIntegrationSuite extends SparkQueryCompareTestSuite {
         GpuMetric.PARQUET_BLOCK_METADATA_TIME,
         GpuMetric.PARQUET_BLOCK_COPY_TIME,
         GpuMetric.PARQUET_FOOTER_WRITE_TIME,
-        GpuMetric.PARQUET_SPILLABLE_WRAP_TIME).foreach { metricName =>
+        GpuMetric.PARQUET_SPILLABLE_WRAP_TIME,
+        GpuMetric.PARQUET_CHUNK_SELECTION_TIME,
+        GpuMetric.PARQUET_PART_FILE_TIME,
+        GpuMetric.PARQUET_PART_BOOKKEEPING_TIME,
+        GpuMetric.PARQUET_RESULT_ASSEMBLY_TIME).foreach { metricName =>
         assert(metrics.contains(metricName), s"missing Parquet reader metric $metricName")
         assert(metrics(metricName).value > 0, s"Parquet reader metric $metricName was not updated")
       }

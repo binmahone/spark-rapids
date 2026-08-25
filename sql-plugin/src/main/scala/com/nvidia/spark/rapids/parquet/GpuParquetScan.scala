@@ -3030,25 +3030,34 @@ abstract class AbstractMultiFileCloudParquetPartitionReader(
             } else {
               val filePath = new Path(new URI(file.filePath.toString()))
               while (blockChunkIter.hasNext) {
-                val blocksToRead = populateCurrentBlockChunk(blockChunkIter,
-                  maxReadBatchSizeRows, maxReadBatchSizeBytes, fileBlockMeta.readSchema)
+                val blocksToRead = execMetrics.getOrElse(
+                  PARQUET_CHUNK_SELECTION_TIME, NoopMetric).ns {
+                  populateCurrentBlockChunk(blockChunkIter,
+                    maxReadBatchSizeRows, maxReadBatchSizeBytes, fileBlockMeta.readSchema)
+                }
                 val (dataBuffer, blockMeta) =
-                  readPartFile(blocksToRead, fileBlockMeta.schema, filePath)
-                val numRows = blocksToRead.map(_.getRowCount).sum.toInt
-                hostBuffers += SingleHMBAndMeta(Array(dataBuffer), dataBuffer.length,
-                  numRows, blockMeta)
+                  execMetrics.getOrElse(PARQUET_PART_FILE_TIME, NoopMetric).ns {
+                    readPartFile(blocksToRead, fileBlockMeta.schema, filePath)
+                  }
+                execMetrics.getOrElse(PARQUET_PART_BOOKKEEPING_TIME, NoopMetric).ns {
+                  val numRows = blocksToRead.map(_.getRowCount).sum.toInt
+                  hostBuffers += SingleHMBAndMeta(Array(dataBuffer), dataBuffer.length,
+                    numRows, blockMeta)
+                }
               }
-              val bytesRead = fileSystemBytesRead() - startingBytesRead
-              if (isDone) {
-                // got close before finishing
-                hostBuffers.safeClose()
-                newHMEmptyMetadataForChunks(file, 0, bytesRead,
-                  fileBlockMeta.dateRebaseMode, fileBlockMeta.timestampRebaseMode,
-                  fileBlockMeta.hasInt96Timestamps, fileBlockMeta.schema,
-                  fileBlockMeta.readSchema, 0, Seq.empty)
-              } else {
-                newHMBWithMetaDataForChunks(file, hostBuffers.toArray,
-                  bytesRead, fileBlockMeta)
+              execMetrics.getOrElse(PARQUET_RESULT_ASSEMBLY_TIME, NoopMetric).ns {
+                val bytesRead = fileSystemBytesRead() - startingBytesRead
+                if (isDone) {
+                  // got close before finishing
+                  hostBuffers.safeClose()
+                  newHMEmptyMetadataForChunks(file, 0, bytesRead,
+                    fileBlockMeta.dateRebaseMode, fileBlockMeta.timestampRebaseMode,
+                    fileBlockMeta.hasInt96Timestamps, fileBlockMeta.schema,
+                    fileBlockMeta.readSchema, 0, Seq.empty)
+                } else {
+                  newHMBWithMetaDataForChunks(file, hostBuffers.toArray,
+                    bytesRead, fileBlockMeta)
+                }
               }
             }
           }

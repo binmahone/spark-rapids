@@ -439,6 +439,14 @@ case class GpuFileSourceScanExec(
             DESCRIPTION_PARQUET_FOOTER_WRITE_TIME)
           bf += PARQUET_SPILLABLE_WRAP_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
             DESCRIPTION_PARQUET_SPILLABLE_WRAP_TIME)
+          bf += PARQUET_CHUNK_SELECTION_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+            DESCRIPTION_PARQUET_CHUNK_SELECTION_TIME)
+          bf += PARQUET_PART_FILE_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+            DESCRIPTION_PARQUET_PART_FILE_TIME)
+          bf += PARQUET_PART_BOOKKEEPING_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+            DESCRIPTION_PARQUET_PART_BOOKKEEPING_TIME)
+          bf += PARQUET_RESULT_ASSEMBLY_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+            DESCRIPTION_PARQUET_RESULT_ASSEMBLY_TIME)
         }
         if (ExternalSource.isSupportedFormat(relation.fileFormat.getClass)) {
           // This metric is used to post the time spent in generating the `skip_row` column

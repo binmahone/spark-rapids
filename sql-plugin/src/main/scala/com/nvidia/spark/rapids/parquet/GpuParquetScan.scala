@@ -1735,18 +1735,20 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
     val remoteItems = new ArrayBuffer[CopyRange](blocks.length)
     var totalBytesToCopy = 0L
     withResource(new ArrayBuffer[LocalCopy](blocks.length)) { localItems =>
-      blocks.foreach { block =>
-        block.getColumns.asScala.foreach { column =>
-          val columnSize = column.getTotalSize
-          val outputOffset = totalBytesToCopy + startPos
-          val channel = FileCache.get.getDataRangeChannel(inputFile,
-            column.getStartingPos, columnSize)
-          if (channel.isDefined) {
-            localItems += LocalCopy(channel.get, columnSize, outputOffset)
-          } else {
-            remoteItems += new CopyRange(column.getStartingPos, columnSize, outputOffset)
+      metrics.getOrElse(PARQUET_RANGE_PREP_TIME, NoopMetric).ns {
+        blocks.foreach { block =>
+          block.getColumns.asScala.foreach { column =>
+            val columnSize = column.getTotalSize
+            val outputOffset = totalBytesToCopy + startPos
+            val channel = FileCache.get.getDataRangeChannel(inputFile,
+              column.getStartingPos, columnSize)
+            if (channel.isDefined) {
+              localItems += LocalCopy(channel.get, columnSize, outputOffset)
+            } else {
+              remoteItems += new CopyRange(column.getStartingPos, columnSize, outputOffset)
+            }
+            totalBytesToCopy += columnSize
           }
-          totalBytesToCopy += columnSize
         }
       }
       localItems.foreach { localItem =>
@@ -1758,7 +1760,9 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       inputFile, out, metrics)
     // fixup output pos after blocks were copied possibly out of order
     out.seek(startPos + totalBytesToCopy)
-    computeBlockMetaData(blocks, realStartOffset)
+    metrics.getOrElse(PARQUET_BLOCK_METADATA_TIME, NoopMetric).ns {
+      computeBlockMetaData(blocks, realStartOffset)
+    }
   }
 
   private class BufferedFileInput(
@@ -2024,7 +2028,9 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       return 0L
     }
 
-    val coalescedRanges = coalesceReads(remoteCopies)
+    val coalescedRanges = metrics.getOrElse(PARQUET_RANGE_PREP_TIME, NoopMetric).ns {
+      coalesceReads(remoteCopies)
+    }
     val scheme = filePath.toUri.getScheme
     if (scheme != null && scheme.startsWith("s3")) {
       GpuTaskMetrics.get.recordPerfioS3BackendOnce()
@@ -2033,15 +2039,17 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       inputFile, out.buffer, coalescedRanges, metrics)
 
     // try to cache the remote ranges that were copied
-    remoteCopies.foreach { range =>
-      metrics.getOrElse(GpuMetric.FILECACHE_DATA_RANGE_MISSES, NoopMetric) += 1
-      metrics.getOrElse(GpuMetric.FILECACHE_DATA_RANGE_MISSES_SIZE, NoopMetric) += range.getLength
-      val cacheToken = FileCache.get.startDataRangeCache(
-        inputFile, range.getInputOffset, range.getLength)
-      // If we get a filecache token then we can complete the caching by providing the data.
-      // If we do not get a token then we should not cache this data.
-      cacheToken.foreach { token =>
-        token.complete(out.buffer.slice(range.getOutputOffset, range.getLength))
+    metrics.getOrElse(PARQUET_REMOTE_CACHE_TIME, NoopMetric).ns {
+      remoteCopies.foreach { range =>
+        metrics.getOrElse(GpuMetric.FILECACHE_DATA_RANGE_MISSES, NoopMetric) += 1
+        metrics.getOrElse(GpuMetric.FILECACHE_DATA_RANGE_MISSES_SIZE, NoopMetric) += range.getLength
+        val cacheToken = FileCache.get.startDataRangeCache(
+          inputFile, range.getInputOffset, range.getLength)
+        // If we get a filecache token then we can complete the caching by providing the data.
+        // If we do not get a token then we should not cache this data.
+        cacheToken.foreach { token =>
+          token.complete(out.buffer.slice(range.getOutputOffset, range.getLength))
+        }
       }
     }
     totalBytesCopied
@@ -2106,29 +2114,39 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
         }
       }
 
-      val estTotalSize = calculateParquetOutputSize(blocks, clippedSchema)
-      val outHostBuf = withRetryNoSplit[HostMemoryBuffer] {
-        HostMemoryBuffer.allocate(estTotalSize)
+      val estTotalSize = execMetrics.getOrElse(PARQUET_OUTPUT_SIZE_TIME, NoopMetric).ns {
+        calculateParquetOutputSize(blocks, clippedSchema)
+      }
+      val outHostBuf = execMetrics.getOrElse(PARQUET_HOST_BUFFER_ALLOC_TIME, NoopMetric).ns {
+        withRetryNoSplit[HostMemoryBuffer] {
+          HostMemoryBuffer.allocate(estTotalSize)
+        }
       }
       closeOnExcept(outHostBuf) { hmb =>
         val out = new HostMemoryOutputStream(hmb)
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
-        val outputBlocks = if (compressCfg.decompressAnyCpu) {
-          copyAndUncompressBlocksData(filePath, out, blocks, out.getPos, metrics, compressCfg)
-        } else {
-          copyBlocksData(filePath, out, blocks, out.getPos, metrics)
+        val outputBlocks = execMetrics.getOrElse(PARQUET_BLOCK_COPY_TIME, NoopMetric).ns {
+          if (compressCfg.decompressAnyCpu) {
+            copyAndUncompressBlocksData(filePath, out, blocks, out.getPos, metrics, compressCfg)
+          } else {
+            copyBlocksData(filePath, out, blocks, out.getPos, metrics)
+          }
         }
-        val footerPos = out.getPos
-        writeFooter(out, outputBlocks, clippedSchema)
-        BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
-        out.write(ParquetPartitionReader.PARQUET_MAGIC)
+        execMetrics.getOrElse(PARQUET_FOOTER_WRITE_TIME, NoopMetric).ns {
+          val footerPos = out.getPos
+          writeFooter(out, outputBlocks, clippedSchema)
+          BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
+          out.write(ParquetPartitionReader.PARQUET_MAGIC)
+        }
         // check we didn't go over memory
         if (out.getPos > estTotalSize) {
           throw new QueryExecutionException(s"Calculated buffer size $estTotalSize is too " +
               s"small, actual written: ${out.getPos}")
         }
-        (SpillableHostBuffer(hmb, out.getPos, SpillPriorities.ACTIVE_BATCHING_PRIORITY),
-          outputBlocks)
+        val spillable = execMetrics.getOrElse(PARQUET_SPILLABLE_WRAP_TIME, NoopMetric).ns {
+          SpillableHostBuffer(hmb, out.getPos, SpillPriorities.ACTIVE_BATCHING_PRIORITY)
+        }
+        (spillable, outputBlocks)
       }
     }
   }

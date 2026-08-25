@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2026, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package org.apache.spark.sql.rapids.filecache
 
-import com.nvidia.spark.rapids.SparkQueryCompareTestSuite
+import com.nvidia.spark.rapids.{GpuMetric, RapidsConf, SparkQueryCompareTestSuite}
 import com.nvidia.spark.rapids.shims.GpuBatchScanExec
 
 import org.apache.spark.SparkConf
@@ -39,6 +39,33 @@ class NoFileCacheIntegrationSuite extends SparkQueryCompareTestSuite {
       assume(!isFileCacheEnabled(spark.sparkContext.conf))
       val df = frameFromParquet(FILE_SPLITS_PARQUET)(spark)
       checkNoMetricsV1(df)
+    }, conf)
+  }
+
+  test("v1 multithreaded Parquet reader reports buffer subphase metrics") {
+    val conf = new SparkConf(false)
+        .set("spark.rapids.filecache.enabled", "false")
+        .set("spark.sql.sources.useV1SourceList", "parquet")
+        .set(RapidsConf.PARQUET_READER_TYPE.key, "MULTITHREADED")
+        .set(RapidsConf.METRICS_LEVEL.key, "DEBUG")
+    withGpuSparkSession({ spark =>
+      val df = frameFromParquet(FILE_SPLITS_PARQUET)(spark)
+      df.collect()
+      val gpuScan = df.queryExecution.executedPlan.find(_.isInstanceOf[GpuFileSourceScanExec])
+      assert(gpuScan.isDefined)
+      val metrics = gpuScan.get.metrics
+      Seq(
+        GpuMetric.PARQUET_OUTPUT_SIZE_TIME,
+        GpuMetric.PARQUET_HOST_BUFFER_ALLOC_TIME,
+        GpuMetric.PARQUET_RANGE_PREP_TIME,
+        GpuMetric.PARQUET_REMOTE_CACHE_TIME,
+        GpuMetric.PARQUET_BLOCK_METADATA_TIME,
+        GpuMetric.PARQUET_BLOCK_COPY_TIME,
+        GpuMetric.PARQUET_FOOTER_WRITE_TIME,
+        GpuMetric.PARQUET_SPILLABLE_WRAP_TIME).foreach { metricName =>
+        assert(metrics.contains(metricName), s"missing Parquet reader metric $metricName")
+        assert(metrics(metricName).value > 0, s"Parquet reader metric $metricName was not updated")
+      }
     }, conf)
   }
 

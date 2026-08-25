@@ -423,6 +423,22 @@ case class GpuFileSourceScanExec(
           // Track the actual data size read from the file system, excluding data being pruned
           // by meta-level pruning.
           bf += "readBufferSize" -> createSizeMetric(DEBUG_LEVEL, "size of read buffer")
+          bf += PARQUET_OUTPUT_SIZE_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+            DESCRIPTION_PARQUET_OUTPUT_SIZE_TIME)
+          bf += PARQUET_HOST_BUFFER_ALLOC_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+            DESCRIPTION_PARQUET_HOST_BUFFER_ALLOC_TIME)
+          bf += PARQUET_RANGE_PREP_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+            DESCRIPTION_PARQUET_RANGE_PREP_TIME)
+          bf += PARQUET_REMOTE_CACHE_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+            DESCRIPTION_PARQUET_REMOTE_CACHE_TIME)
+          bf += PARQUET_BLOCK_METADATA_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+            DESCRIPTION_PARQUET_BLOCK_METADATA_TIME)
+          bf += PARQUET_BLOCK_COPY_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+            DESCRIPTION_PARQUET_BLOCK_COPY_TIME)
+          bf += PARQUET_FOOTER_WRITE_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+            DESCRIPTION_PARQUET_FOOTER_WRITE_TIME)
+          bf += PARQUET_SPILLABLE_WRAP_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
+            DESCRIPTION_PARQUET_SPILLABLE_WRAP_TIME)
         }
         if (ExternalSource.isSupportedFormat(relation.fileFormat.getClass)) {
           // This metric is used to post the time spent in generating the `skip_row` column

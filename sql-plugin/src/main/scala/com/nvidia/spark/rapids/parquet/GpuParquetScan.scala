@@ -1569,6 +1569,11 @@ private[parquet] final class ParquetPartFilePhaseTimes {
   var blockCopyTime: Long = 0L
   var footerWriteTime: Long = 0L
   var spillableWrapTime: Long = 0L
+  var rangePrepTime: Long = 0L
+  var localCopyTime: Long = 0L
+  var vectoredReadTime: Long = 0L
+  var remoteCacheTime: Long = 0L
+  var blockMetadataTime: Long = 0L
 }
 
 trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
@@ -1737,12 +1742,14 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       out: HostMemoryOutputStream,
       blocks: Seq[BlockMetaData],
       realStartOffset: Long,
-      metrics: Map[String, GpuMetric]): Seq[BlockMetaData] = {
+      metrics: Map[String, GpuMetric],
+      phaseTimes: Option[ParquetPartFilePhaseTimes] = None): Seq[BlockMetaData] = {
     val startPos = out.getPos
     val inputFile = fileIO.newInputFile(filePath)
     val remoteItems = new ArrayBuffer[CopyRange](blocks.length)
     var totalBytesToCopy = 0L
     withResource(new ArrayBuffer[LocalCopy](blocks.length)) { localItems =>
+      val rangePrepStartTime = System.nanoTime()
       metrics.getOrElse(PARQUET_RANGE_PREP_TIME, NoopMetric).ns {
         blocks.foreach { block =>
           block.getColumns.asScala.foreach { column =>
@@ -1759,18 +1766,24 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
           }
         }
       }
+      phaseTimes.foreach(_.rangePrepTime += System.nanoTime() - rangePrepStartTime)
+      val localCopyStartTime = System.nanoTime()
       localItems.foreach { localItem =>
         copyLocal(localItem, out, metrics)
         localItem.close()
       }
+      phaseTimes.foreach(_.localCopyTime += System.nanoTime() - localCopyStartTime)
     }
     copyRemoteBlocksData(remoteItems.toSeq, filePath,
-      inputFile, out, metrics)
+      inputFile, out, metrics, phaseTimes)
     // fixup output pos after blocks were copied possibly out of order
     out.seek(startPos + totalBytesToCopy)
-    metrics.getOrElse(PARQUET_BLOCK_METADATA_TIME, NoopMetric).ns {
+    val blockMetadataStartTime = System.nanoTime()
+    val outputBlocks = metrics.getOrElse(PARQUET_BLOCK_METADATA_TIME, NoopMetric).ns {
       computeBlockMetaData(blocks, realStartOffset)
     }
+    phaseTimes.foreach(_.blockMetadataTime += System.nanoTime() - blockMetadataStartTime)
+    outputBlocks
   }
 
   private class BufferedFileInput(
@@ -2031,22 +2044,28 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       filePath: Path,
       inputFile: RapidsInputFile,
       out: HostMemoryOutputStream,
-      metrics: Map[String, GpuMetric]): Long = {
+      metrics: Map[String, GpuMetric],
+      phaseTimes: Option[ParquetPartFilePhaseTimes]): Long = {
     if (remoteCopies.isEmpty) {
       return 0L
     }
 
+    val rangePrepStartTime = System.nanoTime()
     val coalescedRanges = metrics.getOrElse(PARQUET_RANGE_PREP_TIME, NoopMetric).ns {
       coalesceReads(remoteCopies)
     }
+    phaseTimes.foreach(_.rangePrepTime += System.nanoTime() - rangePrepStartTime)
     val scheme = filePath.toUri.getScheme
     if (scheme != null && scheme.startsWith("s3")) {
       GpuTaskMetrics.get.recordPerfioS3BackendOnce()
     }
+    val vectoredReadStartTime = System.nanoTime()
     val totalBytesCopied = GpuParquetScan.readRangesToHostMemory(
       inputFile, out.buffer, coalescedRanges, metrics)
+    phaseTimes.foreach(_.vectoredReadTime += System.nanoTime() - vectoredReadStartTime)
 
     // try to cache the remote ranges that were copied
+    val remoteCacheStartTime = System.nanoTime()
     metrics.getOrElse(PARQUET_REMOTE_CACHE_TIME, NoopMetric).ns {
       remoteCopies.foreach { range =>
         metrics.getOrElse(GpuMetric.FILECACHE_DATA_RANGE_MISSES, NoopMetric) += 1
@@ -2060,6 +2079,7 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
         }
       }
     }
+    phaseTimes.foreach(_.remoteCacheTime += System.nanoTime() - remoteCacheStartTime)
     totalBytesCopied
   }
 
@@ -2144,7 +2164,7 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
           if (compressCfg.decompressAnyCpu) {
             copyAndUncompressBlocksData(filePath, out, blocks, out.getPos, metrics, compressCfg)
           } else {
-            copyBlocksData(filePath, out, blocks, out.getPos, metrics)
+            copyBlocksData(filePath, out, blocks, out.getPos, metrics, phaseTimes)
           }
         }
         phaseTimes.foreach(_.blockCopyTime += System.nanoTime() - blockCopyStartTime)
@@ -3113,6 +3133,12 @@ abstract class AbstractMultiFileCloudParquetPartitionReader(
         partFilePhaseTimes.blockCopyTime,
         partFilePhaseTimes.footerWriteTime,
         partFilePhaseTimes.spillableWrapTime)
+      result.setParquetBlockCopyPhaseTimes(
+        partFilePhaseTimes.rangePrepTime,
+        partFilePhaseTimes.localCopyTime,
+        partFilePhaseTimes.vectoredReadTime,
+        partFilePhaseTimes.remoteCacheTime,
+        partFilePhaseTimes.blockMetadataTime)
       result
     }
   }

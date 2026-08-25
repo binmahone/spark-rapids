@@ -114,6 +114,11 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
   private var _parquetBlockCopyTime: Long = 0L
   private var _parquetFooterWriteTime: Long = 0L
   private var _parquetSpillableWrapTime: Long = 0L
+  private var _parquetRangePrepTime: Long = 0L
+  private var _parquetLocalCopyTime: Long = 0L
+  private var _parquetVectoredReadTime: Long = 0L
+  private var _parquetRemoteCacheTime: Long = 0L
+  private var _parquetBlockMetadataTime: Long = 0L
 
   /**
    * When it is present, it indicates the partition values stored as an array of
@@ -159,6 +164,19 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
     _parquetSpillableWrapTime = spillableWrapTime
   }
 
+  def setParquetBlockCopyPhaseTimes(
+      rangePrepTime: Long,
+      localCopyTime: Long,
+      vectoredReadTime: Long,
+      remoteCacheTime: Long,
+      blockMetadataTime: Long): Unit = {
+    _parquetRangePrepTime = rangePrepTime
+    _parquetLocalCopyTime = localCopyTime
+    _parquetVectoredReadTime = vectoredReadTime
+    _parquetRemoteCacheTime = remoteCacheTime
+    _parquetBlockMetadataTime = blockMetadataTime
+  }
+
   def getBufferTime: Long = _bufferTime
   def getFilterTime: Long = _filterTime
   def getScheduleTime: Long = _scheduleTime
@@ -171,6 +189,11 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
   def getParquetBlockCopyTime: Long = _parquetBlockCopyTime
   def getParquetFooterWriteTime: Long = _parquetFooterWriteTime
   def getParquetSpillableWrapTime: Long = _parquetSpillableWrapTime
+  def getParquetRangePrepTime: Long = _parquetRangePrepTime
+  def getParquetLocalCopyTime: Long = _parquetLocalCopyTime
+  def getParquetVectoredReadTime: Long = _parquetVectoredReadTime
+  def getParquetRemoteCacheTime: Long = _parquetRemoteCacheTime
+  def getParquetBlockMetadataTime: Long = _parquetBlockMetadataTime
 
   def getBufferTimePct: Double = {
     val totalTime = _filterTime + _bufferTime + _scheduleTime
@@ -817,6 +840,22 @@ abstract class MultiFileCloudPartitionReaderBase(
       parquetSpillableWrapTime
     metrics.getOrElse(ASYNC_RAW_PARQUET_PART_FILE_RESIDUAL_TIME, NoopMetric) +=
       parquetPartFileResidualTime
+    val parquetRangePrepTime = taskRet.data.getParquetRangePrepTime
+    val parquetLocalCopyTime = taskRet.data.getParquetLocalCopyTime
+    val parquetVectoredReadTime = taskRet.data.getParquetVectoredReadTime
+    val parquetRemoteCacheTime = taskRet.data.getParquetRemoteCacheTime
+    val parquetBlockMetadataTime = taskRet.data.getParquetBlockMetadataTime
+    val parquetBlockCopyResidualTime = math.max(0L, parquetBlockCopyTime -
+      parquetRangePrepTime - parquetLocalCopyTime - parquetVectoredReadTime -
+      parquetRemoteCacheTime - parquetBlockMetadataTime)
+    metrics.getOrElse(ASYNC_RAW_PARQUET_RANGE_PREP_TIME, NoopMetric) += parquetRangePrepTime
+    metrics.getOrElse(ASYNC_RAW_PARQUET_LOCAL_COPY_TIME, NoopMetric) += parquetLocalCopyTime
+    metrics.getOrElse(ASYNC_RAW_PARQUET_VECTORED_READ_TIME, NoopMetric) += parquetVectoredReadTime
+    metrics.getOrElse(ASYNC_RAW_PARQUET_REMOTE_CACHE_TIME, NoopMetric) += parquetRemoteCacheTime
+    metrics.getOrElse(ASYNC_RAW_PARQUET_BLOCK_METADATA_TIME, NoopMetric) +=
+      parquetBlockMetadataTime
+    metrics.getOrElse(ASYNC_RAW_PARQUET_BLOCK_COPY_RESIDUAL_TIME, NoopMetric) +=
+      parquetBlockCopyResidualTime
     metrics.getOrElse(ASYNC_FUTURE_WAIT_TIME, NoopMetric) += waitNs
     metrics.getOrElse(ASYNC_FUTURE_WAIT_QUEUE_OVERLAP_TIME, NoopMetric) += queueOverlapNs
     metrics.getOrElse(ASYNC_FUTURE_WAIT_EXECUTION_OVERLAP_TIME, NoopMetric) += executionOverlapNs

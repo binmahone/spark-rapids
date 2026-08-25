@@ -128,6 +128,12 @@ object GpuMetric extends Logging {
   val ASYNC_RAW_PARQUET_FOOTER_WRITE_TIME = "asyncRawParquetFooterWriteTime"
   val ASYNC_RAW_PARQUET_SPILLABLE_WRAP_TIME = "asyncRawParquetSpillableWrapTime"
   val ASYNC_RAW_PARQUET_PART_FILE_RESIDUAL_TIME = "asyncRawParquetPartFileResidualTime"
+  val ASYNC_RAW_PARQUET_RANGE_PREP_TIME = "asyncRawParquetRangePrepTime"
+  val ASYNC_RAW_PARQUET_LOCAL_COPY_TIME = "asyncRawParquetLocalCopyTime"
+  val ASYNC_RAW_PARQUET_VECTORED_READ_TIME = "asyncRawParquetVectoredReadTime"
+  val ASYNC_RAW_PARQUET_REMOTE_CACHE_TIME = "asyncRawParquetRemoteCacheTime"
+  val ASYNC_RAW_PARQUET_BLOCK_METADATA_TIME = "asyncRawParquetBlockMetadataTime"
+  val ASYNC_RAW_PARQUET_BLOCK_COPY_RESIDUAL_TIME = "asyncRawParquetBlockCopyResidualTime"
   val ASYNC_FUTURE_WAIT_TIME = "asyncFutureWaitTime"
   val ASYNC_FUTURE_WAIT_QUEUE_OVERLAP_TIME = "asyncFutureWaitQueueOverlapTime"
   val ASYNC_FUTURE_WAIT_EXECUTION_OVERLAP_TIME = "asyncFutureWaitExecutionOverlapTime"
@@ -223,6 +229,17 @@ object GpuMetric extends Logging {
     "raw async Parquet spillable buffer wrapping time"
   val DESCRIPTION_ASYNC_RAW_PARQUET_PART_FILE_RESIDUAL_TIME =
     "raw async Parquet part file time outside measured subphases"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_RANGE_PREP_TIME =
+    "raw async Parquet range preparation time"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_LOCAL_COPY_TIME = "raw async Parquet local copy time"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_VECTORED_READ_TIME =
+    "raw async Parquet vectored read time"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_REMOTE_CACHE_TIME =
+    "raw async Parquet remote cache registration time"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_BLOCK_METADATA_TIME =
+    "raw async Parquet block metadata construction time"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_BLOCK_COPY_RESIDUAL_TIME =
+    "raw async Parquet block copy time outside measured subphases"
   val DESCRIPTION_ASYNC_FUTURE_WAIT_TIME = "async reader future wait time"
   val DESCRIPTION_ASYNC_FUTURE_WAIT_QUEUE_OVERLAP_TIME =
     "future wait overlapping async reader queue time"

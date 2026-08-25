@@ -2998,6 +2998,10 @@ abstract class AbstractMultiFileCloudParquetPartitionReader(
       val hostBuffers = new ArrayBuffer[SingleHMBAndMeta]
       var filterTime = 0L
       var bufferStartTime = 0L
+      var chunkSelectionTime = 0L
+      var partFileTime = 0L
+      var partBookkeepingTime = 0L
+      var resultAssemblyTime = 0L
       val result = try {
         val filterStartTime = System.nanoTime()
         val fileBlockMeta = filterFunc(file)
@@ -3030,22 +3034,30 @@ abstract class AbstractMultiFileCloudParquetPartitionReader(
             } else {
               val filePath = new Path(new URI(file.filePath.toString()))
               while (blockChunkIter.hasNext) {
+                val chunkSelectionStartTime = System.nanoTime()
                 val blocksToRead = execMetrics.getOrElse(
                   PARQUET_CHUNK_SELECTION_TIME, NoopMetric).ns {
                   populateCurrentBlockChunk(blockChunkIter,
                     maxReadBatchSizeRows, maxReadBatchSizeBytes, fileBlockMeta.readSchema)
                 }
+                chunkSelectionTime += System.nanoTime() - chunkSelectionStartTime
+                val partFileStartTime = System.nanoTime()
                 val (dataBuffer, blockMeta) =
                   execMetrics.getOrElse(PARQUET_PART_FILE_TIME, NoopMetric).ns {
                     readPartFile(blocksToRead, fileBlockMeta.schema, filePath)
                   }
+                partFileTime += System.nanoTime() - partFileStartTime
+                val partBookkeepingStartTime = System.nanoTime()
                 execMetrics.getOrElse(PARQUET_PART_BOOKKEEPING_TIME, NoopMetric).ns {
                   val numRows = blocksToRead.map(_.getRowCount).sum.toInt
                   hostBuffers += SingleHMBAndMeta(Array(dataBuffer), dataBuffer.length,
                     numRows, blockMeta)
                 }
+                partBookkeepingTime += System.nanoTime() - partBookkeepingStartTime
               }
-              execMetrics.getOrElse(PARQUET_RESULT_ASSEMBLY_TIME, NoopMetric).ns {
+              val resultAssemblyStartTime = System.nanoTime()
+              val assembledResult = execMetrics.getOrElse(
+                PARQUET_RESULT_ASSEMBLY_TIME, NoopMetric).ns {
                 val bytesRead = fileSystemBytesRead() - startingBytesRead
                 if (isDone) {
                   // got close before finishing
@@ -3059,6 +3071,8 @@ abstract class AbstractMultiFileCloudParquetPartitionReader(
                     bytesRead, fileBlockMeta)
                 }
               }
+              resultAssemblyTime += System.nanoTime() - resultAssemblyStartTime
+              assembledResult
             }
           }
         }
@@ -3069,6 +3083,8 @@ abstract class AbstractMultiFileCloudParquetPartitionReader(
       }
       val bufferTime = System.nanoTime() - bufferStartTime
       result.setExecutionTime(filterTime, bufferTime)
+      result.setParquetBufferPhaseTimes(chunkSelectionTime, partFileTime,
+        partBookkeepingTime, resultAssemblyTime)
       result
     }
   }

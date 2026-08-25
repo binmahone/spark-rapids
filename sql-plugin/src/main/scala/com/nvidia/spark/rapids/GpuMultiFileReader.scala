@@ -105,6 +105,10 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
   private var _bufferTime: Long = 0L
   // Time spent on waiting for (virtual) resource
   private var _scheduleTime: Long = 0L
+  private var _parquetChunkSelectionTime: Long = 0L
+  private var _parquetPartFileTime: Long = 0L
+  private var _parquetPartBookkeepingTime: Long = 0L
+  private var _parquetResultAssemblyTime: Long = 0L
 
   /**
    * When it is present, it indicates the partition values stored as an array of
@@ -126,9 +130,24 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
 
   def setScheduleTime(time: Long): Unit = _scheduleTime = time
 
+  def setParquetBufferPhaseTimes(
+      chunkSelectionTime: Long,
+      partFileTime: Long,
+      partBookkeepingTime: Long,
+      resultAssemblyTime: Long): Unit = {
+    _parquetChunkSelectionTime = chunkSelectionTime
+    _parquetPartFileTime = partFileTime
+    _parquetPartBookkeepingTime = partBookkeepingTime
+    _parquetResultAssemblyTime = resultAssemblyTime
+  }
+
   def getBufferTime: Long = _bufferTime
   def getFilterTime: Long = _filterTime
   def getScheduleTime: Long = _scheduleTime
+  def getParquetChunkSelectionTime: Long = _parquetChunkSelectionTime
+  def getParquetPartFileTime: Long = _parquetPartFileTime
+  def getParquetPartBookkeepingTime: Long = _parquetPartBookkeepingTime
+  def getParquetResultAssemblyTime: Long = _parquetResultAssemblyTime
 
   def getBufferTimePct: Double = {
     val totalTime = _filterTime + _bufferTime + _scheduleTime
@@ -742,6 +761,22 @@ abstract class MultiFileCloudPartitionReaderBase(
     metrics.getOrElse(ASYNC_RAW_EXECUTION_TIME, NoopMetric) += async.executionTimeMs
     metrics.getOrElse(ASYNC_RAW_FILTER_TIME, NoopMetric) += taskRet.data.getFilterTime
     metrics.getOrElse(ASYNC_RAW_BUFFER_TIME, NoopMetric) += taskRet.data.getBufferTime
+    val parquetChunkSelectionTime = taskRet.data.getParquetChunkSelectionTime
+    val parquetPartFileTime = taskRet.data.getParquetPartFileTime
+    val parquetPartBookkeepingTime = taskRet.data.getParquetPartBookkeepingTime
+    val parquetResultAssemblyTime = taskRet.data.getParquetResultAssemblyTime
+    val parquetBufferResidualTime = math.max(0L, taskRet.data.getBufferTime -
+      parquetChunkSelectionTime - parquetPartFileTime - parquetPartBookkeepingTime -
+      parquetResultAssemblyTime)
+    metrics.getOrElse(ASYNC_RAW_PARQUET_CHUNK_SELECTION_TIME, NoopMetric) +=
+      parquetChunkSelectionTime
+    metrics.getOrElse(ASYNC_RAW_PARQUET_PART_FILE_TIME, NoopMetric) += parquetPartFileTime
+    metrics.getOrElse(ASYNC_RAW_PARQUET_PART_BOOKKEEPING_TIME, NoopMetric) +=
+      parquetPartBookkeepingTime
+    metrics.getOrElse(ASYNC_RAW_PARQUET_RESULT_ASSEMBLY_TIME, NoopMetric) +=
+      parquetResultAssemblyTime
+    metrics.getOrElse(ASYNC_RAW_PARQUET_BUFFER_RESIDUAL_TIME, NoopMetric) +=
+      parquetBufferResidualTime
     metrics.getOrElse(ASYNC_FUTURE_WAIT_TIME, NoopMetric) += waitNs
     metrics.getOrElse(ASYNC_FUTURE_WAIT_QUEUE_OVERLAP_TIME, NoopMetric) += queueOverlapNs
     metrics.getOrElse(ASYNC_FUTURE_WAIT_EXECUTION_OVERLAP_TIME, NoopMetric) += executionOverlapNs

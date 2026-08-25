@@ -117,6 +117,11 @@ object GpuMetric extends Logging {
   val ASYNC_RAW_EXECUTION_TIME = "asyncRawExecutionTime"
   val ASYNC_RAW_FILTER_TIME = "asyncRawFilterTime"
   val ASYNC_RAW_BUFFER_TIME = "asyncRawBufferTime"
+  val ASYNC_RAW_PARQUET_CHUNK_SELECTION_TIME = "asyncRawParquetChunkSelectionTime"
+  val ASYNC_RAW_PARQUET_PART_FILE_TIME = "asyncRawParquetPartFileTime"
+  val ASYNC_RAW_PARQUET_PART_BOOKKEEPING_TIME = "asyncRawParquetPartBookkeepingTime"
+  val ASYNC_RAW_PARQUET_RESULT_ASSEMBLY_TIME = "asyncRawParquetResultAssemblyTime"
+  val ASYNC_RAW_PARQUET_BUFFER_RESIDUAL_TIME = "asyncRawParquetBufferResidualTime"
   val ASYNC_FUTURE_WAIT_TIME = "asyncFutureWaitTime"
   val ASYNC_FUTURE_WAIT_QUEUE_OVERLAP_TIME = "asyncFutureWaitQueueOverlapTime"
   val ASYNC_FUTURE_WAIT_EXECUTION_OVERLAP_TIME = "asyncFutureWaitExecutionOverlapTime"
@@ -193,6 +198,15 @@ object GpuMetric extends Logging {
   val DESCRIPTION_ASYNC_RAW_EXECUTION_TIME = "raw async reader execution time"
   val DESCRIPTION_ASYNC_RAW_FILTER_TIME = "raw async reader filter time"
   val DESCRIPTION_ASYNC_RAW_BUFFER_TIME = "raw async reader buffer time"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_CHUNK_SELECTION_TIME =
+    "raw async Parquet chunk selection time"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_PART_FILE_TIME = "raw async Parquet part file time"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_PART_BOOKKEEPING_TIME =
+    "raw async Parquet part bookkeeping time"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_RESULT_ASSEMBLY_TIME =
+    "raw async Parquet result assembly time"
+  val DESCRIPTION_ASYNC_RAW_PARQUET_BUFFER_RESIDUAL_TIME =
+    "raw async Parquet buffer time outside measured subphases"
   val DESCRIPTION_ASYNC_FUTURE_WAIT_TIME = "async reader future wait time"
   val DESCRIPTION_ASYNC_FUTURE_WAIT_QUEUE_OVERLAP_TIME =
     "future wait overlapping async reader queue time"

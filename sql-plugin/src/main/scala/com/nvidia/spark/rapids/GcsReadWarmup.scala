@@ -202,67 +202,86 @@ private[rapids] object GcsReadWarmup extends Logging {
       s"$EXPECTED_FS_IMPL_KEY expected ${settings.expectedFsImpl}, observed $fsImpl")
     checkCancelled(cancelled)
 
-    val openStart = System.nanoTime()
-    val in = fs.open(path)
-    val openMs = elapsedMs(openStart)
-    logPhase(executorId, "open", openMs)
-    inputRef.set(in)
-    var seekMs = -1L
-    var firstByteMs = -1L
-    var readRemainingMs = -1L
-    var closeMs = -1L
-    var bytesRead = 0
-    try {
-      checkCancelled(cancelled)
-      val seekStart = System.nanoTime()
-      in.seek(settings.offset)
-      seekMs = elapsedMs(seekStart)
-      logPhase(executorId, "seek", seekMs)
-
-      checkCancelled(cancelled)
-      val firstByteStart = System.nanoTime()
-      val firstByte = in.read()
-      firstByteMs = elapsedMs(firstByteStart)
-      logPhase(executorId, "first_byte", firstByteMs)
-      require(firstByte >= 0, s"Unexpected EOF at offset ${settings.offset} for $uri")
-      bytesRead = 1
-
-      val buffer = new Array[Byte](math.min(64 * 1024, settings.byteCount - bytesRead))
-      val readRemainingStart = System.nanoTime()
-      while (bytesRead < settings.byteCount) {
+    if (settings.byteCount == 0) {
+      Result(
+        status = "success",
+        executorId = executorId,
+        uri = uri,
+        uriIndex = uriIndex,
+        bytesRead = 0,
+        fsImpl = fsImpl,
+        configurationMs = configurationMs,
+        getFileSystemMs = getFileSystemMs,
+        openMs = -1L,
+        seekMs = -1L,
+        firstByteMs = -1L,
+        readRemainingMs = -1L,
+        closeMs = -1L,
+        totalMs = elapsedMs(totalStart),
+        detail = "client_only")
+    } else {
+      val openStart = System.nanoTime()
+      val in = fs.open(path)
+      val openMs = elapsedMs(openStart)
+      logPhase(executorId, "open", openMs)
+      inputRef.set(in)
+      var seekMs = -1L
+      var firstByteMs = -1L
+      var readRemainingMs = -1L
+      var closeMs = -1L
+      var bytesRead = 0
+      try {
         checkCancelled(cancelled)
-        val requested = math.min(buffer.length, settings.byteCount - bytesRead)
-        val count = in.read(buffer, 0, requested)
-        require(count >= 0,
-          s"Unexpected EOF after $bytesRead of ${settings.byteCount} bytes for $uri")
-        bytesRead += count
-      }
-      readRemainingMs = elapsedMs(readRemainingStart)
-      logPhase(executorId, "read_remaining", readRemainingMs)
-    } finally {
-      inputRef.compareAndSet(in, null)
-      val closeStart = System.nanoTime()
-      closeQuietly(in)
-      closeMs = elapsedMs(closeStart)
-      logPhase(executorId, "close", closeMs)
-    }
+        val seekStart = System.nanoTime()
+        in.seek(settings.offset)
+        seekMs = elapsedMs(seekStart)
+        logPhase(executorId, "seek", seekMs)
 
-    Result(
-      status = if (cancelled.get()) "cancelled" else "success",
-      executorId = executorId,
-      uri = uri,
-      uriIndex = uriIndex,
-      bytesRead = bytesRead,
-      fsImpl = fsImpl,
-      configurationMs = configurationMs,
-      getFileSystemMs = getFileSystemMs,
-      openMs = openMs,
-      seekMs = seekMs,
-      firstByteMs = firstByteMs,
-      readRemainingMs = readRemainingMs,
-      closeMs = closeMs,
-      totalMs = elapsedMs(totalStart),
-      detail = "none")
+        checkCancelled(cancelled)
+        val firstByteStart = System.nanoTime()
+        val firstByte = in.read()
+        firstByteMs = elapsedMs(firstByteStart)
+        logPhase(executorId, "first_byte", firstByteMs)
+        require(firstByte >= 0, s"Unexpected EOF at offset ${settings.offset} for $uri")
+        bytesRead = 1
+
+        val buffer = new Array[Byte](math.min(64 * 1024, settings.byteCount - bytesRead))
+        val readRemainingStart = System.nanoTime()
+        while (bytesRead < settings.byteCount) {
+          checkCancelled(cancelled)
+          val requested = math.min(buffer.length, settings.byteCount - bytesRead)
+          val count = in.read(buffer, 0, requested)
+          require(count >= 0,
+            s"Unexpected EOF after $bytesRead of ${settings.byteCount} bytes for $uri")
+          bytesRead += count
+        }
+        readRemainingMs = elapsedMs(readRemainingStart)
+        logPhase(executorId, "read_remaining", readRemainingMs)
+      } finally {
+        inputRef.compareAndSet(in, null)
+        val closeStart = System.nanoTime()
+        closeQuietly(in)
+        closeMs = elapsedMs(closeStart)
+        logPhase(executorId, "close", closeMs)
+      }
+
+      Result(
+        status = if (cancelled.get()) "cancelled" else "success",
+        executorId = executorId,
+        uri = uri,
+        uriIndex = uriIndex,
+        bytesRead = bytesRead,
+        fsImpl = fsImpl,
+        configurationMs = configurationMs,
+        getFileSystemMs = getFileSystemMs,
+        openMs = openMs,
+        seekMs = seekMs,
+        firstByteMs = firstByteMs,
+        readRemainingMs = readRemainingMs,
+        closeMs = closeMs,
+        totalMs = elapsedMs(totalStart),
+        detail = "none")
+    }
   }
 
   private[rapids] def parseSettings(sparkConf: SparkConf): Settings = {
@@ -270,8 +289,8 @@ private[rapids] object GcsReadWarmup extends Logging {
       .flatMap(_.split(",")).map(_.trim).filter(_.nonEmpty)
     require(uris.nonEmpty, s"$URIS_KEY must contain at least one URI when $ENABLED_KEY=true")
     val byteCount = sparkConf.getInt(BYTES_KEY, DefaultBytes)
-    require(byteCount > 0 && byteCount <= MaxBytes,
-      s"$BYTES_KEY must be within [1, $MaxBytes], observed $byteCount")
+    require(byteCount >= 0 && byteCount <= MaxBytes,
+      s"$BYTES_KEY must be within [0, $MaxBytes], observed $byteCount")
     val offset = sparkConf.getLong(OFFSET_KEY, 0L)
     require(offset >= 0, s"$OFFSET_KEY must be non-negative, observed $offset")
     val timeoutMs = sparkConf.getLong(TIMEOUT_MS_KEY, DefaultTimeoutMs)

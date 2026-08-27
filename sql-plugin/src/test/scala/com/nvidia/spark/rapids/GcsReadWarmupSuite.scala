@@ -16,12 +16,23 @@
 
 package com.nvidia.spark.rapids
 
+import java.net.URI
 import java.util.concurrent.CountDownLatch
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FSDataInputStream, Path, RawLocalFileSystem}
 import org.scalatest.funsuite.AnyFunSuite
 
 import org.apache.spark.SparkConf
+
+class TestGcsReadFileSystem extends RawLocalFileSystem {
+  override def getScheme: String = "gs"
+  override def getUri: URI = URI.create("gs://test-bucket")
+  override def initialize(name: URI, conf: Configuration): Unit = setConf(conf)
+  override def open(path: Path, bufferSize: Int): FSDataInputStream = {
+    throw new AssertionError(s"client-only warm-up opened $path")
+  }
+}
 
 class GcsReadWarmupSuite extends AnyFunSuite {
   test("disabled warm-up does not evaluate the Hadoop configuration supplier") {
@@ -64,6 +75,22 @@ class GcsReadWarmupSuite extends AnyFunSuite {
     assert(settings.timeoutMs === 4000L)
     assert(!settings.cancelOnTaskStart)
     assert(settings.expectedFsImpl === "example.GcsFileSystem")
+  }
+
+  test("zero-byte mode initializes the client without opening an object") {
+    val conf = new SparkConf(false)
+      .set(GcsReadWarmup.URIS_KEY, "gs://test-bucket/object")
+      .set(GcsReadWarmup.BYTES_KEY, "0")
+      .set(GcsReadWarmup.EXPECTED_FS_IMPL_KEY, classOf[TestGcsReadFileSystem].getName)
+      .set("spark.hadoop.fs.gs.impl", classOf[TestGcsReadFileSystem].getName)
+      .set("spark.hadoop.fs.gs.impl.disable.cache", "true")
+
+    val result = GcsReadWarmup.run(conf, new Configuration(false), "4")
+
+    assert(result.status === "success")
+    assert(result.bytesRead === 0)
+    assert(result.openMs === -1L)
+    assert(result.detail === "client_only")
   }
 
   test("Spark Hadoop properties override the base Hadoop configuration") {

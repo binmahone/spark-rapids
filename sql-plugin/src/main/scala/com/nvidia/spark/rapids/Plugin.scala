@@ -912,9 +912,7 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
   }
 
   override def onTaskStart(): Unit = {
-    readerDecodeWarmup.filter(_.cancelOnTaskStart).foreach(
-      _.cancelOnFirstTaskAndAwait(
-        "first_task_start", ExecutorReaderDecodeWarmup.TaskStartCancelAwaitMs))
+    readerDecodeWarmup.filter(_.cancelOnTaskStart).foreach(_.cancel("first_task_start"))
     gcsReadWarmup.filter(_.cancelOnTaskStart).foreach(_.cancel("first_task_start"))
     val tc = TaskContext.get
     startTaskNvtx(tc)

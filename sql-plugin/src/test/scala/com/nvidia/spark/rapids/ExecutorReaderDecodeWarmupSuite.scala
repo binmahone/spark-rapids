@@ -70,7 +70,7 @@ class ExecutorReaderDecodeWarmupSuite extends AnyFunSuite {
     assert(error.getMessage.contains(ExecutorReaderDecodeWarmup.WORKER_COUNT_KEY))
   }
 
-  test("only the first task start performs cancellation and waiting") {
+  test("task-start cancellation is idempotent and does not wait") {
     val handle = new ExecutorReaderDecodeWarmup.AsyncHandle(
       cancelOnTaskStart = true,
       new CountDownLatch(1),
@@ -78,7 +78,7 @@ class ExecutorReaderDecodeWarmupSuite extends AnyFunSuite {
       new Thread(),
       ArrayBuffer.empty)
 
-    assert(!handle.cancelOnFirstTaskAndAwait("first", 1L))
-    assert(handle.cancelOnFirstTaskAndAwait("second", 1L))
+    assert(handle.cancel("first"))
+    assert(!handle.cancel("second"))
   }
 }

@@ -56,7 +56,6 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
   private val AbsoluteMaxFileBytes = 8 * 1024 * 1024
   private val DefaultTimeoutMs = 15000L
   private val MaxTimeoutMs = 60000L
-  private[rapids] val TaskStartCancelAwaitMs = 2000L
   private val DefaultExpectedFsImpl =
     "com.nvidia.v017.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem"
 
@@ -83,8 +82,6 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
       private val cancelled: AtomicBoolean,
       private val coordinator: Thread,
       private val futures: ArrayBuffer[Future[_]]) {
-    private val taskStartHandled = new AtomicBoolean(false)
-
     def cancel(reason: String): Boolean = synchronized {
       if (done.getCount > 0 && cancelled.compareAndSet(false, true)) {
         futures.synchronized(futures.foreach(_.cancel(true)))
@@ -100,18 +97,6 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
     private[rapids] def await(timeoutMs: Long): Boolean =
       done.await(timeoutMs, TimeUnit.MILLISECONDS)
 
-    private[rapids] def cancelOnFirstTaskAndAwait(reason: String, timeoutMs: Long): Boolean = {
-      if (taskStartHandled.compareAndSet(false, true)) {
-        val start = System.nanoTime()
-        cancel(reason)
-        val completed = await(timeoutMs)
-        logInfo(s"RAPIDS_EXECUTOR_READER_DECODE_WARMUP_METRIC event=cancel_wait " +
-          s"reason=${metricValue(reason)} completed=$completed duration_ms=${elapsedMs(start)}")
-        completed
-      } else {
-        true
-      }
-    }
   }
 
   def startAsync(

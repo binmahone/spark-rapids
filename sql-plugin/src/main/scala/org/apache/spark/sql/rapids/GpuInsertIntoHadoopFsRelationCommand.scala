@@ -56,15 +56,26 @@ case class GpuInsertIntoHadoopFsRelationCommand(
   extends GpuDataWritingCommand {
 
   override def runColumnar(sparkSession: SparkSession, child: SparkPlan): Seq[ColumnarBatch] = {
-    // Most formats don't do well with duplicate columns, so lets not allow that
-    SchemaUtilsShims.checkColumnNameDuplication(
-      outputColumnNames,
-      s"when inserting into $outputPath",
-      sparkSession.sessionState.conf.caseSensitiveAnalysis)
+    val instrumentation = ColdStartWriteInstrumentation(sparkSession, outputPath.toString)
+    instrumentation.event("run_columnar_entered")
 
-    val hadoopConf = sparkSession.sessionState.newHadoopConfWithOptions(options)
-    val fs = outputPath.getFileSystem(hadoopConf)
-    val qualifiedOutputPath = outputPath.makeQualified(fs.getUri, fs.getWorkingDirectory)
+    // Most formats don't do well with duplicate columns, so lets not allow that
+    instrumentation.phase("schema_validation") {
+      SchemaUtilsShims.checkColumnNameDuplication(
+        outputColumnNames,
+        s"when inserting into $outputPath",
+        sparkSession.sessionState.conf.caseSensitiveAnalysis)
+    }
+
+    val hadoopConf = instrumentation.phase("hadoop_conf_creation") {
+      sparkSession.sessionState.newHadoopConfWithOptions(options)
+    }
+    val fs = instrumentation.phase("output_file_system") {
+      outputPath.getFileSystem(hadoopConf)
+    }
+    val qualifiedOutputPath = instrumentation.phase("output_path_qualification") {
+      outputPath.makeQualified(fs.getUri, fs.getWorkingDirectory)
+    }
 
     val parameters = CaseInsensitiveMap(options)
 
@@ -111,16 +122,20 @@ case class GpuInsertIntoHadoopFsRelationCommand(
         fs, catalogTable.get, qualifiedOutputPath, matchingPartitions)
     }
 
-    val committer = FileCommitProtocol.instantiate(
-      sparkSession.sessionState.conf.fileCommitProtocolClass,
-      jobId = jobId,
-      outputPath = outputPath.toString,
-      dynamicPartitionOverwrite = dynamicPartitionOverwrite)
+    val committer = instrumentation.phase("committer_instantiation") {
+      FileCommitProtocol.instantiate(
+        sparkSession.sessionState.conf.fileCommitProtocolClass,
+        jobId = jobId,
+        outputPath = outputPath.toString,
+        dynamicPartitionOverwrite = dynamicPartitionOverwrite)
+    }
 
     val doInsertion = if (mode == SaveMode.Append) {
       true
     } else {
-      val pathExists = fs.exists(qualifiedOutputPath)
+      val pathExists = instrumentation.phase("output_path_exists") {
+        fs.exists(qualifiedOutputPath)
+      }
       (mode, pathExists) match {
         case (SaveMode.ErrorIfExists, true) =>
           throw RapidsErrorUtils.outputPathAlreadyExistsError(qualifiedOutputPath)
@@ -170,7 +185,7 @@ case class GpuInsertIntoHadoopFsRelationCommand(
       val forceHiveHashForBucketing =
         RapidsConf.FORCE_HIVE_HASH_FOR_BUCKETED_WRITE.get(sparkSession.sessionState.conf)
 
-      val updatedPartitionPaths =
+      val updatedPartitionPaths = instrumentation.phase("file_format_writer_total") {
         GpuFileFormatWriter.write(
           sparkSession = sparkSession,
           plan = child,
@@ -187,7 +202,9 @@ case class GpuInsertIntoHadoopFsRelationCommand(
           concurrentWriterPartitionFlushSize = concurrentWriterPartitionFlushSize,
           forceHiveHashForBucketing = forceHiveHashForBucketing,
           numStaticPartitionCols = staticPartitions.size,
-          baseDebugOutputPath = baseDebugOutputPath)
+          baseDebugOutputPath = baseDebugOutputPath,
+          instrumentation = instrumentation)
+      }
 
 
       // update metastore partition metadata

@@ -104,18 +104,20 @@ trait GpuFileFormatWriterBase extends Serializable with Logging {
       concurrentWriterPartitionFlushSize: Long,
       forceHiveHashForBucketing: Boolean = false,
       numStaticPartitionCols: Int = 0,
-      baseDebugOutputPath: Option[String]): Set[String] = {
+      baseDebugOutputPath: Option[String],
+      instrumentation: ColdStartWriteInstrumentation =
+        ColdStartWriteInstrumentation.Disabled): Set[String] = {
     require(partitionColumns.size >= numStaticPartitionCols)
 
-    val job = Job.getInstance(hadoopConf)
-    job.setOutputKeyClass(classOf[Void])
-    // The data is being written as columnar batches, but those are not serializable. Using the same
-    // InternalRow type that Spark uses here, as it should not really matter. The columnar path
-    // should not be executing the output format code that depends on this setting. Instead specific
-    // output formats are detected and replaced with a different code path, otherwise the code
-    // needs to fallback to the row-based write path.
-    job.setOutputValueClass(classOf[InternalRow])
-    FileOutputFormat.setOutputPath(job, new Path(outputSpec.outputPath))
+    val job = instrumentation.phase("job_initialization") {
+      val newJob = Job.getInstance(hadoopConf)
+      newJob.setOutputKeyClass(classOf[Void])
+      // The data is written as non-serializable columnar batches. This output value class is
+      // retained for Hadoop APIs that require a value class during driver-side setup.
+      newJob.setOutputValueClass(classOf[InternalRow])
+      FileOutputFormat.setOutputPath(newJob, new Path(outputSpec.outputPath))
+      newJob
+    }
 
     val partitionSet = AttributeSet(partitionColumns)
     // cleanup the internal metadata information of
@@ -136,26 +138,28 @@ trait GpuFileFormatWriterBase extends Serializable with Logging {
     verifySchema(fileFormat, dataSchema)
 
     // NOTE: prepareWrite has side effects as it modifies the job configuration.
-    val outputWriterFactory =
+    val outputWriterFactory = instrumentation.phase("file_format_prepare_write") {
       fileFormat.prepareWrite(sparkSession, job, caseInsensitiveOptions, dataSchema)
+    }
 
-    val description = new GpuWriteJobDescription(
-      uuid = UUID.randomUUID.toString,
-      serializableHadoopConf = new SerializableConfiguration(job.getConfiguration),
-      outputWriterFactory = outputWriterFactory,
-      allColumns = finalOutputSpec.outputColumns,
-      dataColumns = dataColumns,
-      partitionColumns = partitionColumns,
-      bucketSpec = writerBucketSpec,
-      path = finalOutputSpec.outputPath,
-      customPartitionLocations = finalOutputSpec.customPartitionLocations,
-      maxRecordsPerFile = caseInsensitiveOptions.get("maxRecordsPerFile").map(_.toLong)
-        .getOrElse(sparkSession.sessionState.conf.maxRecordsPerFile),
-      timeZoneId = caseInsensitiveOptions.get(DateTimeUtils.TIMEZONE_OPTION)
-        .getOrElse(sparkSession.sessionState.conf.sessionLocalTimeZone),
-      statsTrackers = statsTrackers,
-      concurrentWriterPartitionFlushSize = concurrentWriterPartitionFlushSize
-    )
+    val description = instrumentation.phase("write_description_creation") {
+      new GpuWriteJobDescription(
+        uuid = UUID.randomUUID.toString,
+        serializableHadoopConf = new SerializableConfiguration(job.getConfiguration),
+        outputWriterFactory = outputWriterFactory,
+        allColumns = finalOutputSpec.outputColumns,
+        dataColumns = dataColumns,
+        partitionColumns = partitionColumns,
+        bucketSpec = writerBucketSpec,
+        path = finalOutputSpec.outputPath,
+        customPartitionLocations = finalOutputSpec.customPartitionLocations,
+        maxRecordsPerFile = caseInsensitiveOptions.get("maxRecordsPerFile").map(_.toLong)
+          .getOrElse(sparkSession.sessionState.conf.maxRecordsPerFile),
+        timeZoneId = caseInsensitiveOptions.get(DateTimeUtils.TIMEZONE_OPTION)
+          .getOrElse(sparkSession.sessionState.conf.sessionLocalTimeZone),
+        statsTrackers = statsTrackers,
+        concurrentWriterPartitionFlushSize = concurrentWriterPartitionFlushSize)
+    }
 
     // We should first sort by dynamic partition columns, then bucket id, and finally
     // sorting columns.
@@ -204,13 +208,15 @@ trait GpuFileFormatWriterBase extends Serializable with Logging {
         committer = committer,
         concurrentOutputWriterSpecFunc = concurrentOutputWriterSpecFunc
       )
-      executeWrite(sparkSession, plan.asInstanceOf[GpuWriteFilesExec], writeSpec, job)
+      instrumentation.event("write_files_mode")
+      executeWrite(sparkSession, plan.asInstanceOf[GpuWriteFilesExec], writeSpec, job,
+        instrumentation)
     } else {
       // In this path, Spark version is less than 340 or 'spark.sql.optimizer.plannedWrite.enabled'
       // is disabled, should sort the data if necessary.
       executeWrite(sparkSession, plan, job, description, committer, outputSpec,
         requiredOrdering, partitionColumns, sortColumns, orderingMatched, useStableSort,
-        baseDebugOutputPath)
+        baseDebugOutputPath, instrumentation)
     }
   }
 
@@ -226,7 +232,8 @@ trait GpuFileFormatWriterBase extends Serializable with Logging {
       sortColumns: Seq[Attribute],
       orderingMatched: Boolean,
       useStableSort: Boolean,
-      baseDebugOutputPath: Option[String]): Set[String] = {
+      baseDebugOutputPath: Option[String],
+      instrumentation: ColdStartWriteInstrumentation): Set[String] = {
     val partitionSet = AttributeSet(partitionColumns)
     val hasGpuEmpty2Null = plan.find(p => GpuV1WriteUtils.hasGpuEmptyToNull(p.expressions))
       .isDefined
@@ -238,10 +245,11 @@ trait GpuFileFormatWriterBase extends Serializable with Logging {
       if (projectList.nonEmpty) GpuProjectExec(projectList, plan) else plan
     }
 
-    writeAndCommit(job, description, committer) {
-      val (rdd, concurrentOutputWriterSpec) = if (orderingMatched) {
-        (empty2NullPlan.executeColumnar(), None)
-      } else {
+    writeAndCommit(job, description, committer, instrumentation) {
+      val (rdd, concurrentOutputWriterSpec) = instrumentation.phase("rdd_preparation") {
+        if (orderingMatched) {
+          (empty2NullPlan.executeColumnar(), None)
+        } else {
         // SPARK-21165: the `requiredOrdering` is based on the attributes from analyzed plan, and
         // the physical plan may have different attribute ids due to optimizer removing some
         // aliases. Here we bind the expression ahead to avoid potential attribute ids mismatch.
@@ -263,14 +271,17 @@ trait GpuFileFormatWriterBase extends Serializable with Logging {
           val sort = sortPlan.executeColumnar()
           (sort, concurrentOutputWriterSpec) // concurrentOutputWriterSpec is None
         }
+        }
       }
 
       // SPARK-23271 If we are attempting to write a zero partition rdd, create a dummy single
       // partition rdd to make sure we at least set up one write task to write the metadata.
-      val rddWithNonEmptyPartitions = if (rdd.partitions.length == 0) {
-        sparkSession.sparkContext.parallelize(Array.empty[ColumnarBatch], 1)
-      } else {
-        rdd
+      val rddWithNonEmptyPartitions = instrumentation.phase("non_empty_rdd_preparation") {
+        if (rdd.partitions.length == 0) {
+          sparkSession.sparkContext.parallelize(Array.empty[ColumnarBatch], 1)
+        } else {
+          rdd
+        }
       }
 
       // Collect exclude metrics from the plan. The child may be wrapped in
@@ -301,31 +312,41 @@ trait GpuFileFormatWriterBase extends Serializable with Logging {
       }
       // distinct: a reused descendant reached via multiple GpuExec roots must be
       // excluded once, not once per path (double-exclusion would under-count).
-      val excludeMetrics = collectExcludeMetrics(plan, Set.empty).distinct
+      val excludeMetrics = instrumentation.phase("exclude_metric_collection") {
+        collectExcludeMetrics(plan, Set.empty).distinct
+      }
 
       // SPARK-41448 map reduce job IDs need to consistent across attempts for correctness
-      val jobTrackerID = SparkHadoopWriterUtils.createJobTrackerID(new Date())
-      val ret = new Array[WriteTaskResult](rddWithNonEmptyPartitions.partitions.length)
-      sparkSession.sparkContext.runJob(
-        rddWithNonEmptyPartitions,
-        (taskContext: TaskContext, iter: Iterator[ColumnarBatch]) => {
-          executeTask(
-            description = description,
-            jobTrackerID = jobTrackerID,
-            sparkStageId = taskContext.stageId(),
-            sparkPartitionId = taskContext.partitionId(),
-            sparkAttemptNumber = taskContext.taskAttemptId().toInt & Integer.MAX_VALUE,
-            committer,
-            iterator = iter,
-            concurrentOutputWriterSpec = concurrentOutputWriterSpec,
-            baseDebugOutputPath = baseDebugOutputPath,
-            excludeMetrics = excludeMetrics)
-        },
-        rddWithNonEmptyPartitions.partitions.indices,
-        (index, res: WriteTaskResult) => {
-          committer.onTaskCommit(res.commitMsg)
-          ret(index) = res
-        })
+      val jobTrackerID = instrumentation.phase("job_tracker_creation") {
+        SparkHadoopWriterUtils.createJobTrackerID(new Date())
+      }
+      val partitionIndices = instrumentation.phase("partition_enumeration") {
+        rddWithNonEmptyPartitions.partitions.indices
+      }
+      val ret = new Array[WriteTaskResult](partitionIndices.length)
+      instrumentation.event("run_job_submit")
+      instrumentation.phase("run_job") {
+        sparkSession.sparkContext.runJob(
+          rddWithNonEmptyPartitions,
+          (taskContext: TaskContext, iter: Iterator[ColumnarBatch]) => {
+            executeTask(
+              description = description,
+              jobTrackerID = jobTrackerID,
+              sparkStageId = taskContext.stageId(),
+              sparkPartitionId = taskContext.partitionId(),
+              sparkAttemptNumber = taskContext.taskAttemptId().toInt & Integer.MAX_VALUE,
+              committer,
+              iterator = iter,
+              concurrentOutputWriterSpec = concurrentOutputWriterSpec,
+              baseDebugOutputPath = baseDebugOutputPath,
+              excludeMetrics = excludeMetrics)
+          },
+          partitionIndices,
+          (index, res: WriteTaskResult) => {
+            committer.onTaskCommit(res.commitMsg)
+            ret(index) = res
+          })
+      }
       ret
     }
   }
@@ -333,10 +354,14 @@ trait GpuFileFormatWriterBase extends Serializable with Logging {
   private def writeAndCommit(
       job: Job,
       description: GpuWriteJobDescription,
-      committer: FileCommitProtocol)(f: => Array[WriteTaskResult]): Set[String] = {
+      committer: FileCommitProtocol,
+      instrumentation: ColdStartWriteInstrumentation)(
+      f: => Array[WriteTaskResult]): Set[String] = {
     // This call shouldn't be put into the `try` block below because it only initializes and
     // prepares the job, any exception thrown from here shouldn't cause abortJob() to be called.
-    committer.setupJob(job)
+    instrumentation.phase("committer_setup_job") {
+      committer.setupJob(job)
+    }
     try {
       val ret = f
       val commitMsgs = ret.map(_.commitMsg)
@@ -366,29 +391,39 @@ trait GpuFileFormatWriterBase extends Serializable with Logging {
       session: SparkSession,
       planForWrites: GpuWriteFilesExec,
       writeFilesSpec: GpuWriteFilesSpec,
-      job: Job): Set[String] = {
+      job: Job,
+      instrumentation: ColdStartWriteInstrumentation =
+        ColdStartWriteInstrumentation.Disabled): Set[String] = {
     val committer = writeFilesSpec.committer
     val description = writeFilesSpec.description
 
-    writeAndCommit(job, description, committer) {
+    writeAndCommit(job, description, committer, instrumentation) {
       // columnar write
-      val rdd = planForWrites.executeColumnarWrite(writeFilesSpec)
-      val ret = new Array[WriteTaskResult](rdd.partitions.length)
-      session.sparkContext.runJob(
-        rdd,
-        (context: TaskContext, iter: Iterator[WriterCommitMessage]) => {
-          assertInTests(iter.hasNext)
-          val commitMessage = iter.next()
-          assertInTests(!iter.hasNext)
-          commitMessage
-        },
-        rdd.partitions.indices,
-        (index, res: WriterCommitMessage) => {
-          assert(res.isInstanceOf[WriteTaskResult])
-          val writeTaskResult = res.asInstanceOf[WriteTaskResult]
-          committer.onTaskCommit(writeTaskResult.commitMsg)
-          ret(index) = writeTaskResult
-        })
+      val rdd = instrumentation.phase("rdd_preparation") {
+        planForWrites.executeColumnarWrite(writeFilesSpec)
+      }
+      val partitionIndices = instrumentation.phase("partition_enumeration") {
+        rdd.partitions.indices
+      }
+      val ret = new Array[WriteTaskResult](partitionIndices.length)
+      instrumentation.event("run_job_submit")
+      instrumentation.phase("run_job") {
+        session.sparkContext.runJob(
+          rdd,
+          (context: TaskContext, iter: Iterator[WriterCommitMessage]) => {
+            assertInTests(iter.hasNext)
+            val commitMessage = iter.next()
+            assertInTests(!iter.hasNext)
+            commitMessage
+          },
+          partitionIndices,
+          (index, res: WriterCommitMessage) => {
+            assert(res.isInstanceOf[WriteTaskResult])
+            val writeTaskResult = res.asInstanceOf[WriteTaskResult]
+            committer.onTaskCommit(writeTaskResult.commitMsg)
+            ret(index) = writeTaskResult
+          })
+      }
       ret
     }
   }

@@ -122,6 +122,16 @@ case class GpuDataWritingCommandExec(cmd: GpuDataWritingCommand, child: SparkPla
     dumpLoreMetaInfo()
     // Execute the command with LoRE dumping if needed
     val childWithDumping = dumpLoreRDD(child)
+    if (sparkSession.sparkContext.getConf.getBoolean(
+        "spark.rapids.sql.write.driverInstrumentation.enabled", false)) {
+      val commandCodeSource = Option(cmd.getClass.getProtectionDomain)
+        .flatMap(domain => Option(domain.getCodeSource))
+        .flatMap(source => Option(source.getLocation))
+        .map(_.toString)
+        .getOrElse("unknown")
+      logWarning(s"RAPIDS_DRIVER_WRITE_EXEC_METRIC event=run_columnar_submit " +
+        s"command_class=${cmd.getClass.getName} command_code_source=$commandCodeSource")
+    }
     cmd.runColumnar(sparkSession, childWithDumping)
   }
 
@@ -195,5 +205,4 @@ case class GpuDataWritingCommandExec(cmd: GpuDataWritingCommand, child: SparkPla
     }.getOrElse(inputChild)
   }
 }
-
 

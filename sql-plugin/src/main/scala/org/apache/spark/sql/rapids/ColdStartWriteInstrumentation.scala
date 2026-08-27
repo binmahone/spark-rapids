@@ -98,14 +98,33 @@ private[rapids] object ColdStartWriteInstrumentation extends Logging {
   @volatile private var metricObserver: Metric => Unit = _ => ()
 
   def apply(sparkSession: SparkSession, outputPath: String): ColdStartWriteInstrumentation = {
-    val enabled = sparkSession.sparkContext.getConf.getBoolean(ENABLED_KEY, false)
+    val sparkConfValue = sparkSession.sparkContext.getConf.getOption(ENABLED_KEY)
+    val sessionConfValue = sparkSession.conf.getOption(ENABLED_KEY)
+    val enabled = sparkConfValue.orElse(sessionConfValue).exists(_.toBoolean)
     val queryExecutionId = Option(sparkSession.sparkContext.getLocalProperty(
       SQLExecution.EXECUTION_ID_KEY)).getOrElse("unknown")
+    if (sparkConfValue.isDefined || sessionConfValue.isDefined) {
+      logWarning(s"RAPIDS_DRIVER_WRITE_INSTRUMENTATION_ACTIVATION enabled=$enabled " +
+        s"spark_conf_value=${sparkConfValue.getOrElse("missing")} " +
+        s"session_conf_value=${sessionConfValue.getOrElse("missing")} " +
+        s"query_execution_id=$queryExecutionId output_path=$outputPath " +
+        s"instrumentation_code_source=${codeSource(classOf[ColdStartWriteInstrumentation])} " +
+        s"command_code_source=${codeSource(classOf[GpuInsertIntoHadoopFsRelationCommand])} " +
+        s"writer_code_source=${codeSource(GpuFileFormatWriter.getClass)}")
+    }
     new ColdStartWriteInstrumentation(enabled, queryExecutionId, outputPath)
   }
 
+  private def codeSource(clazz: Class[_]): String = {
+    Option(clazz.getProtectionDomain)
+      .flatMap(domain => Option(domain.getCodeSource))
+      .flatMap(source => Option(source.getLocation))
+      .map(_.toString)
+      .getOrElse("unknown")
+  }
+
   private[rapids] def emit(metric: Metric): Unit = {
-    logInfo(s"RAPIDS_DRIVER_WRITE_PHASE_METRIC event=${metric.event} " +
+    logWarning(s"RAPIDS_DRIVER_WRITE_PHASE_METRIC event=${metric.event} " +
       s"phase=${metric.phase} outcome=${metric.outcome} " +
       s"query_execution_id=${metric.queryExecutionId} output_path=${metric.outputPath} " +
       s"duration_ns=${metric.durationNs} start_epoch_ms=${metric.startEpochMs} " +

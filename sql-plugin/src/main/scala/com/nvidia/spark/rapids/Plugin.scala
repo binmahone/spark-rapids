@@ -596,15 +596,14 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
 
   private var isAsyncProfilerEnabled = false
 
-  private def timeExecutorInitPhase[T](phase: String)(body: => T): T = {
-    val startNanos = System.nanoTime()
-    try {
+  private def timeExecutorInitPhase[T](phase: String)(body: => T): T =
+    RapidsExecutorPlugin.timeExecutorInitPhase(
+      phase,
+      () => System.nanoTime(),
+      (completedPhase, durationMs) =>
+        logInfo(s"RAPIDS_EXECUTOR_INIT_METRIC phase=$completedPhase duration_ms=$durationMs")) {
       body
-    } finally {
-      val durationMs = (System.nanoTime() - startNanos) / 1000000L
-      logInfo(s"RAPIDS_EXECUTOR_INIT_METRIC phase=$phase duration_ms=$durationMs")
     }
-  }
 
   override def init(
       pluginContext: PluginContext,
@@ -936,6 +935,18 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
 }
 
 object RapidsExecutorPlugin extends Logging {
+  private[rapids] def timeExecutorInitPhase[T](
+      phase: String,
+      nanoTime: () => Long,
+      record: (String, Long) => Unit)(body: => T): T = {
+    val startNanos = nanoTime()
+    try {
+      body
+    } finally {
+      record(phase, (nanoTime() - startNanos) / 1000000L)
+    }
+  }
+
   /**
    * Calling System.exit will trigger shutdown hooks to run.
    * This code is intended to let them run, but then force

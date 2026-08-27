@@ -596,6 +596,7 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
 
   private var isAsyncProfilerEnabled = false
   @volatile private var gcsReadWarmup: Option[GcsReadWarmup.AsyncHandle] = None
+  @volatile private var gcsWriteWarmup: Option[GcsWriteWarmup.AsyncHandle] = None
   @volatile private var readerDecodeWarmup: Option[ExecutorReaderDecodeWarmup.AsyncHandle] = None
 
   private def timeExecutorInitPhase[T](phase: String)(body: => T): T =
@@ -657,6 +658,19 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
       }
       timeExecutorInitPhase("jni_constants_check") {
         checkJniConstants()
+      }
+
+      timeExecutorInitPhase("early_gcs_read_warmup_submit") {
+        gcsReadWarmup = GcsReadWarmup.startAsync(
+          sparkConf,
+          () => TrampolineUtil.getSparkHadoopUtilConf,
+          pluginContext.executorID())
+      }
+      timeExecutorInitPhase("early_gcs_write_warmup_submit") {
+        gcsWriteWarmup = GcsWriteWarmup.startAsync(
+          sparkConf,
+          () => TrampolineUtil.getSparkHadoopUtilConf,
+          pluginContext.executorID())
       }
 
       // Validate driver and executor time zone are same if the driver time zone is supported by
@@ -747,19 +761,14 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
       timeExecutorInitPhase("traffic_controller_init") {
         TrafficController.initialize(conf)
       }
-      timeExecutorInitPhase("gcs_read_warmup_submit") {
-        gcsReadWarmup = GcsReadWarmup.startAsync(
-          sparkConf,
-          () => TrampolineUtil.getSparkHadoopUtilConf,
-          pluginContext.executorID())
-      }
       timeExecutorInitPhase("reader_decode_warmup_submit") {
         readerDecodeWarmup = ExecutorReaderDecodeWarmup.startAsync(
           sparkConf,
           conf,
           () => TrampolineUtil.getSparkHadoopUtilConf,
           pluginContext.executorID(),
-          gcsReadWarmup)
+          gcsReadWarmup,
+          gcsWriteWarmup)
       }
       val executorInitDurationMs = (System.nanoTime() - executorInitStartNanos) / 1000000L
       logInfo(s"RAPIDS_EXECUTOR_INIT_METRIC phase=total duration_ms=$executorInitDurationMs " +
@@ -867,6 +876,7 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
 
   override def shutdown(): Unit = {
     readerDecodeWarmup.foreach(_.cancel("executor_shutdown"))
+    gcsWriteWarmup.foreach(_.cancel("executor_shutdown"))
     gcsReadWarmup.foreach(_.cancel("executor_shutdown"))
     GpuTimeZoneDB.shutdown()
     GpuSemaphore.shutdown()
@@ -913,6 +923,7 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
 
   override def onTaskStart(): Unit = {
     readerDecodeWarmup.filter(_.cancelOnTaskStart).foreach(_.cancel("first_task_start"))
+    gcsWriteWarmup.filter(_.cancelOnTaskStart).foreach(_.cancel("first_task_start"))
     gcsReadWarmup.filter(_.cancelOnTaskStart).foreach(_.cancel("first_task_start"))
     val tc = TaskContext.get
     startTaskNvtx(tc)

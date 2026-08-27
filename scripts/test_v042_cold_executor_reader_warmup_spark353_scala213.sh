@@ -29,6 +29,6 @@ mvn --offline --non-recursive -B \
 
 mvn "${COMMON_ARGS[@]}" \
   -pl sql-plugin -am \
-  -DwildcardSuites=com.nvidia.spark.rapids.GcsReadWarmupSuite,com.nvidia.spark.rapids.ExecutorReaderDecodeWarmupSuite \
+  -DwildcardSuites=com.nvidia.spark.rapids.GcsReadWarmupSuite,com.nvidia.spark.rapids.GcsWriteWarmupSuite,com.nvidia.spark.rapids.ExecutorReaderDecodeWarmupSuite \
   package \
   2>&1 | tee "${VALIDATION_ROOT}/warmup-tests.log"

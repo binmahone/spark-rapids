@@ -92,7 +92,7 @@ private[rapids] object GcsReadWarmup extends Logging {
         worker.interrupt()
         Option(input.get()).foreach(closeAsync)
         logInfo(s"RAPIDS_EXECUTOR_GCS_READ_WARMUP_METRIC event=cancel_requested " +
-          s"reason=${metricValue(reason)}")
+          s"reason=${metricValue(reason)} epoch_ms=${System.currentTimeMillis()}")
         true
       } else {
         false
@@ -119,6 +119,7 @@ private[rapids] object GcsReadWarmup extends Logging {
 
       val worker = new Thread(() => {
         val totalStart = System.nanoTime()
+        val startEpochMs = System.currentTimeMillis()
         try {
           val configurationStart = System.nanoTime()
           val settings = parseSettings(confSnapshot)
@@ -128,16 +129,18 @@ private[rapids] object GcsReadWarmup extends Logging {
           logPhase(executorId, "hadoop_conf_supplier", elapsedMs(hadoopConfStart))
           val result = run(confSnapshot, baseHadoopConf, executorId, settings, cancelled, input,
             totalStart)
-          logResult(result)
+          logResult(result, startEpochMs)
         } catch {
           case e: InterruptedException =>
             logInfo(s"RAPIDS_EXECUTOR_GCS_READ_WARMUP_METRIC event=completed status=cancelled " +
               s"executor_id=$safeExecutorId total_ms=${elapsedMs(totalStart)} " +
+              s"start_epoch_ms=$startEpochMs end_epoch_ms=${System.currentTimeMillis()} " +
               s"detail=${metricValue(errorDetail(e))}")
           case NonFatal(e) =>
             val status = if (cancelled.get()) "cancelled" else "failed"
             logInfo(s"RAPIDS_EXECUTOR_GCS_READ_WARMUP_METRIC event=completed status=$status " +
               s"executor_id=$safeExecutorId total_ms=${elapsedMs(totalStart)} " +
+              s"start_epoch_ms=$startEpochMs end_epoch_ms=${System.currentTimeMillis()} " +
               s"detail=${metricValue(errorDetail(e))}")
         } finally {
           done.countDown()
@@ -157,7 +160,7 @@ private[rapids] object GcsReadWarmup extends Logging {
       startDeadlineThread(handle, done, timeoutMs, safeExecutorId)
       logInfo(s"RAPIDS_EXECUTOR_GCS_READ_WARMUP_METRIC event=submitted status=running " +
         s"executor_id=$safeExecutorId timeout_ms=$timeoutMs " +
-        s"cancel_on_task_start=$cancelOnTaskStart")
+        s"cancel_on_task_start=$cancelOnTaskStart epoch_ms=${System.currentTimeMillis()}")
       Some(handle)
     }
   }
@@ -319,7 +322,7 @@ private[rapids] object GcsReadWarmup extends Logging {
     }
   }
 
-  private def logResult(result: Result): Unit = {
+  private def logResult(result: Result, startEpochMs: Long): Unit = {
     logInfo(s"RAPIDS_EXECUTOR_GCS_READ_WARMUP_METRIC event=completed " +
       s"status=${result.status} executor_id=${metricValue(result.executorId)} " +
       s"uri_index=${result.uriIndex} uri=${metricValue(result.uri)} bytes=${result.bytesRead} " +
@@ -327,7 +330,8 @@ private[rapids] object GcsReadWarmup extends Logging {
       s"get_file_system_ms=${result.getFileSystemMs} open_ms=${result.openMs} " +
       s"seek_ms=${result.seekMs} first_byte_ms=${result.firstByteMs} " +
       s"read_remaining_ms=${result.readRemainingMs} close_ms=${result.closeMs} " +
-      s"total_ms=${result.totalMs} detail=${metricValue(result.detail)}")
+      s"total_ms=${result.totalMs} start_epoch_ms=$startEpochMs " +
+      s"end_epoch_ms=${System.currentTimeMillis()} detail=${metricValue(result.detail)}")
   }
 
   private def logPhase(executorId: String, phase: String, durationMs: Long): Unit = {

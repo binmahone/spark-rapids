@@ -49,6 +49,8 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
   val EXPECTED_FS_IMPL_KEY = "spark.rapids.executor.readerDecodeWarmup.expectedFsImpl"
   val WAIT_FOR_GCS_WARMUP_KEY =
     "spark.rapids.executor.readerDecodeWarmup.waitForGcsReadWarmup"
+  val WAIT_FOR_GCS_WRITE_WARMUP_KEY =
+    "spark.rapids.executor.readerDecodeWarmup.waitForGcsWriteWarmup"
 
   private val DefaultWorkerCount = 1
   private val MaxWorkerCount = 64
@@ -66,7 +68,8 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
       timeoutMs: Long,
       cancelOnTaskStart: Boolean,
       expectedFsImpl: String,
-      waitForGcsReadWarmup: Boolean)
+      waitForGcsReadWarmup: Boolean,
+      waitForGcsWriteWarmup: Boolean)
 
   private[rapids] case class ReadResult(
       uri: String,
@@ -87,7 +90,7 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
         futures.synchronized(futures.foreach(_.cancel(true)))
         coordinator.interrupt()
         logInfo(s"RAPIDS_EXECUTOR_READER_DECODE_WARMUP_METRIC event=cancel_requested " +
-          s"reason=${metricValue(reason)}")
+          s"reason=${metricValue(reason)} epoch_ms=${System.currentTimeMillis()}")
         true
       } else {
         false
@@ -104,7 +107,8 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
       rapidsConf: RapidsConf,
       hadoopConf: () => Configuration,
       executorId: String,
-      predecessor: Option[GcsReadWarmup.AsyncHandle]): Option[AsyncHandle] = {
+      readPredecessor: Option[GcsReadWarmup.AsyncHandle],
+      writePredecessor: Option[GcsWriteWarmup.AsyncHandle]): Option[AsyncHandle] = {
     if (!sparkConf.getBoolean(ENABLED_KEY, false)) {
       None
     } else {
@@ -120,9 +124,13 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
 
       val coordinator = new Thread(() => {
         val start = System.nanoTime()
+        val startEpochMs = System.currentTimeMillis()
         try {
           if (settings.waitForGcsReadWarmup) {
-            predecessor.foreach(_.await(settings.timeoutMs))
+            readPredecessor.foreach(_.await(settings.timeoutMs))
+          }
+          if (settings.waitForGcsWriteWarmup) {
+            writePredecessor.foreach(_.await(settings.timeoutMs))
           }
           checkCancelled(cancelled)
           val effectiveConf = GcsReadWarmup.buildEffectiveHadoopConf(confSnapshot, hadoopConf())
@@ -163,14 +171,15 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
             s"unique_worker_threads=${results.map(_.workerThread).distinct.size} " +
             s"bytes=${results.map(_.bytes.length.toLong).sum} decoded_rows=$rows " +
             s"decoded_columns=$columns decode_ms=${elapsedMs(decodeStart)} " +
-            s"total_ms=${elapsedMs(start)}")
+            s"total_ms=${elapsedMs(start)} start_epoch_ms=$startEpochMs " +
+            s"end_epoch_ms=${System.currentTimeMillis()}")
         } catch {
           case e: InterruptedException =>
             Thread.currentThread().interrupt()
-            logCompletionFailure(executorId, "cancelled", start, e)
+            logCompletionFailure(executorId, "cancelled", start, startEpochMs, e)
           case NonFatal(e) =>
             val status = if (cancelled.get()) "cancelled" else "failed"
-            logCompletionFailure(executorId, status, start, e)
+            logCompletionFailure(executorId, status, start, startEpochMs, e)
         } finally {
           done.countDown()
         }
@@ -182,7 +191,8 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
       startDeadlineThread(handle, settings.timeoutMs, safeExecutorId)
       logInfo(s"RAPIDS_EXECUTOR_READER_DECODE_WARMUP_METRIC event=submitted status=running " +
         s"executor_id=$safeExecutorId timeout_ms=${settings.timeoutMs} " +
-        s"cancel_on_task_start=${settings.cancelOnTaskStart}")
+        s"cancel_on_task_start=${settings.cancelOnTaskStart} " +
+        s"epoch_ms=${System.currentTimeMillis()}")
       Some(handle)
     }
   }
@@ -238,7 +248,8 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
       timeoutMs,
       conf.getBoolean(CANCEL_ON_TASK_START_KEY, true),
       expectedFsImpl,
-      conf.getBoolean(WAIT_FOR_GCS_WARMUP_KEY, true))
+      conf.getBoolean(WAIT_FOR_GCS_WARMUP_KEY, true),
+      conf.getBoolean(WAIT_FOR_GCS_WRITE_WARMUP_KEY, false))
   }
 
   private[rapids] def selectUris(
@@ -280,9 +291,14 @@ private[rapids] object ExecutorReaderDecodeWarmup extends Logging {
   }
 
   private def logCompletionFailure(
-      executorId: String, status: String, start: Long, error: Throwable): Unit = {
+      executorId: String,
+      status: String,
+      start: Long,
+      startEpochMs: Long,
+      error: Throwable): Unit = {
     logInfo(s"RAPIDS_EXECUTOR_READER_DECODE_WARMUP_METRIC event=completed status=$status " +
       s"executor_id=${metricValue(executorId)} total_ms=${elapsedMs(start)} " +
+      s"start_epoch_ms=$startEpochMs end_epoch_ms=${System.currentTimeMillis()} " +
       s"detail=${metricValue(errorDetail(error))}")
   }
 

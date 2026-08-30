@@ -460,6 +460,51 @@ private[rapids] class ReaderTaskAdmissionGate(
 
 object RapidsShuffleInternalManagerBase extends Logging {
   private val poolUnavailable = "unavailable"
+  private val largeHeapBufferLogThreshold = 64L * 1024 * 1024
+  private val activeCompressedHeapBufferCount = new AtomicLong(0L)
+  private val activeCompressedHeapBufferBytes = new AtomicLong(0L)
+  private val peakCompressedHeapBufferBytes = new AtomicLong(0L)
+
+  private def updatePeakCompressedHeapBufferBytes(currentBytes: Long): Unit = {
+    var previousPeak = peakCompressedHeapBufferBytes.get()
+    while (currentBytes > previousPeak &&
+        !peakCompressedHeapBufferBytes.compareAndSet(previousPeak, currentBytes)) {
+      previousPeak = peakCompressedHeapBufferBytes.get()
+    }
+  }
+
+  private[rapids] def trackCompressedHeapBufferAllocated(
+      capacity: Long,
+      context: String): Unit = {
+    val count = activeCompressedHeapBufferCount.incrementAndGet()
+    val bytes = activeCompressedHeapBufferBytes.addAndGet(capacity)
+    updatePeakCompressedHeapBufferBytes(bytes)
+    if (capacity >= largeHeapBufferLogThreshold) {
+      logWarning(s"RAPIDS_SHUFFLE_HEAP_BUFFER_ALLOCATED context={$context}," +
+        s"capacity=$capacity,activeCount=$count,activeBytes=$bytes," +
+        s"peakBytes=${peakCompressedHeapBufferBytes.get()}," +
+        s"heap={${heapDiagnosticSnapshot}},pools={${threadPoolDiagnosticSnapshot}}")
+    }
+  }
+
+  private[rapids] def trackCompressedHeapBufferReleased(
+      capacity: Long,
+      context: String): Unit = {
+    val count = activeCompressedHeapBufferCount.decrementAndGet()
+    val bytes = activeCompressedHeapBufferBytes.addAndGet(-capacity)
+    if (capacity >= largeHeapBufferLogThreshold || count == 0L) {
+      logWarning(s"RAPIDS_SHUFFLE_HEAP_BUFFER_RELEASED context={$context}," +
+        s"capacity=$capacity,activeCount=$count,activeBytes=$bytes," +
+        s"peakBytes=${peakCompressedHeapBufferBytes.get()}," +
+        s"heap={${heapDiagnosticSnapshot}},pools={${threadPoolDiagnosticSnapshot}}")
+    }
+  }
+
+  private[rapids] def heapDiagnosticSnapshot: String = {
+    val runtime = Runtime.getRuntime
+    s"used=${runtime.totalMemory() - runtime.freeMemory()}," +
+      s"free=${runtime.freeMemory()},committed=${runtime.totalMemory()},max=${runtime.maxMemory()}"
+  }
 
   def unwrapHandle(handle: ShuffleHandle): ShuffleHandle = handle match {
     case gh: GpuShuffleHandle[_, _] => gh.wrapped
@@ -697,33 +742,55 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
    * @param remainingQuota The quota to release after writing to disk
    */
   private case class CompressedRecord(
-    buffer: OpenByteArrayOutputStream,
-    compressedSize: Long,
-    remainingQuota: Long)
+      buffer: OpenByteArrayOutputStream,
+      compressedSize: Long,
+      remainingQuota: Long,
+      heapBufferCapacity: Long,
+      diagnosticContext: String) {
+    private val trackingReleased = new AtomicBoolean(false)
+
+    def releaseTracking(): Unit = {
+      if (trackingReleased.compareAndSet(false, true)) {
+        RapidsShuffleInternalManagerBase.trackCompressedHeapBufferReleased(
+          heapBufferCapacity, diagnosticContext)
+      }
+    }
+  }
 
   private def writePrecompressedFrames(
       compressedFrames: HostMemoryBuffer,
-      destination: OpenByteArrayOutputStream): Unit = {
+      destination: OpenByteArrayOutputStream,
+      diagnosticContext: String): Unit = {
     require(compressedFrames.getLength <= Int.MaxValue,
       s"GPU-compressed shuffle record exceeds the JVM buffer limit: " +
         s"${compressedFrames.getLength}")
 
-    if (blockManager.serializerManager.encryptionEnabled) {
-      withResource(blockManager.serializerManager.wrapForEncryption(destination)) { encrypted =>
-        val copyBuffer = new Array[Byte](math.min(
-          fileBufferSize.toLong,
-          compressedFrames.getLength).toInt)
-        var offset = 0L
-        while (offset < compressedFrames.getLength) {
-          val copyLength = math.min(copyBuffer.length.toLong,
-            compressedFrames.getLength - offset).toInt
-          compressedFrames.getBytes(copyBuffer, 0, offset, copyLength)
-          encrypted.write(copyBuffer, 0, copyLength)
-          offset += copyLength
+    try {
+      if (blockManager.serializerManager.encryptionEnabled) {
+        withResource(blockManager.serializerManager.wrapForEncryption(destination)) { encrypted =>
+          val copyBuffer = new Array[Byte](math.min(
+            fileBufferSize.toLong,
+            compressedFrames.getLength).toInt)
+          var offset = 0L
+          while (offset < compressedFrames.getLength) {
+            val copyLength = math.min(copyBuffer.length.toLong,
+              compressedFrames.getLength - offset).toInt
+            compressedFrames.getBytes(copyBuffer, 0, offset, copyLength)
+            encrypted.write(copyBuffer, 0, copyLength)
+            offset += copyLength
+          }
         }
+      } else {
+        destination.write(compressedFrames, 0, compressedFrames.getLength.toInt)
       }
-    } else {
-      destination.write(compressedFrames, 0, compressedFrames.getLength.toInt)
+    } catch {
+      case oom: OutOfMemoryError =>
+        logError(s"RAPIDS_SHUFFLE_HEAP_BUFFER_OOM context={$diagnosticContext}," +
+          s"requestedBytes=${compressedFrames.getLength}," +
+          s"currentCapacity=${destination.getBuf.length}," +
+          s"heap={${RapidsShuffleInternalManagerBase.heapDiagnosticSnapshot}}," +
+          s"pools={${RapidsShuffleInternalManagerBase.threadPoolDiagnosticSnapshot}}", oom)
+        throw oom
     }
   }
 
@@ -907,6 +974,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
       } finally {
         mergerWriteTimeNs.addAndGet(System.nanoTime() - writeStartNs)
         record.buffer.close()
+        record.releaseTracking()
         limiter.release(record.remainingQuota)
       }
     }
@@ -1255,9 +1323,12 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                 }
 
                 closeOnExcept(buffer) { _ =>
+                  val diagnosticContext =
+                    s"shuffle=$shuffleId,map=$mapId,partition=$reducePartitionId"
                   cb.column(0) match {
                     case precompressed: PrecompressedSerializedColumnVector =>
-                      writePrecompressedFrames(precompressed.getWrap, buffer)
+                      writePrecompressedFrames(
+                        precompressed.getWrap, buffer, diagnosticContext)
                     case _ =>
                       val shuffleBlockId = ShuffleBlockId(shuffleId, mapId, reducePartitionId)
                       val compressedOutputStream = blockManager.serializerManager.wrapStream(
@@ -1312,7 +1383,15 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                   // Return CompressedRecord with buffer and remaining quota for Merger
                   // Total released = excessQuota + remainingQuota should equal recordSize
                   val remainingQuota = recordSize - excessQuota
-                  CompressedRecord(buffer, compressedSize, remainingQuota)
+                  val heapBufferCapacity = buffer.getBuf.length.toLong
+                  RapidsShuffleInternalManagerBase.trackCompressedHeapBufferAllocated(
+                    heapBufferCapacity, diagnosticContext)
+                  CompressedRecord(
+                    buffer,
+                    compressedSize,
+                    remainingQuota,
+                    heapBufferCapacity,
+                    diagnosticContext)
                 }
               }
               compressionTasksCompleted.incrementAndGet()
@@ -1444,6 +1523,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
               try {
                 val record = future.get()
                 record.buffer.close()
+                record.releaseTracking()
                 limiter.release(record.remainingQuota)
               } catch {
                 case _: Exception => // Ignore cleanup errors

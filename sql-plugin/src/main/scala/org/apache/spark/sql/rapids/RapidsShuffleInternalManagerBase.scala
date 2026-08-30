@@ -464,12 +464,14 @@ object RapidsShuffleInternalManagerBase extends Logging {
   private val activeCompressedHeapBufferCount = new AtomicLong(0L)
   private val activeCompressedHeapBufferBytes = new AtomicLong(0L)
   private val peakCompressedHeapBufferBytes = new AtomicLong(0L)
+  private val activeShuffleReservationBytes = new AtomicLong(0L)
+  private val peakShuffleReservationBytes = new AtomicLong(0L)
 
-  private def updatePeakCompressedHeapBufferBytes(currentBytes: Long): Unit = {
-    var previousPeak = peakCompressedHeapBufferBytes.get()
+  private def updatePeak(counter: AtomicLong, currentBytes: Long): Unit = {
+    var previousPeak = counter.get()
     while (currentBytes > previousPeak &&
-        !peakCompressedHeapBufferBytes.compareAndSet(previousPeak, currentBytes)) {
-      previousPeak = peakCompressedHeapBufferBytes.get()
+        !counter.compareAndSet(previousPeak, currentBytes)) {
+      previousPeak = counter.get()
     }
   }
 
@@ -478,7 +480,7 @@ object RapidsShuffleInternalManagerBase extends Logging {
       context: String): Unit = {
     val count = activeCompressedHeapBufferCount.incrementAndGet()
     val bytes = activeCompressedHeapBufferBytes.addAndGet(capacity)
-    updatePeakCompressedHeapBufferBytes(bytes)
+    updatePeak(peakCompressedHeapBufferBytes, bytes)
     if (capacity >= largeHeapBufferLogThreshold) {
       logWarning(s"RAPIDS_SHUFFLE_HEAP_BUFFER_ALLOCATED context={$context}," +
         s"capacity=$capacity,activeCount=$count,activeBytes=$bytes," +
@@ -492,12 +494,45 @@ object RapidsShuffleInternalManagerBase extends Logging {
       context: String): Unit = {
     val count = activeCompressedHeapBufferCount.decrementAndGet()
     val bytes = activeCompressedHeapBufferBytes.addAndGet(-capacity)
-    if (capacity >= largeHeapBufferLogThreshold || count == 0L) {
+    if (capacity >= largeHeapBufferLogThreshold) {
       logWarning(s"RAPIDS_SHUFFLE_HEAP_BUFFER_RELEASED context={$context}," +
         s"capacity=$capacity,activeCount=$count,activeBytes=$bytes," +
         s"peakBytes=${peakCompressedHeapBufferBytes.get()}," +
         s"heap={${heapDiagnosticSnapshot}},pools={${threadPoolDiagnosticSnapshot}}")
     }
+  }
+
+  private[rapids] def trackShuffleReservationAcquired(
+      reservationBytes: Long,
+      context: String): Unit = {
+    val bytes = activeShuffleReservationBytes.addAndGet(reservationBytes)
+    updatePeak(peakShuffleReservationBytes, bytes)
+    if (reservationBytes >= largeHeapBufferLogThreshold) {
+      logWarning(s"RAPIDS_SHUFFLE_RESERVATION_ACQUIRED context={$context}," +
+        s"reservationBytes=$reservationBytes,activeBytes=$bytes," +
+        s"peakBytes=${peakShuffleReservationBytes.get()}," +
+        s"heap={${heapDiagnosticSnapshot}},pools={${threadPoolDiagnosticSnapshot}}")
+    }
+  }
+
+  private[rapids] def trackShuffleReservationReleased(
+      reservationBytes: Long,
+      context: String): Unit = {
+    val bytes = activeShuffleReservationBytes.addAndGet(-reservationBytes)
+    if (reservationBytes >= largeHeapBufferLogThreshold) {
+      logWarning(s"RAPIDS_SHUFFLE_RESERVATION_RELEASED context={$context}," +
+        s"reservationBytes=$reservationBytes,activeBytes=$bytes," +
+        s"peakBytes=${peakShuffleReservationBytes.get()}," +
+        s"heap={${heapDiagnosticSnapshot}},pools={${threadPoolDiagnosticSnapshot}}")
+    }
+  }
+
+  private[rapids] def shuffleHeapDiagnosticSnapshot: String = {
+    s"completedBufferCount=${activeCompressedHeapBufferCount.get()}," +
+      s"completedBufferBytes=${activeCompressedHeapBufferBytes.get()}," +
+      s"completedBufferPeakBytes=${peakCompressedHeapBufferBytes.get()}," +
+      s"reservationBytes=${activeShuffleReservationBytes.get()}," +
+      s"reservationPeakBytes=${peakShuffleReservationBytes.get()}"
   }
 
   private[rapids] def heapDiagnosticSnapshot: String = {
@@ -976,6 +1011,8 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
         record.buffer.close()
         record.releaseTracking()
         limiter.release(record.remainingQuota)
+        RapidsShuffleInternalManagerBase.trackShuffleReservationReleased(
+          record.remainingQuota, record.diagnosticContext)
       }
     }
 
@@ -1272,6 +1309,8 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
           _ => new ConcurrentLinkedQueue[Future[CompressedRecord]]())
 
         val (cb, recordSize) = incRefCountAndGetSize(value)
+        val diagnosticContext =
+          s"shuffle=$shuffleId,map=$mapId,partition=$reducePartitionId"
 
         // Acquire limiter and process compression task immediately
         val waitOnLimiterStart = System.nanoTime()
@@ -1283,6 +1322,8 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
             cb.close()
             throw t
         }
+        RapidsShuffleInternalManagerBase.trackShuffleReservationAcquired(
+          recordSize, diagnosticContext)
         waitTimeOnLimiterNs += System.nanoTime() - waitOnLimiterStart
 
         val batchForRecord = currentBatch
@@ -1323,8 +1364,6 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                 }
 
                 closeOnExcept(buffer) { _ =>
-                  val diagnosticContext =
-                    s"shuffle=$shuffleId,map=$mapId,partition=$reducePartitionId"
                   cb.column(0) match {
                     case precompressed: PrecompressedSerializedColumnVector =>
                       writePrecompressedFrames(
@@ -1377,6 +1416,8 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                   val excessQuota = math.max(0L, recordSize - compressedSize)
                   if (excessQuota > 0) {
                     limiter.release(excessQuota)
+                    RapidsShuffleInternalManagerBase.trackShuffleReservationReleased(
+                      excessQuota, diagnosticContext)
                     releasedQuota = excessQuota
                   }
 
@@ -1397,15 +1438,35 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
               compressionTasksCompleted.incrementAndGet()
               result
             } catch {
+              case oom: OutOfMemoryError =>
+                compressionTasksFailed.incrementAndGet()
+                logError(s"RAPIDS_SHUFFLE_COMPRESSION_OOM context={$diagnosticContext}," +
+                  s"recordSize=$recordSize,releasedQuota=$releasedQuota," +
+                  s"shuffleState={${RapidsShuffleInternalManagerBase
+                    .shuffleHeapDiagnosticSnapshot}}," +
+                  s"heap={${RapidsShuffleInternalManagerBase.heapDiagnosticSnapshot}}," +
+                  s"pools={${RapidsShuffleInternalManagerBase.threadPoolDiagnosticSnapshot}}",
+                  oom)
+                val quotaToRelease = recordSize - releasedQuota
+                limiter.release(quotaToRelease)
+                RapidsShuffleInternalManagerBase.trackShuffleReservationReleased(
+                  quotaToRelease, diagnosticContext)
+                throw oom
               case e: Exception =>
                 compressionTasksFailed.incrementAndGet()
-                limiter.release(recordSize - releasedQuota)
+                val quotaToRelease = recordSize - releasedQuota
+                limiter.release(quotaToRelease)
+                RapidsShuffleInternalManagerBase.trackShuffleReservationReleased(
+                  quotaToRelease, diagnosticContext)
                 throw new IOException(
                   s"Failed compression task for shuffle $shuffleId, map $mapId, " +
                     s"partition $reducePartitionId", e)
               case t: Throwable =>
                 compressionTasksFailed.incrementAndGet()
-                limiter.release(recordSize - releasedQuota)
+                val quotaToRelease = recordSize - releasedQuota
+                limiter.release(quotaToRelease)
+                RapidsShuffleInternalManagerBase.trackShuffleReservationReleased(
+                  quotaToRelease, diagnosticContext)
                 throw t
             } finally {
               compressionExecutionTimeNs.addAndGet(
@@ -1525,6 +1586,8 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                 record.buffer.close()
                 record.releaseTracking()
                 limiter.release(record.remainingQuota)
+                RapidsShuffleInternalManagerBase.trackShuffleReservationReleased(
+                  record.remainingQuota, record.diagnosticContext)
               } catch {
                 case _: Exception => // Ignore cleanup errors
               }
@@ -1543,6 +1606,10 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
         cleanupBatch(currentBatch)
       }
 
+      logWarning(s"RAPIDS_SHUFFLE_WRITER_FINALIZED shuffle=$shuffleId,map=$mapId," +
+        s"shuffleState={${RapidsShuffleInternalManagerBase.shuffleHeapDiagnosticSnapshot}}," +
+        s"heap={${RapidsShuffleInternalManagerBase.heapDiagnosticSnapshot}}," +
+        s"pools={${RapidsShuffleInternalManagerBase.threadPoolDiagnosticSnapshot}}")
     }
 
     // Track whether handles have been transferred to catalog or merged

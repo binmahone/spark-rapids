@@ -35,7 +35,8 @@ class RapidsShuffleThreadedWriter[K, V](
     writeMetrics: ShuffleWriteMetricsReporter,
     maxBytesInFlight: Long,
     shuffleExecutorComponents: ShuffleExecutorComponents,
-    numWriterThreads: Int)
+    numWriterThreads: Int,
+    maxBytesInFlightPerExecutor: Long = 0L)
   extends RapidsShuffleThreadedWriterBase[K, V](
     blockManager,
     handle,
@@ -44,7 +45,8 @@ class RapidsShuffleThreadedWriter[K, V](
     writeMetrics,
     maxBytesInFlight,
     shuffleExecutorComponents,
-    numWriterThreads)
+    numWriterThreads,
+    maxBytesInFlightPerExecutor)
       with org.apache.spark.shuffle.checksum.ShuffleChecksumSupport {
 
   // Spark 3.2.0+ computes checksums per map partition as it writes the

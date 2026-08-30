@@ -2415,6 +2415,19 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
       .bytesConf(ByteUnit.BYTE)
       .createWithDefault(128 * 1024 * 1024)
 
+  val SHUFFLE_MULTITHREADED_WRITER_MAX_BYTES_IN_FLIGHT_PER_EXECUTOR =
+    conf("spark.rapids.shuffle.multiThreaded.writer.maxBytesInFlightPerExecutor")
+      .doc(
+        "Optional executor-wide size limit, in bytes, for records concurrently serialized by " +
+        "the RAPIDS multithreaded shuffle writer. This limit is applied in addition to the " +
+        "per-task maxBytesInFlight limit so concurrent map tasks cannot multiply JVM heap " +
+        "buffer reservations without bound. A value of 0 disables the executor-wide limit.")
+      .internal()
+      .startupOnly()
+      .bytesConf(ByteUnit.BYTE)
+      .checkValue(_ >= 0, "Executor-wide writer bytes in flight must be non-negative")
+      .createWithDefault(0L)
+
   val SHUFFLE_MULTITHREADED_WRITER_THREADS =
     conf("spark.rapids.shuffle.multiThreaded.writer.threads")
       .doc("The number of threads to use for writing shuffle blocks per executor in the " +
@@ -3974,6 +3987,9 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val shuffleMultiThreadedMaxBytesInFlight: Long =
     get(SHUFFLE_MULTITHREADED_MAX_BYTES_IN_FLIGHT)
+
+  lazy val shuffleMultiThreadedWriterMaxBytesInFlightPerExecutor: Long =
+    get(SHUFFLE_MULTITHREADED_WRITER_MAX_BYTES_IN_FLIGHT_PER_EXECUTOR)
 
   lazy val shuffleMultiThreadedWriterThreads: Int = get(SHUFFLE_MULTITHREADED_WRITER_THREADS)
 

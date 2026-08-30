@@ -473,6 +473,8 @@ object RapidsShuffleInternalManagerBase extends Logging {
   private var writerPool: ThreadPoolExecutor = _
   private var readerPool: ExecutorService = _
   private var mergerPool: ExecutorService = _
+  @volatile private var writerBytesInFlightLimiter: SharedBytesInFlightLimiter = _
+  private var writerBytesInFlightLimit: Long = 0L
   @volatile private var readerTaskAdmissionGate: ReaderTaskAdmissionGate = _
 
   private val hangDiagnosticScheduler = Executors.newSingleThreadScheduledExecutor(
@@ -489,6 +491,27 @@ object RapidsShuffleInternalManagerBase extends Logging {
   def queueWriteTask[T](task: FutureTask[T]): Future[T] = {
     writerPool.execute(task)
     task
+  }
+
+  def getOrCreateWriterBytesInFlightLimiter(
+      maxBytesInFlightPerExecutor: Long): Option[SharedBytesInFlightLimiter] = {
+    if (maxBytesInFlightPerExecutor == 0L) {
+      None
+    } else {
+      synchronized {
+        if (writerBytesInFlightLimiter == null) {
+          writerBytesInFlightLimit = maxBytesInFlightPerExecutor
+          writerBytesInFlightLimiter =
+            new SharedBytesInFlightLimiter(maxBytesInFlightPerExecutor)
+          logInfo(s"Configured executor-wide threaded shuffle writer bytes-in-flight limit: " +
+            s"$maxBytesInFlightPerExecutor")
+        }
+        require(writerBytesInFlightLimit == maxBytesInFlightPerExecutor,
+          s"Executor-wide threaded shuffle writer bytes-in-flight limit was configured with " +
+            s"$writerBytesInFlightLimit and cannot be changed to $maxBytesInFlightPerExecutor")
+        Some(writerBytesInFlightLimiter)
+      }
+    }
   }
 
   def adaptiveCompressionPressure: AdaptiveCompressionPressure = {
@@ -615,6 +638,8 @@ object RapidsShuffleInternalManagerBase extends Logging {
       shutdownNow(mergerPool)
       mergerPool = null
     }
+    writerBytesInFlightLimiter = null
+    writerBytesInFlightLimit = 0L
     readerTaskAdmissionGate = null
   }
 }
@@ -646,7 +671,8 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
     writeMetrics: ShuffleWriteMetricsReporter,
     maxBytesInFlight: Long,
     shuffleExecutorComponents: ShuffleExecutorComponents,
-    numWriterThreads: Int)
+    numWriterThreads: Int,
+    maxBytesInFlightPerExecutor: Long = 0L)
   extends RapidsShuffleWriter[K, V]
     with RapidsShuffleWriterShimHelper {
   private val dep: ShuffleDependency[K, V, V] = handle.dependency
@@ -656,6 +682,9 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
   private val serializer = dep.serializer.newInstance()
   private val fileBufferSize = sparkConf.get(config.SHUFFLE_FILE_BUFFER_SIZE).toInt * 1024
   private val limiter = new BytesInFlightLimiter(maxBytesInFlight)
+  private val executorLimiter =
+    RapidsShuffleInternalManagerBase.getOrCreateWriterBytesInFlightLimiter(
+      maxBytesInFlightPerExecutor)
   private val limiterWaitTimeMetric =
     handle.metrics.get(METRIC_THREADED_WRITER_LIMITER_WAIT_TIME)
   private val serializationWaitTimeMetric =
@@ -777,7 +806,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
 
     def cancel(): Unit = {
       if (!completionFuture.isDone) {
-        limiter.abort(new CancellationException("shuffle batch merger cancelled"))
+        abortLimiters(new CancellationException("shuffle batch merger cancelled"))
       }
       completionFuture.cancel(true)
       Option(stepFuture.get()).foreach(_.cancel(true))
@@ -907,7 +936,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
       } finally {
         mergerWriteTimeNs.addAndGet(System.nanoTime() - writeStartNs)
         record.buffer.close()
-        limiter.release(record.remainingQuota)
+        releaseLimiters(record.remainingQuota)
       }
     }
 
@@ -928,7 +957,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
 
     private def fail(t: Throwable): Unit = {
       closeOutputStreamQuietly()
-      limiter.abort(t)
+      abortLimiters(t)
       completionFuture.completeExceptionally(t)
     }
   }
@@ -1210,6 +1239,13 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
         markDiagnosticProgress("limiter_acquire")
         try {
           limiter.acquireOrBlock(recordSize)
+          try {
+            executorLimiter.foreach(_.acquireOrBlock(recordSize, limiter.getAbortCause))
+          } catch {
+            case t: Throwable =>
+              limiter.release(recordSize)
+              throw t
+          }
         } catch {
           case t: Throwable =>
             cb.close()
@@ -1305,7 +1341,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                   // Note: excessQuota can be 0 if compression doesn't reduce size (or expands)
                   val excessQuota = math.max(0L, recordSize - compressedSize)
                   if (excessQuota > 0) {
-                    limiter.release(excessQuota)
+                    releaseLimiters(excessQuota)
                     releasedQuota = excessQuota
                   }
 
@@ -1320,13 +1356,13 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
             } catch {
               case e: Exception =>
                 compressionTasksFailed.incrementAndGet()
-                limiter.release(recordSize - releasedQuota)
+                releaseLimiters(recordSize - releasedQuota)
                 throw new IOException(
                   s"Failed compression task for shuffle $shuffleId, map $mapId, " +
                     s"partition $reducePartitionId", e)
               case t: Throwable =>
                 compressionTasksFailed.incrementAndGet()
-                limiter.release(recordSize - releasedQuota)
+                releaseLimiters(recordSize - releasedQuota)
                 throw t
             } finally {
               compressionExecutionTimeNs.addAndGet(
@@ -1444,7 +1480,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
               try {
                 val record = future.get()
                 record.buffer.close()
-                limiter.release(record.remainingQuota)
+                releaseLimiters(record.remainingQuota)
               } catch {
                 case _: Exception => // Ignore cleanup errors
               }
@@ -1666,6 +1702,16 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
   }
 
   def getBytesInFlight: Long = limiter.getBytesInFlight
+
+  private def releaseLimiters(bytes: Long): Unit = {
+    executorLimiter.foreach(_.release(bytes))
+    limiter.release(bytes)
+  }
+
+  private def abortLimiters(cause: Throwable): Unit = {
+    limiter.abort(cause)
+    executorLimiter.foreach(_.notifyWaiters())
+  }
 }
 
 class BytesInFlightLimiter(maxBytesInFlight: Long) {
@@ -1717,6 +1763,39 @@ class BytesInFlightLimiter(maxBytesInFlight: Long) {
 
   def getBytesInFlight: Long = synchronized {
     inFlight
+  }
+
+  private[rapids] def getAbortCause: Option[Throwable] = synchronized {
+    Option(abortCause)
+  }
+}
+
+class SharedBytesInFlightLimiter(maxBytesInFlight: Long) {
+  private var inFlight: Long = 0L
+
+  def acquireOrBlock(sz: Long, abortCause: => Option[Throwable]): Unit = synchronized {
+    while (!canAcquire(sz) && abortCause.isEmpty) {
+      wait()
+    }
+    abortCause.foreach(cause => throw cause)
+    inFlight += sz
+  }
+
+  def release(sz: Long): Unit = synchronized {
+    inFlight -= sz
+    notifyAll()
+  }
+
+  def notifyWaiters(): Unit = synchronized {
+    notifyAll()
+  }
+
+  def getBytesInFlight: Long = synchronized {
+    inFlight
+  }
+
+  private def canAcquire(sz: Long): Boolean = {
+    sz == 0 || inFlight == 0 || sz + inFlight < maxBytesInFlight
   }
 }
 
@@ -2656,7 +2735,8 @@ class RapidsShuffleInternalManagerBase(conf: SparkConf, val isDriver: Boolean)
               new ThreadSafeShuffleWriteMetricsReporter(metricsReporter),
               rapidsConf.shuffleMultiThreadedMaxBytesInFlight,
               execComponents.get,
-              rapidsConf.shuffleMultiThreadedWriterThreads)
+              rapidsConf.shuffleMultiThreadedWriterThreads,
+              rapidsConf.shuffleMultiThreadedWriterMaxBytesInFlightPerExecutor)
           case _ =>
             wrapped.getWriter(handle, mapId, context, metricsReporter)
         }

@@ -460,6 +460,17 @@ private[rapids] class ReaderTaskAdmissionGate(
 
 object RapidsShuffleInternalManagerBase extends Logging {
   private val poolUnavailable = "unavailable"
+  private val defaultCompressedBufferCapacity = 32L
+
+  private[rapids] def initialCompressedBufferCapacity(
+      recordSize: Long,
+      maxBytesInFlight: Long): Int = {
+    require(recordSize >= 0L, s"Record size must be non-negative: $recordSize")
+    val reservationBound = if (maxBytesInFlight > 0L) maxBytesInFlight else recordSize
+    math.max(
+      defaultCompressedBufferCapacity,
+      math.min(math.min(recordSize, reservationBound), Int.MaxValue.toLong)).toInt
+  }
 
   def unwrapHandle(handle: ShuffleHandle): ShuffleHandle = handle match {
     case gh: GpuShuffleHandle[_, _] => gh.wrapped
@@ -1267,7 +1278,9 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                 val compressionStartNs = System.nanoTime()
                 // Create a new buffer for this record.
                 // The buffer is closed by the merger thread after writing to disk.
-                val buffer = new OpenByteArrayOutputStream()
+                val buffer = new OpenByteArrayOutputStream(
+                  RapidsShuffleInternalManagerBase.initialCompressedBufferCapacity(
+                    recordSize, maxBytesInFlight))
 
                 val adaptiveVector = cb.column(0) match {
                   case adaptive: AdaptiveSerializedColumnVector =>

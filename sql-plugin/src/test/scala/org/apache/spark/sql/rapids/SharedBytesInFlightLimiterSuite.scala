@@ -23,6 +23,13 @@ import org.scalatest.funsuite.AnyFunSuite
 
 class SharedBytesInFlightLimiterSuite extends AnyFunSuite {
 
+  test("compressed buffer capacity follows the admitted record reservation") {
+    assert(RapidsShuffleInternalManagerBase.initialCompressedBufferCapacity(0, 1024) == 32)
+    assert(RapidsShuffleInternalManagerBase.initialCompressedBufferCapacity(512, 1024) == 512)
+    assert(RapidsShuffleInternalManagerBase.initialCompressedBufferCapacity(2048, 1024) == 1024)
+    assert(RapidsShuffleInternalManagerBase.initialCompressedBufferCapacity(512, 0) == 512)
+  }
+
   test("shared limiter bounds aggregate quota across writers") {
     val limiter = new SharedBytesInFlightLimiter(1024)
     limiter.acquireOrBlock(800, None)

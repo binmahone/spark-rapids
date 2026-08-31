@@ -40,7 +40,6 @@ import com.nvidia.spark.rapids.format.TableMeta
 import com.nvidia.spark.rapids.metrics.GpuBubbleTimerManager
 import com.nvidia.spark.rapids.shuffle.{RapidsShuffleRequestHandler, RapidsShuffleServer, RapidsShuffleTransport}
 import com.nvidia.spark.rapids.spill.SpillablePartialFileHandle
-import org.apache.commons.io.output.{ByteArrayOutputStream => SegmentedByteArrayOutputStream}
 
 import org.apache.spark.{InterruptibleIterator, MapOutputTracker, ShuffleDependency, SparkConf, SparkEnv, TaskContext}
 import org.apache.spark.executor.ShuffleWriteMetrics
@@ -458,12 +457,72 @@ private[rapids] class ReaderTaskAdmissionGate(
 
 }
 
+private[rapids] final class SegmentedShuffleCompressionBuffer(
+    initialSegmentSize: Int) extends OutputStream {
+  require(initialSegmentSize > 0, "initialSegmentSize must be positive")
+
+  private val maxSegmentSize = 1024 * 1024
+  private val segments = ArrayBuffer(new Array[Byte](math.min(initialSegmentSize, maxSegmentSize)))
+  private var currentSegment = segments.last
+  private var currentPosition = 0
+  private var byteCount = 0L
+
+  override def write(value: Int): Unit = {
+    ensureWritableSegment()
+    currentSegment(currentPosition) = value.toByte
+    currentPosition += 1
+    byteCount += 1
+  }
+
+  override def write(bytes: Array[Byte], offset: Int, length: Int): Unit = {
+    if (bytes == null) {
+      throw new NullPointerException("bytes")
+    }
+    if ((offset | length) < 0 || length > bytes.length - offset) {
+      throw new IndexOutOfBoundsException(
+        s"offset=$offset, length=$length, arrayLength=${bytes.length}")
+    }
+    var sourceOffset = offset
+    var remaining = length
+    while (remaining > 0) {
+      ensureWritableSegment()
+      val copyLength = math.min(remaining, currentSegment.length - currentPosition)
+      System.arraycopy(bytes, sourceOffset, currentSegment, currentPosition, copyLength)
+      sourceOffset += copyLength
+      currentPosition += copyLength
+      remaining -= copyLength
+      byteCount += copyLength
+    }
+  }
+
+  def size(): Long = byteCount
+
+  def writeTo(destination: OutputStream): Unit = {
+    var index = 0
+    while (index < segments.length) {
+      val segment = segments(index)
+      val length = if (index == segments.length - 1) currentPosition else segment.length
+      destination.write(segment, 0, length)
+      index += 1
+    }
+  }
+
+  private def ensureWritableSegment(): Unit = {
+    if (currentPosition == currentSegment.length) {
+      val nextSize = math.min(maxSegmentSize, currentSegment.length * 2)
+      currentSegment = new Array[Byte](nextSize)
+      segments += currentSegment
+      currentPosition = 0
+    }
+  }
+}
+
 object RapidsShuffleInternalManagerBase extends Logging {
   private val poolUnavailable = "unavailable"
 
   private[rapids] def newShuffleCompressionBuffer(
-      initialCapacity: Int): SegmentedByteArrayOutputStream = {
-    new SegmentedByteArrayOutputStream(initialCapacity)
+      initialCapacity: Int): SegmentedShuffleCompressionBuffer = {
+    new SegmentedShuffleCompressionBuffer(initialCapacity)
   }
 
   def unwrapHandle(handle: ShuffleHandle): ShuffleHandle = handle match {
@@ -731,7 +790,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
    * @param remainingQuota The quota to release after writing to disk
    */
   private case class CompressedRecord(
-    buffer: SegmentedByteArrayOutputStream,
+    buffer: SegmentedShuffleCompressionBuffer,
     compressedSize: Long,
     remainingQuota: Long)
 

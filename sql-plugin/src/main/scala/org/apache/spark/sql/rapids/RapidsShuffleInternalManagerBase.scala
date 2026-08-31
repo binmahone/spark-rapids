@@ -37,10 +37,10 @@ import com.nvidia.spark.rapids.RapidsConf
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
 import com.nvidia.spark.rapids.format.TableMeta
-import com.nvidia.spark.rapids.jni.kudo.OpenByteArrayOutputStream
 import com.nvidia.spark.rapids.metrics.GpuBubbleTimerManager
 import com.nvidia.spark.rapids.shuffle.{RapidsShuffleRequestHandler, RapidsShuffleServer, RapidsShuffleTransport}
 import com.nvidia.spark.rapids.spill.SpillablePartialFileHandle
+import org.apache.commons.io.output.{ByteArrayOutputStream => SegmentedByteArrayOutputStream}
 
 import org.apache.spark.{InterruptibleIterator, MapOutputTracker, ShuffleDependency, SparkConf, SparkEnv, TaskContext}
 import org.apache.spark.executor.ShuffleWriteMetrics
@@ -461,6 +461,11 @@ private[rapids] class ReaderTaskAdmissionGate(
 object RapidsShuffleInternalManagerBase extends Logging {
   private val poolUnavailable = "unavailable"
 
+  private[rapids] def newShuffleCompressionBuffer(
+      initialCapacity: Int): SegmentedByteArrayOutputStream = {
+    new SegmentedByteArrayOutputStream(initialCapacity)
+  }
+
   def unwrapHandle(handle: ShuffleHandle): ShuffleHandle = handle match {
     case gh: GpuShuffleHandle[_, _] => gh.wrapped
     case other => other
@@ -726,33 +731,36 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
    * @param remainingQuota The quota to release after writing to disk
    */
   private case class CompressedRecord(
-    buffer: OpenByteArrayOutputStream,
+    buffer: SegmentedByteArrayOutputStream,
     compressedSize: Long,
     remainingQuota: Long)
 
   private def writePrecompressedFrames(
       compressedFrames: HostMemoryBuffer,
-      destination: OpenByteArrayOutputStream): Unit = {
+      destination: OutputStream): Unit = {
     require(compressedFrames.getLength <= Int.MaxValue,
       s"GPU-compressed shuffle record exceeds the JVM buffer limit: " +
         s"${compressedFrames.getLength}")
 
     if (blockManager.serializerManager.encryptionEnabled) {
       withResource(blockManager.serializerManager.wrapForEncryption(destination)) { encrypted =>
-        val copyBuffer = new Array[Byte](math.min(
-          fileBufferSize.toLong,
-          compressedFrames.getLength).toInt)
-        var offset = 0L
-        while (offset < compressedFrames.getLength) {
-          val copyLength = math.min(copyBuffer.length.toLong,
-            compressedFrames.getLength - offset).toInt
-          compressedFrames.getBytes(copyBuffer, 0, offset, copyLength)
-          encrypted.write(copyBuffer, 0, copyLength)
-          offset += copyLength
-        }
+        copyHostBuffer(compressedFrames, encrypted)
       }
     } else {
-      destination.write(compressedFrames, 0, compressedFrames.getLength.toInt)
+      copyHostBuffer(compressedFrames, destination)
+    }
+  }
+
+  private def copyHostBuffer(source: HostMemoryBuffer, destination: OutputStream): Unit = {
+    val copyBuffer = new Array[Byte](math.min(
+      fileBufferSize.toLong,
+      source.getLength).toInt)
+    var offset = 0L
+    while (offset < source.getLength) {
+      val copyLength = math.min(copyBuffer.length.toLong, source.getLength - offset).toInt
+      source.getBytes(copyBuffer, 0, offset, copyLength)
+      destination.write(copyBuffer, 0, copyLength)
+      offset += copyLength
     }
   }
 
@@ -931,7 +939,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
       val writeStartNs = System.nanoTime()
       try {
         if (record.compressedSize > 0) {
-          outputStream.write(record.buffer.getBuf, 0, record.compressedSize.toInt)
+          record.buffer.writeTo(outputStream)
         }
       } finally {
         mergerWriteTimeNs.addAndGet(System.nanoTime() - writeStartNs)
@@ -1094,7 +1102,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
    * Data flow for each record:
    * 1. ColumnarBatch (already copied to host memory, may be split from GPU batches based on
    *    spark.rapids.shuffle.partitioning.maxCpuBatchSize) -> Main thread acquires limiter quota
-   * 2. Writer thread: serialize + compress -> OpenByteArrayOutputStream (JVM heap)
+   * 2. Writer thread: serialize + compress -> segmented byte-array stream (JVM heap)
    * 3. Writer thread: release excess quota (recordSize - compressedSize)
    * 4. Merger step: heap buffer -> ShuffleMapOutputWriter (via SpillablePartialFileHandle)
    *    - If MEMORY_WITH_SPILL mode: data may stay in host memory until spill/commit
@@ -1267,7 +1275,8 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                 val compressionStartNs = System.nanoTime()
                 // Create a new buffer for this record.
                 // The buffer is closed by the merger thread after writing to disk.
-                val buffer = new OpenByteArrayOutputStream()
+                val buffer = RapidsShuffleInternalManagerBase.newShuffleCompressionBuffer(
+                  fileBufferSize)
 
                 val adaptiveVector = cb.column(0) match {
                   case adaptive: AdaptiveSerializedColumnVector =>
@@ -1307,7 +1316,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                   }
 
                   // Track total written data size (compressed size)
-                  val compressedSize = buffer.getCount.toLong
+                  val compressedSize = buffer.size().toLong
                   totalCompressedSize.addAndGet(compressedSize)
                   adaptiveVector.foreach { adaptive =>
                     val backend = if (adaptive.isGpuSelected()) {
@@ -1336,7 +1345,7 @@ abstract class RapidsShuffleThreadedWriterBase[K, V](
                   }
 
                   // Release excess quota immediately after compression.
-                  // Data is now in OpenByteArrayOutputStream (heap), only need to hold
+                  // Data is now in the segmented output buffer (heap), only need to hold
                   // compressedSize quota until Merger writes to disk.
                   // Note: excessQuota can be 0 if compression doesn't reduce size (or expands)
                   val excessQuota = math.max(0L, recordSize - compressedSize)

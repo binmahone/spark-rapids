@@ -16,12 +16,24 @@
 
 package org.apache.spark.sql.rapids
 
-import java.io.IOException
+import java.io.{ByteArrayOutputStream, IOException}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import org.scalatest.funsuite.AnyFunSuite
 
 class SharedBytesInFlightLimiterSuite extends AnyFunSuite {
+
+  test("shuffle compression buffer writes all accumulated bytes") {
+    val buffer = RapidsShuffleInternalManagerBase.newShuffleCompressionBuffer(32)
+    val expected = Array.tabulate[Byte](4097)(index => (index % 251).toByte)
+    buffer.write(expected)
+
+    val destination = new ByteArrayOutputStream()
+    buffer.writeTo(destination)
+
+    assert(buffer.size() == expected.length)
+    assert(destination.toByteArray.sameElements(expected))
+  }
 
   test("shared limiter bounds aggregate quota across writers") {
     val limiter = new SharedBytesInFlightLimiter(1024)

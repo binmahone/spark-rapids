@@ -18,6 +18,7 @@ package com.nvidia.spark.rapids.shims
 import java.io.{EOFException, IOException}
 import java.nio.ByteBuffer
 import java.nio.channels.SeekableByteChannel
+import java.util.concurrent.atomic.AtomicBoolean
 
 import ai.rapids.cudf.HostMemoryBuffer
 import com.nvidia.spark.rapids.{GpuMetric, HostMemoryOutputStream, NoopMetric}
@@ -30,11 +31,12 @@ import org.apache.hadoop.fs.FSDataInputStream
 import org.apache.hadoop.hive.common.io.DiskRangeList
 import org.apache.orc.{DataReader, OrcProto, StripeInformation}
 import org.apache.orc.impl.DataReaderProperties
+import org.apache.spark.internal.Logging
 
 abstract class GpuOrcDataReaderBase(
     props: DataReaderProperties,
     conf: Configuration,
-    metrics: Map[String, GpuMetric]) extends DataReader {
+    metrics: Map[String, GpuMetric]) extends DataReader with Logging {
   protected val filePathString = props.getPath.toString
   protected var file: Option[FSDataInputStream] = None
   protected lazy val fileIO = new HadoopFileIO(conf)
@@ -63,14 +65,42 @@ abstract class GpuOrcDataReaderBase(
   }
 
   private class HostStreamLoader(out: HostMemoryOutputStream) extends BlockLoader {
+    def loadRemoteBlocksFromFile(
+        input: FSDataInputStream,
+        offset: Long,
+        readSize: Int,
+        baseOffset: Long,
+        first: DiskRangeList,
+        last: DiskRangeList): DiskRangeList = {
+      val bufferPos = out.getPos
+      if (readSize > GpuOrcDataReaderBase.HOST_STREAM_READ_CHUNK_SIZE &&
+          GpuOrcDataReaderBase.boundedCopyLogged.compareAndSet(false, true)) {
+        logInfo(s"ORC_HOST_STREAM_BOUNDED_COPY readSize=$readSize " +
+          s"chunkSize=${GpuOrcDataReaderBase.HOST_STREAM_READ_CHUNK_SIZE}")
+      }
+      GpuOrcDataReaderBase.readFullyInChunks(input, offset, readSize,
+        GpuOrcDataReaderBase.HOST_STREAM_READ_CHUNK_SIZE) { data =>
+        out.write(data)
+      }
+      populateFileCache(baseOffset, first, last, bufferPos)
+    }
+
     override def loadRemoteBlocks(
         baseOffset: Long,
         first: DiskRangeList,
         last: DiskRangeList,
         data: ByteBuffer): DiskRangeList = {
-      var bufferPos = out.getPos
+      val bufferPos = out.getPos
       out.write(data)
-      // see if the filecache wants any of this data
+      populateFileCache(baseOffset, first, last, bufferPos)
+    }
+
+    private def populateFileCache(
+        baseOffset: Long,
+        first: DiskRangeList,
+        last: DiskRangeList,
+        initialBufferPos: Long): DiskRangeList = {
+      var bufferPos = initialBufferPos
       var current = first
       while (current ne last.next) {
         val cacheToken = FileCache.get.startDataRangeCache(inputFile,
@@ -245,9 +275,15 @@ abstract class GpuOrcDataReaderBase(
     ensureFile()
     val offset = baseOffset + first.getOffset
     try {
-      val buffer = new Array[Byte](readSize)
-      file.get.readFully(offset, buffer, 0, buffer.length)
-      loader.loadRemoteBlocks(baseOffset, first, last, ByteBuffer.wrap(buffer))
+      loader match {
+        case hostStreamLoader: HostStreamLoader =>
+          hostStreamLoader.loadRemoteBlocksFromFile(
+            file.get, offset, readSize, baseOffset, first, last)
+        case _ =>
+          val buffer = new Array[Byte](readSize)
+          file.get.readFully(offset, buffer, 0, buffer.length)
+          loader.loadRemoteBlocks(baseOffset, first, last, ByteBuffer.wrap(buffer))
+      }
     } catch {
       case e: IOException =>
         throw new IOException(s"Failed to read $filePathString $offset:$readSize", e)
@@ -259,5 +295,29 @@ abstract class GpuOrcDataReaderBase(
   // which was a bug in the compiler previously.
   override def clone(): DataReader = {
     super.clone().asInstanceOf[DataReader]
+  }
+}
+
+private[shims] object GpuOrcDataReaderBase {
+  // Bound per-reader JVM heap usage while retaining large positional reads for cloud storage.
+  val HOST_STREAM_READ_CHUNK_SIZE: Int = 128 * 1024 * 1024
+  private val boundedCopyLogged = new AtomicBoolean(false)
+
+  def readFullyInChunks(
+      input: FSDataInputStream,
+      offset: Long,
+      length: Int,
+      chunkSize: Int)(consume: Array[Byte] => Unit): Unit = {
+    require(length >= 0, s"length must not be negative: $length")
+    require(chunkSize > 0, s"chunkSize must be positive: $chunkSize")
+    var currentOffset = offset
+    var remaining = length
+    while (remaining > 0) {
+      val buffer = new Array[Byte](math.min(remaining, chunkSize))
+      input.readFully(currentOffset, buffer, 0, buffer.length)
+      consume(buffer)
+      currentOffset += buffer.length
+      remaining -= buffer.length
+    }
   }
 }

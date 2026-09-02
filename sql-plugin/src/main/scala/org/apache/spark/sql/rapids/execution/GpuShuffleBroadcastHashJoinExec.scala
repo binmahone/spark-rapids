@@ -25,6 +25,7 @@ import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.shims.ShimBinaryExecNode
 
+import org.apache.spark.rapids.shims.GpuShuffleExchangeExec
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -33,7 +34,6 @@ import org.apache.spark.sql.catalyst.plans.physical.{Distribution, Partitioning,
 import org.apache.spark.sql.execution.{CoalescedPartitionSpec, SparkPlan}
 import org.apache.spark.sql.execution.exchange.ReusedExchangeExec
 import org.apache.spark.sql.vectorized.ColumnarBatch
-import org.apache.spark.rapids.shims.GpuShuffleExchangeExec
 
 case class GpuShuffleBroadcastHashJoinExec(
     leftKeys: Seq[Expression],

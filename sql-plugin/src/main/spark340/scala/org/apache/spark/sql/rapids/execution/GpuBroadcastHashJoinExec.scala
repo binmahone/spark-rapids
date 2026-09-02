@@ -43,9 +43,9 @@ spark-rapids-shim-json-lines ***/
 package org.apache.spark.sql.rapids.execution
 
 import com.nvidia.spark.rapids._
-import org.apache.spark.rapids.shims.GpuShuffleExchangeExec
 
 import org.apache.spark.internal.Logging
+import org.apache.spark.rapids.shims.GpuShuffleExchangeExec
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.execution.SparkPlan
@@ -135,7 +135,8 @@ object GpuBroadcastHashJoinMeta extends Logging {
   /** Peel BroadcastQueryStageExec / ReusedExchangeExec wrappers to get the
    *  underlying GpuBroadcastExchangeExec on the build side. Returns None if
    *  the structure is unexpected (e.g. AQE on, or already-rewritten). */
-  private def unwrapBroadcastExchange(plan: SparkPlan): Option[GpuBroadcastExchangeExec] = plan match {
+  private def unwrapBroadcastExchange(
+      plan: SparkPlan): Option[GpuBroadcastExchangeExec] = plan match {
     case g: GpuBroadcastExchangeExec => Some(g)
     case bqse: BroadcastQueryStageExec => bqse.plan match {
       case g: GpuBroadcastExchangeExec => Some(g)

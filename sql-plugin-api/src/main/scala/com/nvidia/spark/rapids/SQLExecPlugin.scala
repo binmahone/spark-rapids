@@ -32,6 +32,10 @@ class SQLExecPlugin extends (SparkSessionExtensions => Unit) {
     extensions.injectQueryStagePrepRule(queryStagePrepOverrides)
     extensions.injectPlannerStrategy(_ => strategyRules)
     extensions.injectPostHocResolutionRule(postHocResolutionOverrides)
+    // Trigger so the rule self-registers into spark.experimental.extraOptimizations, where it
+    // runs after the Subquery batch (EXISTS -> LeftSemiJoin). No-op unless
+    // spark.rapids.sql.optimizer.rewriteLargeLeftSemi.enabled=true.
+    extensions.injectOptimizerRule(spark => GpuRewriteLargeLeftSemiToInnerDistinct(spark))
   }
 
   private def columnarOverrides(sparkSession: SparkSession): ColumnarRule = {

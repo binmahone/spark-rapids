@@ -48,7 +48,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.internal.StaticSQLConf
-import org.apache.spark.sql.rapids.{GpuShuffleEnv, ShuffleCleanupListener, XxHash64Utils}
+import org.apache.spark.sql.rapids.{GpuCatalogCleanupListener, GpuShuffleEnv, ShuffleCleanupListener, XxHash64Utils}
 import org.apache.spark.sql.rapids.execution.TrampolineUtil
 
 class PluginException(msg: String) extends RuntimeException(msg)
@@ -75,8 +75,13 @@ object RapidsShuffleManagerAutoConfigurator {
 case class ColumnarOverrideRules(sparkSession: SparkSession) extends ColumnarRule with Logging {
   lazy val overrides: Rule[SparkPlan] = GpuOverrides(sparkSession)
   lazy val overrideTransitions: Rule[SparkPlan] = new GpuTransitionOverrides(sparkSession)
+  // Runs before GpuOverrides so the rewritten SinglePartition exchange is converted to GPU.
+  // No-op unless spark.rapids.sql.optimizer.rangeSortSinglePartition.enabled=true.
+  lazy val rangeSortSinglePartition: Rule[SparkPlan] = new GpuRangeSinglePartitionSortRule()
 
-  override def preColumnarTransitions : Rule[SparkPlan] = overrides
+  override def preColumnarTransitions : Rule[SparkPlan] = new Rule[SparkPlan] {
+    override def apply(plan: SparkPlan): SparkPlan = overrides(rangeSortSinglePartition(plan))
+  }
 
   override def postColumnarTransitions: Rule[SparkPlan] = overrideTransitions
 }
@@ -484,6 +489,7 @@ object RapidsPluginUtils extends Logging {
 class RapidsDriverPlugin extends DriverPlugin with Logging {
   var rapidsShuffleHeartbeatManager: RapidsShuffleHeartbeatManager = null
   var shuffleCleanupListener: ShuffleCleanupListener = null
+  var gpuCatalogCleanupListener: GpuCatalogCleanupListener = null
   private lazy val extraDriverPlugins =
     RapidsPluginUtils.extraPlugins.map(_.driverPlugin()).filterNot(_ == null)
 
@@ -560,6 +566,21 @@ class RapidsDriverPlugin extends DriverPlugin with Logging {
         "Set spark.rapids.memory.host.offHeapLimit.enabled=true to use skipMerge feature.")
     }
 
+    // GpuCatalogCleanupListener releases ShuffleBufferCatalog device buffers
+    // eagerly at stage completion for GPU-resident shuffle paths (UCX,
+    // CACHE_ONLY). Independent of the MULTITHREADED ShuffleCleanupManager
+    // above: that one polls executors via custom RPC for the
+    // MultithreadedShuffleBufferCatalog; this one drives RAPIDS GPU shuffle
+    // cleanup via Spark's standard BlockManagerMaster.removeShuffle path,
+    // which propagates to RapidsShuffleInternalManagerBase.unregisterShuffle
+    // on every executor. Default off until validated.
+    if (conf.isGPUShuffle && conf.isShuffleGpuCatalogEagerCleanupEnabled) {
+      gpuCatalogCleanupListener = new GpuCatalogCleanupListener()
+      sc.addSparkListener(gpuCatalogCleanupListener)
+      logInfo("GpuCatalogCleanupListener enabled for RAPIDS GPU shuffle " +
+        "(stage-level eager release of ShuffleBufferCatalog)")
+    }
+
     if (GpuShuffleEnv.isRapidsShuffleAvailable(conf)) {
       GpuShuffleEnv.initShuffleManager()
     }
@@ -595,6 +616,7 @@ class RapidsDriverPlugin extends DriverPlugin with Logging {
           () => FileCacheLocalityManager.shutdown(),
           // Shutdown listener first to trigger cleanup for any remaining jobs
           () => Option(shuffleCleanupListener).foreach(_.shutdown()),
+          () => Option(gpuCatalogCleanupListener).foreach(_.shutdown()),
           () => ShuffleCleanupManager.shutdown()))
   }
 }

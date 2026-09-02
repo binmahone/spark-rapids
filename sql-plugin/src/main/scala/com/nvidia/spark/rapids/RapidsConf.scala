@@ -2280,6 +2280,21 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
     .booleanConf
     .createWithDefault(true)
 
+  val SHUFFLE_GPU_CATALOG_EAGER_CLEANUP =
+    conf("spark.rapids.shuffle.gpuCatalog.eagerCleanup.enabled")
+      .doc("When using a RAPIDS-managed GPU shuffle (UCX or CACHE_ONLY), register a " +
+        "driver-side SparkListener that releases ShuffleBufferCatalog device buffers " +
+        "at stage completion once all consumer stages have read the shuffle, instead " +
+        "of waiting for Spark's GC-triggered ContextCleaner.doCleanupShuffle (which " +
+        "can delay release until application shutdown and let multi-stage queries " +
+        "accumulate GPU memory until OOM). Eager release is only applied to SQL " +
+        "executions whose executedPlan is single-job + static (AQE off, no write " +
+        "operator); all others defer to SQL execution end as before. Safe to leave " +
+        "on for SELECT-only TPC-H-style workloads.")
+      .startupOnly()
+      .booleanConf
+      .createWithDefault(false)
+
   val SHUFFLE_TRANSPORT_EARLY_START_HEARTBEAT_INTERVAL =
     conf("spark.rapids.shuffle.transport.earlyStart.heartbeatInterval")
       .doc("Shuffle early start heartbeat interval (milliseconds). " +
@@ -2388,6 +2403,36 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
     .startupOnly()
     .integerConf
     .createWithDefault(100)
+
+  val SHUFFLE_BROADCAST_ENABLED = conf("spark.rapids.shuffle.broadcast.enabled")
+    .doc("Enable native (worker-to-worker via UCX shuffle) broadcast. When true, " +
+      "broadcast hash joins whose build side estimated size is larger than " +
+      "the driver broadcast threshold but smaller than " +
+      "spark.rapids.shuffle.broadcast.maxSize will route the build side through " +
+      "the GPU shuffle path (replicate-to-all partitioning) instead of collecting " +
+      "to the driver. This avoids the driver D2H + host serialize + broadcast " +
+      "send + executor H2D round-trip on GB-scale builds. " +
+      "Requires the GPU shuffle (`spark.rapids.shuffle.mode=UCX`).")
+    .booleanConf
+    .createWithDefault(false)
+
+  val RANGE_SORT_SINGLE_PARTITION_ENABLED =
+    conf("spark.rapids.sql.optimizer.rangeSortSinglePartition.enabled")
+    .doc("When true, rewrite a top-of-plan global Sort fed by a RangePartitioning exchange " +
+      "into a SinglePartition gather followed by Sort (Presto-style single-gather ORDER BY). " +
+      "This eliminates Spark's RangePartitioner sampling job which, under AQE-off, re-executes " +
+      "the entire upstream (double-scanning the input) just to compute range bounds. Intended " +
+      "for queries whose final sorted output is small (e.g. post-aggregation TPC-H ORDER BY). " +
+      "Only the top-of-plan global sort is rewritten; per-key sorts inside joins are untouched.")
+    .booleanConf
+    .createWithDefault(false)
+
+  val SHUFFLE_BROADCAST_MAX_SIZE = conf("spark.rapids.shuffle.broadcast.maxSize")
+    .doc("Upper bound (in bytes) on the build side size eligible for native " +
+      "shuffle-broadcast. Sized to balance per-executor build-replica memory " +
+      "against network replication cost (N consumers receive N copies on the wire).")
+    .bytesConf(org.apache.spark.network.util.ByteUnit.BYTE)
+    .createWithDefault(4L * 1024 * 1024 * 1024)  // 4 GiB
 
   val SHUFFLE_CLIENT_THREAD_KEEPALIVE = conf("spark.rapids.shuffle.clientThreadKeepAlive")
     .doc("The number of seconds that the ThreadPoolExecutor will allow an idle client " +
@@ -3873,6 +3918,12 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val shuffleTransportMaxReceiveInflightBytes: Long = get(
     SHUFFLE_TRANSPORT_MAX_RECEIVE_INFLIGHT_BYTES)
 
+  lazy val isShuffleBroadcastEnabled: Boolean = get(SHUFFLE_BROADCAST_ENABLED)
+
+  lazy val isRangeSortSinglePartitionEnabled: Boolean = get(RANGE_SORT_SINGLE_PARTITION_ENABLED)
+
+  lazy val shuffleBroadcastMaxSize: Long = get(SHUFFLE_BROADCAST_MAX_SIZE)
+
   lazy val shuffleUcxActiveMessagesForceRndv: Boolean = get(SHUFFLE_UCX_ACTIVE_MESSAGES_FORCE_RNDV)
 
   lazy val shuffleUcxUseWakeup: Boolean = get(SHUFFLE_UCX_USE_WAKEUP)
@@ -3977,6 +4028,8 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
       .withName(get(SHUFFLE_MANAGER_MODE)) == RapidsShuffleManagerMode.MULTITHREADED
 
   def isMultithreadedShuffleSkipMergeEnabled: Boolean = get(MULTITHREADED_SHUFFLE_SKIP_MERGE)
+
+  def isShuffleGpuCatalogEagerCleanupEnabled: Boolean = get(SHUFFLE_GPU_CATALOG_EAGER_CLEANUP)
 
   def isCacheOnlyShuffleManagerMode: Boolean =
     RapidsShuffleManagerMode

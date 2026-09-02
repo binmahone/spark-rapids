@@ -50,7 +50,8 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.adaptive.BroadcastQueryStageExec
-import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, ReusedExchangeExec}
+import org.apache.spark.sql.execution.exchange.{BroadcastExchangeExec, ENSURE_REQUIREMENTS,
+  ReusedExchangeExec}
 import org.apache.spark.sql.execution.joins.BroadcastHashJoinExec
 import org.apache.spark.sql.internal.SQLConf
 
@@ -67,12 +68,18 @@ class GpuBroadcastHashJoinMeta(
       case GpuBuildLeft => left
       case GpuBuildRight => right
     }
+    val originalBuildSide = buildSide match {
+      case GpuBuildLeft => join.left
+      case GpuBuildRight => join.right
+    }
     verifyBuildSideWasReplaced(buildSideMeta)
 
     val sbEnabled = conf.isShuffleBroadcastEnabled
     val sbDecision = sbEnabled &&
-      GpuBroadcastHashJoinMeta.shouldUseShuffleBroadcast(buildSideMeta, conf)
-    GpuBroadcastHashJoinMeta.logRewriteDecision(buildSideMeta, sbEnabled, sbDecision, conf)
+      GpuBroadcastHashJoinMeta.shouldUseShuffleBroadcast(
+        buildSideMeta, originalBuildSide, conf)
+    GpuBroadcastHashJoinMeta.logRewriteDecision(
+      buildSideMeta, originalBuildSide, sbEnabled, sbDecision, conf)
     if (sbDecision) {
       // Swap the GpuBroadcastExchangeExec under the build side for a
       // single-partition GpuShuffleExchangeExec, then construct the consumer
@@ -116,12 +123,14 @@ object GpuBroadcastHashJoinMeta extends Logging {
    *  through the native shuffle-broadcast path. */
   def logRewriteDecision(
       buildSidePlan: SparkPlan,
+      originalBuildSidePlan: SparkPlan,
       enabledFlag: Boolean,
       finalDecision: Boolean,
       conf: RapidsConf): Unit = {
     val (sizeStr, unwrapStatus) = unwrapBroadcastExchange(buildSidePlan) match {
       case Some(ex) =>
-        val sz = estimatedBuildSize(ex).map(_.toString).getOrElse("UNAVAILABLE")
+        val sz = estimatedBuildSize(ex, originalBuildSidePlan)
+          .map(_.toString).getOrElse("UNAVAILABLE")
         (sz, "ok")
       case None => ("n/a", s"unwrap_fail(${buildSidePlan.getClass.getSimpleName})")
     }
@@ -147,20 +156,44 @@ object GpuBroadcastHashJoinMeta extends Logging {
     case _ => None
   }
 
-  /** Return the static logical-plan estimate for the exchange child.
-   *  Runtime statistics are still zero when GpuOverrides performs this
-   *  decision, so an unknown static estimate must fail closed. */
-  private def estimatedBuildSize(exchange: GpuBroadcastExchangeExec): Option[Long] = {
-    exchange.child.logicalLink
+  /** Peel the wrappers from the original CPU build side. This plan still has
+   *  the logical links that may be absent after GPU conversion. */
+  private def unwrapCpuBroadcastExchange(plan: SparkPlan): Option[BroadcastExchangeExec] =
+    plan match {
+      case b: BroadcastExchangeExec => Some(b)
+      case bqse: BroadcastQueryStageExec => bqse.plan match {
+        case b: BroadcastExchangeExec => Some(b)
+        case ReusedExchangeExec(_, b: BroadcastExchangeExec) => Some(b)
+        case _ => None
+      }
+      case ReusedExchangeExec(_, b: BroadcastExchangeExec) => Some(b)
+      case _ => None
+    }
+
+  private def staticLogicalSize(plan: SparkPlan): Option[Long] = {
+    plan.logicalLink
       .map(_.stats.sizeInBytes)
       .filter(_.isValidLong)
       .map(_.longValue)
   }
 
+  /** Return the static logical-plan estimate for the exchange child.
+   *  Runtime statistics are still zero when GpuOverrides performs this
+   *  decision, so an unknown static estimate must fail closed. */
+  private def estimatedBuildSize(
+      exchange: GpuBroadcastExchangeExec,
+      originalBuildSidePlan: SparkPlan): Option[Long] =
+    staticLogicalSize(exchange.child).orElse {
+      unwrapCpuBroadcastExchange(originalBuildSidePlan).flatMap(ex => staticLogicalSize(ex.child))
+    }
+
   /** Decide whether this build side is eligible for shuffle-broadcast. */
-  def shouldUseShuffleBroadcast(buildSidePlan: SparkPlan, conf: RapidsConf): Boolean = {
+  def shouldUseShuffleBroadcast(
+      buildSidePlan: SparkPlan,
+      originalBuildSidePlan: SparkPlan,
+      conf: RapidsConf): Boolean = {
     unwrapBroadcastExchange(buildSidePlan)
-      .flatMap(estimatedBuildSize)
+      .flatMap(estimatedBuildSize(_, originalBuildSidePlan))
       .exists(size => size >= 0 && size <= conf.shuffleBroadcastMaxSize)
   }
 

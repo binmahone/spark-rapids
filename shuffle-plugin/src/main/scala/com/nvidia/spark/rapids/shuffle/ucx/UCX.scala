@@ -609,22 +609,21 @@ class UCX(transport: UCXShuffleTransport, executor: BlockManagerId, rapidsConf: 
    */
   private def retryPendingActiveMessages(): Unit = {
     var remaining = pendingActiveMessages.size()
-    if (remaining == 0) {
-      return
-    }
-    val now = System.nanoTime()
-    while (remaining > 0) {
-      remaining -= 1
-      val p = pendingActiveMessages.poll()
-      if (p != null) {
-        val endpoint = endpointManager.getEndpointByExecutorId(p.executorId)
-        if (endpoint != null) {
-          sendActiveMessage(endpoint, p.am, p.dataAddress, p.dataSize, p.cb, p.isGpu)
-        } else if (now >= p.deadlineNanos) {
-          p.cb.onError(-200,
-            s"Trying to send a message to an executor that doesn't exist ${p.executorId}")
-        } else {
-          pendingActiveMessages.add(p)
+    if (remaining > 0) {
+      val now = System.nanoTime()
+      while (remaining > 0) {
+        remaining -= 1
+        val p = pendingActiveMessages.poll()
+        if (p != null) {
+          val endpoint = endpointManager.getEndpointByExecutorId(p.executorId)
+          if (endpoint != null) {
+            sendActiveMessage(endpoint, p.am, p.dataAddress, p.dataSize, p.cb, p.isGpu)
+          } else if (now >= p.deadlineNanos) {
+            p.cb.onError(-200,
+              s"Trying to send a message to an executor that doesn't exist ${p.executorId}")
+          } else {
+            pendingActiveMessages.add(p)
+          }
         }
       }
     }

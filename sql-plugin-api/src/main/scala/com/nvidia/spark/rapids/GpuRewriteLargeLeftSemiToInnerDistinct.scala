@@ -82,32 +82,32 @@ case class GpuRewriteLargeLeftSemiToInnerDistinct(spark: SparkSession)
     val conf = SQLConf.get
     val enabled = conf.getConfString(confKey, confDefault).toBoolean
     if (!enabled) {
-      return plan
-    }
-    val multiplier = scala.util
-      .Try(conf.getConfString(multiplierKey, multiplierDefault).toLong)
-      .getOrElse(multiplierDefault.toLong)
-    val sizeThreshold = conf.autoBroadcastJoinThreshold * multiplier
+      plan
+    } else {
+      val multiplier = scala.util
+        .Try(conf.getConfString(multiplierKey, multiplierDefault).toLong)
+        .getOrElse(multiplierDefault.toLong)
+      val sizeThreshold = conf.autoBroadcastJoinThreshold * multiplier
 
-    plan.transformDownWithPruning(_.containsPattern(JOIN)) {
-      case j @ Join(left, right, LeftSemi, Some(condition), hint)
-          if !hasUserHint(hint) && right.stats.sizeInBytes > BigInt(sizeThreshold) =>
-        extractEquiKeys(condition, left.outputSet, right.outputSet) match {
-          case Some((_, rightKeys)) =>
-            val deduplicatedRight = Aggregate(
-              groupingExpressions = rightKeys,
-              aggregateExpressions = rightKeys,
-              child = right
-            )
-            logDebug("GpuRewriteLargeLeftSemiToInnerDistinct: rewrote LeftSemi -> Inner with " +
-              s"DISTINCT on right keys ${rightKeys.map(_.name).mkString("[", ",", "]")}; " +
-              s"right.sizeInBytes=${right.stats.sizeInBytes} > threshold=$sizeThreshold")
-            Join(left, deduplicatedRight, Inner, Some(condition), JoinHint.NONE)
-          case None =>
-            // non-equi / mixed-side conjunct -- intentionally NOT rewritten. Return the original
-            // tree node (not a fresh Join) so TreeNodeTags / referential identity survive.
-            j
-        }
+      plan.transformDownWithPruning(_.containsPattern(JOIN)) {
+        case j @ Join(left, right, LeftSemi, Some(condition), hint)
+            if !hasUserHint(hint) && right.stats.sizeInBytes > BigInt(sizeThreshold) =>
+          extractEquiKeys(condition, left.outputSet, right.outputSet) match {
+            case Some((_, rightKeys)) =>
+              val deduplicatedRight = Aggregate(
+                groupingExpressions = rightKeys,
+                aggregateExpressions = rightKeys,
+                child = right
+              )
+              logDebug("GpuRewriteLargeLeftSemiToInnerDistinct: rewrote LeftSemi -> Inner with " +
+                s"DISTINCT on right keys ${rightKeys.map(_.name).mkString("[", ",", "]")}; " +
+                s"right.sizeInBytes=${right.stats.sizeInBytes} > threshold=$sizeThreshold")
+              Join(left, deduplicatedRight, Inner, Some(condition), JoinHint.NONE)
+            case None =>
+              // Preserve the original node so TreeNodeTags and referential identity survive.
+              j
+          }
+      }
     }
   }
 
@@ -121,23 +121,20 @@ case class GpuRewriteLargeLeftSemiToInnerDistinct(spark: SparkSession)
       leftOut: AttributeSet,
       rightOut: AttributeSet): Option[(Seq[Attribute], Seq[Attribute])] = {
     val conjuncts = splitAnd(cond)
-    val leftBuilder = scala.collection.mutable.ArrayBuffer.empty[Attribute]
-    val rightBuilder = scala.collection.mutable.ArrayBuffer.empty[Attribute]
-    val seenRightKeys = scala.collection.mutable.HashSet.empty[Long]
-    conjuncts.foreach {
-      case EqualTo(l: Attribute, r: Attribute) =>
-        if (leftOut.contains(l) && rightOut.contains(r)) {
-          leftBuilder += l
-          if (seenRightKeys.add(r.exprId.id)) rightBuilder += r
-        } else if (leftOut.contains(r) && rightOut.contains(l)) {
-          leftBuilder += r
-          if (seenRightKeys.add(l.exprId.id)) rightBuilder += l
-        } else {
-          return None
-        }
-      case _ => return None
+    val pairs = conjuncts.foldLeft(Option(Vector.empty[(Attribute, Attribute)])) {
+      case (Some(acc), EqualTo(l: Attribute, r: Attribute))
+          if leftOut.contains(l) && rightOut.contains(r) => Some(acc :+ (l -> r))
+      case (Some(acc), EqualTo(l: Attribute, r: Attribute))
+          if leftOut.contains(r) && rightOut.contains(l) => Some(acc :+ (r -> l))
+      case _ => None
     }
-    if (leftBuilder.isEmpty) None else Some((leftBuilder.toSeq, rightBuilder.toSeq))
+    pairs.filter(_.nonEmpty).map { allPairs =>
+      val uniquePairs = allPairs.foldLeft(Vector.empty[(Attribute, Attribute)]) {
+        case (acc, pair) if acc.exists(_._2.exprId == pair._2.exprId) => acc
+        case (acc, pair) => acc :+ pair
+      }
+      (uniquePairs.map(_._1), uniquePairs.map(_._2))
+    }
   }
 
   private def splitAnd(expr: Expression): Seq[Expression] = expr match {

@@ -121,11 +121,7 @@ object GpuBroadcastHashJoinMeta extends Logging {
       conf: RapidsConf): Unit = {
     val (sizeStr, unwrapStatus) = unwrapBroadcastExchange(buildSidePlan) match {
       case Some(ex) =>
-        val sz = try {
-          ex.runtimeStatistics.sizeInBytes.longValue.toString
-        } catch {
-          case t: Throwable => s"UNAVAILABLE(${t.getClass.getSimpleName})"
-        }
+        val sz = estimatedBuildSize(ex).map(_.toString).getOrElse("UNAVAILABLE")
         (sz, "ok")
       case None => ("n/a", s"unwrap_fail(${buildSidePlan.getClass.getSimpleName})")
     }
@@ -150,21 +146,21 @@ object GpuBroadcastHashJoinMeta extends Logging {
     case _ => None
   }
 
-  /** Decide whether this build side is eligible for shuffle-broadcast.
-   *
-   *  In an aggressive SOL configuration the user has already set
-   *  `spark.sql.autoBroadcastJoinThreshold` to gate which joins become BHJ;
-   *  any BHJ that reaches GpuOverrides has, by definition, a build estimate
-   *  small enough for the broadcast pattern. Layering another runtime size
-   *  check on `GpuBroadcastExchangeExec.runtimeStatistics` is unreliable —
-   *  at GpuOverrides time the relationFuture has not been kicked off, so
-   *  the runtime stats return 0 and the rewrite never fires.
-   *
-   *  So this method just verifies the build side structure is something we
-   *  can rewrite (a GpuBroadcastExchangeExec, possibly behind a
-   *  BroadcastQueryStageExec / ReusedExchangeExec wrapper). */
+  /** Return the static logical-plan estimate for the exchange child.
+   *  Runtime statistics are still zero when GpuOverrides performs this
+   *  decision, so an unknown static estimate must fail closed. */
+  private def estimatedBuildSize(exchange: GpuBroadcastExchangeExec): Option[Long] = {
+    exchange.child.logicalLink
+      .map(_.stats.sizeInBytes)
+      .filter(_.isValidLong)
+      .map(_.longValue)
+  }
+
+  /** Decide whether this build side is eligible for shuffle-broadcast. */
   def shouldUseShuffleBroadcast(buildSidePlan: SparkPlan, conf: RapidsConf): Boolean = {
-    unwrapBroadcastExchange(buildSidePlan).isDefined
+    unwrapBroadcastExchange(buildSidePlan)
+      .flatMap(estimatedBuildSize)
+      .exists(size => size >= 0 && size <= conf.shuffleBroadcastMaxSize)
   }
 
   /** Rewrite the broadcast exchange under the build side into a single-output

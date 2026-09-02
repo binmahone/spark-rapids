@@ -578,7 +578,7 @@ class RapidsDriverPlugin extends DriverPlugin with Logging {
       gpuCatalogCleanupListener = new GpuCatalogCleanupListener()
       sc.addSparkListener(gpuCatalogCleanupListener)
       logInfo("GpuCatalogCleanupListener enabled for RAPIDS GPU shuffle " +
-        "(stage-level eager release of ShuffleBufferCatalog)")
+        "(SQL-execution-boundary release of ShuffleBufferCatalog)")
     }
 
     if (GpuShuffleEnv.isRapidsShuffleAvailable(conf)) {

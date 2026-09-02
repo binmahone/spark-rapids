@@ -16,350 +16,85 @@
 package org.apache.spark.sql.rapids
 
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 
 import org.apache.spark.SparkEnv
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler._
-import org.apache.spark.sql.execution.{SparkPlan, SQLExecution}
-import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
+import org.apache.spark.sql.execution.SQLExecution
 import org.apache.spark.sql.execution.ui.SparkListenerSQLExecutionEnd
 
 /**
- * SparkListener that releases the RAPIDS GPU ShuffleBufferCatalog eagerly at
- * stage completion (ref count == 0) for single-job static-plan SQL executions,
- * instead of waiting for Spark's GC-triggered ContextCleaner.
+ * Releases RAPIDS GPU shuffle buffers at the SQL execution boundary rather
+ * than waiting for GC-triggered ContextCleaner cleanup.
  *
- * Background: when running RAPIDS UCX (or any GPU-resident) shuffle,
- * map-output device buffers are tracked in ShuffleBufferCatalog and only
- * freed when ShuffleManager.unregisterShuffle is invoked. The default path
- * relies on ContextCleaner.doCleanupShuffle which is triggered by GC of the
- * ShuffleDependency object and can be delayed until application shutdown.
- * Multi-stage queries (e.g. TPC-H Q2 5-way join) accumulate every stage's
- * map outputs on GPU until then, which can exhaust the RMM pool and OOM the
- * UCX shuffle server thread.
+ * A stage-completion listener cannot know that every future consumer of a
+ * shuffle has already been submitted. Range-partition sampling and explicit
+ * submitMapStage calls can create a later Spark job in the same SQL execution.
+ * Cleaning at stage completion can therefore remove a live shuffle. The SQL
+ * execution end event is the earliest boundary at which all jobs belonging to
+ * the query have completed.
  *
- * Mechanism: track shuffle-to-consumer-stage refs at onJobStart, decrement
- * at onStageCompleted, and trigger cleanup (via BlockManagerMaster.removeShuffle
- * to broadcast to every executor) when ref hits zero -- but only for SQL
- * executions that are guaranteed to produce exactly one Spark job with a
- * static plan. Other executions defer cleanup to SparkListenerSQLExecutionEnd.
- *
- * Adapted from gluten branch 260414-mahone-ucx commit 1db5bd728. The
- * fine-grained per-shuffle classification mode from that branch is dropped
- * here because RAPIDS workloads we care about (TPC-H benchmark) are pure
- * SELECT with AQE disabled; coarse classification is sufficient.
- *
- * Driver-only. Cleanup is propagated to executors via
- * BlockManagerMaster.removeShuffle (which RPCs to every BlockManager;
- * BlockManagerStorageEndpoint.receive(RemoveShuffle) then invokes
- * SparkEnv.get.shuffleManager.unregisterShuffle, i.e.
- * RapidsShuffleInternalManagerBase.unregisterShuffle, which calls the
- * GpuShuffleEnv catalog's unregisterShuffle).
- *
- * Placed in org.apache.spark.sql.rapids package so it can access the
- * private[spark] StageInfo.shuffleDepId field.
+ * Driver-only. Cleanup is propagated to every executor through Spark's
+ * BlockManagerMaster.removeShuffle RPC. The RAPIDS shuffle manager then
+ * unregisters the shuffle from its ShuffleBufferCatalog.
  */
 class GpuCatalogCleanupListener extends SparkListener with Logging {
 
-  // executionId -> shuffleIds the execution has touched. Used by the
-  // defer-to-SQL-end fallback.
   private val executionShuffles =
-    new ConcurrentHashMap[Long, mutable.Set[Int]]()
-
-  // shuffleId -> remaining consumer-stage count.
-  private val shuffleRefCount =
-    new ConcurrentHashMap[Int, AtomicInteger]()
-
-  // stageId -> shuffleIds this stage consumes. Removed on the first
-  // onStageCompleted for the stage (subsequent attempts no-op).
-  private val stageInputShuffles =
-    new ConcurrentHashMap[Int, Set[Int]]()
-
-  // stageId -> the shuffleId this stage produces, accumulated across jobs.
-  private val globalProducerMap =
-    new ConcurrentHashMap[Int, Int]()
-
-  // executionIds classified eager-eligible. Populated at onJobStart.
-  private val eagerCleanupExecutions =
-    ConcurrentHashMap.newKeySet[Long]()
-
-  // executionIds requiring defer-to-SQL-end (AQE on, multi-job op, or no
-  // QueryExecution).
-  private val deferredExecutions =
-    ConcurrentHashMap.newKeySet[Long]()
-
-  // shuffleId -> owning executionId. Lets onStageCompleted look up
-  // eligibility without scanning every execution.
-  private val shuffleToExecution =
-    new ConcurrentHashMap[Int, Long]()
-
-  // shuffleIds that have ever had their ref incremented. Used to
-  // distinguish a ref==0 transition that is "first consumer about to read"
-  // (no warning) from "shuffle already cleaned, now revived" (warning -- a
-  // missed multiJobOpPatterns entry).
-  private val everIncrementedShuffles =
-    ConcurrentHashMap.newKeySet[Int]()
-
-  // Class simple-name substrings whose presence in the executedPlan forces
-  // defer-to-SQL-end. Empirically these produce multiple Spark Jobs sharing
-  // intermediate shuffle outputs (gluten 260414-mahone-ucx q7 instrumentation
-  // showed VeloxColumnarWriteFiles reviving shuffle 6); eager cleanup of any
-  // such shuffle between jobs would force re-execution of upstream stages.
-  // TPC-H SELECT-only workload matches none of these; the list is kept as
-  // defense-in-depth.
-  private val multiJobOpPatterns: Seq[String] = Seq(
-    "VeloxColumnarWriteFiles",
-    "InsertIntoHadoopFsRelation",
-    "InsertIntoDataSource",
-    "CreateDataSourceTableAsSelect",
-    "CreateHiveTableAsSelect",
-    "InsertIntoHiveTable",
-    // Native (worker-to-worker via UCX shuffle) broadcast splits its work
-    // across two Spark jobs: an explicit submitMapStage job that runs the
-    // build-side shuffle write, followed by the main consumer job that reads
-    // the build via getShuffleRDD. The eager listener must NOT reclaim the
-    // build shuffle between these two jobs.
-    "GpuShuffleBroadcastHashJoinExec"
-  )
-
-  /**
-   * Decide eager-eligibility for `executionId` on demand. Looks up the live
-   * QueryExecution via SQLExecution.getQueryExecution and inspects
-   * executedPlan. Result cached in eagerCleanupExecutions or
-   * deferredExecutions.
-   */
-  private def classifyExecution(executionId: Long): Unit = {
-    if (eagerCleanupExecutions.contains(executionId) ||
-        deferredExecutions.contains(executionId)) {
-      return
-    }
-    val qe = SQLExecution.getQueryExecution(executionId)
-    if (qe == null) {
-      deferredExecutions.add(executionId)
-      logInfo(s"GpuCatalogCleanup: SQL execution $executionId has no " +
-        "QueryExecution; deferring cleanup to SQL execution end")
-      return
-    }
-    val plan = qe.executedPlan
-    val aqe = planContainsAqe(plan)
-    val multiJob = planContainsMultiJobOp(plan)
-    if (!aqe && !multiJob) {
-      eagerCleanupExecutions.add(executionId)
-      logInfo(s"GpuCatalogCleanup: SQL execution $executionId" +
-        " eager stage-level cleanup enabled")
-    } else {
-      deferredExecutions.add(executionId)
-      logInfo(s"GpuCatalogCleanup: SQL execution $executionId deferred " +
-        s"(aqe=$aqe multiJob=$multiJob)")
-    }
-  }
-
-  private def planContainsAqe(plan: SparkPlan): Boolean =
-    plan.find(_.isInstanceOf[AdaptiveSparkPlanExec]).isDefined
-
-  private def planContainsMultiJobOp(plan: SparkPlan): Boolean =
-    plan
-      .find(n => multiJobOpPatterns.exists(pat =>
-        n.getClass.getSimpleName.contains(pat)))
-      .isDefined
+    new ConcurrentHashMap[Long, java.util.Set[Int]]()
 
   override def onJobStart(jobStart: SparkListenerJobStart): Unit = {
-    val executionIdOpt = Option(jobStart.properties)
+    val executionId = Option(jobStart.properties)
       .flatMap(p => Option(p.getProperty(SQLExecution.EXECUTION_ID_KEY)))
       .flatMap(s => scala.util.Try(s.toLong).toOption)
+    val shuffleIds = jobStart.stageInfos.flatMap(_.shuffleDepId).toSet
 
-    // Update global producer map first so the consumer-side ref counting
-    // pass below can resolve any cross-job dependency.
-    for (si <- jobStart.stageInfos) {
-      si.shuffleDepId.foreach(shufId => globalProducerMap.put(si.stageId, shufId))
-    }
-
-    executionIdOpt.foreach { executionId =>
-      classifyExecution(executionId)
-
-      val shuffleIds = jobStart.stageInfos.flatMap(_.shuffleDepId).toSet
-      if (shuffleIds.nonEmpty) {
-        executionShuffles.compute(executionId, (_, existing) => {
-          val set =
-            if (existing == null) mutable.Set[Int]()
-            else existing
-          set ++= shuffleIds
-          set
-        })
-        shuffleIds.foreach(sid => shuffleToExecution.putIfAbsent(sid, executionId))
-      }
-    }
-
-    // Build consumer-side ref counts for stage-level cleanup.
-    for (si <- jobStart.stageInfos) {
-      val consumed = si.parentIds
-        .flatMap(pid => Option(globalProducerMap.get(pid)))
-        .toSet
-      if (consumed.nonEmpty) {
-        stageInputShuffles.put(si.stageId, consumed)
-        consumed.foreach { shufId =>
-          val ref = shuffleRefCount.computeIfAbsent(shufId, _ => new AtomicInteger(0))
-          val before = ref.getAndIncrement()
-          // before > 0 means a second consumer stage starts to fetch this
-          // shuffle (ReusedExchange pattern). Per-block eager release on the
-          // map-side is unsafe for such shuffles; warn loudly so the user
-          // can disable perBlockEagerRelease for this workload. Note: we
-          // cannot reliably propagate a "mark this shuffle no-per-block" to
-          // executors from this listener thread — Spark local properties
-          // set in a listener don't reach jobs submitted from other driver
-          // threads. Plan-time detection via ReusedExchangeExec scan inside
-          // GpuShuffleBroadcastHashJoinExec handles the cases visible
-          // through a native-broadcast subtree.
-          if (before > 0) {
-            logWarning(s"GpuCatalogCleanup: shuffle $shufId now has multiple " +
-              s"consumer stages (stage ${si.stageId} is consumer #${before + 1}). " +
-              "If spark.rapids.shuffle.gpuCatalog.perBlockEagerRelease.enabled " +
-              "is on, the shuffle may have been already released per-block by " +
-              "the first consumer's fetch path. Disable perBlockEagerRelease " +
-              "for this workload, or rely on the native-broadcast plan-time " +
-              "detection in GpuShuffleBroadcastHashJoinExec.")
-          }
-          val newlySeen = everIncrementedShuffles.add(shufId)
-          if (before == 0 && !newlySeen) {
-            val execIdOpt = Option(shuffleToExecution.get(shufId)).map(_.longValue())
-            if (execIdOpt.exists(eagerCleanupExecutions.contains)) {
-              logWarning(s"GpuCatalogCleanup: shuffle $shufId revived from " +
-                s"ref=0 by new consumer stage ${si.stageId} " +
-                s"(execution=${execIdOpt.get}); eager cleanup may have been " +
-                "premature. Add the responsible plan node to multiJobOpPatterns.")
-            }
-          }
-        }
-      }
-    }
-  }
-
-  override def onStageCompleted(event: SparkListenerStageCompleted): Unit = {
-    val stageId = event.stageInfo.stageId
-    val consumed = Option(stageInputShuffles.remove(stageId))
-    consumed.foreach { shuffleIds =>
-      shuffleIds.foreach { shufId =>
-        val ref = shuffleRefCount.get(shufId)
-        if (ref != null) {
-          val remaining = ref.decrementAndGet()
-          if (remaining <= 0) {
-            val execIdOpt = Option(shuffleToExecution.get(shufId)).map(_.longValue())
-            val canEager = execIdOpt.exists(eagerCleanupExecutions.contains)
-            if (canEager) {
-              logInfo(s"GpuCatalogCleanup: shuffle $shufId ref=0 " +
-                s"(stage=$stageId execution=${execIdOpt.get}) - eager cleanup")
-              shuffleRefCount.remove(shufId)
-              shuffleToExecution.remove(shufId)
-              removeFromExecution(shufId)
-              try {
-                onCleanup(shufId)
-              } catch {
-                case e: Exception =>
-                  logWarning(s"GpuCatalogCleanup: failed eager cleanup for " +
-                    s"shuffle $shufId", e)
-              }
-            } else {
-              logInfo(s"GpuCatalogCleanup: shuffle $shufId ref=0 " +
-                s"(stage=$stageId execution=${execIdOpt.orNull}) - deferring " +
-                "to SQL execution end")
-            }
-          }
-        }
-      }
-    }
-  }
-
-  private def removeFromExecution(shuffleId: Int): Unit = {
-    val iter = executionShuffles.values().iterator()
-    while (iter.hasNext) {
-      val set = iter.next()
-      set -= shuffleId
+    executionId.filter(_ => shuffleIds.nonEmpty).foreach { id =>
+      val tracked = executionShuffles.computeIfAbsent(
+        id, _ => ConcurrentHashMap.newKeySet[Int]())
+      tracked.addAll(shuffleIds.asJava)
     }
   }
 
   override def onOtherEvent(event: SparkListenerEvent): Unit = event match {
-    case e: SparkListenerSQLExecutionEnd => onSQLExecutionEnd(e)
+    case e: SparkListenerSQLExecutionEnd => cleanupExecution(e.executionId)
     case _ =>
   }
 
-  private def onSQLExecutionEnd(event: SparkListenerSQLExecutionEnd): Unit = {
-    eagerCleanupExecutions.remove(event.executionId)
-    deferredExecutions.remove(event.executionId)
-    Option(executionShuffles.remove(event.executionId)).foreach { ids =>
-      if (ids.nonEmpty) {
-        logInfo(s"GpuCatalogCleanup: SQL execution ${event.executionId} ended, " +
-          s"cleaning ${ids.size} remaining shuffle(s): ${ids.mkString(", ")}")
-        ids.foreach { shuffleId =>
-          shuffleRefCount.remove(shuffleId)
-          shuffleToExecution.remove(shuffleId)
-          try {
-            onCleanup(shuffleId)
-          } catch {
-            case e: Exception =>
-              logWarning(s"GpuCatalogCleanup: failed to clean shuffle " +
-                s"$shuffleId", e)
-          }
-        }
-      }
+  private def cleanupExecution(executionId: Long): Unit = {
+    Option(executionShuffles.remove(executionId)).foreach { ids =>
+      logInfo(s"GpuCatalogCleanup: SQL execution $executionId ended, " +
+        s"cleaning ${ids.size} shuffle(s): ${ids.asScala.mkString(", ")}")
+      ids.asScala.foreach(cleanupShuffle)
     }
   }
 
-  /**
-   * Called at end-of-application to clean any executions that never received
-   * SparkListenerSQLExecutionEnd (e.g. failed query, abrupt shutdown). Mirrors
-   * the existing ShuffleCleanupListener.shutdown contract so RapidsDriverPlugin
-   * can invoke it during plugin shutdown.
-   */
+  private def cleanupShuffle(shuffleId: Int): Unit = {
+    try {
+      onCleanup(shuffleId)
+    } catch {
+      case e: Exception =>
+        logWarning(s"GpuCatalogCleanup: failed to clean shuffle $shuffleId", e)
+    }
+  }
+
+  /** Clean executions that did not receive a SQL execution end event. */
   def shutdown(): Unit = {
-    val remaining = executionShuffles.entrySet().asScala.toSeq
+    val remaining = executionShuffles.keySet().asScala.toSeq
     if (remaining.nonEmpty) {
-      logInfo(s"GpuCatalogCleanup shutdown: ${remaining.size} execution(s) " +
-        "still have pending shuffle cleanup")
-      remaining.foreach { entry =>
-        entry.getValue.foreach { shuffleId =>
-          try {
-            onCleanup(shuffleId)
-          } catch {
-            case e: Exception =>
-              logWarning("GpuCatalogCleanup shutdown: failed to clean " +
-                s"shuffle $shuffleId", e)
-          }
-        }
-      }
+      logInfo(s"GpuCatalogCleanup shutdown: cleaning ${remaining.size} execution(s)")
+      remaining.foreach(cleanupExecution)
     }
-    executionShuffles.clear()
-    shuffleRefCount.clear()
-    stageInputShuffles.clear()
-    globalProducerMap.clear()
-    eagerCleanupExecutions.clear()
-    deferredExecutions.clear()
-    shuffleToExecution.clear()
-    everIncrementedShuffles.clear()
   }
 
-  /**
-   * Propagate cleanup to every executor by going through Spark's standard
-   * BlockManager remove-shuffle RPC. BlockManagerStorageEndpoint on each
-   * executor invokes SparkEnv.get.shuffleManager.unregisterShuffle, which
-   * for RAPIDS-managed shuffle is RapidsShuffleInternalManagerBase: that
-   * call closes the GPU device buffers in ShuffleBufferCatalog.
-   *
-   * Overridable for testing.
-   */
+  /** Propagate cleanup to every executor and wait for acknowledgements. */
   protected def onCleanup(shuffleId: Int): Unit = {
-    val env = SparkEnv.get
-    if (env == null) {
-      logWarning(s"GpuCatalogCleanup: SparkEnv null, cannot clean shuffle " +
-        s"$shuffleId")
-      return
+    Option(SparkEnv.get) match {
+      case Some(env) => env.blockManager.master.removeShuffle(shuffleId, blocking = true)
+      case None =>
+        logWarning(s"GpuCatalogCleanup: SparkEnv null, cannot clean shuffle $shuffleId")
     }
-    // Non-blocking: cleanup is best-effort. A subsequent fetch that races
-    // against eager removal would trigger Spark's normal fetch-failure
-    // recovery (rerun the parent stage), which is correctness-preserving.
-    env.blockManager.master.removeShuffle(shuffleId, blocking = false)
   }
 }

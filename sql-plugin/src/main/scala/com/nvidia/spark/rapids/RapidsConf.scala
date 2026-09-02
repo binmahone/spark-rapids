@@ -2284,13 +2284,10 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
     conf("spark.rapids.shuffle.gpuCatalog.eagerCleanup.enabled")
       .doc("When using a RAPIDS-managed GPU shuffle (UCX or CACHE_ONLY), register a " +
         "driver-side SparkListener that releases ShuffleBufferCatalog device buffers " +
-        "at stage completion once all consumer stages have read the shuffle, instead " +
-        "of waiting for Spark's GC-triggered ContextCleaner.doCleanupShuffle (which " +
-        "can delay release until application shutdown and let multi-stage queries " +
-        "accumulate GPU memory until OOM). Eager release is only applied to SQL " +
-        "executions whose executedPlan is single-job + static (AQE off, no write " +
-        "operator); all others defer to SQL execution end as before. Safe to leave " +
-        "on for SELECT-only TPC-H-style workloads.")
+        "at the SQL execution boundary instead of waiting for Spark's GC-triggered " +
+        "ContextCleaner.doCleanupShuffle. Execution-boundary cleanup avoids removing " +
+        "a shuffle before a later job in the same query consumes it while preventing " +
+        "completed queries from accumulating GPU shuffle buffers.")
       .startupOnly()
       .booleanConf
       .createWithDefault(false)
@@ -2406,9 +2403,8 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
 
   val SHUFFLE_BROADCAST_ENABLED = conf("spark.rapids.shuffle.broadcast.enabled")
     .doc("Enable native (worker-to-worker via UCX shuffle) broadcast. When true, " +
-      "broadcast hash joins whose build side estimated size is larger than " +
-      "the driver broadcast threshold but smaller than " +
-      "spark.rapids.shuffle.broadcast.maxSize will route the build side through " +
+      "broadcast hash joins whose build side has a known static size no larger than " +
+      "spark.rapids.shuffle.broadcast.maxSize can route the build side through " +
       "the GPU shuffle path (replicate-to-all partitioning) instead of collecting " +
       "to the driver. This avoids the driver D2H + host serialize + broadcast " +
       "send + executor H2D round-trip on GB-scale builds. " +

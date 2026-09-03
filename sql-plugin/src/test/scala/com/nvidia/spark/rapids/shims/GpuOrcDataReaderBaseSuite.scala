@@ -46,6 +46,23 @@ class GpuOrcDataReaderBaseSuite extends AnyFunSuite {
     assert(calls == 0)
   }
 
+  test("readFullyInChunks exposes each production read separately from consumption") {
+    val source = Array.tabulate[Byte](23)(_.toByte)
+    val input = new FSDataInputStream(new ByteArraySeekableInputStream(source))
+    val reads = collection.mutable.ArrayBuffer.empty[(Long, Int)]
+    val chunks = collection.mutable.ArrayBuffer.empty[Array[Byte]]
+
+    GpuOrcDataReaderBase.readFullyInChunksWithReader(3, 17, 5) { (offset, data) =>
+      reads += offset -> data.length
+      input.readFully(offset, data, 0, data.length)
+    } { data =>
+      chunks += data
+    }
+
+    assert(reads == Seq(3L -> 5, 8L -> 5, 13L -> 5, 18L -> 2))
+    assert(chunks.flatten.toArray.sameElements(source.slice(3, 20)))
+  }
+
   private class ByteArraySeekableInputStream(data: Array[Byte]) extends FSInputStream {
     private val stream = new ByteArrayInputStream(data)
     private var position = 0

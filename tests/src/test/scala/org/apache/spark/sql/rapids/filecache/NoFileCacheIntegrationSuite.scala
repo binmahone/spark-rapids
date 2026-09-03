@@ -84,6 +84,40 @@ class NoFileCacheIntegrationSuite extends SparkQueryCompareTestSuite {
     }, conf)
   }
 
+  test("v1 multithreaded ORC reader reports phase metrics") {
+    val conf = new SparkConf(false)
+        .set("spark.rapids.filecache.enabled", "false")
+        .set("spark.sql.sources.useV1SourceList", "orc")
+        .set(RapidsConf.ORC_READER_TYPE.key, "MULTITHREADED")
+        .set(RapidsConf.METRICS_LEVEL.key, "DEBUG")
+    withGpuSparkSession({ spark =>
+      val df = frameFromOrc(SCHEMA_CAN_PRUNE_ORC)(spark)
+      df.collect()
+      val gpuScan = df.queryExecution.executedPlan.find(_.isInstanceOf[GpuFileSourceScanExec])
+      assert(gpuScan.isDefined)
+      val metrics = gpuScan.get.metrics
+      Seq(
+        GpuMetric.ORC_FS_LOOKUP_TIME,
+        GpuMetric.ORC_TAIL_READ_TIME,
+        GpuMetric.ORC_TAIL_PARSE_TIME,
+        GpuMetric.ORC_READER_FILTER_TIME,
+        GpuMetric.ORC_OUTPUT_SIZE_TIME,
+        GpuMetric.ORC_HOST_BUFFER_ALLOC_TIME,
+        GpuMetric.ORC_REMOTE_OPEN_TIME,
+        GpuMetric.ORC_REMOTE_READ_TIME,
+        GpuMetric.ORC_HOST_COPY_TIME,
+        GpuMetric.ORC_FILE_REBUILD_TIME,
+        GpuMetric.ORC_SPILLABLE_WRAP_TIME).foreach { metricName =>
+        assert(metrics.contains(metricName), s"missing ORC reader metric $metricName")
+        assert(metrics(metricName).value > 0, s"ORC reader metric $metricName was not updated")
+      }
+      assert(metrics(GpuMetric.ORC_TAIL_READ_BYTES).value > 0)
+      assert(metrics(GpuMetric.ORC_TAIL_READ_CALLS).value > 0)
+      assert(metrics(GpuMetric.ORC_REMOTE_READ_BYTES).value > 0)
+      assert(metrics(GpuMetric.ORC_REMOTE_READ_CALLS).value > 0)
+    }, conf)
+  }
+
   test("no filecache no metrics v2 Parquet") {
     val conf = new SparkConf(false)
         .set("spark.rapids.filecache.enabled", "false")

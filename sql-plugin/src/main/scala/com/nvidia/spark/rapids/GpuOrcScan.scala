@@ -17,6 +17,7 @@
 package com.nvidia.spark.rapids
 
 import java.io.{ByteArrayInputStream, FileNotFoundException, IOException, OutputStream}
+import java.lang.management.ManagementFactory
 import java.net.URI
 import java.nio.ByteBuffer
 import java.nio.channels.Channels
@@ -1090,15 +1091,23 @@ trait OrcPartitionReaderBase extends OrcCommonFunctions with Logging
         return (null, 0L)
       }
 
-      val hostBufferSize = estimateOutputSize(ctx, stripes)
-      val hostBuffer = withRetryNoSplit[HostMemoryBuffer] {
-        HostMemoryBuffer.allocate(hostBufferSize)
+      val hostBufferSize = metrics.getOrElse(ORC_OUTPUT_SIZE_TIME, NoopMetric).ns {
+        estimateOutputSize(ctx, stripes)
+      }
+      val hostBuffer = metrics.getOrElse(ORC_HOST_BUFFER_ALLOC_TIME, NoopMetric).ns {
+        withRetryNoSplit[HostMemoryBuffer] {
+          HostMemoryBuffer.allocate(hostBufferSize)
+        }
       }
       closeOnExcept(hostBuffer) { hmb =>
         withResource(new HostMemoryOutputStream(hmb)) { out =>
-          writeOrcOutputFile(ctx, out, stripes)
-          (SpillableHostBuffer(hmb, out.getPos, SpillPriorities.ACTIVE_BATCHING_PRIORITY),
-            out.getPos)
+          metrics.getOrElse(ORC_FILE_REBUILD_TIME, NoopMetric).ns {
+            writeOrcOutputFile(ctx, out, stripes)
+          }
+          val spillable = metrics.getOrElse(ORC_SPILLABLE_WRAP_TIME, NoopMetric).ns {
+            SpillableHostBuffer(hmb, out.getPos, SpillPriorities.ACTIVE_BATCHING_PRIORITY)
+          }
+          (spillable, out.getPos)
         }
       }
     }
@@ -1339,6 +1348,18 @@ private object OrcTools {
   val ORC_MAGIC: Array[Byte] = OrcFile.MAGIC.getBytes(StandardCharsets.US_ASCII)
 }
 
+private object OrcThreadCpuTimer {
+  private val threadBean = ManagementFactory.getThreadMXBean
+
+  def currentTimeNanos: Long = {
+    if (threadBean.isCurrentThreadCpuTimeSupported) {
+      math.max(0L, threadBean.getCurrentThreadCpuTime)
+    } else {
+      0L
+    }
+  }
+}
+
 /**
  * A tool to filter stripes
  *
@@ -1365,52 +1386,56 @@ private case class GpuOrcFileFilterHandler(
     OrcConf.IS_SCHEMA_EVOLUTION_CASE_SENSITIVE.setBoolean(conf, isCaseSensitive)
 
     val filePath = new Path(new URI(partFile.filePath.toString()))
-    val fs = filePath.getFileSystem(conf)
+    val fs = metrics.getOrElse(ORC_FS_LOOKUP_TIME, NoopMetric).ns {
+      filePath.getFileSystem(conf)
+    }
     val orcFileReaderOpts = OrcFile.readerOptions(conf)
         .filesystem(fs)
         .orcTail(GpuOrcFileFilterHandler.getOrcTail(filePath, fs, conf,  metrics))
 
     // After getting the necessary information from ORC reader, we must close the ORC reader
-    OrcShims.withReader(OrcFile.createReader(filePath, orcFileReaderOpts)) { orcReader =>
-    val resultedColPruneInfo = OrcReadingShims.requestedColumnIds(isCaseSensitive, dataSchema,
-        readDataSchema, orcReader, conf)
-      if (resultedColPruneInfo.isEmpty) {
-        // Be careful when the OrcPartitionReaderContext is null, we should change
-        // reader to EmptyPartitionReader for throwing exception
-        null
-      } else {
-        val requestedColIds = resultedColPruneInfo.get._1
-        // Normally without column names we cannot prune the file schema to the read schema,
-        // but if no columns are requested from the file (e.g.: row count) then we can prune.
-        val canPruneCols = resultedColPruneInfo.get._2 || requestedColIds.isEmpty
-        OrcUtils.orcResultSchemaString(canPruneCols, dataSchema, readDataSchema,
-          partitionSchema, conf)
-        assert(requestedColIds.length == readDataSchema.length,
-          "[BUG] requested column IDs do not match required schema")
-
-        // Create a local copy of broadcastedConf before we set task-local configs.
-        val taskConf = new Configuration(conf)
-        // Following SPARK-35783, set requested columns as OrcConf. This setting may not make
-        // any difference. Just in case it might be important for the ORC methods called by us,
-        // either today or in the future.
-        val includeColumns = requestedColIds.filter(_ != -1).sorted.mkString(",")
-        taskConf.set(OrcConf.INCLUDE_COLUMNS.getAttribute, includeColumns)
-
-        // Only need to filter ORC's schema evolution if it cannot prune directly
-        val requestedMapping = if (canPruneCols) {
-          None
+    metrics.getOrElse(ORC_READER_FILTER_TIME, NoopMetric).ns {
+      OrcShims.withReader(OrcFile.createReader(filePath, orcFileReaderOpts)) { orcReader =>
+        val resultedColPruneInfo = OrcReadingShims.requestedColumnIds(isCaseSensitive, dataSchema,
+          readDataSchema, orcReader, conf)
+        if (resultedColPruneInfo.isEmpty) {
+          // Be careful when the OrcPartitionReaderContext is null, we should change
+          // reader to EmptyPartitionReader for throwing exception
+          null
         } else {
-          Some(requestedColIds)
-        }
-        val fullSchema = StructType(dataSchema ++ partitionSchema)
-        val readerOpts = buildOrcReaderOpts(taskConf, orcReader, partFile, fullSchema)
+          val requestedColIds = resultedColPruneInfo.get._1
+          // Normally without column names we cannot prune the file schema to the read schema,
+          // but if no columns are requested from the file (e.g.: row count) then we can prune.
+          val canPruneCols = resultedColPruneInfo.get._2 || requestedColIds.isEmpty
+          OrcUtils.orcResultSchemaString(canPruneCols, dataSchema, readDataSchema,
+            partitionSchema, conf)
+          assert(requestedColIds.length == readDataSchema.length,
+            "[BUG] requested column IDs do not match required schema")
 
-        withResource(OrcTools.buildDataReader(orcReader.getCompressionSize,
-          orcReader.getCompressionKind, orcReader.getSchema, readerOpts, filePath, fs, taskConf,
-          metrics)) {
-          dataReader =>
-            new GpuOrcPartitionReaderUtils(filePath, taskConf, partFile, orcFileReaderOpts,
-              orcReader, readerOpts, dataReader, requestedMapping).getOrcPartitionReaderContext
+          // Create a local copy of broadcastedConf before we set task-local configs.
+          val taskConf = new Configuration(conf)
+          // Following SPARK-35783, set requested columns as OrcConf. This setting may not make
+          // any difference. Just in case it might be important for the ORC methods called by us,
+          // either today or in the future.
+          val includeColumns = requestedColIds.filter(_ != -1).sorted.mkString(",")
+          taskConf.set(OrcConf.INCLUDE_COLUMNS.getAttribute, includeColumns)
+
+          // Only need to filter ORC's schema evolution if it cannot prune directly
+          val requestedMapping = if (canPruneCols) {
+            None
+          } else {
+            Some(requestedColIds)
+          }
+          val fullSchema = StructType(dataSchema ++ partitionSchema)
+          val readerOpts = buildOrcReaderOpts(taskConf, orcReader, partFile, fullSchema)
+
+          withResource(OrcTools.buildDataReader(orcReader.getCompressionSize,
+            orcReader.getCompressionKind, orcReader.getSchema, readerOpts, filePath, fs, taskConf,
+            metrics)) {
+            dataReader =>
+              new GpuOrcPartitionReaderUtils(filePath, taskConf, partFile, orcFileReaderOpts,
+                orcReader, readerOpts, dataReader, requestedMapping).getOrcPartitionReaderContext
+          }
         }
       }
     }
@@ -1792,7 +1817,9 @@ private object GpuOrcFileFilterHandler {
       metrics: Map[String, GpuMetric]): OrcTail = {
     val fileIO = new HadoopFileIO(conf)
     val inputFile = fileIO.newInputFile(filePath)
-    val cachedFooter = FileCache.get.getFooter(inputFile)
+    val cachedFooter = metrics.getOrElse(ORC_TAIL_CACHE_LOOKUP_TIME, NoopMetric).ns {
+      FileCache.get.getFooter(inputFile)
+    }
     val bb = cachedFooter.map { hmb =>
       // ORC can only deal with on-heap buffers
       val bb = withResource(hmb) { _ =>
@@ -1805,7 +1832,9 @@ private object GpuOrcFileFilterHandler {
       bb
     }.getOrElse {
       metrics.getOrElse(GpuMetric.FILECACHE_FOOTER_MISSES, NoopMetric) += 1
-      val bb = readOrcTailBuffer(filePath, fs)
+      val bb = metrics.getOrElse(ORC_TAIL_READ_TIME, NoopMetric).ns {
+        readOrcTailBuffer(filePath, fs, metrics)
+      }
       val bbSize = bb.remaining()
       metrics.getOrElse(GpuMetric.FILECACHE_FOOTER_MISSES_SIZE, NoopMetric) += bbSize
       // footer was not cached, so try to cache it
@@ -1821,7 +1850,9 @@ private object GpuOrcFileFilterHandler {
       }
       bb
     }
-    loadOrcTailFromBuffer(bb)
+    metrics.getOrElse(ORC_TAIL_PARSE_TIME, NoopMetric).ns {
+      loadOrcTailFromBuffer(bb)
+    }
   }
 
   private def loadOrcTailFromBuffer(bb: ByteBuffer): OrcTail = {
@@ -1853,7 +1884,16 @@ private object GpuOrcFileFilterHandler {
     OrcProto.PostScript.parseFrom(in)
   }
 
-  private def readOrcTailBuffer(filePath: Path, fs: FileSystem): ByteBuffer = {
+  private def readOrcTailBuffer(
+      filePath: Path,
+      fs: FileSystem,
+      metrics: Map[String, GpuMetric]): ByteBuffer = {
+    def readFully(in: FSDataInputStream, offset: Long, data: Array[Byte], dataOffset: Int,
+        length: Int): Unit = {
+      in.readFully(offset, data, dataOffset, length)
+      metrics.getOrElse(ORC_TAIL_READ_BYTES, NoopMetric) += length
+      metrics.getOrElse(ORC_TAIL_READ_CALLS, NoopMetric) += 1
+    }
     withResource(fs.open(filePath)) { in =>
       val fileStatus = fs.getFileStatus(filePath)
       val fileSize = fileStatus.getLen
@@ -1865,7 +1905,7 @@ private object GpuOrcFileFilterHandler {
         val footerSizeGuess = 16 * 1024
         val bb = ByteBuffer.allocate(footerSizeGuess)
         val readSize = fileSize.min(footerSizeGuess).toInt
-        in.readFully(fileSize - readSize, bb.array(), bb.arrayOffset(), readSize)
+        readFully(in, fileSize - readSize, bb.array(), bb.arrayOffset(), readSize)
         bb.position(0)
         bb.limit(readSize)
         val psLen = bb.get(readSize - 1) & 0xff
@@ -1884,7 +1924,7 @@ private object GpuOrcFileFilterHandler {
         if (unreadRemaining > 0) {
           // first read did not grab the entire tail, need to read more
           tailBuffer.position(TAIL_PREFIX_SIZE)
-          in.readFully(fileSize - readSize - unreadRemaining, tailBuffer.array(),
+          readFully(in, fileSize - readSize - unreadRemaining, tailBuffer.array(),
             tailBuffer.arrayOffset() + tailBuffer.position(), unreadRemaining)
         }
         tailBuffer.putLong(0, fileSize)
@@ -2101,10 +2141,14 @@ class MultiFileCloudOrcPartitionReader(
 
       val hostBuffers = new ArrayBuffer[SingleHMBAndMeta]
       val filterStartTime = System.nanoTime()
+      val filterCpuStartTime = OrcThreadCpuTimer.currentTimeNanos
       val ctx = filterHandler.filterStripes(partFile, dataSchema, readDataSchema,
         partitionSchema)
       val filterTime = System.nanoTime() - filterStartTime
+      execMetrics.getOrElse(ORC_FILTER_CPU_TIME, NoopMetric) +=
+        OrcThreadCpuTimer.currentTimeNanos - filterCpuStartTime
       val bufferTimeStart = System.nanoTime()
+      val bufferCpuStartTime = OrcThreadCpuTimer.currentTimeNanos
       val result = try {
         if (ctx == null || ctx.blockIterator.isEmpty) {
           val bytesRead = fileSystemBytesRead() - startingBytesRead
@@ -2154,6 +2198,8 @@ class MultiFileCloudOrcPartitionReader(
           throw e
       }
       val bufferTime = System.nanoTime() - bufferTimeStart
+      execMetrics.getOrElse(ORC_BUFFER_CPU_TIME, NoopMetric) +=
+        OrcThreadCpuTimer.currentTimeNanos - bufferCpuStartTime
       result.setExecutionTime(filterTime, bufferTime)
       result
     }

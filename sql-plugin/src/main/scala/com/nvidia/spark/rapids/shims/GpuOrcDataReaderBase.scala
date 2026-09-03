@@ -31,6 +31,7 @@ import org.apache.hadoop.fs.FSDataInputStream
 import org.apache.hadoop.hive.common.io.DiskRangeList
 import org.apache.orc.{DataReader, OrcProto, StripeInformation}
 import org.apache.orc.impl.DataReaderProperties
+
 import org.apache.spark.internal.Logging
 
 abstract class GpuOrcDataReaderBase(
@@ -78,9 +79,17 @@ abstract class GpuOrcDataReaderBase(
         logInfo(s"ORC_HOST_STREAM_BOUNDED_COPY readSize=$readSize " +
           s"chunkSize=${GpuOrcDataReaderBase.HOST_STREAM_READ_CHUNK_SIZE}")
       }
-      GpuOrcDataReaderBase.readFullyInChunks(input, offset, readSize,
-        GpuOrcDataReaderBase.HOST_STREAM_READ_CHUNK_SIZE) { data =>
-        out.write(data)
+      GpuOrcDataReaderBase.readFullyInChunksWithReader(offset, readSize,
+        GpuOrcDataReaderBase.HOST_STREAM_READ_CHUNK_SIZE) { (currentOffset, data) =>
+        remoteReadTimeMetric.ns {
+          input.readFully(currentOffset, data, 0, data.length)
+        }
+        remoteReadBytesMetric += data.length
+        remoteReadCallsMetric += 1
+      } { data =>
+        hostCopyTimeMetric.ns {
+          out.write(data)
+        }
       }
       populateFileCache(baseOffset, first, last, bufferPos)
     }
@@ -153,7 +162,11 @@ abstract class GpuOrcDataReaderBase(
       missMetric += 1
       missSizeMetric += tailLength
       ensureFile()
-      file.get.readFully(offset, tailBuf.array(), tailBuf.arrayOffset(), tailLength)
+      stripeFooterReadTimeMetric.ns {
+        file.get.readFully(offset, tailBuf.array(), tailBuf.arrayOffset(), tailLength)
+      }
+      stripeFooterReadBytesMetric += tailLength
+      stripeFooterReadCallsMetric += 1
       val cacheToken = FileCache.get.startDataRangeCache(inputFile, offset, tailLength)
       cacheToken.foreach { token =>
         closeOnExcept(HostMemoryBuffer.allocate(tailLength, false)) { hmb =>
@@ -162,7 +175,9 @@ abstract class GpuOrcDataReaderBase(
         }
       }
     }
-    lastStripeFooter = parseStripeFooter(tailBuf, tailLength)
+    lastStripeFooter = stripeFooterParseTimeMetric.ns {
+      parseStripeFooter(tailBuf, tailLength)
+    }
     lastStripeFooterInfo = stripe
     lastStripeFooter
   }
@@ -186,9 +201,21 @@ abstract class GpuOrcDataReaderBase(
 
   private def getMetric(metricName: String): GpuMetric = metrics.getOrElse(metricName, NoopMetric)
 
+  private val stripeFooterReadTimeMetric = getMetric(GpuMetric.ORC_STRIPE_FOOTER_READ_TIME)
+  private val stripeFooterReadBytesMetric = getMetric(GpuMetric.ORC_STRIPE_FOOTER_READ_BYTES)
+  private val stripeFooterReadCallsMetric = getMetric(GpuMetric.ORC_STRIPE_FOOTER_READ_CALLS)
+  private val stripeFooterParseTimeMetric = getMetric(GpuMetric.ORC_STRIPE_FOOTER_PARSE_TIME)
+  private val remoteOpenTimeMetric = getMetric(GpuMetric.ORC_REMOTE_OPEN_TIME)
+  private val remoteReadTimeMetric = getMetric(GpuMetric.ORC_REMOTE_READ_TIME)
+  private val remoteReadBytesMetric = getMetric(GpuMetric.ORC_REMOTE_READ_BYTES)
+  private val remoteReadCallsMetric = getMetric(GpuMetric.ORC_REMOTE_READ_CALLS)
+  private val hostCopyTimeMetric = getMetric(GpuMetric.ORC_HOST_COPY_TIME)
+
   private def ensureFile(): Unit = {
     if (file.isEmpty) {
-      file = Some(props.getFileSystemSupplier.get.open(props.getPath))
+      file = Some(remoteOpenTimeMetric.ns {
+        props.getFileSystemSupplier.get.open(props.getPath)
+      })
     }
   }
 
@@ -281,8 +308,14 @@ abstract class GpuOrcDataReaderBase(
             file.get, offset, readSize, baseOffset, first, last)
         case _ =>
           val buffer = new Array[Byte](readSize)
-          file.get.readFully(offset, buffer, 0, buffer.length)
-          loader.loadRemoteBlocks(baseOffset, first, last, ByteBuffer.wrap(buffer))
+          remoteReadTimeMetric.ns {
+            file.get.readFully(offset, buffer, 0, buffer.length)
+          }
+          remoteReadBytesMetric += buffer.length
+          remoteReadCallsMetric += 1
+          hostCopyTimeMetric.ns {
+            loader.loadRemoteBlocks(baseOffset, first, last, ByteBuffer.wrap(buffer))
+          }
       }
     } catch {
       case e: IOException =>
@@ -308,13 +341,22 @@ private[shims] object GpuOrcDataReaderBase {
       offset: Long,
       length: Int,
       chunkSize: Int)(consume: Array[Byte] => Unit): Unit = {
+    readFullyInChunksWithReader(offset, length, chunkSize) { (currentOffset, buffer) =>
+      input.readFully(currentOffset, buffer, 0, buffer.length)
+    }(consume)
+  }
+
+  private[shims] def readFullyInChunksWithReader(
+      offset: Long,
+      length: Int,
+      chunkSize: Int)(read: (Long, Array[Byte]) => Unit)(consume: Array[Byte] => Unit): Unit = {
     require(length >= 0, s"length must not be negative: $length")
     require(chunkSize > 0, s"chunkSize must be positive: $chunkSize")
     var currentOffset = offset
     var remaining = length
     while (remaining > 0) {
       val buffer = new Array[Byte](math.min(remaining, chunkSize))
-      input.readFully(currentOffset, buffer, 0, buffer.length)
+      read(currentOffset, buffer)
       consume(buffer)
       currentOffset += buffer.length
       remaining -= buffer.length

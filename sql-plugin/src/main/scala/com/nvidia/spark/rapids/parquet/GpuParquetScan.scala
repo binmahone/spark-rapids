@@ -169,6 +169,28 @@ case class GpuParquetScan(
 }
 
 object GpuParquetScan {
+  private[parquet] def mapClippedBlocksToRowGroupIndices(
+      fullBlocks: Seq[BlockMetaData],
+      clippedBlocks: Iterable[BlockMetaData],
+      filePath: Path): Array[Int] = {
+    val indexByColumnChunk = fullBlocks.zipWithIndex.flatMap { case (block, index) =>
+      block.getColumns.asScala.map { column =>
+        (column.getPath.toDotString, column.getStartingPos) -> index
+      }
+    }.toMap
+
+    clippedBlocks.iterator.map { block =>
+      val matchingIndices = block.getColumns.asScala.flatMap { column =>
+        indexByColumnChunk.get((column.getPath.toDotString, column.getStartingPos))
+      }.distinct
+      require(matchingIndices.size == 1,
+        s"Unable to map clipped Parquet block to one row group in $filePath: " +
+          s"matched indices=${matchingIndices.mkString("[", ",", "]")}, " +
+          s"columns=${block.getColumns.size()}")
+      matchingIndices.head
+    }.toArray
+  }
+
   def tagSupport(scanMeta: ScanMeta[ParquetScan]): Unit = {
     val scan = scanMeta.wrapped
     val schema = StructType(scan.readDataSchema ++ scan.readPartitionSchema)
@@ -3856,10 +3878,10 @@ case class GpuParquetGDSPartitionReaderFactory(
       HadoopInputFile.fromPath(singleFileInfo.filePath, conf))) { reader =>
       reader.getFooter
     }
-    val selectedBlockOffsets = singleFileInfo.blocks.iterator.map(_.getStartingPos).toSet
-    val rowGroupIndices = footer.getBlocks.asScala.zipWithIndex.collect {
-      case (block, index) if selectedBlockOffsets.contains(block.getStartingPos) => index
-    }.toArray
+    // BlockMetaData.getStartingPos is not stable after clipping to the projected schema because
+    // it is derived from the earliest retained column chunk. Match physical column chunks instead.
+    val rowGroupIndices = GpuParquetScan.mapClippedBlocksToRowGroupIndices(
+      footer.getBlocks.asScala.toSeq, singleFileInfo.blocks, singleFileInfo.filePath)
 
     new ParquetGDSPartitionReader(
       fileIO, conf, file, singleFileInfo.filePath, singleFileInfo.blocks,

@@ -4054,6 +4054,17 @@ private[parquet] object GpuParquetGDSFilterAst {
     case other => Left(s"unsupported Spark data source filter ${other.getClass.getName}")
   }
 
+  private def nullRejectingAttribute(filter: Filter): Option[String] = filter match {
+    case SourceEqualTo(attribute, _) => Some(attribute)
+    case SourceGreaterThan(attribute, _) => Some(attribute)
+    case SourceGreaterThanOrEqual(attribute, _) => Some(attribute)
+    case SourceLessThan(attribute, _) => Some(attribute)
+    case SourceLessThanOrEqual(attribute, _) => Some(attribute)
+    case SourceIn(attribute, _) => Some(attribute)
+    case SourceStringStartsWith(attribute, _) => Some(attribute)
+    case _ => None
+  }
+
   def compile(
       filters: Array[Filter],
       readDataSchema: StructType,
@@ -4062,15 +4073,34 @@ private[parquet] object GpuParquetGDSFilterAst {
     if (filters.isEmpty) {
       return Left("no filters were provided")
     }
+    val converted = filters.map { filter =>
+      filter -> convert(filter, readDataSchema, cudfColumnNames, isCaseSensitive)
+    }
+    val nullRejectingAttributes = converted.flatMap {
+      case (filter, Right(_)) =>
+        nullRejectingAttribute(filter).map { attribute =>
+          if (isCaseSensitive) attribute else attribute.toLowerCase(Locale.ROOT)
+        }
+      case _ => None
+    }.toSet
     var root: CudfAstExpression = null
     val pushed = ArrayBuffer[Filter]()
     val skipped = ArrayBuffer[(Filter, String)]()
     var index = 0
-    while (index < filters.length) {
-      convert(filters(index), readDataSchema, cudfColumnNames, isCaseSensitive) match {
-        case Left(reason) => skipped += filters(index) -> reason
+    while (index < converted.length) {
+      val (filter, expression) = converted(index)
+      val redundantIsNotNull = filter match {
+        case SourceIsNotNull(attribute) =>
+          val key = if (isCaseSensitive) attribute else attribute.toLowerCase(Locale.ROOT)
+          nullRejectingAttributes.contains(key)
+        case _ => false
+      }
+      if (redundantIsNotNull) {
+        skipped += filter -> "redundant with another null-rejecting pushed predicate"
+      } else expression match {
+        case Left(reason) => skipped += filter -> reason
         case Right(expression) =>
-          pushed += filters(index)
+          pushed += filter
           root = if (root == null) expression else {
             new BinaryOperation(BinaryOperator.NULL_LOGICAL_AND, root, expression)
           }

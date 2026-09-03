@@ -3852,8 +3852,10 @@ case class GpuParquetGDSPartitionReaderFactory(
       _ += (System.nanoTime() - startTime)
     }
 
-    val footer = ParquetFileReader.readFooter(
-      HadoopInputFile.fromPath(singleFileInfo.filePath, conf), ParquetMetadataConverter.NO_FILTER)
+    val footer = withResource(ParquetFileReader.open(
+      HadoopInputFile.fromPath(singleFileInfo.filePath, conf))) { reader =>
+      reader.getFooter
+    }
     val selectedBlockOffsets = singleFileInfo.blocks.iterator.map(_.getStartingPos).toSet
     val rowGroupIndices = footer.getBlocks.asScala.zipWithIndex.collect {
       case (block, index) if selectedBlockOffsets.contains(block.getStartingPos) => index

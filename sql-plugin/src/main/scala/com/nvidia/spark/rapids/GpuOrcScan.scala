@@ -1084,27 +1084,30 @@ trait OrcPartitionReaderBase extends OrcCommonFunctions with Logging
    * @param stripes a sequence of Stripe to be read into HostMemeoryBuffer
    * @return HostMemeoryBuffer and its data size
    */
-  protected def readPartFile(ctx: OrcPartitionReaderContext, stripes: Seq[OrcOutputStripe]):
+  protected def readPartFile(
+      ctx: OrcPartitionReaderContext,
+      stripes: Seq[OrcOutputStripe],
+      phaseMetrics: Map[String, GpuMetric] = metrics):
       (SpillableHostBuffer, Long) = {
     NvtxRegistry.ORC_BUFFER_FILE_SPLIT {
       if (stripes.isEmpty) {
         return (null, 0L)
       }
 
-      val hostBufferSize = metrics.getOrElse(ORC_OUTPUT_SIZE_TIME, NoopMetric).ns {
+      val hostBufferSize = phaseMetrics.getOrElse(ORC_OUTPUT_SIZE_TIME, NoopMetric).ns {
         estimateOutputSize(ctx, stripes)
       }
-      val hostBuffer = metrics.getOrElse(ORC_HOST_BUFFER_ALLOC_TIME, NoopMetric).ns {
+      val hostBuffer = phaseMetrics.getOrElse(ORC_HOST_BUFFER_ALLOC_TIME, NoopMetric).ns {
         withRetryNoSplit[HostMemoryBuffer] {
           HostMemoryBuffer.allocate(hostBufferSize)
         }
       }
       closeOnExcept(hostBuffer) { hmb =>
         withResource(new HostMemoryOutputStream(hmb)) { out =>
-          metrics.getOrElse(ORC_FILE_REBUILD_TIME, NoopMetric).ns {
-            writeOrcOutputFile(ctx, out, stripes)
+          phaseMetrics.getOrElse(ORC_FILE_REBUILD_TIME, NoopMetric).ns {
+            writeOrcOutputFile(ctx, out, stripes, phaseMetrics)
           }
-          val spillable = metrics.getOrElse(ORC_SPILLABLE_WRAP_TIME, NoopMetric).ns {
+          val spillable = phaseMetrics.getOrElse(ORC_SPILLABLE_WRAP_TIME, NoopMetric).ns {
             SpillableHostBuffer(hmb, out.getPos, SpillPriorities.ACTIVE_BATCHING_PRIORITY)
           }
           (spillable, out.getPos)
@@ -1155,14 +1158,15 @@ trait OrcPartitionReaderBase extends OrcCommonFunctions with Logging
   private def writeOrcOutputFile(
       ctx: OrcPartitionReaderContext,
       rawOut: HostMemoryOutputStream,
-      stripes: Seq[OrcOutputStripe]): Unit = {
+      stripes: Seq[OrcOutputStripe],
+      phaseMetrics: Map[String, GpuMetric]): Unit = {
 
     // write ORC header
     writeOrcFileHeader(rawOut)
 
     // write the stripes
     withCodecOutputStream(ctx, rawOut) { protoWriter =>
-      withResource(OrcTools.buildDataReader(ctx, metrics)) { dataReader =>
+      withResource(OrcTools.buildDataReader(ctx, phaseMetrics)) { dataReader =>
         stripes.foreach { stripe =>
           stripe.infoBuilder.setOffset(rawOut.getPos)
           copyStripeData(dataReader, rawOut, stripe.inputDataRanges)
@@ -2138,14 +2142,18 @@ class MultiFileCloudOrcPartitionReader(
 
     private def doRead(): HostMemoryBuffersWithMetaDataBase = {
       val startingBytesRead = fileSystemBytesRead()
+      val localMetrics = execMetrics.keysIterator.map { name =>
+        name -> new LocalGpuMetric
+      }.toMap
+      val localFilterHandler = filterHandler.copy(metrics = localMetrics)
 
       val hostBuffers = new ArrayBuffer[SingleHMBAndMeta]
       val filterStartTime = System.nanoTime()
       val filterCpuStartTime = OrcThreadCpuTimer.currentTimeNanos
-      val ctx = filterHandler.filterStripes(partFile, dataSchema, readDataSchema,
+      val ctx = localFilterHandler.filterStripes(partFile, dataSchema, readDataSchema,
         partitionSchema)
       val filterTime = System.nanoTime() - filterStartTime
-      execMetrics.getOrElse(ORC_FILTER_CPU_TIME, NoopMetric) +=
+      localMetrics.getOrElse(ORC_FILTER_CPU_TIME, NoopMetric) +=
         OrcThreadCpuTimer.currentTimeNanos - filterCpuStartTime
       val bufferTimeStart = System.nanoTime()
       val bufferCpuStartTime = OrcThreadCpuTimer.currentTimeNanos
@@ -2173,7 +2181,7 @@ class MultiFileCloudOrcPartitionReader(
               while (blockChunkIter.hasNext) {
                 val blocksToRead = populateCurrentBlockChunk(blockChunkIter, maxReadBatchSizeRows,
                   maxReadBatchSizeBytes)
-                val (hostBuf, bufSize) = readPartFile(ctx, blocksToRead)
+                val (hostBuf, bufSize) = readPartFile(ctx, blocksToRead, localMetrics)
                 val numRows = blocksToRead.map(_.infoBuilder.getNumberOfRows).sum
                 val metas = blocksToRead.map(b => OrcDataStripe(OrcStripeWithMeta(b, ctx)))
                 hostBuffers += SingleHMBAndMeta(Array(hostBuf), bufSize, numRows, metas)
@@ -2198,8 +2206,11 @@ class MultiFileCloudOrcPartitionReader(
           throw e
       }
       val bufferTime = System.nanoTime() - bufferTimeStart
-      execMetrics.getOrElse(ORC_BUFFER_CPU_TIME, NoopMetric) +=
+      localMetrics.getOrElse(ORC_BUFFER_CPU_TIME, NoopMetric) +=
         OrcThreadCpuTimer.currentTimeNanos - bufferCpuStartTime
+      result.setOrcPhaseMetrics(ORC_PHASE_METRICS.map { name =>
+        name -> localMetrics.getOrElse(name, NoopMetric).value
+      }.toMap)
       result.setExecutionTime(filterTime, bufferTime)
       result
     }

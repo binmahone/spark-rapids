@@ -119,6 +119,7 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
   private var _parquetVectoredReadTime: Long = 0L
   private var _parquetRemoteCacheTime: Long = 0L
   private var _parquetBlockMetadataTime: Long = 0L
+  private var _orcPhaseMetrics: Map[String, Long] = Map.empty
 
   /**
    * When it is present, it indicates the partition values stored as an array of
@@ -177,6 +178,10 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
     _parquetBlockMetadataTime = blockMetadataTime
   }
 
+  def setOrcPhaseMetrics(values: Map[String, Long]): Unit = {
+    _orcPhaseMetrics = values
+  }
+
   def getBufferTime: Long = _bufferTime
   def getFilterTime: Long = _filterTime
   def getScheduleTime: Long = _scheduleTime
@@ -194,6 +199,7 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
   def getParquetVectoredReadTime: Long = _parquetVectoredReadTime
   def getParquetRemoteCacheTime: Long = _parquetRemoteCacheTime
   def getParquetBlockMetadataTime: Long = _parquetBlockMetadataTime
+  def getOrcPhaseMetric(name: String): Long = _orcPhaseMetrics.getOrElse(name, 0L)
 
   def getBufferTimePct: Double = {
     val totalTime = _filterTime + _bufferTime + _scheduleTime
@@ -347,6 +353,16 @@ object MultiFileReaderUtils {
       files: Array[String],
       cloudSchemes: Set[String]): Boolean =
     !coalescingEnabled || (multiThreadEnabled && hasPathInCloud(files, cloudSchemes))
+}
+
+object MultiFileCloudPartitionReaderBase {
+  private[rapids] def publishOrcPhaseMetrics(
+      data: HostMemoryBuffersWithMetaDataBase,
+      metrics: Map[String, GpuMetric]): Unit = {
+    ORC_PHASE_METRICS.foreach { name =>
+      metrics.getOrElse(name, NoopMetric) += data.getOrcPhaseMetric(name)
+    }
+  }
 }
 
 /**
@@ -807,6 +823,7 @@ abstract class MultiFileCloudPartitionReaderBase(
     metrics.getOrElse(ASYNC_RAW_EXECUTION_TIME, NoopMetric) += async.executionTimeMs
     metrics.getOrElse(ASYNC_RAW_FILTER_TIME, NoopMetric) += taskRet.data.getFilterTime
     metrics.getOrElse(ASYNC_RAW_BUFFER_TIME, NoopMetric) += taskRet.data.getBufferTime
+    MultiFileCloudPartitionReaderBase.publishOrcPhaseMetrics(taskRet.data, metrics)
     val parquetChunkSelectionTime = taskRet.data.getParquetChunkSelectionTime
     val parquetPartFileTime = taskRet.data.getParquetPartFileTime
     val parquetPartBookkeepingTime = taskRet.data.getParquetPartBookkeepingTime

@@ -19,7 +19,30 @@ package com.nvidia.spark.rapids
 import com.nvidia.spark.rapids.Arm.withResource
 import org.scalatest.funsuite.AnyFunSuite
 
+import org.apache.spark.sql.execution.datasources.PartitionedFile
+
 class GpuMetricsSuite extends AnyFunSuite {
+
+  test("ORC phase metrics are published after async reader completion") {
+    val sourceValues = GpuMetric.ORC_PHASE_METRICS.zipWithIndex.map { case (name, index) =>
+      name -> (index.toLong + 1L)
+    }.toMap
+    val data = new HostMemoryBuffersWithMetaDataBase {
+      override def partitionedFile: PartitionedFile = null
+      override def memBuffersAndSizes: Array[SingleHMBAndMeta] = Array.empty
+      override def bytesRead: Long = 0L
+    }
+    data.setOrcPhaseMetrics(sourceValues)
+    val published = GpuMetric.ORC_PHASE_METRICS.map { name =>
+      name -> new LocalGpuMetric
+    }.toMap
+
+    MultiFileCloudPartitionReaderBase.publishOrcPhaseMetrics(data, published)
+
+    sourceValues.foreach { case (name, expected) =>
+      assert(published(name).value == expected)
+    }
+  }
 
   test("GpuMetric.ns: duplicate timing on the same metrics") {
     val m1 = new LocalGpuMetric()

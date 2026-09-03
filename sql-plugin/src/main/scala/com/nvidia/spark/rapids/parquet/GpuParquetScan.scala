@@ -4141,6 +4141,7 @@ class GDSParquetTableReader(
   private val delegate = new JniParquetChunkedReader(
     chunkSizeByteLimit, maxChunkedReaderMemoryUsageSizeBytes, opts, file)
   private lazy val splitsString = splits.mkString("; ")
+  private var closed = false
 
   override def hasNext: Boolean = delegate.hasNext
 
@@ -4167,11 +4168,14 @@ class GDSParquetTableReader(
     table
   }
 
-  override def close(): Unit = {
-    try {
-      delegate.close()
-    } finally {
-      filter.foreach(_.close())
+  override def close(): Unit = synchronized {
+    if (!closed) {
+      closed = true
+      try {
+        delegate.close()
+      } finally {
+        filter.foreach(_.close())
+      }
     }
   }
 }
@@ -4250,11 +4254,11 @@ class ParquetGDSPartitionReader(
       } else {
         None
       }
-      val parseOpts = getParquetOptions(
-        readDataSchema, clippedParquetSchema, useFieldId, rowGroupIndices,
-        compiledFilter.orNull)
-      val javaFile = new java.io.File(new URI(filePath.toString).getPath)
       val producer = try {
+        val parseOpts = getParquetOptions(
+          readDataSchema, clippedParquetSchema, useFieldId, rowGroupIndices,
+          compiledFilter.orNull)
+        val javaFile = new java.io.File(new URI(filePath.toString).getPath)
         new GDSParquetTableReader(
           targetBatchSizeBytes, maxChunkedReaderMemoryUsageSizeBytes, parseOpts, javaFile,
           execMetrics, readDataSchema, Array(split), compiledFilter)

@@ -47,7 +47,7 @@ import org.apache.spark.sql.types.StructType
  * Rules that run after the row to columnar and columnar to row transitions have been inserted.
  * These rules insert transitions to and from the GPU, and then optimize various transitions.
  */
-class GpuTransitionOverrides extends Rule[SparkPlan] {
+class GpuTransitionOverrides(sparkSession: SparkSession = null) extends Rule[SparkPlan] {
   // previous name of the field `conf` collides with Rule#conf as of Spark 3.1.1
   var rapidsConf: RapidsConf = null
 
@@ -456,7 +456,10 @@ class GpuTransitionOverrides extends Rule[SparkPlan] {
     // Prune the output of the Scan so it only includes things that the referenceList will
     // actually read
     val neededExprIds = referenceList.flatMap(extractAttrReferences).map(_.exprId).toSet
-    val partOutAttrs = fss.output.drop(fss.requiredSchema.length)
+    // Partition attributes follow the required data attributes in the scan output.
+    val partOutAttrs = fss.output.slice(
+      fss.requiredSchema.length,
+      fss.requiredSchema.length + fss.relation.partitionSchema.length)
     val neededPartIndexes = partOutAttrs.zipWithIndex.collect{
       case (provided, index) if neededExprIds.contains(provided.exprId) => index
     }
@@ -939,7 +942,9 @@ class GpuTransitionOverrides extends Rule[SparkPlan] {
     }
   }
 
-  override def apply(sparkPlan: SparkPlan): SparkPlan = GpuOverrideUtil.tryOverride { plan =>
+  override def apply(sparkPlan: SparkPlan): SparkPlan =
+      GpuOverrideUtil.withActiveSession(sparkSession) {
+    GpuOverrideUtil.tryOverride { plan =>
     this.rapidsConf = new RapidsConf(plan.conf)
     if (rapidsConf.isSqlEnabled && rapidsConf.isSqlExecuteOnGPU) {
       GpuOverrides.logDuration(rapidsConf.shouldExplain,
@@ -1010,7 +1015,8 @@ class GpuTransitionOverrides extends Rule[SparkPlan] {
     } else {
       plan
     }
-  }(sparkPlan)
+    }(sparkPlan)
+  }
 }
 
 object GpuTransitionOverrides {

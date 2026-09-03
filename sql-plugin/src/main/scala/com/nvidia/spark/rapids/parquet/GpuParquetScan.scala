@@ -4239,7 +4239,7 @@ class ParquetGDSPartitionReader(
         readDataSchema, clippedParquetSchema, isSchemaCaseSensitive, useFieldId)
       val compiledFilter = if (nativeFilterPushdownEnabled) {
         GpuParquetGDSFilterAst.compile(
-          filters, readDataSchema, cudfColumnNames, isSchemaCaseSensitive) match {
+          filters, readDataSchema, cudfColumnNames.toArray, isSchemaCaseSensitive) match {
           case Right(compiled) =>
             val skipped = compiled.skippedFilters.map {
               case (filter, reason) => s"$filter ($reason)"

@@ -61,6 +61,7 @@ class GpuReadParquetFileFormat extends ParquetFileFormat with GpuReadFileFormatW
         partitionSchema,
         filters.toArray,
         rapidsConf,
+        rapidsConf.isParquetGDSFilterPushdownEnabled,
         metrics,
         options)
     } else {

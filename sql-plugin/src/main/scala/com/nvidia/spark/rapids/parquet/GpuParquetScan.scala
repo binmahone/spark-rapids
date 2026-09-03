@@ -136,8 +136,8 @@ case class GpuParquetScan(
     if (rapidsConf.isParquetGDSReadEnabled) {
       logInfo("Using the GDS parquet reader")
       GpuParquetGDSPartitionReaderFactory(sparkSession.sessionState.conf, broadcastedConf,
-        dataSchema, readDataSchema, readPartitionSchema, pushedFilters, rapidsConf, metrics,
-        options.asScala.toMap)
+        dataSchema, readDataSchema, readPartitionSchema, pushedFilters, rapidsConf,
+        rapidsConf.isParquetGDSFilterPushdownEnabled, metrics, options.asScala.toMap)
     } else if (rapidsConf.isParquetPerFileReadEnabled) {
       logInfo("Using the original per file parquet reader")
       GpuParquetPartitionReaderFactory(sparkSession.sessionState.conf, broadcastedConf,
@@ -4093,6 +4093,7 @@ case class GpuParquetGDSPartitionReaderFactory(
     partitionSchema: StructType,
     filters: Array[Filter],
     @transient rapidsConf: RapidsConf,
+    gdsFilterPushdownEnabled: Boolean,
     metrics: Map[String, GpuMetric],
     @transient params: Map[String, String])
   extends GpuParquetPartitionReaderFactoryBase(
@@ -4124,7 +4125,7 @@ case class GpuParquetGDSPartitionReaderFactory(
       targetSizeBytes, maxChunkedReaderMemoryUsageSizeBytes, compressCfg,
       metrics, singleFileInfo.dateRebaseMode, singleFileInfo.timestampRebaseMode,
       singleFileInfo.hasInt96Timestamps, readUseFieldId, rowGroupIndices, filters,
-      rapidsConf.isParquetGDSFilterPushdownEnabled)
+      gdsFilterPushdownEnabled)
   }
 }
 

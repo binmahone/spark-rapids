@@ -124,6 +124,8 @@ object GpuMetric extends Logging {
   val ORC_TAIL_READ_TIME = "orcTailReadTime"
   val ORC_TAIL_READ_BYTES = "orcTailReadBytes"
   val ORC_TAIL_READ_CALLS = "orcTailReadCalls"
+  val ORC_TAIL_PERFIO_READ_CALLS = "orcTailPerfIOReadCalls"
+  val ORC_TAIL_FALLBACK_READ_CALLS = "orcTailFallbackReadCalls"
   val ORC_TAIL_PARSE_TIME = "orcTailParseTime"
   val ORC_READER_FILTER_TIME = "orcReaderFilterTime"
   val ORC_STRIPE_FOOTER_READ_TIME = "orcStripeFooterReadTime"
@@ -147,6 +149,8 @@ object GpuMetric extends Logging {
     ORC_TAIL_READ_TIME,
     ORC_TAIL_READ_BYTES,
     ORC_TAIL_READ_CALLS,
+    ORC_TAIL_PERFIO_READ_CALLS,
+    ORC_TAIL_FALLBACK_READ_CALLS,
     ORC_TAIL_PARSE_TIME,
     ORC_READER_FILTER_TIME,
     ORC_STRIPE_FOOTER_READ_TIME,
@@ -262,6 +266,8 @@ object GpuMetric extends Logging {
   val DESCRIPTION_ORC_TAIL_READ_TIME = "ORC tail open, status, and remote read time"
   val DESCRIPTION_ORC_TAIL_READ_BYTES = "ORC tail remote read bytes"
   val DESCRIPTION_ORC_TAIL_READ_CALLS = "ORC tail remote read calls"
+  val DESCRIPTION_ORC_TAIL_PERFIO_READ_CALLS = "ORC tail PerfIO read calls"
+  val DESCRIPTION_ORC_TAIL_FALLBACK_READ_CALLS = "ORC tail fallback read calls"
   val DESCRIPTION_ORC_TAIL_PARSE_TIME = "ORC tail parse time"
   val DESCRIPTION_ORC_READER_FILTER_TIME =
     "ORC reader setup and stripe filtering time including stripe footer I/O"

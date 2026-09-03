@@ -39,14 +39,15 @@ import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
 import com.nvidia.spark.rapids.SchemaUtils._
 import com.nvidia.spark.rapids.filecache.FileCache
-import com.nvidia.spark.rapids.fileio.hadoop.HadoopFileIO
+import com.nvidia.spark.rapids.fileio.hadoop.{GCSInputFile, HadoopFileIO, S3InputFile}
 import com.nvidia.spark.rapids.io.async._
 import com.nvidia.spark.rapids.jni.{CastStrings, RmmSpark}
+import com.nvidia.spark.rapids.jni.fileio.RapidsInputFile
 import com.nvidia.spark.rapids.shims.{ColumnDefaultValuesShims, GpuOrcDataReader, NullOutputStreamShim, OrcCastingShims, OrcReadingShims, OrcShims, ShimFilePartitionReaderFactory}
 import org.apache.commons.io.IOUtils
 import org.apache.commons.io.output.CountingOutputStream
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, FSDataInputStream, Path}
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.common.io.DiskRangeList
 import org.apache.hadoop.io.Text
 import org.apache.orc.{CompressionKind, DataReader, FileFormatException, OrcConf, OrcFile, OrcProto, PhysicalWriter, Reader, StripeInformation, TypeDescription}
@@ -1893,50 +1894,76 @@ private object GpuOrcFileFilterHandler {
       filePath: Path,
       fs: FileSystem,
       metrics: Map[String, GpuMetric]): ByteBuffer = {
-    def readFully(in: FSDataInputStream, offset: Long, data: Array[Byte], dataOffset: Int,
-        length: Int): Unit = {
-      in.readFully(offset, data, dataOffset, length)
+    val inputFile = new HadoopFileIO(fs.getConf).newInputFile(filePath)
+    val perfIO = inputFile.isInstanceOf[GCSInputFile] || inputFile.isInstanceOf[S3InputFile]
+
+    def recordRead(length: Int, usedPerfIO: Boolean): Unit = {
       metrics.getOrElse(ORC_TAIL_READ_BYTES, NoopMetric) += length
       metrics.getOrElse(ORC_TAIL_READ_CALLS, NoopMetric) += 1
-    }
-    withResource(fs.open(filePath)) { in =>
-      val fileStatus = fs.getFileStatus(filePath)
-      val fileSize = fileStatus.getLen
-      val modificationTime = fileStatus.getModificationTime
-      if (fileSize == 0) {
-        // file is empty
-        ByteBuffer.allocate(0)
+      val transportMetric = if (usedPerfIO) {
+        ORC_TAIL_PERFIO_READ_CALLS
       } else {
-        val footerSizeGuess = 16 * 1024
-        val bb = ByteBuffer.allocate(footerSizeGuess)
-        val readSize = fileSize.min(footerSizeGuess).toInt
-        readFully(in, fileSize - readSize, bb.array(), bb.arrayOffset(), readSize)
-        bb.position(0)
-        bb.limit(readSize)
-        val psLen = bb.get(readSize - 1) & 0xff
-        ensureOrcFooter(in, filePath, psLen, bb)
-        val psOffset = readSize - 1 - psLen
-        val ps = extractPostScript(bb, filePath, psLen, psOffset)
-        val tailSize = (1 + psLen + ps.getFooterLength + ps.getMetadataLength +
-            OrcShims.getStripeStatisticsLength(ps)).toInt
-        val tailBuffer = ByteBuffer.allocate(tailSize + TAIL_PREFIX_SIZE)
-        // calculate the amount of tail data that was missed in the speculative initial read
-        val unreadRemaining = Math.max(0, tailSize - readSize)
-        // copy tail bytes from original buffer
-        bb.position(Math.max(0, readSize - tailSize))
-        tailBuffer.position(TAIL_PREFIX_SIZE + unreadRemaining)
-        tailBuffer.put(bb)
-        if (unreadRemaining > 0) {
-          // first read did not grab the entire tail, need to read more
-          tailBuffer.position(TAIL_PREFIX_SIZE)
-          readFully(in, fileSize - readSize - unreadRemaining, tailBuffer.array(),
-            tailBuffer.arrayOffset() + tailBuffer.position(), unreadRemaining)
-        }
-        tailBuffer.putLong(0, fileSize)
-        tailBuffer.putLong(java.lang.Long.BYTES, modificationTime)
-        tailBuffer.position(0)
-        tailBuffer
+        ORC_TAIL_FALLBACK_READ_CALLS
       }
+      metrics.getOrElse(transportMetric, NoopMetric) += 1
+    }
+
+    def readRange(offset: Long, data: Array[Byte], dataOffset: Int, length: Int): Unit = {
+      if (perfIO && offset == 0L) {
+        withResource(fs.open(filePath)) { in =>
+          in.readFully(offset, data, dataOffset, length)
+        }
+        recordRead(length, usedPerfIO = false)
+      } else {
+        withResource(HostMemoryBuffer.allocate(length, false)) { hmb =>
+          val range = new RapidsInputFile.CopyRange(offset, length, 0L)
+          inputFile.readVectored(hmb, util.Collections.singletonList(range))
+          hmb.getBytes(data, dataOffset, 0L, length)
+        }
+        recordRead(length, usedPerfIO = perfIO)
+      }
+    }
+
+    def readTail(data: Array[Byte], dataOffset: Int, length: Int): Unit = {
+      withResource(HostMemoryBuffer.allocate(length, false)) { hmb =>
+        inputFile.readTail(length, hmb)
+        hmb.getBytes(data, dataOffset, 0L, length)
+      }
+      recordRead(length, usedPerfIO = perfIO)
+    }
+
+    val fileStatus = fs.getFileStatus(filePath)
+    val fileSize = fileStatus.getLen
+    val modificationTime = fileStatus.getModificationTime
+    if (fileSize == 0) {
+      ByteBuffer.allocate(0)
+    } else {
+      val footerSizeGuess = 16 * 1024
+      val bb = ByteBuffer.allocate(footerSizeGuess)
+      val readSize = fileSize.min(footerSizeGuess).toInt
+      readTail(bb.array(), bb.arrayOffset(), readSize)
+      bb.position(0)
+      bb.limit(readSize)
+      val psLen = bb.get(readSize - 1) & 0xff
+      ensureOrcFooter(readRange, filePath, psLen, bb)
+      val psOffset = readSize - 1 - psLen
+      val ps = extractPostScript(bb, filePath, psLen, psOffset)
+      val tailSize = (1 + psLen + ps.getFooterLength + ps.getMetadataLength +
+          OrcShims.getStripeStatisticsLength(ps)).toInt
+      val tailBuffer = ByteBuffer.allocate(tailSize + TAIL_PREFIX_SIZE)
+      val unreadRemaining = Math.max(0, tailSize - readSize)
+      bb.position(Math.max(0, readSize - tailSize))
+      tailBuffer.position(TAIL_PREFIX_SIZE + unreadRemaining)
+      tailBuffer.put(bb)
+      if (unreadRemaining > 0) {
+        tailBuffer.position(TAIL_PREFIX_SIZE)
+        readRange(fileSize - readSize - unreadRemaining, tailBuffer.array(),
+          tailBuffer.arrayOffset() + tailBuffer.position(), unreadRemaining)
+      }
+      tailBuffer.putLong(0, fileSize)
+      tailBuffer.putLong(java.lang.Long.BYTES, modificationTime)
+      tailBuffer.position(0)
+      tailBuffer
     }
   }
 
@@ -1963,7 +1990,7 @@ private object GpuOrcFileFilterHandler {
    * @param buffer the tail of the file
    */
   private def ensureOrcFooter(
-      in: FSDataInputStream,
+      readRange: (Long, Array[Byte], Int, Int) => Unit,
       path: Path,
       psLen: Int,
       buffer: ByteBuffer): Unit = {
@@ -1980,7 +2007,7 @@ private object GpuOrcFileFilterHandler {
       // If it isn't there, this may be the 0.11.0 version of ORC.
       // Read the first 3 bytes of the file to check for the header
       val header = new Array[Byte](magicLength)
-      in.readFully(0, header, 0, magicLength)
+      readRange(0, header, 0, magicLength)
       // if it isn't there, this isn't an ORC file
       if (!Text.decode(header, 0, magicLength).equals(OrcFile.MAGIC)) {
         throw new FileFormatException("Malformed ORC file " + path +

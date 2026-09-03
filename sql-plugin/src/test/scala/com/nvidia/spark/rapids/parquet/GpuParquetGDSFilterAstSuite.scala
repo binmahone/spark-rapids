@@ -16,10 +16,11 @@
 
 package com.nvidia.spark.rapids.parquet
 
+import org.scalatest.funsuite.AnyFunSuite
+
 import org.apache.spark.sql.sources.{Filter, GreaterThanOrEqual, IsNotNull,
   LessThan}
 import org.apache.spark.sql.types.{DoubleType, StructField, StructType}
-import org.scalatest.funsuite.AnyFunSuite
 
 class GpuParquetGDSFilterAstSuite extends AnyFunSuite {
   private val schema = StructType(Seq(StructField("value", DoubleType, nullable = true)))

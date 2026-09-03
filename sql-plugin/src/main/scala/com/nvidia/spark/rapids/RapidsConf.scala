@@ -1485,6 +1485,14 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
     .checkValues(RapidsReaderType.values.map(_.toString))
     .createWithDefault(RapidsReaderType.AUTO.toString)
 
+  val PARQUET_GDS_FILTER_PUSHDOWN_ENABLED =
+    conf("spark.rapids.sql.format.parquet.gds.filterPushdown.enabled")
+      .doc("Enables full supported Spark data source filter pushdown into the cuDF AST for the " +
+        "GDS Parquet reader. Unsupported top-level conjuncts remain as Spark filters and are " +
+        "not included in the AST.")
+      .booleanConf
+      .createWithDefault(false)
+
   val PARQUET_DECOMPRESS_CPU =
     conf("spark.rapids.sql.format.parquet.decompressCpu")
       .doc("If true then the CPU is eligible to decompress Parquet data rather than the GPU. " +
@@ -3778,6 +3786,9 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val isParquetGDSReadEnabled: Boolean =
     RapidsReaderType.withName(get(PARQUET_READER_TYPE)) == RapidsReaderType.GDS
+
+  lazy val isParquetGDSFilterPushdownEnabled: Boolean =
+    get(PARQUET_GDS_FILTER_PUSHDOWN_ENABLED)
 
   lazy val isParquetAutoReaderEnabled: Boolean =
     RapidsReaderType.withName(get(PARQUET_READER_TYPE)) == RapidsReaderType.AUTO

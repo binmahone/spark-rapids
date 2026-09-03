@@ -30,6 +30,8 @@ import scala.language.implicitConversions
 
 import ai.rapids.cudf._
 import ai.rapids.cudf.{ParquetChunkedReader => JniParquetChunkedReader}
+import ai.rapids.cudf.ast.{AstExpression => CudfAstExpression, BinaryOperation,
+  BinaryOperator, ColumnNameReference, CompiledExpression, Literal, UnaryOperation, UnaryOperator}
 import com.github.luben.zstd.ZstdDecompressCtx
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
@@ -81,7 +83,11 @@ import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.rapids.{isTimestampNTZ, GpuTaskMetrics}
 import org.apache.spark.sql.rapids.execution.TrampolineUtil
-import org.apache.spark.sql.sources.Filter
+import org.apache.spark.sql.sources.{And => SourceAnd, EqualTo => SourceEqualTo, Filter,
+  GreaterThan => SourceGreaterThan, GreaterThanOrEqual => SourceGreaterThanOrEqual,
+  In => SourceIn, IsNotNull => SourceIsNotNull, IsNull => SourceIsNull,
+  LessThan => SourceLessThan, LessThanOrEqual => SourceLessThanOrEqual, Not => SourceNot,
+  Or => SourceOr, StringStartsWith => SourceStringStartsWith}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector => SparkVector}
@@ -2406,7 +2412,8 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       readDataSchema: StructType,
       clippedSchema: MessageType,
       useFieldId: Boolean,
-      rowGroupIndices: Array[Int] = null): ParquetOptions = {
+      rowGroupIndices: Array[Int] = null,
+      filter: CompiledExpression = null): ParquetOptions = {
     val includeColumns = toCudfColumnNames(readDataSchema, clippedSchema,
       isSchemaCaseSensitive, useFieldId)
     val builder = ParquetOptions.builder()
@@ -2414,6 +2421,9 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
         .includeColumn(includeColumns : _*)
     if (rowGroupIndices != null) {
       builder.withRowGroups(rowGroupIndices)
+    }
+    if (filter != null) {
+      builder.withFilter(filter)
     }
     builder.build()
   }
@@ -3850,6 +3860,231 @@ class ParquetPartitionReader(
   }
 }
 
+private[parquet] object GpuParquetGDSFilterAst {
+  case class CompiledFilter(
+      expression: CompiledExpression,
+      pushedFilters: Seq[Filter],
+      skippedFilters: Seq[(Filter, String)])
+
+  private def resolveColumn(
+      attribute: String,
+      readDataSchema: StructType,
+      cudfColumnNames: Array[String],
+      isCaseSensitive: Boolean): Either[String, (StructField, String)] = {
+    if (readDataSchema.length != cudfColumnNames.length) {
+      Left("projected Spark and cuDF schemas have different column counts")
+    } else {
+      val index = readDataSchema.fields.indexWhere { field =>
+        if (isCaseSensitive) field.name == attribute else field.name.equalsIgnoreCase(attribute)
+      }
+      if (index < 0) Left(s"filter column $attribute is not in the read schema")
+      else Right((readDataSchema.fields(index), cudfColumnNames(index)))
+    }
+  }
+
+  private def decimalLiteral(value: Any, dataType: DecimalType): Either[String, Literal] = {
+    val decimal = value match {
+      case d: java.math.BigDecimal => Some(d)
+      case d: Decimal => Some(d.toJavaBigDecimal)
+      case _ => None
+    }
+    decimal match {
+      case Some(d) =>
+        try {
+          val scaled = d.setScale(dataType.scale)
+          Right(Literal.ofDecimal(DecimalUtil.createCudfDecimal(dataType), scaled.unscaledValue()))
+        } catch {
+          case e: ArithmeticException =>
+            Left(s"decimal literal cannot use $dataType: ${e.getMessage}")
+        }
+      case None => Left(s"unsupported decimal literal ${value.getClass.getName}")
+    }
+  }
+
+  private def literal(value: Any, dataType: DataType): Either[String, Literal] = {
+    if (value == null) {
+      return Left("null comparison literals are not supported")
+    }
+    (dataType, value) match {
+      case (BooleanType, v: java.lang.Boolean) => Right(Literal.ofBoolean(v))
+      case (ByteType, v: java.lang.Number) => Right(Literal.ofByte(v.byteValue()))
+      case (ShortType, v: java.lang.Number) => Right(Literal.ofShort(v.shortValue()))
+      case (IntegerType, v: java.lang.Number) => Right(Literal.ofInt(v.intValue()))
+      case (LongType, v: java.lang.Number) => Right(Literal.ofLong(v.longValue()))
+      case (FloatType, v: java.lang.Number) => Right(Literal.ofFloat(v.floatValue()))
+      case (DoubleType, v: java.lang.Number) => Right(Literal.ofDouble(v.doubleValue()))
+      case (StringType, v: String) => Right(Literal.ofString(v))
+      case (DateType, v: java.sql.Date) =>
+        Right(Literal.ofTimestampDaysFromInt(Math.toIntExact(v.toLocalDate.toEpochDay)))
+      case (DateType, v: java.time.LocalDate) =>
+        Right(Literal.ofTimestampDaysFromInt(Math.toIntExact(v.toEpochDay)))
+      case (DateType, v: java.lang.Number) =>
+        Right(Literal.ofTimestampDaysFromInt(v.intValue()))
+      case (d: DecimalType, _) => decimalLiteral(value, d)
+      case _ => Left(s"unsupported literal ${value.getClass.getName} for $dataType")
+    }
+  }
+
+  private def comparison(
+      operator: BinaryOperator,
+      attribute: String,
+      value: Any,
+      readDataSchema: StructType,
+      cudfColumnNames: Array[String],
+      isCaseSensitive: Boolean): Either[String, CudfAstExpression] = {
+    resolveColumn(attribute, readDataSchema, cudfColumnNames, isCaseSensitive) match {
+      case Left(reason) => Left(reason)
+      case Right((field, cudfName)) =>
+        literal(value, field.dataType) match {
+          case Left(reason) => Left(reason)
+          case Right(lit) =>
+            Right(new BinaryOperation(operator, new ColumnNameReference(cudfName), lit))
+        }
+    }
+  }
+
+  private def combine(
+      operator: BinaryOperator,
+      left: Either[String, CudfAstExpression],
+      right: Either[String, CudfAstExpression]): Either[String, CudfAstExpression] = {
+    (left, right) match {
+      case (Right(leftAst), Right(rightAst)) =>
+        Right(new BinaryOperation(operator, leftAst, rightAst))
+      case (Left(reason), _) => Left(reason)
+      case (_, Left(reason)) => Left(reason)
+    }
+  }
+
+  private def in(
+      attribute: String,
+      values: Array[Any],
+      readDataSchema: StructType,
+      cudfColumnNames: Array[String],
+      isCaseSensitive: Boolean): Either[String, CudfAstExpression] = {
+    if (values.isEmpty) {
+      return Left("empty IN lists are not pushed")
+    }
+    resolveColumn(attribute, readDataSchema, cudfColumnNames, isCaseSensitive) match {
+      case Left(reason) => Left(reason)
+      case Right((field, cudfName)) =>
+        var root: CudfAstExpression = null
+        var index = 0
+        while (index < values.length) {
+          literal(values(index), field.dataType) match {
+            case Left(reason) => return Left(reason)
+            case Right(lit) =>
+              val equal = new BinaryOperation(
+                BinaryOperator.EQUAL, new ColumnNameReference(cudfName), lit)
+              root = if (root == null) equal else {
+                new BinaryOperation(BinaryOperator.NULL_LOGICAL_OR, root, equal)
+              }
+          }
+          index += 1
+        }
+        Right(root)
+    }
+  }
+
+  private def stringStartsWith(
+      attribute: String,
+      prefix: String,
+      readDataSchema: StructType,
+      cudfColumnNames: Array[String],
+      isCaseSensitive: Boolean): Either[String, CudfAstExpression] = {
+    if (prefix.isEmpty || !prefix.forall(ch => ch >= ' ' && ch < 127)) {
+      return Left("StringStartsWith requires a non-empty ASCII prefix")
+    }
+    val last = prefix.last
+    if (last == 126) {
+      return Left("StringStartsWith prefix has no supported ASCII upper bound")
+    }
+    val upper = prefix.dropRight(1) + (last + 1).toChar
+    combine(BinaryOperator.NULL_LOGICAL_AND,
+      comparison(BinaryOperator.GREATER_EQUAL, attribute, prefix,
+        readDataSchema, cudfColumnNames, isCaseSensitive),
+      comparison(BinaryOperator.LESS, attribute, upper,
+        readDataSchema, cudfColumnNames, isCaseSensitive))
+  }
+
+  private def convert(
+      filter: Filter,
+      readDataSchema: StructType,
+      cudfColumnNames: Array[String],
+      isCaseSensitive: Boolean): Either[String, CudfAstExpression] = filter match {
+    case SourceAnd(left, right) =>
+      combine(BinaryOperator.NULL_LOGICAL_AND,
+        convert(left, readDataSchema, cudfColumnNames, isCaseSensitive),
+        convert(right, readDataSchema, cudfColumnNames, isCaseSensitive))
+    case SourceOr(left, right) =>
+      combine(BinaryOperator.NULL_LOGICAL_OR,
+        convert(left, readDataSchema, cudfColumnNames, isCaseSensitive),
+        convert(right, readDataSchema, cudfColumnNames, isCaseSensitive))
+    case SourceNot(child) =>
+      convert(child, readDataSchema, cudfColumnNames, isCaseSensitive) match {
+        case Left(reason) => Left(reason)
+        case Right(childAst) => Right(new UnaryOperation(UnaryOperator.NOT, childAst))
+      }
+    case SourceIsNull(attribute) =>
+      resolveColumn(attribute, readDataSchema, cudfColumnNames, isCaseSensitive) match {
+        case Left(reason) => Left(reason)
+        case Right((_, cudfName)) =>
+          Right(new UnaryOperation(UnaryOperator.IS_NULL, new ColumnNameReference(cudfName)))
+      }
+    case SourceIsNotNull(attribute) =>
+      resolveColumn(attribute, readDataSchema, cudfColumnNames, isCaseSensitive) match {
+        case Left(reason) => Left(reason)
+        case Right((_, cudfName)) =>
+          val isNull = new UnaryOperation(UnaryOperator.IS_NULL, new ColumnNameReference(cudfName))
+          Right(new UnaryOperation(UnaryOperator.NOT, isNull))
+      }
+    case SourceEqualTo(attribute, value) => comparison(BinaryOperator.EQUAL, attribute, value,
+      readDataSchema, cudfColumnNames, isCaseSensitive)
+    case SourceGreaterThan(attribute, value) => comparison(BinaryOperator.GREATER, attribute, value,
+      readDataSchema, cudfColumnNames, isCaseSensitive)
+    case SourceGreaterThanOrEqual(attribute, value) => comparison(BinaryOperator.GREATER_EQUAL,
+      attribute, value, readDataSchema, cudfColumnNames, isCaseSensitive)
+    case SourceLessThan(attribute, value) => comparison(BinaryOperator.LESS, attribute, value,
+      readDataSchema, cudfColumnNames, isCaseSensitive)
+    case SourceLessThanOrEqual(attribute, value) => comparison(BinaryOperator.LESS_EQUAL, attribute,
+      value, readDataSchema, cudfColumnNames, isCaseSensitive)
+    case SourceIn(attribute, values) =>
+      in(attribute, values, readDataSchema, cudfColumnNames, isCaseSensitive)
+    case SourceStringStartsWith(attribute, prefix) =>
+      stringStartsWith(attribute, prefix, readDataSchema, cudfColumnNames, isCaseSensitive)
+    case other => Left(s"unsupported Spark data source filter ${other.getClass.getName}")
+  }
+
+  def compile(
+      filters: Array[Filter],
+      readDataSchema: StructType,
+      cudfColumnNames: Array[String],
+      isCaseSensitive: Boolean): Either[String, CompiledFilter] = {
+    if (filters.isEmpty) {
+      return Left("no filters were provided")
+    }
+    var root: CudfAstExpression = null
+    val pushed = ArrayBuffer[Filter]()
+    val skipped = ArrayBuffer[(Filter, String)]()
+    var index = 0
+    while (index < filters.length) {
+      convert(filters(index), readDataSchema, cudfColumnNames, isCaseSensitive) match {
+        case Left(reason) => skipped += filters(index) -> reason
+        case Right(expression) =>
+          pushed += filters(index)
+          root = if (root == null) expression else {
+            new BinaryOperation(BinaryOperator.NULL_LOGICAL_AND, root, expression)
+          }
+      }
+      index += 1
+    }
+    if (root == null) {
+      Left(skipped.map { case (filter, reason) => s"$filter: $reason" }.mkString("; "))
+    } else {
+      Right(CompiledFilter(root.compile(), pushed.toSeq, skipped.toSeq))
+    }
+  }
+}
+
 case class GpuParquetGDSPartitionReaderFactory(
     @transient sqlConf: SQLConf,
     broadcastedConf: Broadcast[SerializableConfiguration],
@@ -3888,7 +4123,8 @@ case class GpuParquetGDSPartitionReaderFactory(
       singleFileInfo.schema, isCaseSensitive, readDataSchema,
       targetSizeBytes, maxChunkedReaderMemoryUsageSizeBytes, compressCfg,
       metrics, singleFileInfo.dateRebaseMode, singleFileInfo.timestampRebaseMode,
-      singleFileInfo.hasInt96Timestamps, readUseFieldId, rowGroupIndices)
+      singleFileInfo.hasInt96Timestamps, readUseFieldId, rowGroupIndices, filters,
+      rapidsConf.isParquetGDSFilterPushdownEnabled)
   }
 }
 
@@ -3899,7 +4135,8 @@ class GDSParquetTableReader(
     file: java.io.File,
     metrics: Map[String, GpuMetric],
     readDataSchema: StructType,
-    splits: Array[PartitionedFile]) extends GpuDataProducer[Table] with Logging {
+    splits: Array[PartitionedFile],
+    filter: Option[CompiledExpression]) extends GpuDataProducer[Table] with Logging {
 
   private val delegate = new JniParquetChunkedReader(
     chunkSizeByteLimit, maxChunkedReaderMemoryUsageSizeBytes, opts, file)
@@ -3930,7 +4167,13 @@ class GDSParquetTableReader(
     table
   }
 
-  override def close(): Unit = delegate.close()
+  override def close(): Unit = {
+    try {
+      delegate.close()
+    } finally {
+      filter.foreach(_.close())
+    }
+  }
 }
 
 class ParquetGDSPartitionReader(
@@ -3950,7 +4193,9 @@ class ParquetGDSPartitionReader(
     timestampRebaseMode: DateTimeRebaseMode,
     hasInt96Timestamps: Boolean,
     useFieldId: Boolean,
-    rowGroupIndices: Array[Int]) extends FilePartitionReaderBase(conf, execMetrics)
+    rowGroupIndices: Array[Int],
+    filters: Array[Filter],
+    nativeFilterPushdownEnabled: Boolean) extends FilePartitionReaderBase(conf, execMetrics)
   with ParquetPartitionReaderBase {
 
   private var initialized = false
@@ -3986,12 +4231,38 @@ class ParquetGDSPartitionReader(
       }
 
       GpuSemaphore.acquireIfNecessary(TaskContext.get())
+      val cudfColumnNames = toCudfColumnNames(
+        readDataSchema, clippedParquetSchema, isSchemaCaseSensitive, useFieldId)
+      val compiledFilter = if (nativeFilterPushdownEnabled) {
+        GpuParquetGDSFilterAst.compile(
+          filters, readDataSchema, cudfColumnNames, isSchemaCaseSensitive) match {
+          case Right(compiled) =>
+            val skipped = compiled.skippedFilters.map {
+              case (filter, reason) => s"$filter ($reason)"
+            }.mkString("; ")
+            logInfo(s"GDS_NATIVE_FILTER_AST_ENABLED " +
+              s"pushed=${compiled.pushedFilters.mkString(" AND ")} skipped=$skipped")
+            Some(compiled.expression)
+          case Left(reason) =>
+            logWarning(s"GDS_NATIVE_FILTER_AST_DISABLED reason=$reason")
+            None
+        }
+      } else {
+        None
+      }
       val parseOpts = getParquetOptions(
-        readDataSchema, clippedParquetSchema, useFieldId, rowGroupIndices)
+        readDataSchema, clippedParquetSchema, useFieldId, rowGroupIndices,
+        compiledFilter.orNull)
       val javaFile = new java.io.File(new URI(filePath.toString).getPath)
-      val producer = new GDSParquetTableReader(
-        targetBatchSizeBytes, maxChunkedReaderMemoryUsageSizeBytes, parseOpts, javaFile,
-        execMetrics, readDataSchema, Array(split))
+      val producer = try {
+        new GDSParquetTableReader(
+          targetBatchSizeBytes, maxChunkedReaderMemoryUsageSizeBytes, parseOpts, javaFile,
+          execMetrics, readDataSchema, Array(split), compiledFilter)
+      } catch {
+        case t: Throwable =>
+          compiledFilter.foreach(_.close())
+          throw t
+      }
       batchIter = CachedGpuBatchIterator(producer, readDataSchema.fields.map(_.dataType))
     }
     if (batchIter.hasNext) {

@@ -59,6 +59,7 @@ import org.apache.parquet.hadoop.{CodecFactory, ParquetFileReader, ParquetInputF
   ParquetOutputFormat, ParquetWriter}
 import org.apache.parquet.hadoop.ParquetFileWriter.MAGIC
 import org.apache.parquet.hadoop.metadata._
+import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.io.{InputFile, SeekableInputStream => ParquetSeekableInputStream}
 import org.apache.parquet.schema.{DecimalMetadata, GroupType, LogicalTypeAnnotation, MessageType, OriginalType, PrimitiveType, Type}
 import org.apache.parquet.schema.LogicalTypeAnnotation.{DateLogicalTypeAnnotation, IntLogicalTypeAnnotation, TimestampLogicalTypeAnnotation}
@@ -126,7 +127,12 @@ case class GpuParquetScan(
     val broadcastedConf = sparkSession.sparkContext.broadcast(
       new SerializableConfiguration(hadoopConf))
 
-    if (rapidsConf.isParquetPerFileReadEnabled) {
+    if (rapidsConf.isParquetGDSReadEnabled) {
+      logInfo("Using the GDS parquet reader")
+      GpuParquetGDSPartitionReaderFactory(sparkSession.sessionState.conf, broadcastedConf,
+        dataSchema, readDataSchema, readPartitionSchema, pushedFilters, rapidsConf, metrics,
+        options.asScala.toMap)
+    } else if (rapidsConf.isParquetPerFileReadEnabled) {
       logInfo("Using the original per file parquet reader")
       GpuParquetPartitionReaderFactory(sparkSession.sessionState.conf, broadcastedConf,
         dataSchema, readDataSchema, readPartitionSchema, pushedFilters, rapidsConf, metrics,
@@ -2377,13 +2383,17 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
   def getParquetOptions(
       readDataSchema: StructType,
       clippedSchema: MessageType,
-      useFieldId: Boolean): ParquetOptions = {
+      useFieldId: Boolean,
+      rowGroupIndices: Array[Int] = null): ParquetOptions = {
     val includeColumns = toCudfColumnNames(readDataSchema, clippedSchema,
       isSchemaCaseSensitive, useFieldId)
-    ParquetOptions.builder()
+    val builder = ParquetOptions.builder()
         .withTimeUnit(DType.TIMESTAMP_MICROSECONDS)
         .includeColumn(includeColumns : _*)
-        .build()
+    if (rowGroupIndices != null) {
+      builder.withRowGroups(rowGroupIndices)
+    }
+    builder.build()
   }
 
   /** conversions used by multithreaded reader and coalescing reader */
@@ -3814,6 +3824,157 @@ class ParquetPartitionReader(
           clippedParquetSchema, Array(split), debugDumpPrefix, debugDumpAlways)
         CachedGpuBatchIterator(producer, colTypes)
       }
+    }
+  }
+}
+
+case class GpuParquetGDSPartitionReaderFactory(
+    @transient sqlConf: SQLConf,
+    broadcastedConf: Broadcast[SerializableConfiguration],
+    dataSchema: StructType,
+    readDataSchema: StructType,
+    partitionSchema: StructType,
+    filters: Array[Filter],
+    @transient rapidsConf: RapidsConf,
+    metrics: Map[String, GpuMetric],
+    @transient params: Map[String, String])
+  extends GpuParquetPartitionReaderFactoryBase(
+    sqlConf, broadcastedConf, dataSchema, readDataSchema, partitionSchema,
+    rapidsConf, metrics, params) with Logging {
+
+  override protected def buildBaseColumnarParquetReader(
+      file: PartitionedFile): PartitionReader[ColumnarBatch] = {
+    val conf = new Configuration(broadcastedConf.value.value)
+    val startTime = System.nanoTime()
+    val singleFileInfo = filterHandler.filterBlocks(fileIO, footerReadType, file, conf, filters,
+      readDataSchema)
+    metrics.get(FILTER_TIME).foreach {
+      _ += (System.nanoTime() - startTime)
+    }
+
+    val footer = ParquetFileReader.readFooter(
+      HadoopInputFile.fromPath(singleFileInfo.filePath, conf), ParquetMetadataConverter.NO_FILTER)
+    val selectedBlockOffsets = singleFileInfo.blocks.iterator.map(_.getStartingPos).toSet
+    val rowGroupIndices = footer.getBlocks.asScala.zipWithIndex.collect {
+      case (block, index) if selectedBlockOffsets.contains(block.getStartingPos) => index
+    }.toArray
+
+    new ParquetGDSPartitionReader(
+      fileIO, conf, file, singleFileInfo.filePath, singleFileInfo.blocks,
+      singleFileInfo.schema, isCaseSensitive, readDataSchema,
+      targetSizeBytes, maxChunkedReaderMemoryUsageSizeBytes, compressCfg,
+      metrics, singleFileInfo.dateRebaseMode, singleFileInfo.timestampRebaseMode,
+      singleFileInfo.hasInt96Timestamps, readUseFieldId, rowGroupIndices)
+  }
+}
+
+class GDSParquetTableReader(
+    chunkSizeByteLimit: Long,
+    maxChunkedReaderMemoryUsageSizeBytes: Long,
+    opts: ParquetOptions,
+    file: java.io.File,
+    metrics: Map[String, GpuMetric],
+    readDataSchema: StructType,
+    splits: Array[PartitionedFile]) extends GpuDataProducer[Table] with Logging {
+
+  private val delegate = new JniParquetChunkedReader(
+    chunkSizeByteLimit, maxChunkedReaderMemoryUsageSizeBytes, opts, file)
+  private lazy val splitsString = splits.mkString("; ")
+
+  override def hasNext: Boolean = delegate.hasNext
+
+  override def next: Table = {
+    val table = NvtxIdWithMetrics(NvtxRegistry.PARQUET_DECODE, metrics(GPU_DECODE_TIME)) {
+      try {
+        delegate.readChunk()
+      } catch {
+        case e: Exception =>
+          throw new IOException(s"Error when processing $splitsString", e)
+      }
+    }
+    if (table == null) {
+      return null
+    }
+    closeOnExcept(table) { _ =>
+      if (readDataSchema.length != table.getNumberOfColumns) {
+        throw new QueryExecutionException(
+          s"Expected ${readDataSchema.length} columns but read " +
+            s"${table.getNumberOfColumns} from $splitsString")
+      }
+    }
+    metrics(NUM_OUTPUT_BATCHES) += 1
+    table
+  }
+
+  override def close(): Unit = delegate.close()
+}
+
+class ParquetGDSPartitionReader(
+    override val fileIO: RapidsFileIO,
+    override val conf: Configuration,
+    split: PartitionedFile,
+    filePath: Path,
+    clippedBlocks: Iterable[BlockMetaData],
+    clippedParquetSchema: MessageType,
+    override val isSchemaCaseSensitive: Boolean,
+    readDataSchema: StructType,
+    targetBatchSizeBytes: Long,
+    maxChunkedReaderMemoryUsageSizeBytes: Long,
+    override val compressCfg: CpuCompressionConfig,
+    override val execMetrics: Map[String, GpuMetric],
+    dateRebaseMode: DateTimeRebaseMode,
+    timestampRebaseMode: DateTimeRebaseMode,
+    hasInt96Timestamps: Boolean,
+    useFieldId: Boolean,
+    rowGroupIndices: Array[Int]) extends FilePartitionReaderBase(conf, execMetrics)
+  with ParquetPartitionReaderBase {
+
+  private var initialized = false
+
+  override def next(): Boolean = {
+    if (batchIter.hasNext) {
+      return true
+    }
+    if (isDone) {
+      return false
+    }
+    if (!initialized) {
+      initialized = true
+      if (clippedParquetSchema.getFieldCount == 0) {
+        val rowCount = Math.toIntExact(clippedBlocks.iterator.map(_.getRowCount).sum)
+        if (rowCount == 0) {
+          isDone = true
+          return false
+        }
+        GpuSemaphore.acquireIfNecessary(TaskContext.get())
+        val nullColumns = readDataSchema.fields.safeMap { field =>
+          GpuColumnVector.fromNull(rowCount, field.dataType).asInstanceOf[SparkVector]
+        }
+        batchIter = new SingleGpuColumnarBatchIterator(
+          new ColumnarBatch(nullColumns.toArray, rowCount))
+        return true
+      }
+
+      if (dateRebaseMode != DateTimeRebaseCorrected ||
+          timestampRebaseMode != DateTimeRebaseCorrected || hasInt96Timestamps) {
+        throw new UnsupportedOperationException(
+          "The GDS Parquet reader requires corrected date/timestamp rebasing and no INT96 data")
+      }
+
+      GpuSemaphore.acquireIfNecessary(TaskContext.get())
+      val parseOpts = getParquetOptions(
+        readDataSchema, clippedParquetSchema, useFieldId, rowGroupIndices)
+      val javaFile = new java.io.File(new URI(filePath.toString).getPath)
+      val producer = new GDSParquetTableReader(
+        targetBatchSizeBytes, maxChunkedReaderMemoryUsageSizeBytes, parseOpts, javaFile,
+        execMetrics, readDataSchema, Array(split))
+      batchIter = CachedGpuBatchIterator(producer, readDataSchema.fields.map(_.dataType))
+    }
+    if (batchIter.hasNext) {
+      true
+    } else {
+      isDone = true
+      false
     }
   }
 }

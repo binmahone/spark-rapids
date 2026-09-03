@@ -317,7 +317,7 @@ class ConfBuilder(val key: String, val register: ConfEntry[_] => Unit) {
 
 object RapidsReaderType extends Enumeration {
   type RapidsReaderType = Value
-  val AUTO, COALESCING, MULTITHREADED, PERFILE = Value
+  val AUTO, COALESCING, MULTITHREADED, PERFILE, GDS = Value
 }
 
 object RapidsConf extends Logging {
@@ -3775,6 +3775,9 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val isParquetPerFileReadEnabled: Boolean =
     RapidsReaderType.withName(get(PARQUET_READER_TYPE)) == RapidsReaderType.PERFILE
+
+  lazy val isParquetGDSReadEnabled: Boolean =
+    RapidsReaderType.withName(get(PARQUET_READER_TYPE)) == RapidsReaderType.GDS
 
   lazy val isParquetAutoReaderEnabled: Boolean =
     RapidsReaderType.withName(get(PARQUET_READER_TYPE)) == RapidsReaderType.AUTO

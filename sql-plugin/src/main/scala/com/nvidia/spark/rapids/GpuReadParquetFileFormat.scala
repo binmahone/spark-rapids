@@ -16,7 +16,9 @@
 
 package com.nvidia.spark.rapids
 
-import com.nvidia.spark.rapids.parquet.{GpuParquetMultiFilePartitionReaderFactory, GpuParquetPartitionReaderFactory, GpuParquetPartitionReaderFactoryBase, GpuParquetScan}
+import com.nvidia.spark.rapids.parquet.{GpuParquetGDSPartitionReaderFactory,
+  GpuParquetMultiFilePartitionReaderFactory, GpuParquetPartitionReaderFactory,
+  GpuParquetPartitionReaderFactoryBase, GpuParquetScan}
 import org.apache.hadoop.conf.Configuration
 
 import org.apache.spark.broadcast.Broadcast
@@ -50,16 +52,29 @@ class GpuReadParquetFileFormat extends ParquetFileFormat with GpuReadFileFormatW
       rapidsConf: RapidsConf,
       metrics: Map[String, GpuMetric],
       options: Map[String, String]) : GpuParquetPartitionReaderFactoryBase = {
-    GpuParquetPartitionReaderFactory(
-      sqlConf,
-      broadcastedConf,
-      dataSchema,
-      readDataSchema,
-      partitionSchema,
-      filters.toArray,
-      rapidsConf,
-      metrics,
-      options)
+    if (rapidsConf.isParquetGDSReadEnabled) {
+      GpuParquetGDSPartitionReaderFactory(
+        sqlConf,
+        broadcastedConf,
+        dataSchema,
+        readDataSchema,
+        partitionSchema,
+        filters.toArray,
+        rapidsConf,
+        metrics,
+        options)
+    } else {
+      GpuParquetPartitionReaderFactory(
+        sqlConf,
+        broadcastedConf,
+        dataSchema,
+        readDataSchema,
+        partitionSchema,
+        filters.toArray,
+        rapidsConf,
+        metrics,
+        options)
+    }
   }
 
   override def buildReaderWithPartitionValuesAndMetrics(
@@ -88,7 +103,8 @@ class GpuReadParquetFileFormat extends ParquetFileFormat with GpuReadFileFormatW
     PartitionReaderIterator.buildReader(factory)
   }
 
-  override def isPerFileReadEnabled(conf: RapidsConf): Boolean = conf.isParquetPerFileReadEnabled
+  override def isPerFileReadEnabled(conf: RapidsConf): Boolean =
+    conf.isParquetPerFileReadEnabled || conf.isParquetGDSReadEnabled
 
   override def createMultiFileReaderFactory(
       broadcastedConf: Broadcast[SerializableConfiguration],

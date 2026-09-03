@@ -1384,21 +1384,22 @@ private case class GpuOrcFileFilterHandler(
       partFile: PartitionedFile,
       dataSchema: StructType,
       readDataSchema: StructType,
-      partitionSchema: StructType): OrcPartitionReaderContext = {
+      partitionSchema: StructType,
+      phaseMetrics: Map[String, GpuMetric] = metrics): OrcPartitionReaderContext = {
 
     val conf = broadcastedConf.value.value
     OrcConf.IS_SCHEMA_EVOLUTION_CASE_SENSITIVE.setBoolean(conf, isCaseSensitive)
 
     val filePath = new Path(new URI(partFile.filePath.toString()))
-    val fs = metrics.getOrElse(ORC_FS_LOOKUP_TIME, NoopMetric).ns {
+    val fs = phaseMetrics.getOrElse(ORC_FS_LOOKUP_TIME, NoopMetric).ns {
       filePath.getFileSystem(conf)
     }
     val orcFileReaderOpts = OrcFile.readerOptions(conf)
         .filesystem(fs)
-        .orcTail(GpuOrcFileFilterHandler.getOrcTail(filePath, fs, conf,  metrics))
+        .orcTail(GpuOrcFileFilterHandler.getOrcTail(filePath, fs, conf, phaseMetrics))
 
     // After getting the necessary information from ORC reader, we must close the ORC reader
-    metrics.getOrElse(ORC_READER_FILTER_TIME, NoopMetric).ns {
+    phaseMetrics.getOrElse(ORC_READER_FILTER_TIME, NoopMetric).ns {
       OrcShims.withReader(OrcFile.createReader(filePath, orcFileReaderOpts)) { orcReader =>
         val resultedColPruneInfo = OrcReadingShims.requestedColumnIds(isCaseSensitive, dataSchema,
           readDataSchema, orcReader, conf)
@@ -1435,7 +1436,7 @@ private case class GpuOrcFileFilterHandler(
 
           withResource(OrcTools.buildDataReader(orcReader.getCompressionSize,
             orcReader.getCompressionKind, orcReader.getSchema, readerOpts, filePath, fs, taskConf,
-            metrics)) {
+            phaseMetrics)) {
             dataReader =>
               new GpuOrcPartitionReaderUtils(filePath, taskConf, partFile, orcFileReaderOpts,
                 orcReader, readerOpts, dataReader, requestedMapping).getOrcPartitionReaderContext
@@ -2145,13 +2146,11 @@ class MultiFileCloudOrcPartitionReader(
       val localMetrics = execMetrics.keysIterator.map { name =>
         name -> new LocalGpuMetric
       }.toMap
-      val localFilterHandler = filterHandler.copy(metrics = localMetrics)
-
       val hostBuffers = new ArrayBuffer[SingleHMBAndMeta]
       val filterStartTime = System.nanoTime()
       val filterCpuStartTime = OrcThreadCpuTimer.currentTimeNanos
-      val ctx = localFilterHandler.filterStripes(partFile, dataSchema, readDataSchema,
-        partitionSchema)
+      val ctx = filterHandler.filterStripes(partFile, dataSchema, readDataSchema,
+        partitionSchema, localMetrics)
       val filterTime = System.nanoTime() - filterStartTime
       localMetrics.getOrElse(ORC_FILTER_CPU_TIME, NoopMetric) +=
         OrcThreadCpuTimer.currentTimeNanos - filterCpuStartTime

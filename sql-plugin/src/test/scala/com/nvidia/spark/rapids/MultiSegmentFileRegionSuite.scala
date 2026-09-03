@@ -22,7 +22,7 @@ import java.nio.channels.WritableByteChannel
 
 import com.nvidia.spark.rapids.spill.SpillablePartialFileHandle
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong}
-import org.mockito.Mockito.when
+import org.mockito.Mockito.{verify, when}
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatestplus.mockito.MockitoSugar.mock
 
@@ -46,16 +46,24 @@ class MultiSegmentFileRegionSuite extends AnyFunSuite {
         }
       })
 
-    val region = new MultiSegmentFileRegion(Seq(PartitionSegment(handle, 0, data.length)))
+    val region = new MultiSegmentFileRegion(
+      Seq(PartitionSegment(handle, 0, data.length)), Seq(handle))
     val channel = new ZeroThenWriteChannel
 
-    assert(region.transferTo(channel, 0) === 0)
-    assert(region.transferred() === 0)
-    assert(channel.writeCalls === 1)
+    try {
+      assert(region.transferTo(channel, 0) === 0)
+      assert(region.transferred() === 0)
+      assert(channel.writeCalls === 1)
 
-    assert(region.transferTo(channel, 0) === data.length)
-    assert(region.transferred() === data.length)
-    assert(channel.bytes === data)
+      assert(region.transferTo(channel, 0) === data.length)
+      assert(region.transferred() === data.length)
+      assert(channel.bytes === data)
+    } finally {
+      assert(region.release())
+    }
+
+    verify(handle).acquireRead()
+    verify(handle).releaseRead()
   }
 
   private final class ZeroThenWriteChannel extends WritableByteChannel {

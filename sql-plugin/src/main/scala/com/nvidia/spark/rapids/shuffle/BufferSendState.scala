@@ -18,7 +18,7 @@ package com.nvidia.spark.rapids.shuffle
 
 import ai.rapids.cudf.{Cuda, DeviceMemoryBuffer, MemoryBuffer}
 import com.nvidia.spark.rapids.{RapidsShuffleHandle, ShuffleMetadata}
-import com.nvidia.spark.rapids.Arm.withResource
+import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.format.{BufferMeta, BufferTransferRequest}
 
@@ -58,7 +58,8 @@ class BufferSendState(
     serverStream: Cuda.Stream = Cuda.DEFAULT_STREAM)
     extends AutoCloseable with Logging {
 
-  class SendBlock(val bufferHandle: RapidsShuffleHandle) extends BlockWithSize {
+  class SendBlock(val bufferHandle: RapidsShuffleHandle)
+      extends BlockWithSize with AutoCloseable {
     // we assume that the size of the buffer won't change as it goes to host/disk
     // we also are likely to assume this is just a device buffer, and so we should
     // copy to device and then send.
@@ -69,6 +70,8 @@ class BufferSendState(
         0L // degenerate
       }
     }
+
+    override def close(): Unit = bufferHandle.close()
   }
 
   val peerExecutorId: Long = transaction.peerExecutorId()
@@ -85,11 +88,13 @@ class BufferSendState(
       val bufferMetas = new Array[BufferMeta](transferRequest.requestsLength())
 
       val btr = new BufferTransferRequest() // for reuse
-      val blocksToSend = (0 until transferRequest.requestsLength()).map { ix =>
+      val blocksToSend = (0 until transferRequest.requestsLength()).safeMap { ix =>
         val bufferTransferRequest = transferRequest.requests(btr, ix)
         val handle = requestHandler.getShuffleHandle(bufferTransferRequest.bufferId())
-        bufferMetas(ix) = handle.tableMeta.bufferMeta()
-        new SendBlock(handle)
+        closeOnExcept(new SendBlock(handle)) { block =>
+          bufferMetas(ix) = handle.tableMeta.bufferMeta()
+          block
+        }
       }
       (peerBufferReceiveHeader, bufferMetas, blocksToSend)
     }
@@ -143,8 +148,15 @@ class BufferSendState(
     // close transaction
     withResource(transaction) { _ =>
       isClosed = true
-      freeBounceBuffers()
-      releaseAcquiredToCatalog()
+      try {
+        freeBounceBuffers()
+      } finally {
+        try {
+          releaseAcquiredToCatalog()
+        } finally {
+          blocksToSend.safeClose()
+        }
+      }
     }
   }
 

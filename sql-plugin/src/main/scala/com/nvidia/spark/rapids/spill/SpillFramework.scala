@@ -573,6 +573,9 @@ class SpillableDeviceBufferHandle private (
     private[spill] var host: Option[SpillableHostBufferHandle] = None)
     extends DeviceSpillableHandle[DeviceMemoryBuffer] {
 
+  private var readRefCount: Int = 0
+  private var closeRequested: Boolean = false
+
   override val approxSizeInBytes: Long = sizeInBytes
 
   private[spill] override def spillable: Boolean = synchronized {
@@ -623,6 +626,47 @@ class SpillableDeviceBufferHandle private (
       }
     }
     materialized
+  }
+
+  /** Retain this handle while a shuffle server transfer may still materialize it. */
+  private[rapids] def acquireRead(): Unit = synchronized {
+    if (closed || closeRequested) {
+      throw new IllegalStateException("Cannot acquire a read lease on a closing buffer handle")
+    }
+    readRefCount += 1
+  }
+
+  /** Release a shuffle server transfer lease and complete a deferred close if needed. */
+  private[rapids] def releaseRead(): Unit = {
+    val shouldClose = synchronized {
+      if (readRefCount <= 0) {
+        throw new IllegalStateException("releaseRead() without a matching acquireRead()")
+      }
+      readRefCount -= 1
+      markCloseIfReady()
+    }
+    if (shouldClose) {
+      doClose()
+    }
+  }
+
+  override def close(): Unit = {
+    val shouldClose = synchronized {
+      closeRequested = true
+      markCloseIfReady()
+    }
+    if (shouldClose) {
+      doClose()
+    }
+  }
+
+  private def markCloseIfReady(): Boolean = {
+    if (closeRequested && readRefCount == 0 && !closed) {
+      closed = true
+      !spilling
+    } else {
+      false
+    }
   }
 
   override def spill(): Long = {

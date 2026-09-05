@@ -296,10 +296,15 @@ class ShuffleBufferCatalog extends Logging {
     if (shuffleBufferId == null) {
       throw new NoSuchElementException(s"unknown table ID $tableId")
     }
-    val (maybeHandle, meta) = bufferIdToHandle.get(shuffleBufferId)
+    val handleAndMeta = bufferIdToHandle.get(shuffleBufferId)
+    if (handleAndMeta == null) {
+      throw new NoSuchElementException(s"unknown table ID $tableId")
+    }
+    val (maybeHandle, meta) = handleAndMeta
     maybeHandle match {
       case Some(spillable) =>
-        RapidsShuffleHandle(spillable, meta)
+        spillable.acquireRead()
+        RapidsShuffleHandle.withLease(spillable, meta, () => spillable.releaseRead())
       case None =>
         throw new IllegalStateException(
           "a buffer handle could not be obtained for a degenerate buffer")

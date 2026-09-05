@@ -26,10 +26,37 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
-case class RapidsShuffleHandle(
-    spillable: SpillableDeviceBufferHandle, tableMeta: TableMeta) extends AutoCloseable {
+final class RapidsShuffleHandle private (
+    val spillable: SpillableDeviceBufferHandle,
+    val tableMeta: TableMeta,
+    releaseLease: Option[() => Unit]) extends AutoCloseable {
+  private var closed = false
+
   override def close(): Unit = {
-    spillable.safeClose()
+    val closeAction = synchronized {
+      if (closed) {
+        None
+      } else {
+        closed = true
+        Some(releaseLease.getOrElse(() => spillable.safeClose()))
+      }
+    }
+    closeAction.foreach(_())
+  }
+}
+
+object RapidsShuffleHandle {
+  def apply(
+      spillable: SpillableDeviceBufferHandle,
+      tableMeta: TableMeta): RapidsShuffleHandle = {
+    new RapidsShuffleHandle(spillable, tableMeta, None)
+  }
+
+  private[rapids] def withLease(
+      spillable: SpillableDeviceBufferHandle,
+      tableMeta: TableMeta,
+      releaseLease: () => Unit): RapidsShuffleHandle = {
+    new RapidsShuffleHandle(spillable, tableMeta, Some(releaseLease))
   }
 }
 

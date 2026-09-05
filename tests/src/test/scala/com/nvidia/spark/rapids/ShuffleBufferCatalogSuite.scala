@@ -104,6 +104,27 @@ class ShuffleBufferCatalogSuite
     shuffleCatalog.unregisterShuffle(2)
   }
 
+  test("shuffle send lease keeps a buffer readable across unregister") {
+    val shuffleCatalog = new ShuffleBufferCatalog()
+    val blockId = ShuffleBlockId(1, 10L, 0)
+    val ct = RapidsShuffleTestHelper.buildContiguousTable(1000)
+
+    shuffleCatalog.registerShuffle(blockId.shuffleId)
+    shuffleCatalog.addContiguousTable(blockId, ct, -1)
+    val meta = shuffleCatalog.blockIdToMetas(blockId).head
+    val sendHandle = shuffleCatalog.getShuffleBufferHandle(meta.bufferMeta().id())
+
+    shuffleCatalog.unregisterShuffle(blockId.shuffleId)
+    withResource(sendHandle.spillable.materialize()) { buffer =>
+      assert(buffer.getLength > 0)
+    }
+
+    sendHandle.close()
+    assertThrows[IllegalStateException] {
+      sendHandle.spillable.materialize()
+    }
+  }
+
   test("get a columnar batch iterator from catalog") {
     val shuffleCatalog = new ShuffleBufferCatalog()
     shuffleCatalog.registerShuffle(1)

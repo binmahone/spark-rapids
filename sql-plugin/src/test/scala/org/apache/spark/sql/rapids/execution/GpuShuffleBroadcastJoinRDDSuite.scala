@@ -15,9 +15,10 @@
  */
 package org.apache.spark.sql.rapids.execution
 
-import org.apache.spark.{NarrowDependency, SparkConf, SparkContext}
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.funsuite.AnyFunSuite
+
+import org.apache.spark.{NarrowDependency, SparkConf, SparkContext}
 
 class GpuShuffleBroadcastJoinRDDSuite extends AnyFunSuite with BeforeAndAfterAll {
   private var sparkContext: SparkContext = _

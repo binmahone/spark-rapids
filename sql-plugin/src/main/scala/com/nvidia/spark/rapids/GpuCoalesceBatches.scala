@@ -417,7 +417,9 @@ abstract class AbstractGpuCoalesceIterator(
             i => cb.column(i).asInstanceOf[GpuColumnVector].getBase.getDeviceMemorySize
           }.sum
         case g: GpuCompressedColumnVector =>
-          g.getTableBuffer.getLength
+          // Coalescing materializes compressed inputs before concatenation. Use the
+          // materialized size so compression does not hide an oversized candidate batch.
+          Math.max(g.getTableBuffer.getLength, g.getTableMeta.bufferMeta().uncompressedSize())
         case g =>
           throw new IllegalStateException(s"Unexpected column type: $g")
       }

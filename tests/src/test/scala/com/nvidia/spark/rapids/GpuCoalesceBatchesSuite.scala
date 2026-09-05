@@ -20,6 +20,7 @@ import java.io.File
 import java.nio.file.Files
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 
 import ai.rapids.cudf.{ColumnVector, ContiguousTable, Cuda, HostColumnVector, Table}
 import com.nvidia.spark.rapids.Arm.withResource
@@ -563,6 +564,51 @@ class GpuCoalesceBatchesSuite extends SparkQueryCompareTestSuite {
 
   test("all compressed high memory limit") {
     testCompressedBatches(Long.MaxValue)
+  }
+
+  test("compressed coalesce target uses uncompressed size") {
+    val numRows = 10000
+    val batches = Seq(
+      buildCompressedBatch(0, numRows),
+      buildCompressedBatch(numRows, numRows))
+    val compressedSizes = batches.map { batch =>
+      batch.column(0).asInstanceOf[GpuCompressedColumnVector].getTableBuffer.getLength
+    }
+    val uncompressedSizes = batches.map { batch =>
+      batch.column(0).asInstanceOf[GpuCompressedColumnVector]
+        .getTableMeta.bufferMeta().uncompressedSize()
+    }
+    val targetSize = uncompressedSizes.max
+
+    assert(compressedSizes.sum < targetSize)
+    assert(uncompressedSizes.forall(_ <= targetSize))
+    assert(uncompressedSizes.sum > targetSize)
+
+    val schema = new StructType().add("i", LongType)
+      .add("j", DecimalType(ai.rapids.cudf.DType.DECIMAL64_MAX_PRECISION, 3))
+    val dummyMetric = WrappedGpuMetric(new SQLMetric("ignored"))
+    val coalesceIter = new GpuCompressionAwareCoalesceIterator(
+      batches.iterator,
+      GpuColumnVector.extractTypes(schema),
+      TargetSize(targetSize),
+      Long.MaxValue,
+      dummyMetric,
+      dummyMetric,
+      dummyMetric,
+      dummyMetric,
+      dummyMetric,
+      dummyMetric,
+      dummyMetric,
+      "test concat",
+      TableCompressionCodec.makeCodecConfig(rapidsConf))
+
+    val outputRows = ArrayBuffer[Int]()
+    while (coalesceIter.hasNext) {
+      withResource(coalesceIter.next()) { batch =>
+        outputRows += batch.numRows()
+      }
+    }
+    assertResult(Seq(numRows, numRows))(outputRows.toSeq)
   }
 
   test("mixed compressed and uncompressed low memory limit") {

@@ -263,9 +263,10 @@ object RmmRapidsRetryIterator extends Logging {
   private def isColumnSizeOverflow(ex: Throwable): Boolean =
     ex.isInstanceOf[CudfColumnSizeOverflowException]
 
-  @tailrec
   private def isOrCausedByColumnSizeOverflow(ex: Throwable): Boolean = {
-    ex != null && (isColumnSizeOverflow(ex) || isOrCausedByColumnSizeOverflow(ex.getCause))
+    ex != null && (isColumnSizeOverflow(ex) ||
+      isOrCausedByColumnSizeOverflow(ex.getCause) ||
+      ex.getSuppressed.exists(isOrCausedByColumnSizeOverflow))
   }
 
   /**

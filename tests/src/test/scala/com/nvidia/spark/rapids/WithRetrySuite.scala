@@ -16,7 +16,8 @@
 
 package com.nvidia.spark.rapids
 
-import ai.rapids.cudf.{Rmm, RmmAllocationMode, RmmEventHandler, Table}
+import ai.rapids.cudf.{CudfColumnSizeOverflowException, Rmm, RmmAllocationMode,
+  RmmEventHandler, Table}
 import com.nvidia.spark.Retryable
 import com.nvidia.spark.rapids.Arm.withResource
 import com.nvidia.spark.rapids.RmmRapidsRetryIterator.{splitTargetSizeInHalfGpu, withRestoreOnRetry, withRetry, withRetryNoSplit}
@@ -292,6 +293,30 @@ class WithRetrySuite
     } finally {
       assert(lastSplitSize >= minValue)
       assert(lastSplitSize == (initialValue / (2 * numSplits)))
+    }
+  }
+
+  test("suppressed cuDF column overflow triggers split and retry") {
+    val overflowConstructor = classOf[CudfColumnSizeOverflowException]
+      .getDeclaredConstructor(classOf[String])
+    overflowConstructor.setAccessible(true)
+
+    val initialValue = 20L
+    val myTarget = AutoCloseableTargetSize(initialValue, minSize = 5L)
+    var shouldThrow = true
+    var successfulTarget = 0L
+    try {
+      withRetry(myTarget, splitTargetSizeInHalfGpu) { attempt =>
+        if (shouldThrow) {
+          shouldThrow = false
+          val wrapper = new IllegalArgumentException("allocation callback rejected size")
+          wrapper.addSuppressed(overflowConstructor.newInstance("column size overflow"))
+          throw wrapper
+        }
+        successfulTarget = attempt.targetSize
+      }.toSeq
+    } finally {
+      assert(successfulTarget == initialValue / 2)
     }
   }
 

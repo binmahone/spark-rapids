@@ -75,11 +75,12 @@ class GpuBroadcastHashJoinMeta(
     verifyBuildSideWasReplaced(buildSideMeta)
 
     val sbEnabled = conf.isShuffleBroadcastEnabled
+    val trustSparkPlan = conf.isShuffleBroadcastTrustSparkPlanEnabled
     val sbDecision = sbEnabled &&
       GpuBroadcastHashJoinMeta.shouldUseShuffleBroadcast(
-        buildSideMeta, originalBuildSide, conf)
+        buildSideMeta, originalBuildSide, conf, trustSparkPlan)
     GpuBroadcastHashJoinMeta.logRewriteDecision(
-      buildSideMeta, originalBuildSide, sbEnabled, sbDecision, conf)
+      buildSideMeta, originalBuildSide, sbEnabled, trustSparkPlan, sbDecision, conf)
     if (sbDecision) {
       // Swap the GpuBroadcastExchangeExec under the build side for a
       // single-partition GpuShuffleExchangeExec, then construct the consumer
@@ -125,6 +126,7 @@ object GpuBroadcastHashJoinMeta extends Logging {
       buildSidePlan: SparkPlan,
       originalBuildSidePlan: SparkPlan,
       enabledFlag: Boolean,
+      trustSparkPlan: Boolean,
       finalDecision: Boolean,
       conf: RapidsConf): Unit = {
     val (sizeStr, unwrapStatus) = unwrapBroadcastExchange(buildSidePlan) match {
@@ -136,7 +138,8 @@ object GpuBroadcastHashJoinMeta extends Logging {
     }
     val driverThreshold = SQLConf.get.autoBroadcastJoinThreshold
     val maxSize = conf.shuffleBroadcastMaxSize
-    logWarning(s"[NATIVE-BCAST] enabled=$enabledFlag unwrap=$unwrapStatus " +
+    logWarning(s"[NATIVE-BCAST] enabled=$enabledFlag trustSparkPlan=$trustSparkPlan " +
+      s"unwrap=$unwrapStatus " +
       s"buildSizeBytes=$sizeStr driverThreshold=$driverThreshold maxSize=$maxSize " +
       s"decision=$finalDecision")
   }
@@ -188,13 +191,24 @@ object GpuBroadcastHashJoinMeta extends Logging {
     }
 
   /** Decide whether this build side is eligible for shuffle-broadcast. */
+  private[execution] def isBuildSizeEligible(
+      estimatedSize: Option[Long],
+      maxSize: Long,
+      trustSparkPlan: Boolean): Boolean = {
+    trustSparkPlan || estimatedSize.exists(size => size >= 0 && size <= maxSize)
+  }
+
   def shouldUseShuffleBroadcast(
       buildSidePlan: SparkPlan,
       originalBuildSidePlan: SparkPlan,
-      conf: RapidsConf): Boolean = {
-    unwrapBroadcastExchange(buildSidePlan)
-      .flatMap(estimatedBuildSize(_, originalBuildSidePlan))
-      .exists(size => size >= 0 && size <= conf.shuffleBroadcastMaxSize)
+      conf: RapidsConf,
+      trustSparkPlan: Boolean): Boolean = {
+    unwrapBroadcastExchange(buildSidePlan).exists { exchange =>
+      isBuildSizeEligible(
+        estimatedBuildSize(exchange, originalBuildSidePlan),
+        conf.shuffleBroadcastMaxSize,
+        trustSparkPlan)
+    }
   }
 
   /** Rewrite the broadcast exchange under the build side into a single-output

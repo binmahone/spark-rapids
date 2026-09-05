@@ -28,15 +28,29 @@ import com.nvidia.spark.rapids.CoalesceReadOption
 import com.nvidia.spark.rapids.GpuShuffleCoalesceUtils
 
 import org.apache.spark.TaskContext
+import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.rapids.GpuShuffleEnv
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.ColumnarBatch
+import org.apache.spark.util.Utils
 
-object GpuShuffleBroadcastHelper {
+object GpuShuffleBroadcastHelper extends Logging {
   import com.nvidia.spark.rapids.GpuMetric._
+
+  private def verifyBuildSize(batch: ColumnarBatch, maxBuildSize: Long): ColumnarBatch = {
+    val actualSize = GpuColumnVector.getTotalDeviceMemoryUsed(batch)
+    logInfo(s"[NATIVE-BCAST] runtimeBuildSizeBytes=$actualSize maxSize=$maxBuildSize")
+    if (actualSize > maxBuildSize) {
+      batch.close()
+      throw new IllegalStateException(
+        s"Native shuffle-broadcast build size ${Utils.bytesToString(actualSize)} exceeds " +
+          s"spark.rapids.shuffle.broadcast.maxSize=${Utils.bytesToString(maxBuildSize)}")
+    }
+    batch
+  }
 
   private def shuffleDataIterator(shuffleData: RDD[ColumnarBatch]): Iterator[ColumnarBatch] = {
     // Concatenate iterators across the local partitions; each partition in
@@ -109,9 +123,11 @@ object GpuShuffleBroadcastHelper {
       buildSchema: StructType,
       buildOutput: Seq[Attribute],
       metricsMap: Map[String, GpuMetric],
-      targetSize: Long): ColumnarBatch = {
+      targetSize: Long,
+      maxBuildSize: Long): ColumnarBatch = {
     val it = shuffleCoalesceIterator(shuffleData, buildSchema, metricsMap, targetSize)
-    ConcatAndConsumeAll.getSingleBatchWithVerification(it, buildOutput)
+    verifyBuildSize(
+      ConcatAndConsumeAll.getSingleBatchWithVerification(it, buildOutput), maxBuildSize)
   }
 
   /**
@@ -124,7 +140,8 @@ object GpuShuffleBroadcastHelper {
       buildSchema: StructType,
       buildOutput: Seq[Attribute],
       metricsMap: Map[String, GpuMetric],
-      targetSize: Long): ColumnarBatch = {
+      targetSize: Long,
+      maxBuildSize: Long): ColumnarBatch = {
     val dataTypes = GpuColumnVector.extractTypes(buildSchema)
     val useGpuShuffle = GpuShuffleEnv.useGPUShuffle(new RapidsConf(SQLConf.get))
     val coalesceInput: Iterator[ColumnarBatch] = if (useGpuShuffle) {
@@ -147,7 +164,8 @@ object GpuShuffleBroadcastHelper {
       metricsMap(CONCAT_TIME),
       metricsMap(OP_TIME_LEGACY),
       "GpuShuffleBroadcastHashJoinExec").asInstanceOf[Iterator[ColumnarBatch]]
-    ConcatAndConsumeAll.getSingleBatchWithVerification(it, buildOutput)
+    verifyBuildSize(
+      ConcatAndConsumeAll.getSingleBatchWithVerification(it, buildOutput), maxBuildSize)
   }
 
   /**

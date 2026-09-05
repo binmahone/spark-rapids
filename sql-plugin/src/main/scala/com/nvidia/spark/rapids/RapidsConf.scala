@@ -2420,6 +2420,16 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
     .booleanConf
     .createWithDefault(false)
 
+  val SHUFFLE_BROADCAST_TRUST_SPARK_PLAN_ENABLED =
+    conf("spark.rapids.shuffle.broadcast.trustSparkPlan.enabled")
+      .doc("Allow native shuffle-broadcast for a BroadcastHashJoin selected by Spark even when " +
+        "the build side's static size estimate is unavailable or exceeds " +
+        "spark.rapids.shuffle.broadcast.maxSize. The assembled GPU build is still checked " +
+        "against maxSize at runtime. This is intended for plans where Spark has more accurate " +
+        "join-selection information than the static statistics retained during GPU conversion.")
+      .booleanConf
+      .createWithDefault(false)
+
   val RANGE_SORT_SINGLE_PARTITION_ENABLED =
     conf("spark.rapids.sql.optimizer.rangeSortSinglePartition.enabled")
     .doc("When true, rewrite a top-of-plan global Sort fed by a RangePartitioning exchange " +
@@ -3929,6 +3939,9 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
     SHUFFLE_TRANSPORT_MAX_RECEIVE_INFLIGHT_BYTES)
 
   lazy val isShuffleBroadcastEnabled: Boolean = get(SHUFFLE_BROADCAST_ENABLED)
+
+  lazy val isShuffleBroadcastTrustSparkPlanEnabled: Boolean =
+    get(SHUFFLE_BROADCAST_TRUST_SPARK_PLAN_ENABLED)
 
   lazy val isRangeSortSinglePartitionEnabled: Boolean = get(RANGE_SORT_SINGLE_PARTITION_ENABLED)
 

@@ -60,4 +60,14 @@ class GpuShuffleBroadcastJoinRDDSuite extends AnyFunSuite with BeforeAndAfterAll
     assert(buildDependency.getParents(1) == Seq(0))
     assert(joinRdd.collect().sorted.sameElements(Array(11, 12, 13, 14, 21, 22, 23, 24)))
   }
+
+  test("trust Spark plan bypasses only the static native-broadcast size decision") {
+    assert(GpuBroadcastHashJoinMeta.isBuildSizeEligible(Some(1024), 2048, trustSparkPlan = false))
+    assert(!GpuBroadcastHashJoinMeta.isBuildSizeEligible(Some(4096), 2048,
+      trustSparkPlan = false))
+    assert(!GpuBroadcastHashJoinMeta.isBuildSizeEligible(None, 2048, trustSparkPlan = false))
+    assert(GpuBroadcastHashJoinMeta.isBuildSizeEligible(Some(4096), 2048,
+      trustSparkPlan = true))
+    assert(GpuBroadcastHashJoinMeta.isBuildSizeEligible(None, 2048, trustSparkPlan = true))
+  }
 }

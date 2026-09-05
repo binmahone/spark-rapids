@@ -103,6 +103,7 @@ case class GpuShuffleBroadcastHashJoinExec(
     val joinTime = gpuLongMetric(JOIN_TIME)
 
     val targetSize = RapidsConf.GPU_BATCH_SIZE_BYTES.get(conf)
+    val maxBuildSize = RapidsConf.SHUFFLE_BROADCAST_MAX_SIZE.get(conf)
     val joinOptions = RapidsConf.getJoinOptions(conf, targetSize)
 
     val exchange = buildShuffleExchange
@@ -119,6 +120,7 @@ case class GpuShuffleBroadcastHashJoinExec(
     val streamRdd = streamedPlan.executeColumnar()
     val localIsNullAwareAntiJoin = isNullAwareAntiJoin
     val localTargetSize = targetSize
+    val localMaxBuildSize = maxBuildSize
     val localBuildSchema = buildPlan.schema
     val localBuildOutput = buildPlan.output
     val localBoundBuildKeys = boundBuildKeys
@@ -148,7 +150,7 @@ case class GpuShuffleBroadcastHashJoinExec(
         GpuShuffleBroadcastBuildCache.getOrBuild(localBuildShuffleId, () => {
           GpuShuffleBroadcastHelper.getShuffleBroadcastBatchFromIter(
             buildIter, localBuildSchema, localBuildOutput, localAllMetrics,
-            localTargetSize)
+            localTargetSize, localMaxBuildSize)
         })
       }
       if (localIsNullAwareAntiJoin) {

@@ -108,15 +108,6 @@ case class GpuShuffleBroadcastHashJoinExec(
     val exchange = buildShuffleExchange
     val buildShuffleId = exchange.shuffleDependencyColumnar.shuffleId
 
-    // Force the build-side map stage to run and register its outputs with
-    // the MapOutputTracker before consumer tasks start. Without AQE
-    // (where ShuffleQueryStageExec would do this automatically) the stream
-    // RDD has no Spark dependency on the build shuffle, so the scheduler
-    // would otherwise schedule consumer tasks first and they would fail
-    // looking up an unregistered shuffleId.
-    val statsFuture = sparkContext.submitMapStage(exchange.shuffleDependencyColumnar)
-    statsFuture.get()
-
     // With GpuSinglePartitioning the build exchange has exactly one reducer
     // partition containing the full build, assembled from all mappers'
     // partition-0 shards. Every consumer task reads that one partition.
@@ -136,9 +127,9 @@ case class GpuShuffleBroadcastHashJoinExec(
     val localAllMetrics = allMetrics
     val localBuildShuffleId = buildShuffleId
 
-    streamRdd.mapPartitions { it =>
+    new GpuShuffleBroadcastJoinRDD(streamRdd, buildRelation, { (streamIter, buildIter) =>
       val collectTimeIter =
-        new CollectTimeIterator(NvtxRegistry.BROADCAST_JOIN_STREAM, it, streamTime)
+        new CollectTimeIterator(NvtxRegistry.BROADCAST_JOIN_STREAM, streamIter, streamTime)
       val bufferedStreamIter = new CloseableBufferedIterator(collectTimeIter)
       val builtBatch = closeOnExcept(bufferedStreamIter) { _ =>
         NvtxRegistry.JOIN_FIRST_STREAM_BATCH {
@@ -154,8 +145,8 @@ case class GpuShuffleBroadcastHashJoinExec(
         // from it. Reduces GPU memory K-fold for K consumer tasks per
         // executor and avoids redundant UCX traffic on retries.
         GpuShuffleBroadcastBuildCache.getOrBuild(localBuildShuffleId, () => {
-          GpuShuffleBroadcastHelper.getShuffleBroadcastBatch(
-            buildRelation, localBuildSchema, localBuildOutput, localAllMetrics,
+          GpuShuffleBroadcastHelper.getShuffleBroadcastBatchFromIter(
+            buildIter, localBuildSchema, localBuildOutput, localAllMetrics,
             localTargetSize)
         })
       }
@@ -177,6 +168,6 @@ case class GpuShuffleBroadcastHashJoinExec(
         doJoin(builtBatch, bufferedStreamIter, localJoinOptions, numOutputRows,
           numOutputBatches, opTime, joinTime)
       }
-    }
+    })
   }
 }

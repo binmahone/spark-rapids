@@ -127,7 +127,8 @@ case class GpuShuffleBroadcastHashJoinExec(
     val localAllMetrics = allMetrics
     val localBuildShuffleId = buildShuffleId
 
-    new GpuShuffleBroadcastJoinRDD(streamRdd, buildRelation, { (streamIter, buildIter) =>
+    new GpuShuffleBroadcastJoinRDD(streamRdd, buildRelation, {
+      (streamIter: Iterator[ColumnarBatch], buildIter: Iterator[ColumnarBatch]) =>
       val collectTimeIter =
         new CollectTimeIterator(NvtxRegistry.BROADCAST_JOIN_STREAM, streamIter, streamTime)
       val bufferedStreamIter = new CloseableBufferedIterator(collectTimeIter)

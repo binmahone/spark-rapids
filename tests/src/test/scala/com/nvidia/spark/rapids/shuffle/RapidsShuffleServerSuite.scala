@@ -207,7 +207,8 @@ class RapidsShuffleServerSuite extends RapidsShuffleTestHelper {
       val bb = ByteBuffer.allocateDirect(123)
       withResource(new RefCountedDirectByteBuffer(bb)) { _ =>
         val tableMeta = MetaUtils.buildTableMeta(1, 456, bb, 100)
-        val testHandle = spy(SpillableDeviceBufferHandle(DeviceMemoryBuffer.allocate(456)))
+        val deviceBuffer = DeviceMemoryBuffer.allocate(456)
+        val testHandle = SpillableDeviceBufferHandle(deviceBuffer)
         val rapidsBuffer = RapidsShuffleHandle(testHandle, tableMeta)
         when(mockRequestHandler.getShuffleHandle(ArgumentMatchers.eq(1)))
           .thenReturn(rapidsBuffer)
@@ -234,7 +235,7 @@ class RapidsShuffleServerSuite extends RapidsShuffleTestHelper {
         // acquire once at the beginning, and closed at the end
         verify(mockRequestHandler, times(1))
           .getShuffleHandle(ArgumentMatchers.eq(1))
-        verify(testHandle, times(1)).close()
+        assertResult(0)(deviceBuffer.getRefCount)
         assertThrows[IllegalStateException] {
           testHandle.materialize()
         }
@@ -354,6 +355,8 @@ class RapidsShuffleServerSuite extends RapidsShuffleTestHelper {
 
       val mockRequestHandler = mock[RapidsShuffleRequestHandler]
 
+      var successfulDeviceBuffer: DeviceMemoryBuffer = null
+
       def makeMockBuffer(tableId: Int, bb: ByteBuffer, error: Boolean): RapidsShuffleHandle  = {
         val tableMeta = MetaUtils.buildTableMeta(tableId, 456, bb, 100)
         val rapidsBuffer = if (error) {
@@ -367,7 +370,8 @@ class RapidsShuffleServerSuite extends RapidsShuffleTestHelper {
             })
           rapidsBuffer
         } else {
-          val testHandle = spy(SpillableDeviceBufferHandle(spy(DeviceMemoryBuffer.allocate(456))))
+          successfulDeviceBuffer = DeviceMemoryBuffer.allocate(456)
+          val testHandle = SpillableDeviceBufferHandle(successfulDeviceBuffer)
           RapidsShuffleHandle(testHandle, tableMeta)
         }
         when(mockRequestHandler.getShuffleHandle(ArgumentMatchers.eq(tableId)))
@@ -430,8 +434,7 @@ class RapidsShuffleServerSuite extends RapidsShuffleTestHelper {
           verify(rapidsHandle.spillable, times(1)).materialize()
 
           // The successful send materializes and then closes its acquired handle.
-          verify(rapidsHandle2.spillable, times(1)).materialize()
-          verify(rapidsHandle2.spillable, times(1)).close()
+          assertResult(0)(successfulDeviceBuffer.getRefCount)
           assertThrows[IllegalStateException] {
             rapidsHandle2.spillable.materialize()
           }

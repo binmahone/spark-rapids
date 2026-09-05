@@ -207,7 +207,7 @@ class RapidsShuffleServerSuite extends RapidsShuffleTestHelper {
       val bb = ByteBuffer.allocateDirect(123)
       withResource(new RefCountedDirectByteBuffer(bb)) { _ =>
         val tableMeta = MetaUtils.buildTableMeta(1, 456, bb, 100)
-        val testHandle = SpillableDeviceBufferHandle(DeviceMemoryBuffer.allocate(456))
+        val testHandle = spy(SpillableDeviceBufferHandle(DeviceMemoryBuffer.allocate(456)))
         val rapidsBuffer = RapidsShuffleHandle(testHandle, tableMeta)
         when(mockRequestHandler.getShuffleHandle(ArgumentMatchers.eq(1)))
           .thenReturn(rapidsBuffer)
@@ -234,10 +234,9 @@ class RapidsShuffleServerSuite extends RapidsShuffleTestHelper {
         // acquire once at the beginning, and closed at the end
         verify(mockRequestHandler, times(1))
           .getShuffleHandle(ArgumentMatchers.eq(1))
-        withResource(rapidsBuffer.spillable.materialize()) { dmb =>
-          // refcount=2 because it was on the device, and we +1 to materialize.
-          // but it shows no leaks.
-          assertResult(2)(dmb.getRefCount)
+        verify(testHandle, times(1)).close()
+        assertThrows[IllegalStateException] {
+          testHandle.materialize()
         }
       }
     }
@@ -430,12 +429,11 @@ class RapidsShuffleServerSuite extends RapidsShuffleTestHelper {
           // this handle fails to materialize
           verify(rapidsHandle.spillable, times(1)).materialize()
 
-          // this handle materializes, so make sure we close it
+          // The successful send materializes and then closes its acquired handle.
           verify(rapidsHandle2.spillable, times(1)).materialize()
-          withResource(rapidsHandle2.spillable.materialize()) { dmb =>
-            // refcount=2 because it was on the device, and we +1 to materialize.
-            // but it shows no leaks.
-            assertResult(2)(dmb.getRefCount)
+          verify(rapidsHandle2.spillable, times(1)).close()
+          assertThrows[IllegalStateException] {
+            rapidsHandle2.spillable.materialize()
           }
         }
       }

@@ -67,6 +67,7 @@ private case class PendingActiveMessage(
     dataSize: Long,
     cb: UcxCallback,
     isGpu: Boolean,
+    enqueueNanos: Long,
     deadlineNanos: Long)
 
 /**
@@ -135,6 +136,14 @@ class UCX(transport: UCXShuffleTransport, executor: BlockManagerId, rapidsConf: 
   // subsequent progress-loop iterations until the endpoint registers or the deadline elapses,
   // rather than failing the transaction permanently. Only touched on the progress thread.
   private val pendingActiveMessages = new ConcurrentLinkedQueue[PendingActiveMessage]()
+
+  private val deferredActiveMessageCount = new AtomicLong(0L)
+  private val retriedActiveMessageCount = new AtomicLong(0L)
+  private val timedOutActiveMessageCount = new AtomicLong(0L)
+  private val deferredGpuBytes = new AtomicLong(0L)
+  private val deferredHostBytes = new AtomicLong(0L)
+  private val maxDeferredNanos = new AtomicLong(0L)
+  private val deferredActiveMessagesById = new ConcurrentHashMap[Int, AtomicLong]()
 
   // holds memory registered against UCX that should be de-register on exit (used for bounce
   // buffers)
@@ -223,6 +232,12 @@ class UCX(transport: UCXShuffleTransport, executor: BlockManagerId, rapidsConf: 
 
       synchronized {
         logDebug("Exiting UCX progress thread.")
+        logInfo(s"Deferred active-message summary: queued=${deferredActiveMessageCount.get()}, " +
+          s"retried=${retriedActiveMessageCount.get()}, " +
+          s"timedOut=${timedOutActiveMessageCount.get()}, " +
+          s"gpuBytes=${deferredGpuBytes.get()}, hostBytes=${deferredHostBytes.get()}, " +
+          s"maxWaitMicros=${TimeUnit.NANOSECONDS.toMicros(maxDeferredNanos.get())}, " +
+          s"byActiveMessageId=$deferredActiveMessagesById")
         // Fail any sends still deferred for a missing endpoint so their callbacks do not hang
         // waiting on a retry that will never run now the progress loop has exited.
         var p = pendingActiveMessages.poll()
@@ -591,8 +606,17 @@ class UCX(transport: UCXShuffleTransport, executor: BlockManagerId, rapidsConf: 
         val timeoutSec = Option(SparkEnv.get)
           .map(_.conf.getTimeAsSeconds("spark.network.timeout", "120s"))
           .getOrElse(120L)
+        val enqueueNanos = System.nanoTime()
+        deferredActiveMessageCount.incrementAndGet()
+        deferredActiveMessagesById.computeIfAbsent(am.activeMessageId,
+          _ => new AtomicLong(0L)).incrementAndGet()
+        if (isGpu) {
+          deferredGpuBytes.addAndGet(dataSize)
+        } else {
+          deferredHostBytes.addAndGet(dataSize)
+        }
         pendingActiveMessages.add(PendingActiveMessage(executorId, am, dataAddress, dataSize,
-          cb, isGpu, System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSec)))
+          cb, isGpu, enqueueNanos, enqueueNanos + TimeUnit.SECONDS.toNanos(timeoutSec)))
       } else {
         sendActiveMessage(endpoint, am, dataAddress, dataSize, cb, isGpu)
       }
@@ -617,8 +641,12 @@ class UCX(transport: UCXShuffleTransport, executor: BlockManagerId, rapidsConf: 
         if (p != null) {
           val endpoint = endpointManager.getEndpointByExecutorId(p.executorId)
           if (endpoint != null) {
+            retriedActiveMessageCount.incrementAndGet()
+            val waitNanos = now - p.enqueueNanos
+            maxDeferredNanos.accumulateAndGet(waitNanos, Math.max)
             sendActiveMessage(endpoint, p.am, p.dataAddress, p.dataSize, p.cb, p.isGpu)
           } else if (now >= p.deadlineNanos) {
+            timedOutActiveMessageCount.incrementAndGet()
             p.cb.onError(-200,
               s"Trying to send a message to an executor that doesn't exist ${p.executorId}")
           } else {

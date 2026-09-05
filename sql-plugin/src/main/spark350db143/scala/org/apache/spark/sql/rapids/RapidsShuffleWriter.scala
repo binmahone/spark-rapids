@@ -102,7 +102,7 @@ abstract class RapidsCachingWriterBase[K, V](
    * Used to remove shuffle buffers when the writing task detects an error, calling `stop(false)`
    */
   private def cleanStorage(): Unit = {
-    catalog.removeCachedHandles()
+    catalog.removeCachedHandles(handle.shuffleId, mapId)
   }
 
   override def stop(success: Boolean): Option[MapStatusWithStats] = {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2026, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,6 +74,34 @@ class ShuffleBufferCatalogSuite
     val storedMetas = shuffleCatalog.blockIdToMetas(ShuffleBlockId(1, 1L, 1))
     assertResult(1)(storedMetas.size)
     shuffleCatalog.unregisterShuffle(1)
+  }
+
+  test("failed map cleanup only removes buffers from that shuffle map") {
+    val shuffleCatalog = new ShuffleBufferCatalog()
+    val failedBlock = ShuffleBlockId(1, 10L, 0)
+    val otherMapBlock = ShuffleBlockId(1, 11L, 0)
+    val otherShuffleBlock = ShuffleBlockId(2, 10L, 0)
+    val failedMeta = mock[TableMeta]
+    val otherMapMeta = mock[TableMeta]
+    val otherShuffleMeta = mock[TableMeta]
+
+    shuffleCatalog.registerShuffle(1)
+    shuffleCatalog.registerShuffle(2)
+    shuffleCatalog.addDegenerateRapidsBuffer(failedBlock, failedMeta)
+    shuffleCatalog.addDegenerateRapidsBuffer(otherMapBlock, otherMapMeta)
+    shuffleCatalog.addDegenerateRapidsBuffer(otherShuffleBlock, otherShuffleMeta)
+
+    shuffleCatalog.removeCachedHandles(failedBlock.shuffleId, failedBlock.mapId)
+
+    assertThrows[NoSuchElementException] {
+      shuffleCatalog.blockIdToMetas(failedBlock)
+    }
+    assertResult(Seq(otherMapMeta))(shuffleCatalog.blockIdToMetas(otherMapBlock))
+    assertResult(Seq(otherShuffleMeta))(shuffleCatalog.blockIdToMetas(otherShuffleBlock))
+
+    // Full shuffle cleanup must remain safe after a failed map removed its own entries.
+    shuffleCatalog.unregisterShuffle(1)
+    shuffleCatalog.unregisterShuffle(2)
   }
 
   test("get a columnar batch iterator from catalog") {

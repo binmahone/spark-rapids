@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2026, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ package com.nvidia.spark.rapids
 
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.function.{Consumer, IntUnaryOperator}
+import java.util.function.IntUnaryOperator
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -78,13 +78,34 @@ class ShuffleBufferCatalog extends Logging {
     bufferIdToHandle.put(bufferId, (None, meta))
   }
 
-  def removeCachedHandles(): Unit = {
-    val bufferIt = bufferIdToHandle.keySet().iterator()
-    while (bufferIt.hasNext) {
-      val buffer = bufferIt.next()
-      val (maybeHandle, _) = bufferIdToHandle.remove(buffer)
-      tableMap.remove(buffer.tableId)
-      maybeHandle.foreach(_.close())
+  private def removeBufferIds(bufferIds: ArrayBuffer[ShuffleBufferId]): Unit = {
+    val ids = bufferIds.synchronized {
+      val snapshot = bufferIds.toArray
+      bufferIds.clear()
+      snapshot
+    }
+    ids.foreach { id =>
+      tableMap.remove(id.tableId, id)
+      val handleAndMeta = bufferIdToHandle.remove(id)
+      if (handleAndMeta != null) {
+        handleAndMeta._1.foreach(_.close())
+      }
+    }
+  }
+
+  /** Removes the cached output produced by one failed shuffle map task. */
+  def removeCachedHandles(shuffleId: Int, mapId: Long): Unit = {
+    val info = activeShuffles.get(shuffleId)
+    if (info != null) {
+      val entries = info.entrySet().iterator()
+      while (entries.hasNext) {
+        val entry = entries.next()
+        val blockId = entry.getKey
+        val bufferIds = entry.getValue
+        if (blockId.mapId == mapId && info.remove(blockId, bufferIds)) {
+          removeBufferIds(bufferIds)
+        }
+      }
     }
   }
 
@@ -164,15 +185,10 @@ class ShuffleBufferCatalog extends Logging {
 
     val info = activeShuffles.remove(shuffleId)
     if (info != null) {
-      val bufferRemover: Consumer[ArrayBuffer[ShuffleBufferId]] = { bufferIds =>
-        // NOTE: Not synchronizing array buffer because this shuffle should be inactive.
-        bufferIds.foreach { id =>
-          tableMap.remove(id.tableId)
-          val handleAndMeta = bufferIdToHandle.remove(id)
-          handleAndMeta._1.foreach(_.close())
-        }
+      val bufferIds = info.values().iterator()
+      while (bufferIds.hasNext) {
+        removeBufferIds(bufferIds.next())
       }
-      info.forEachValue(Long.MaxValue, bufferRemover)
     } else {
       // currently shuffle unregister can get called on the driver which never saw a register
       if (!TrampolineUtil.isDriver(SparkEnv.get)) {

@@ -18,7 +18,6 @@ package com.nvidia.spark.rapids
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import scala.annotation.tailrec
 import scala.collection.mutable
 
 import ai.rapids.cudf.CudfColumnSizeOverflowException

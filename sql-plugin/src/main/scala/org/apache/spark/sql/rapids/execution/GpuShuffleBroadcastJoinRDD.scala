@@ -25,8 +25,8 @@ import org.apache.spark.rdd.RDD
  * the same Spark job. Every streamed partition consumes build partition zero.
  */
 private[execution] class GpuShuffleBroadcastJoinRDD[A: ClassTag, B: ClassTag, C: ClassTag](
-    @transient private var streamRdd: RDD[A],
-    @transient private var buildRdd: RDD[B],
+    private var streamRdd: RDD[A],
+    private var buildRdd: RDD[B],
     join: (Iterator[A], Iterator[B]) => Iterator[C])
     extends RDD[C](streamRdd.context, Nil) {
 

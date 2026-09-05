@@ -15,10 +15,28 @@
  */
 package org.apache.spark.sql.rapids.execution
 
+import java.io.{IOException, ObjectOutputStream}
+
 import scala.reflect.ClassTag
 
 import org.apache.spark.{Dependency, NarrowDependency, OneToOneDependency, Partition, TaskContext}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.util.Utils
+
+private class GpuShuffleBroadcastJoinPartition(
+    override val index: Int,
+    @transient private val streamRdd: RDD[_],
+    @transient private val buildRdd: RDD[_]) extends Partition {
+  var streamPartition: Partition = streamRdd.partitions(index)
+  var buildPartition: Partition = buildRdd.partitions(0)
+
+  @throws(classOf[IOException])
+  private def writeObject(oos: ObjectOutputStream): Unit = Utils.tryOrIOException {
+    streamPartition = streamRdd.partitions(index)
+    buildPartition = buildRdd.partitions(0)
+    oos.defaultWriteObject()
+  }
+}
 
 /**
  * Preserves the streamed RDD's partitioning while making a single-partition build RDD part of
@@ -33,14 +51,19 @@ private[execution] class GpuShuffleBroadcastJoinRDD[A: ClassTag, B: ClassTag, C:
   require(buildRdd.getNumPartitions == 1,
     s"shuffle broadcast build RDD must have one partition, found ${buildRdd.getNumPartitions}")
 
-  override protected def getPartitions: Array[Partition] = streamRdd.partitions
+  override protected def getPartitions: Array[Partition] = streamRdd.partitions.map { partition =>
+    new GpuShuffleBroadcastJoinPartition(partition.index, streamRdd, buildRdd)
+  }
 
-  override def getPreferredLocations(split: Partition): Seq[String] =
-    streamRdd.preferredLocations(streamRdd.partitions(split.index))
+  override def getPreferredLocations(split: Partition): Seq[String] = {
+    val joinPartition = split.asInstanceOf[GpuShuffleBroadcastJoinPartition]
+    streamRdd.preferredLocations(joinPartition.streamPartition)
+  }
 
   override def compute(split: Partition, context: TaskContext): Iterator[C] = {
-    val streamIter = streamRdd.iterator(streamRdd.partitions(split.index), context)
-    val buildIter = buildRdd.iterator(buildRdd.partitions(0), context)
+    val joinPartition = split.asInstanceOf[GpuShuffleBroadcastJoinPartition]
+    val streamIter = streamRdd.iterator(joinPartition.streamPartition, context)
+    val buildIter = buildRdd.iterator(joinPartition.buildPartition, context)
     join(streamIter, buildIter)
   }
 

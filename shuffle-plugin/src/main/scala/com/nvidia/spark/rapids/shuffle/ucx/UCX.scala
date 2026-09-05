@@ -144,6 +144,17 @@ class UCX(transport: UCXShuffleTransport, executor: BlockManagerId, rapidsConf: 
   private val deferredHostBytes = new AtomicLong(0L)
   private val maxDeferredNanos = new AtomicLong(0L)
   private val deferredActiveMessagesById = new ConcurrentHashMap[Int, AtomicLong]()
+  private val lastReportedRetriedActiveMessageCount = new AtomicLong(0L)
+
+  private def logDeferredActiveMessageSummary(reason: String): Unit = {
+    logInfo(s"Deferred active-message summary ($reason): " +
+      s"queued=${deferredActiveMessageCount.get()}, " +
+      s"retried=${retriedActiveMessageCount.get()}, " +
+      s"timedOut=${timedOutActiveMessageCount.get()}, " +
+      s"gpuBytes=${deferredGpuBytes.get()}, hostBytes=${deferredHostBytes.get()}, " +
+      s"maxWaitMicros=${TimeUnit.NANOSECONDS.toMicros(maxDeferredNanos.get())}, " +
+      s"byActiveMessageId=$deferredActiveMessagesById")
+  }
 
   // holds memory registered against UCX that should be de-register on exit (used for bounce
   // buffers)
@@ -232,12 +243,7 @@ class UCX(transport: UCXShuffleTransport, executor: BlockManagerId, rapidsConf: 
 
       synchronized {
         logDebug("Exiting UCX progress thread.")
-        logInfo(s"Deferred active-message summary: queued=${deferredActiveMessageCount.get()}, " +
-          s"retried=${retriedActiveMessageCount.get()}, " +
-          s"timedOut=${timedOutActiveMessageCount.get()}, " +
-          s"gpuBytes=${deferredGpuBytes.get()}, hostBytes=${deferredHostBytes.get()}, " +
-          s"maxWaitMicros=${TimeUnit.NANOSECONDS.toMicros(maxDeferredNanos.get())}, " +
-          s"byActiveMessageId=$deferredActiveMessagesById")
+        logDeferredActiveMessageSummary("shutdown")
         // Fail any sends still deferred for a missing endpoint so their callbacks do not hang
         // waiting on a retry that will never run now the progress loop has exited.
         var p = pendingActiveMessages.poll()
@@ -607,13 +613,16 @@ class UCX(transport: UCXShuffleTransport, executor: BlockManagerId, rapidsConf: 
           .map(_.conf.getTimeAsSeconds("spark.network.timeout", "120s"))
           .getOrElse(120L)
         val enqueueNanos = System.nanoTime()
-        deferredActiveMessageCount.incrementAndGet()
+        val deferredCount = deferredActiveMessageCount.incrementAndGet()
         deferredActiveMessagesById.computeIfAbsent(am.activeMessageId,
           _ => new AtomicLong(0L)).incrementAndGet()
         if (isGpu) {
           deferredGpuBytes.addAndGet(dataSize)
         } else {
           deferredHostBytes.addAndGet(dataSize)
+        }
+        if (deferredCount == 1L) {
+          logDeferredActiveMessageSummary("first deferred send")
         }
         pendingActiveMessages.add(PendingActiveMessage(executorId, am, dataAddress, dataSize,
           cb, isGpu, enqueueNanos, enqueueNanos + TimeUnit.SECONDS.toNanos(timeoutSec)))
@@ -652,6 +661,12 @@ class UCX(transport: UCXShuffleTransport, executor: BlockManagerId, rapidsConf: 
           } else {
             pendingActiveMessages.add(p)
           }
+        }
+      }
+      if (pendingActiveMessages.isEmpty) {
+        val retriedCount = retriedActiveMessageCount.get()
+        if (retriedCount > lastReportedRetriedActiveMessageCount.getAndSet(retriedCount)) {
+          logDeferredActiveMessageSummary("queue drained")
         }
       }
     }

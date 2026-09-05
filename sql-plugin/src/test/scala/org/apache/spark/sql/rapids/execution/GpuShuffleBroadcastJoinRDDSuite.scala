@@ -15,7 +15,7 @@
  */
 package org.apache.spark.sql.rapids.execution
 
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.{NarrowDependency, SparkConf, SparkContext}
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.funsuite.AnyFunSuite
 
@@ -53,8 +53,10 @@ class GpuShuffleBroadcastJoinRDDSuite extends AnyFunSuite with BeforeAndAfterAll
 
     assert(joinRdd.getNumPartitions == streamRdd.getNumPartitions)
     assert(joinRdd.dependencies.length == 2)
-    assert(joinRdd.dependencies.head.getParents(1) == Seq(1))
-    assert(joinRdd.dependencies(1).getParents(1) == Seq(0))
+    val streamDependency = joinRdd.dependencies.head.asInstanceOf[NarrowDependency[Int]]
+    val buildDependency = joinRdd.dependencies(1).asInstanceOf[NarrowDependency[Int]]
+    assert(streamDependency.getParents(1) == Seq(1))
+    assert(buildDependency.getParents(1) == Seq(0))
     assert(joinRdd.collect().sorted.sameElements(Array(11, 12, 13, 14, 21, 22, 23, 24)))
   }
 }

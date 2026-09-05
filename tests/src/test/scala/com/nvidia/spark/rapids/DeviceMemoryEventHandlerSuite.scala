@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2026, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ package com.nvidia.spark.rapids
 
 import com.nvidia.spark.rapids.spill.SpillableDeviceStore
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.when
+import org.mockito.Mockito.{never, verify, when}
 import org.scalatestplus.mockito.MockitoSugar
 
 class DeviceMemoryEventHandlerSuite extends RmmSparkRetrySuiteBase with MockitoSugar {
@@ -60,14 +60,15 @@ class DeviceMemoryEventHandlerSuite extends RmmSparkRetrySuiteBase with MockitoS
     assertResult(false)(handler.onAllocFailure(1024, 2)) // cuDF would OOM here
   }
 
-  test("a negative allocation cannot be retried and handler throws") {
+  test("a negative allocation cannot be retried and does not mask the native exception") {
     val mockStore = mock[SpillableDeviceStore]
     when(mockStore.spill(any())).thenAnswer(_ => 1024L)
     val handler = new DeviceMemoryEventHandler(
       mockStore,
       None,
       2)
-    assertThrows[IllegalArgumentException](handler.onAllocFailure(-1, 0))
+    assertResult(false)(handler.onAllocFailure(-1, 0))
+    verify(mockStore, never()).spill(any())
   }
 
   test("a negative retry count is invalid") {

@@ -105,9 +105,12 @@ class DeviceMemoryEventHandler(
    * @return true if allocation should be reattempted or false if it should fail
    */
   override def onAllocFailure(allocSize: Long, retryCount: Int): Boolean = {
-    // check arguments for good measure
-    require(allocSize >= 0,
-      s"onAllocFailure invoked with invalid allocSize $allocSize")
+    // A negative value can be reported when a native operation overflows its output-size
+    // calculation. Do not mask the native exception with a callback exception.
+    if (allocSize < 0) {
+      logWarning(s"Ignoring invalid allocation failure size $allocSize")
+      return false
+    }
 
     require(retryCount >= 0,
       s"onAllocFailure invoked with invalid retryCount $retryCount")

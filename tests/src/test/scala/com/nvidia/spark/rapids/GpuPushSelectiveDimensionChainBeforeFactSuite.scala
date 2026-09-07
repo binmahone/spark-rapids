@@ -31,7 +31,9 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
   private val enabledKey =
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled"
 
-  private def conf: SparkConf = new SparkConf().set(enabledKey, "true")
+  private def conf: SparkConf = new SparkConf()
+    .set(enabledKey, "true")
+    .set("spark.sql.autoBroadcastJoinThreshold", "12g")
 
   test("reorders a dimension chain with an independent selective leaf") {
     withCpuSparkSession(

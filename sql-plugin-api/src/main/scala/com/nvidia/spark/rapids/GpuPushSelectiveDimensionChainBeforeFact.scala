@@ -76,6 +76,7 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
     nonNegativeBytesConf(maxPrunableChainDimensionSizeInBytesKey, "1g")
   private val maxPrunableChainDimensionRows = BigInt(
     nonNegativeLongConf(maxPrunableChainDimensionRowsKey, 10000000L))
+  private val trustedMetadata = GpuOptimizerTrustedMetadata.fromSession(spark)
   private val minVictimRows = BigInt(10000000L) // 10M: only prune a genuinely large dimension
   private val minVictimSizeInBytes = minVictimRows * 16
   private val minBenefitRatio = 2.0 // victim must be >= this multiple of the chain dim to bother
@@ -698,8 +699,13 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
       requiredOutput: AttributeSet): LogicalPlan = {
     var acc = first
     var accIsInitialPrunedBranch = true
-    var remainingConditions = conditions
-    var remaining = rest
+    val (preparedRest, preparedConditions) = prepareIndependentSelectiveLeafBranches(
+      rest,
+      conditions,
+      lowNdv,
+      requiredOutput)
+    var remainingConditions = preparedConditions
+    var remaining = preparedRest
     while (remaining.nonEmpty) {
       val accSet = acc.outputSet
       val good = remaining.filter(it => hasHighNdvEdge(accSet, it.outputSet, conditions, lowNdv))
@@ -731,6 +737,60 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
       Filter(remainingConditions.reduceLeft(And), acc)
     } else {
       acc
+    }
+  }
+
+  /**
+   * Build the smallest admitted independent selective leaf with its sole neighbor before that
+   * neighbor is attached to the main left-deep spine. Otherwise connectivity can force the
+   * unfiltered neighbor onto the spine first, making the selective leaf too late to reduce the
+   * neighbor's shuffle.
+   */
+  private def prepareIndependentSelectiveLeafBranches(
+      rest: Seq[LogicalPlan],
+      conditions: Seq[Expression],
+      lowNdv: AttributeSet,
+      requiredOutput: AttributeSet): (Seq[LogicalPlan], Seq[Expression]) = {
+    val candidate = rest.flatMap {
+      leaf =>
+        val neighborsAndEdges = rest
+          .filterNot(_ eq leaf)
+          .flatMap {
+            neighbor =>
+              val edges = edgePredicates(leaf.outputSet, neighbor.outputSet, conditions)
+              if (edges.nonEmpty) Some((neighbor, edges)) else None
+          }
+        neighborsAndEdges match {
+          case Seq((neighbor, edges))
+              if hasSelectiveLiteralFilter(leaf) &&
+                isPotentialPrunableChainDimension(leaf) &&
+                edges.forall(edge => !edge.references.subsetOf(lowNdv)) =>
+            Some((leaf, neighbor, edges))
+          case _ => None
+        }
+    }
+
+    candidate.sortBy {
+      case (leaf, neighbor, _) =>
+        (conservativePlanBytes(leaf), leaf.outputSet.toString, neighbor.outputSet.toString)
+    }.headOption match {
+      case Some((leaf, neighbor, edges)) =>
+        val remainingConditions = conditions.filterNot(
+          condition => edges.exists(edge => samePredicate(condition, edge)))
+        val branchRaw = buildJoin(
+          neighbor,
+          leaf,
+          edges.reduceOption(And),
+          broadcastSmallerHint(neighbor, leaf, allowLeft = false, allowRight = true))
+        val futureRefs =
+          requiredOutput ++ AttributeSet(remainingConditions.flatMap(_.references))
+        val branch = projectForFuture(branchRaw, futureRefs)
+        logWarning(
+          "GpuPushSelectiveDimensionChainBeforeFact: prebuilt independent selective leaf " +
+            s"leaf=${planSummary(leaf)} neighbor=${planSummary(neighbor)}")
+        (rest.filterNot(item => (item eq leaf) || (item eq neighbor)) :+ branch,
+          remainingConditions)
+      case None => (rest, conditions)
     }
   }
 
@@ -802,7 +862,9 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
   }
 
   private def positiveRowCount(plan: LogicalPlan): Option[BigInt] =
-    plan.stats.rowCount.filter(_ > 0).orElse {
+    trustedMetadata.flatMap(_.estimateRows(plan)).orElse {
+      plan.stats.rowCount.filter(_ > 0)
+    }.orElse {
       var total = BigInt(0)
       var found = false
       plan.foreach {

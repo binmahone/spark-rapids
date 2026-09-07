@@ -16,6 +16,10 @@
 
 package com.nvidia.spark.rapids
 
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+
+import org.apache.commons.io.FileUtils
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeReference, EqualTo}
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -30,6 +34,8 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
 
   private val enabledKey =
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled"
+  private val maxChainRowsKey =
+    "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.maxChainRows"
 
   private def conf: SparkConf = new SparkConf().set(enabledKey, "true")
 
@@ -66,20 +72,61 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
       conf)
   }
 
+  test("uses trusted path statistics to prebuild an independent selective leaf") {
+    val datasetDir = Files.createTempDirectory("trusted-metadata-dataset").toFile
+    val partDir = datasetDir.toPath.resolve("part")
+    val metadataFile = datasetDir.toPath.resolve("trusted-metadata.properties")
+    val metadata =
+      s"""dataset.path=${datasetDir.getCanonicalPath}
+         |table.part.rowCount=6000000000
+         |column.part.p_type.distinctCount=150
+         |""".stripMargin
+    Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
+    val trustedConf = conf
+      .set(maxChainRowsKey, "50000000")
+      .set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString)
+
+    try {
+      withCpuSparkSession(
+        spark => {
+          import spark.implicits._
+
+          Seq((1L, "ECONOMY ANODIZED STEEL"), (2L, "OTHER"))
+            .toDF("p_partkey", "p_type")
+            .write.parquet(partDir.toString)
+          val part = spark.read.parquet(partDir.toString)
+            .filter("p_type = 'ECONOMY ANODIZED STEEL'")
+            .queryExecution.analyzed
+          val testPlan = q8LikePlan(addCompetingEdge = false, Some(part))
+          val rewritten = GpuPushSelectiveDimensionChainBeforeFact(spark)(testPlan.plan)
+
+          assert(!rewritten.fastEquals(testPlan.plan), rewritten.treeString)
+          assert(
+            containsDirectJoin(rewritten, testPlan.lineitem, testPlan.part),
+            rewritten.treeString)
+          assert(rewritten.outputSet == testPlan.plan.outputSet, rewritten.treeString)
+        },
+        trustedConf)
+    } finally {
+      FileUtils.deleteDirectory(datasetDir)
+    }
+  }
+
   private case class Q8LikePlan(
       plan: LogicalPlan,
       customer: LogicalPlan,
       nation: LogicalPlan,
       region: LogicalPlan,
       orders: LogicalPlan,
-      lineitem: LogicalPlan)
+      lineitem: LogicalPlan,
+      part: LogicalPlan)
 
-  private def q8LikePlan(addCompetingEdge: Boolean): Q8LikePlan = {
+  private def q8LikePlan(
+      addCompetingEdge: Boolean,
+      partOverride: Option[LogicalPlan] = None): Q8LikePlan = {
     val lOrderKey = AttributeReference("l_orderkey", LongType)()
     val lPartKey = AttributeReference("l_partkey", LongType)()
     val lExtraKey = AttributeReference("l_extra", LongType)()
-    val pPartKey = AttributeReference("p_partkey", LongType)()
-    val pType = AttributeReference("p_type", StringType)()
     val oOrderKey = AttributeReference("o_orderkey", LongType)()
     val oCustKey = AttributeReference("o_custkey", LongType)()
     val oExtraKey = AttributeReference("o_extra", LongType)()
@@ -91,9 +138,14 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     val rName = AttributeReference("r_name", StringType)()
 
     val lineitem = StatRel(Seq(lOrderKey, lPartKey, lExtraKey), 180000000000L)
-    val part = Filter(
-      EqualTo(pType, Literal("ECONOMY ANODIZED STEEL")),
-      StatRel(Seq(pPartKey, pType), 6000000000L))
+    val part = partOverride.getOrElse {
+      val pPartKey = AttributeReference("p_partkey", LongType)()
+      val pType = AttributeReference("p_type", StringType)()
+      Filter(
+        EqualTo(pType, Literal("ECONOMY ANODIZED STEEL")),
+        StatRel(Seq(pPartKey, pType), 6000000000L))
+    }
+    val pPartKey = part.output.find(_.name == "p_partkey").get
     val orders = StatRel(Seq(oOrderKey, oCustKey, oExtraKey), 45000000000L)
     val customer = StatRel(Seq(cCustKey, cNationKey), 4500000000L)
     val nation = StatRel(Seq(nNationKey, nRegionKey), 25L)
@@ -101,15 +153,15 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
       EqualTo(rName, Literal("AMERICA")),
       StatRel(Seq(rRegionKey, rName), 5L))
 
-    val ordersCondition = if (addCompetingEdge) {
-      And(EqualTo(lOrderKey, oOrderKey), EqualTo(pPartKey, oExtraKey))
+    val partCondition = if (addCompetingEdge) {
+      And(EqualTo(pPartKey, lPartKey), EqualTo(pPartKey, oExtraKey))
     } else {
-      EqualTo(lOrderKey, oOrderKey)
+      EqualTo(pPartKey, lPartKey)
     }
     val plan = join(
       join(
         join(
-          join(join(lineitem, part, EqualTo(pPartKey, lPartKey)), orders, ordersCondition),
+          join(join(lineitem, orders, EqualTo(lOrderKey, oOrderKey)), part, partCondition),
           customer,
           EqualTo(oCustKey, cCustKey)),
         nation,
@@ -117,7 +169,7 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
       region,
       EqualTo(nRegionKey, rRegionKey))
 
-    Q8LikePlan(plan, customer, nation, region, orders, lineitem)
+    Q8LikePlan(plan, customer, nation, region, orders, lineitem, part)
   }
 
   private def join(left: LogicalPlan, right: LogicalPlan, condition: Expression): Join =
@@ -136,6 +188,17 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
 
   private def containsBranch(plan: LogicalPlan, target: LogicalPlan): Boolean =
     sameBranch(plan, target) || plan.children.exists(containsBranch(_, target))
+
+  private def containsDirectJoin(
+      plan: LogicalPlan,
+      first: LogicalPlan,
+      second: LogicalPlan): Boolean =
+    plan.exists {
+      case Join(left, right, Inner, _, _) =>
+        (containsBranch(left, first) && containsBranch(right, second)) ||
+          (containsBranch(left, second) && containsBranch(right, first))
+      case _ => false
+    }
 
   private def broadcastsAccumulatedBranch(
       plan: LogicalPlan,

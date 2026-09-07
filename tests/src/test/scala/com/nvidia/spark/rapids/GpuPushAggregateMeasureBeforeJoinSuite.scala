@@ -96,11 +96,14 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
         "CAST(id + 0.5 AS DOUBLE) AS supply_cost")
     val orders = spark.range(0, 12).selectExpr("id AS order_id")
 
-    sales
+    val profit = sales
       .join(costs, col("part_key") === col("cost_part_key"))
       .join(orders, col("sale_id") === col("order_id"))
-      .groupBy(expr("order_id % 2").as("bucket"))
-      .agg(sum(expr("price * (1.0 - discount) - supply_cost")).as("profit"))
+      .select(
+        expr("order_id % 2").as("bucket"),
+        expr("price * (1.0 - discount) - supply_cost").as("amount"))
+
+    profit.groupBy("bucket").agg(sum("amount").as("profit"))
   }
 
   private def normalized(rows: Array[Row]): Seq[String] = rows.map(_.toString).sorted.toSeq
@@ -153,7 +156,7 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
       val optimized = query.queryExecution.optimizedPlan
       val measureProjects = optimized.collect {
         case project: Project if project.projectList.exists {
-              case alias: Alias => alias.name.startsWith("_rapids_measure_")
+              case alias: Alias => alias.name == "amount"
               case _ => false
             } =>
           project

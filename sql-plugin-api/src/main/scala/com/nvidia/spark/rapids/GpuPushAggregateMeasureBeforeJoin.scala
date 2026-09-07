@@ -80,6 +80,10 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
       return aggregate
     }
 
+    rewriteAliasedMeasure(aggregate).getOrElse(rewriteDirectMeasure(aggregate))
+  }
+
+  private def rewriteDirectMeasure(aggregate: Aggregate): LogicalPlan = {
     val sumInputs = aggregate.aggregateExpressions.flatMap(_.collect {
       case sum: Sum if isCompositeMeasure(sum.child) => sum.child
     })
@@ -126,6 +130,73 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
             preAggregateAttribute),
           child = rewrittenChild)
       case None => materializeMeasure(aggregate, candidate, candidateRefs, aliasName, inputWidth)
+    }
+  }
+
+  private def rewriteAliasedMeasure(aggregate: Aggregate): Option[LogicalPlan] = {
+    val (project, joinChild) = aggregate.child match {
+      case p @ Project(_, child) if containsJoin(child) => (p, child)
+      case _ => return None
+    }
+    val sumChildren = aggregate.aggregateExpressions.flatMap(_.collect {
+      case sum: Sum => sum.child
+    })
+    val candidates = sumChildren.flatMap {
+      case attribute: Attribute =>
+        project.projectList.collectFirst {
+          case alias: Alias
+              if alias.toAttribute.semanticEquals(attribute) && isCompositeMeasure(alias.child) =>
+            (attribute, alias)
+        }
+      case _ => None
+    }
+    if (candidates.size != 1 || sumChildren.size != 1) {
+      return None
+    }
+
+    val (sumAttribute, alias) = candidates.head
+    val candidateRefs = alias.child.references
+    if (
+      aggregate.groupingExpressions.exists(
+        expression => expression.references.contains(sumAttribute) ||
+          expression.references.intersect(candidateRefs).nonEmpty) ||
+      aggregate.aggregateExpressions.exists(
+        usesAliasedCandidateOutsideTargetSum(_, sumAttribute, candidateRefs))
+    ) {
+      return None
+    }
+    val otherProjectExpressions = project.projectList.filterNot {
+      case current: Alias => current.exprId == alias.exprId
+      case _ => false
+    }
+    if (otherProjectExpressions.exists(_.references.intersect(candidateRefs).nonEmpty)) {
+      return None
+    }
+
+    val joinRefs = AttributeSet(joinChild.collect {
+      case Join(_, _, _, condition, _) => condition.toSeq.flatMap(_.references)
+    }.flatten)
+    if (joinRefs.intersect(candidateRefs).nonEmpty) {
+      return None
+    }
+    val inputWidth = candidateRefs.toSeq.map(_.dataType.defaultSize).sum
+    if (alias.dataType.defaultSize >= inputWidth) {
+      return None
+    }
+
+    pushIntoSourceBranch(joinChild, candidateRefs, alias).map { rewrittenJoinChild =>
+      val rewrittenProjectList = project.projectList.map {
+        case current: Alias if current.exprId == alias.exprId => alias.toAttribute
+        case other => other
+      }
+      logWarning(
+        "GpuPushAggregateMeasureBeforeJoin: moved an aliased width-reducing SUM input " +
+          s"to its first available join inputWidth=$inputWidth " +
+          s"outputWidth=${alias.dataType.defaultSize} " +
+          s"inputAttributes=${candidateRefs.toSeq.map(_.name).sorted.mkString(",")}")
+      aggregate.copy(child = project.copy(
+        projectList = rewrittenProjectList,
+        child = rewrittenJoinChild))
     }
   }
 
@@ -272,6 +343,25 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
             _.references.intersect(candidateRefs).nonEmpty)
         case _ =>
           aggregateExpression.references.intersect(candidateRefs).nonEmpty
+      }
+    }
+  }
+
+  private def usesAliasedCandidateOutsideTargetSum(
+      expression: Expression,
+      sumAttribute: Attribute,
+      candidateRefs: AttributeSet): Boolean = {
+    expression.collect {
+      case aggregateExpression: AggregateExpression => aggregateExpression
+    }.exists { aggregateExpression =>
+      aggregateExpression.aggregateFunction match {
+        case sum: Sum if sum.child.semanticEquals(sumAttribute) =>
+          aggregateExpression.filter.exists(
+            filter => filter.references.contains(sumAttribute) ||
+              filter.references.intersect(candidateRefs).nonEmpty)
+        case _ =>
+          aggregateExpression.references.contains(sumAttribute) ||
+            aggregateExpression.references.intersect(candidateRefs).nonEmpty
       }
     }
   }

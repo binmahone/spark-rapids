@@ -31,9 +31,7 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
   private val enabledKey =
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled"
 
-  private def conf: SparkConf = new SparkConf()
-    .set(enabledKey, "true")
-    .set("spark.sql.autoBroadcastJoinThreshold", "12g")
+  private def conf: SparkConf = new SparkConf().set(enabledKey, "true")
 
   test("reorders a dimension chain with an independent selective leaf") {
     withCpuSparkSession(
@@ -51,9 +49,6 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
             testPlan.customer,
             testPlan.orders,
             testPlan.lineitem),
-          rewritten.treeString)
-        assert(
-          broadcastsSelectiveLeafIntoNeighbor(rewritten, testPlan.lineitem, testPlan.part),
           rewritten.treeString)
         assert(rewritten.outputSet == testPlan.plan.outputSet, rewritten.treeString)
       },
@@ -77,8 +72,7 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
       nation: LogicalPlan,
       region: LogicalPlan,
       orders: LogicalPlan,
-      lineitem: LogicalPlan,
-      part: LogicalPlan)
+      lineitem: LogicalPlan)
 
   private def q8LikePlan(addCompetingEdge: Boolean): Q8LikePlan = {
     val lOrderKey = AttributeReference("l_orderkey", LongType)()
@@ -99,7 +93,7 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     val lineitem = StatRel(Seq(lOrderKey, lPartKey, lExtraKey), 180000000000L)
     val part = Filter(
       EqualTo(pType, Literal("ECONOMY ANODIZED STEEL")),
-      StatRel(Seq(pPartKey, pType), 500000000L))
+      StatRel(Seq(pPartKey, pType), 6000000000L))
     val orders = StatRel(Seq(oOrderKey, oCustKey, oExtraKey), 45000000000L)
     val customer = StatRel(Seq(cCustKey, cNationKey), 4500000000L)
     val nation = StatRel(Seq(nNationKey, nRegionKey), 25L)
@@ -123,7 +117,7 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
       region,
       EqualTo(nRegionKey, rRegionKey))
 
-    Q8LikePlan(plan, customer, nation, region, orders, lineitem, part)
+    Q8LikePlan(plan, customer, nation, region, orders, lineitem)
   }
 
   private def join(left: LogicalPlan, right: LogicalPlan, condition: Expression): Join =
@@ -153,17 +147,6 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
         containsBranch(left, victim) && containsBranch(left, firstFact) &&
           containsBranch(right, secondFact) &&
           hint.leftHint.exists(_.strategy.contains(BROADCAST))
-      case _ => false
-    }
-
-  private def broadcastsSelectiveLeafIntoNeighbor(
-      plan: LogicalPlan,
-      neighbor: LogicalPlan,
-      leaf: LogicalPlan): Boolean =
-    plan.exists {
-      case Join(left, right, Inner, _, hint) =>
-        sameBranch(left, neighbor) && sameBranch(right, leaf) &&
-          hint.rightHint.exists(_.strategy.contains(BROADCAST))
       case _ => false
     }
 

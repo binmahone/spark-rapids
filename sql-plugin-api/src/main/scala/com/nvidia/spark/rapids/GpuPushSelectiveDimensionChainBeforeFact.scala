@@ -698,13 +698,8 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
       requiredOutput: AttributeSet): LogicalPlan = {
     var acc = first
     var accIsInitialPrunedBranch = true
-    val (preparedRest, preparedConditions) = prepareIndependentSelectiveLeafBranches(
-      rest,
-      conditions,
-      lowNdv,
-      requiredOutput)
-    var remainingConditions = preparedConditions
-    var remaining = preparedRest
+    var remainingConditions = conditions
+    var remaining = rest
     while (remaining.nonEmpty) {
       val accSet = acc.outputSet
       val good = remaining.filter(it => hasHighNdvEdge(accSet, it.outputSet, conditions, lowNdv))
@@ -736,57 +731,6 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
       Filter(remainingConditions.reduceLeft(And), acc)
     } else {
       acc
-    }
-  }
-
-  /**
-   * Build the smallest admitted independent selective leaf with its sole neighbor before that
-   * neighbor is attached to the main left-deep spine. Otherwise connectivity can force the
-   * unfiltered neighbor onto the spine first, making the selective leaf too late to reduce the
-   * neighbor's shuffle.
-   */
-  private def prepareIndependentSelectiveLeafBranches(
-      rest: Seq[LogicalPlan],
-      conditions: Seq[Expression],
-      lowNdv: AttributeSet,
-      requiredOutput: AttributeSet): (Seq[LogicalPlan], Seq[Expression]) = {
-    val candidate = rest.flatMap {
-      leaf =>
-        val neighborsAndEdges = rest
-          .filterNot(_ eq leaf)
-          .flatMap {
-            neighbor =>
-              val edges = edgePredicates(leaf.outputSet, neighbor.outputSet, conditions)
-              if (edges.nonEmpty) Some((neighbor, edges)) else None
-          }
-        neighborsAndEdges match {
-          case Seq((neighbor, edges))
-              if hasSelectiveLiteralFilter(leaf) &&
-                isPotentialPrunableChainDimension(leaf) &&
-                edges.forall(edge => !edge.references.subsetOf(lowNdv)) =>
-            Some((leaf, neighbor, edges))
-          case _ => None
-        }
-    }
-
-    candidate.sortBy {
-      case (leaf, neighbor, _) =>
-        (conservativePlanBytes(leaf), leaf.outputSet.toString, neighbor.outputSet.toString)
-    }.headOption match {
-      case Some((leaf, neighbor, edges)) =>
-        val remainingConditions = conditions.filterNot(
-          condition => edges.exists(edge => samePredicate(condition, edge)))
-        val branchRaw = buildJoin(
-          neighbor,
-          leaf,
-          edges.reduceOption(And),
-          broadcastSmallerHint(neighbor, leaf, allowLeft = false, allowRight = true))
-        val futureRefs =
-          requiredOutput ++ AttributeSet(remainingConditions.flatMap(_.references))
-        val branch = projectForFuture(branchRaw, futureRefs)
-        (rest.filterNot(item => (item eq leaf) || (item eq neighbor)) :+ branch,
-          remainingConditions)
-      case None => (rest, conditions)
     }
   }
 

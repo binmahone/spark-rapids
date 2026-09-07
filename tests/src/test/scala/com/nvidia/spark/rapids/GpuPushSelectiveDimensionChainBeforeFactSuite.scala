@@ -21,7 +21,8 @@ import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeRefer
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.catalyst.plans.Inner
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, JoinHint, LeafNode, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{BROADCAST, Filter, Join, JoinHint, LeafNode}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.plans.logical.Statistics
 import org.apache.spark.sql.types.{LongType, StringType}
 
@@ -41,6 +42,13 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
         assert(!rewritten.fastEquals(testPlan.plan), rewritten.treeString)
         assert(
           containsJoinedBranches(rewritten, testPlan.customer, testPlan.nation, testPlan.region),
+          rewritten.treeString)
+        assert(
+          !broadcastsAccumulatedBranch(
+            rewritten,
+            testPlan.customer,
+            testPlan.orders,
+            testPlan.lineitem),
           rewritten.treeString)
         assert(rewritten.outputSet == testPlan.plan.outputSet, rewritten.treeString)
       },
@@ -62,7 +70,9 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
       plan: LogicalPlan,
       customer: LogicalPlan,
       nation: LogicalPlan,
-      region: LogicalPlan)
+      region: LogicalPlan,
+      orders: LogicalPlan,
+      lineitem: LogicalPlan)
 
   private def q8LikePlan(addCompetingEdge: Boolean): Q8LikePlan = {
     val lOrderKey = AttributeReference("l_orderkey", LongType)()
@@ -107,7 +117,7 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
       region,
       EqualTo(nRegionKey, rRegionKey))
 
-    Q8LikePlan(plan, customer, nation, region)
+    Q8LikePlan(plan, customer, nation, region, orders, lineitem)
   }
 
   private def join(left: LogicalPlan, right: LogicalPlan, condition: Expression): Join =
@@ -126,6 +136,19 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
 
   private def containsBranch(plan: LogicalPlan, target: LogicalPlan): Boolean =
     sameBranch(plan, target) || plan.children.exists(containsBranch(_, target))
+
+  private def broadcastsAccumulatedBranch(
+      plan: LogicalPlan,
+      victim: LogicalPlan,
+      firstFact: LogicalPlan,
+      secondFact: LogicalPlan): Boolean =
+    plan.exists {
+      case Join(left, right, Inner, _, hint) =>
+        containsBranch(left, victim) && containsBranch(left, firstFact) &&
+          containsBranch(right, secondFact) &&
+          hint.leftHint.exists(_.strategy.contains(BROADCAST))
+      case _ => false
+    }
 
   private def sameBranch(left: LogicalPlan, right: LogicalPlan): Boolean =
     left.fastEquals(right) || left.outputSet == right.outputSet

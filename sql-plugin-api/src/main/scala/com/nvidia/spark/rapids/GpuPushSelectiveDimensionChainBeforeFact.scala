@@ -80,7 +80,6 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
   private val minVictimSizeInBytes = minVictimRows * 16
   private val minBenefitRatio = 2.0 // victim must be >= this multiple of the chain dim to bother
   private val minExtendedBenefitCostRatio = 4.0
-  private val minFactProbeRatio = 4.0
   private val maxClusterItems = 12
   private val maxWrapperDepth = 4
   private val maxProbeSpineDepth = 8
@@ -718,8 +717,7 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
       val joinHint = broadcastSmallerHint(
         acc,
         pick,
-        allowLeft =
-          accIsInitialPrunedBranch || canBroadcastPrunedBranchIntoMuchLargerFact(victim, acc, pick),
+        allowLeft = accIsInitialPrunedBranch,
         allowRight = hasPrunableChainDimensionStats(pick)
       )
       val joined = buildJoin(acc, pick, conds.reduceOption(And), joinHint)
@@ -1195,18 +1193,6 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
     val nonSelective = candidates.filterNot(hasSelectiveLiteralFilter)
     val pool = if (nonSelective.nonEmpty) nonSelective else candidates
     pool.minBy(_.outputSet.toString)
-  }
-
-  private def canBroadcastPrunedBranchIntoMuchLargerFact(
-      victim: LogicalPlan,
-      prunedBranch: LogicalPlan,
-      factWardBranch: LogicalPlan): Boolean = {
-    val victimBytes = realScanBytes(victim).toDouble.max(1.0)
-    val prunedBytes = realScanBytes(prunedBranch)
-    val factBytes = realScanBytes(factWardBranch)
-    prunedBytes > 0 &&
-    factBytes > prunedBytes &&
-    factBytes.toDouble / victimBytes >= minFactProbeRatio
   }
 
   private def benefitsFromPrune(victim: LogicalPlan, chainDim: LogicalPlan): Boolean = {

@@ -36,6 +36,8 @@ class SQLExecPlugin extends (SparkSessionExtensions => Unit) {
     // runs after the Subquery batch (EXISTS -> LeftSemiJoin). No-op unless
     // spark.rapids.sql.optimizer.rewriteLargeLeftSemi.enabled=true.
     extensions.injectOptimizerRule(spark => GpuRewriteLargeLeftSemiToInnerDistinct(spark))
+    // Materialize width-reducing aggregate inputs before joins when explicitly enabled.
+    extensions.injectOptimizerRule(spark => GpuPushAggregateMeasureBeforeJoin(spark))
     // This rule also self-registers after CBO, where Spark's selected join order is available.
     // It is disabled unless spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled=true.
     extensions.injectOptimizerRule(spark => GpuPushSelectiveDimensionChainBeforeFact(spark))

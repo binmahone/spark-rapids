@@ -107,7 +107,7 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
    * invokes it only after isolating the candidate from its correlated RHS branches. Enabling the
    * global rule earlier can flatten that boundary before the proof runs.
    */
-  private[columnar] def rewriteProvenCandidate(plan: LogicalPlan): LogicalPlan = {
+  private[rapids] def rewriteProvenCandidate(plan: LogicalPlan): LogicalPlan = {
     if (plan.resolved) rewritePlan(plan, blockedByParentCluster = false) else plan
   }
 
@@ -326,7 +326,7 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
     val context = buildReorderContext(items, atomic, uf).getOrElse(return None)
     val ReorderContext(
       seed,
-      others,
+      _,
       chainDim,
       rest,
       victim,
@@ -616,7 +616,7 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
       case _ => false
     }
 
-  private[columnar] def probeSpineCanCommuteForTesting(
+  private[rapids] def probeSpineCanCommuteForTesting(
       root: LogicalPlan,
       protectedAttrs: AttributeSet,
       victimAttr: Attribute): Boolean =

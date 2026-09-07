@@ -288,7 +288,14 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
       val inLeft = refs.subsetOf(left.outputSet)
       val inRight = refs.subsetOf(right.outputSet)
       if (inLeft == inRight) {
-        None
+        // This is the deepest join at which a measure spanning both inputs becomes available.
+        // Materializing immediately above it still moves the narrower value below every ancestor
+        // join and exchange without changing the join that supplies the measure's inputs.
+        if (!inLeft && refs.subsetOf(join.outputSet)) {
+          projectMeasure(join, refs, alias)
+        } else {
+          None
+        }
       } else if (inLeft) {
         pushIntoSourceBranch(left, refs, alias).map(newLeft => join.copy(left = newLeft))
       } else {

@@ -18,7 +18,7 @@ package com.nvidia.spark.rapids
 
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, Row}
-import org.apache.spark.sql.catalyst.plans.logical.Aggregate
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Join, Project}
 import org.apache.spark.sql.functions.{col, expr, max, sum}
 
 class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite {
@@ -81,6 +81,27 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
         max("price").as("max_price"))
   }
 
+  private def crossJoinMeasureQuery(
+      spark: org.apache.spark.sql.SparkSession): DataFrame = {
+    val sales = spark.range(0, 12)
+      .selectExpr(
+        "id AS sale_id",
+        "id % 4 AS part_key",
+        "CAST(id + 1 AS DOUBLE) AS price",
+        "CAST((id % 3) / 10.0 AS DOUBLE) AS discount")
+    val costs = spark.range(0, 4)
+      .selectExpr(
+        "id AS cost_part_key",
+        "CAST(id + 0.5 AS DOUBLE) AS supply_cost")
+    val orders = spark.range(0, 12).selectExpr("id AS order_id")
+
+    sales
+      .join(costs, col("part_key") === col("cost_part_key"))
+      .join(orders, col("sale_id") === col("order_id"))
+      .groupBy(expr("order_id % 2").as("bucket"))
+      .agg(sum(expr("price * (1.0 - discount) - supply_cost")).as("profit"))
+  }
+
   private def normalized(rows: Array[Row]): Seq[String] = rows.map(_.toString).sorted.toSeq
 
   test("pre-aggregate a distributive SUM before an inner join") {
@@ -117,6 +138,38 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
       val optimized = compositeSumWithOtherMeasure(spark).queryExecution.optimizedPlan
 
       assert(!optimized.treeString.contains("_rapids_measure_"), optimized.treeString)
+    }, conf(enabled = true))
+  }
+
+  test("materialize a measure at the first join that supplies all inputs") {
+    var expected = Seq.empty[String]
+    withCpuSparkSession(spark => {
+      expected = normalized(crossJoinMeasureQuery(spark).collect())
+    }, conf(enabled = false))
+
+    withCpuSparkSession(spark => {
+      val query = crossJoinMeasureQuery(spark)
+      val optimized = query.queryExecution.optimizedPlan
+      val measureProjects = optimized.collect {
+        case project: Project if project.projectList.exists(_.name.startsWith("_rapids_measure_")) =>
+          project
+      }
+
+      assert(normalized(query.collect()) === expected)
+      assert(measureProjects.size === 1, optimized.treeString)
+      assert(measureProjects.head.child.isInstanceOf[Join], optimized.treeString)
+      assert(measureProjects.head.child.asInstanceOf[Join].left.output.exists(_.name == "price"),
+        optimized.treeString)
+      assert(
+        measureProjects.head.child.asInstanceOf[Join].right.output.exists(
+          _.name == "supply_cost"),
+        optimized.treeString)
+      val orderJoin = optimized.collectFirst {
+        case join: Join if join.right.output.exists(_.name == "order_id") => join
+      }.getOrElse(fail(optimized.treeString))
+      assert(
+        !orderJoin.output.exists(_.name == "price"),
+        optimized.treeString)
     }, conf(enabled = true))
   }
 }

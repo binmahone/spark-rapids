@@ -22,7 +22,8 @@ import java.nio.file.Files
 import org.apache.commons.io.{FileUtils => ApacheFileUtils}
 
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualTo}
+import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference}
+import org.apache.spark.sql.catalyst.expressions.EqualTo
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.catalyst.expressions.aggregate.Average
@@ -243,6 +244,66 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
             rewritten.treeString)
           assert(rewrittenJoin.left.fastEquals(lineitem), rewritten.treeString)
           assert(rewrittenJoin.right.fastEquals(part), rewritten.treeString)
+        },
+        trustedConf)
+    } finally {
+      ApacheFileUtils.deleteDirectory(datasetDir)
+    }
+  }
+
+  test("estimates a filtered PK-FK-like dimension chain from trusted NDVs") {
+    val datasetDir = Files.createTempDirectory("trusted-dimension-chain-dataset").toFile
+    val regionDir = datasetDir.toPath.resolve("region")
+    val nationDir = datasetDir.toPath.resolve("nation")
+    val supplierDir = datasetDir.toPath.resolve("supplier")
+    val metadataFile = datasetDir.toPath.resolve("trusted-metadata.properties")
+    val metadata =
+      s"""dataset.path=${datasetDir.getCanonicalPath}
+         |table.region.rowCount=5
+         |column.region.r_regionkey.distinctCount=5
+         |column.region.r_name.distinctCount=5
+         |table.nation.rowCount=25
+         |column.nation.n_nationkey.distinctCount=25
+         |column.nation.n_regionkey.distinctCount=5
+         |table.supplier.rowCount=300000000
+         |column.supplier.s_suppkey.distinctCount=300000000
+         |column.supplier.s_nationkey.distinctCount=25
+         |primaryKey.region=r_regionkey
+         |primaryKey.nation=n_nationkey
+         |primaryKey.supplier=s_suppkey
+         |foreignKey.nation.n_regionkey=region.r_regionkey
+         |foreignKey.supplier.s_nationkey=nation.n_nationkey
+         |""".stripMargin
+    Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
+    val trustedConf = conf
+      .set("spark.sql.autoBroadcastJoinThreshold", "12g")
+      .set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString)
+
+    try {
+      withCpuSparkSession(
+        spark => {
+          import spark.implicits._
+
+          Seq((0L, "ASIA"), (1L, "EUROPE"))
+            .toDF("r_regionkey", "r_name").write.parquet(regionDir.toString)
+          Seq((0L, 0L, "CHINA"), (1L, 1L, "FRANCE"))
+            .toDF("n_nationkey", "n_regionkey", "n_name").write.parquet(nationDir.toString)
+          Seq((0L, 0L), (1L, 1L))
+            .toDF("s_suppkey", "s_nationkey").write.parquet(supplierDir.toString)
+          spark.read.parquet(regionDir.toString).createOrReplaceTempView("trusted_region")
+          spark.read.parquet(nationDir.toString).createOrReplaceTempView("trusted_nation")
+          spark.read.parquet(supplierDir.toString).createOrReplaceTempView("trusted_supplier")
+
+          val chain = spark.sql(
+            """SELECT s_suppkey, n_name
+              |FROM trusted_supplier
+              |JOIN trusted_nation ON s_nationkey = n_nationkey
+              |JOIN trusted_region ON n_regionkey = r_regionkey
+              |WHERE r_name = 'ASIA'""".stripMargin).queryExecution.analyzed
+          val estimate = GpuOptimizerTrustedMetadata.load(metadataFile.toString).estimate(chain)
+
+          assert(estimate.exists(_.rows == 60000000), estimate)
+          assert(estimate.exists(_.sizeInBytes < 12L * 1024L * 1024L * 1024L), estimate)
         },
         trustedConf)
     } finally {

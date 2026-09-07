@@ -221,7 +221,11 @@ case class GpuPushSelectiveDimensionFilterIntoAggregate(spark: SparkSession)
   }
 
   private def estimatedOutputRows(plan: LogicalPlan): Option[BigInt] = {
-    metadata.flatMap(_.estimateRows(plan)).orElse(plan.stats.rowCount.filter(_ > 0))
+    metadata.flatMap(_.estimateRows(plan))
+      .orElse(plan.stats.rowCount.filter(_ > 0))
+      // Project and Filter can drop rowCount from Spark statistics. Their single input leaf is a
+      // conservative upper bound because neither wrapper can add rows.
+      .orElse(singleLeaf(plan).flatMap(_.stats.rowCount.filter(_ > 0)))
   }
 
   private def leafBytes(plan: LogicalPlan): BigInt =

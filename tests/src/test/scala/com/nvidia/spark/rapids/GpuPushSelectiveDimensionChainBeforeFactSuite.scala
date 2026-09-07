@@ -210,8 +210,8 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     val metadataFile = datasetDir.toPath.resolve("trusted-metadata.properties")
     val metadata =
       s"""dataset.path=${datasetDir.getCanonicalPath}
-         |table.part.rowCount=6000000000
-         |column.part.p_partkey.distinctCount=6000000000
+         |table.part.rowCount=1000000000
+         |column.part.p_partkey.distinctCount=1000000000
          |""".stripMargin
     Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
     val trustedConf = conf
@@ -342,7 +342,9 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
         val average = Alias(Average(innerValue).toAggregateExpression(), "average_value")()
         val aggregate = Aggregate(Seq(innerKey), Seq(innerKey, average), innerFact)
         val original = join(outer, aggregate, EqualTo(dimensionKey, innerKey))
-        assert(dimension.stats.rowCount.exists(_ >= 512000000L), dimension.stats.toString)
+        assert(dimension.collectFirst {
+          case leaf: LeafNode => leaf.stats.rowCount.exists(_ >= 512000000L)
+        }.contains(true), dimension.treeString)
         assert(dimension.stats.sizeInBytes <= BigInt(12L << 30), dimension.stats.toString)
         val rewritten = GpuPushSelectiveDimensionFilterIntoAggregate(spark)(original)
 

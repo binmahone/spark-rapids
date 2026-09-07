@@ -17,23 +17,29 @@ package com.nvidia.spark.rapids
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeSet, Expression}
-import org.apache.spark.sql.catalyst.expressions.NamedExpression
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeSet, BinaryComparison}
+import org.apache.spark.sql.catalyst.expressions.{EqualTo, Expression, NamedExpression}
+import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression, Sum}
-import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter, Join, LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.plans.Inner
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter, Join, JoinHint}
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
 
 /**
- * Materialize a width-reducing SUM input on its source branch before an inner-join cluster.
+ * Reduce a SUM measure before an inner-join cluster.
  *
  * This targets a general network-width problem: an aggregate such as `SUM(price * (1 - discount))`
  * otherwise carries both source columns through every intervening exchange, even though only the
- * computed value is needed above the joins. The rewrite is deliberately narrow. It requires one
- * composite SUM input, all of its attributes on one join branch, a smaller result width, and no
- * overlap with grouping keys, join predicates, or another aggregate expression.
+ * computed value is needed above the joins. When the measure branch is selectively filtered and
+ * its equi-join key is also a final grouping key, the rule can additionally pre-aggregate the SUM
+ * by that key. Both rewrites require one composite SUM input, all of its attributes on one join
+ * branch, a smaller result width, and no overlap with grouping keys, join predicates, or another
+ * aggregate expression.
  */
 case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
   extends Rule[LogicalPlan]
+  with PredicateHelper
   with Logging {
 
   private val enabledKey =
@@ -106,23 +112,144 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
       return aggregate
     }
 
-    val alias = Alias(candidate, s"_rapids_measure_${math.abs(candidate.semanticHash())}")()
+    val aliasName = s"_rapids_measure_${math.abs(candidate.semanticHash())}"
+    preAggregateBeforeJoin(aggregate, candidate, candidateRefs, aliasName) match {
+      case Some((rewrittenChild, preAggregateAttribute, groupingKeys)) =>
+        logWarning(
+          "GpuPushAggregateMeasureBeforeJoin: pushed a distributive SUM before an inner join " +
+            s"groupingKeys=${groupingKeys.map(_.name).sorted.mkString(",")} " +
+            s"inputAttributes=${candidateRefs.toSeq.map(_.name).sorted.mkString(",")}")
+        aggregate.copy(
+          aggregateExpressions = replaceTargetSum(
+            aggregate.aggregateExpressions,
+            candidate,
+            preAggregateAttribute),
+          child = rewrittenChild)
+      case None => materializeMeasure(aggregate, candidate, candidateRefs, aliasName, inputWidth)
+    }
+  }
+
+  private def materializeMeasure(
+      aggregate: Aggregate,
+      candidate: Expression,
+      candidateRefs: AttributeSet,
+      aliasName: String,
+      inputWidth: Int): LogicalPlan = {
+    val alias = Alias(candidate, aliasName)()
     pushIntoSourceBranch(aggregate.child, candidateRefs, alias) match {
       case Some(rewrittenChild) =>
-        val rewrittenExpressions = aggregate.aggregateExpressions.map { named =>
-          named.transformDown {
-            case sum: Sum if sum.child.semanticEquals(candidate) =>
-              sum.withNewChildren(Seq(alias.toAttribute))
-          }.asInstanceOf[NamedExpression]
-        }
         logWarning(
           "GpuPushAggregateMeasureBeforeJoin: materialized a width-reducing SUM input " +
             s"before joins inputWidth=$inputWidth outputWidth=${candidate.dataType.defaultSize} " +
             s"inputAttributes=${candidateRefs.toSeq.map(_.name).sorted.mkString(",")}")
         aggregate.copy(
-          aggregateExpressions = rewrittenExpressions,
+          aggregateExpressions = replaceTargetSum(
+            aggregate.aggregateExpressions,
+            candidate,
+            alias.toAttribute),
           child = rewrittenChild)
       case None => aggregate
+    }
+  }
+
+  private def replaceTargetSum(
+      expressions: Seq[NamedExpression],
+      candidate: Expression,
+      replacement: Attribute): Seq[NamedExpression] = {
+    expressions.map { named =>
+      named.transformDown {
+        case sum: Sum if sum.child.semanticEquals(candidate) =>
+          sum.withNewChildren(Seq(replacement))
+      }.asInstanceOf[NamedExpression]
+    }
+  }
+
+  private def preAggregateBeforeJoin(
+      aggregate: Aggregate,
+      candidate: Expression,
+      candidateRefs: AttributeSet,
+      aliasName: String): Option[(LogicalPlan, Attribute, Seq[Attribute])] = {
+    val (projectList, join) = aggregate.child match {
+      case Project(expressions, child: Join) => (Some(expressions), child)
+      case child: Join => (None, child)
+      case _ => return None
+    }
+    if (join.joinType != Inner || join.hint != JoinHint.NONE) {
+      return None
+    }
+
+    val (measureSide, otherSide, replaceLeft) = {
+      val inLeft = candidateRefs.subsetOf(join.left.outputSet)
+      val inRight = candidateRefs.subsetOf(join.right.outputSet)
+      if (inLeft == inRight) {
+        return None
+      } else if (inLeft) {
+        (join.left, join.right, true)
+      } else {
+        (join.right, join.left, false)
+      }
+    }
+    if (containsJoin(measureSide) || !hasSelectiveLiteralFilter(measureSide)) {
+      return None
+    }
+
+    val condition = join.condition.getOrElse(return None)
+    val groupingRefs = AttributeSet(aggregate.groupingExpressions.flatMap(_.references))
+    val groupingKeys = splitConjunctivePredicates(condition).flatMap {
+      case EqualTo(left: Attribute, right: Attribute)
+          if measureSide.outputSet.contains(left) && otherSide.outputSet.contains(right) =>
+        Some(left)
+      case EqualTo(left: Attribute, right: Attribute)
+          if measureSide.outputSet.contains(right) && otherSide.outputSet.contains(left) =>
+        Some(right)
+      case _ => None
+    }.foldLeft(Vector.empty[Attribute]) { (result, attribute) =>
+      if (result.exists(_.semanticEquals(attribute))) result else result :+ attribute
+    }
+    if (groupingKeys.isEmpty || !groupingKeys.forall(groupingRefs.contains)) {
+      return None
+    }
+
+    val measureConditionRefs = condition.references.intersect(measureSide.outputSet)
+    if (!measureConditionRefs.subsetOf(AttributeSet(groupingKeys))) {
+      return None
+    }
+
+    val preAggregateAlias = Alias(Sum(candidate).toAggregateExpression(), aliasName)()
+    val preAggregate = Aggregate(
+      groupingKeys,
+      groupingKeys :+ preAggregateAlias,
+      measureSide)
+    val rewrittenJoin =
+      if (replaceLeft) join.copy(left = preAggregate) else join.copy(right = preAggregate)
+
+    val rewrittenChild = projectList match {
+      case Some(expressions) =>
+        val retained = expressions.filterNot {
+          case attribute: Attribute => candidateRefs.contains(attribute)
+          case _ => false
+        }
+        if (
+          retained.exists(_.references.intersect(candidateRefs).nonEmpty) ||
+          retained.exists(expression => !expression.references.subsetOf(rewrittenJoin.outputSet))
+        ) {
+          return None
+        }
+        Project(retained :+ preAggregateAlias.toAttribute, rewrittenJoin)
+      case None => rewrittenJoin
+    }
+    Some((rewrittenChild, preAggregateAlias.toAttribute, groupingKeys))
+  }
+
+  private def hasSelectiveLiteralFilter(plan: LogicalPlan): Boolean = {
+    plan.exists {
+      case Filter(condition, _) =>
+        splitConjunctivePredicates(condition).exists {
+          case comparison: BinaryComparison =>
+            comparison.left.foldable != comparison.right.foldable
+          case _ => false
+        }
+      case _ => false
     }
   }
 

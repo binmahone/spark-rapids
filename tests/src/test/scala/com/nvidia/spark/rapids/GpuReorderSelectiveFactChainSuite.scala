@@ -23,7 +23,7 @@ import java.sql.Date
 import org.apache.commons.io.{FileUtils => ApacheFileUtils}
 
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan, SHUFFLE_HASH}
 
 class GpuReorderSelectiveFactChainSuite extends SparkQueryCompareTestSuite {
 
@@ -98,6 +98,8 @@ class GpuReorderSelectiveFactChainSuite extends SparkQueryCompareTestSuite {
 
           assert(!rewritten.fastEquals(original), rewritten.treeString)
           assert(hasDirectOrdersLineitemJoin(rewritten), rewritten.treeString)
+          assert(smallerOrdersSideHasShuffleHashHint(rewritten), rewritten.treeString)
+          assert(smallerFactSideHasShuffleHashHint(rewritten), rewritten.treeString)
           spark.conf.set(enabledKey, "false")
           val baselineRows = spark.sql(query).collect().toSeq
           spark.conf.set(enabledKey, "true")
@@ -131,6 +133,25 @@ class GpuReorderSelectiveFactChainSuite extends SparkQueryCompareTestSuite {
       val names = join.output.map(_.name).toSet
       names.contains("o_orderkey") && names.contains("l_orderkey") &&
         !names.contains("c_custkey") && !names.contains("n_nationkey")
+    case _ => false
+  }
+
+  private def smallerOrdersSideHasShuffleHashHint(plan: LogicalPlan): Boolean = plan.exists {
+    case join: Join
+        if join.left.output.exists(_.name == "o_orderkey") &&
+          join.right.output.exists(_.name == "l_orderkey") =>
+      join.hint.leftHint.flatMap(_.strategy).contains(SHUFFLE_HASH) &&
+        join.hint.rightHint.isEmpty
+    case _ => false
+  }
+
+  private def smallerFactSideHasShuffleHashHint(plan: LogicalPlan): Boolean = plan.exists {
+    case join: Join
+        if join.left.output.exists(_.name == "o_custkey") &&
+          join.left.output.exists(_.name.startsWith("_rapids_measure_")) &&
+          join.right.output.exists(_.name == "c_custkey") =>
+      join.hint.leftHint.flatMap(_.strategy).contains(SHUFFLE_HASH) &&
+        join.hint.rightHint.isEmpty
     case _ => false
   }
 }

@@ -22,8 +22,7 @@ import java.nio.file.Files
 import org.apache.commons.io.{FileUtils => ApacheFileUtils}
 
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference}
-import org.apache.spark.sql.catalyst.expressions.EqualTo
+import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualTo}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.catalyst.expressions.aggregate.Average

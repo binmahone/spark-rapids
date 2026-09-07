@@ -27,11 +27,10 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, Contains, EqualNullSafe}
-import org.apache.spark.sql.catalyst.expressions.EqualTo
-import org.apache.spark.sql.catalyst.expressions.{Expression, In, InSet, Literal, Or}
+import org.apache.spark.sql.catalyst.expressions.{EqualTo, Expression, In, InSet, Literal, Or}
 import org.apache.spark.sql.catalyst.plans.Inner
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, LogicalPlan, Project}
-import org.apache.spark.sql.catalyst.plans.logical.SubqueryAlias
+import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join}
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, SubqueryAlias}
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 
 /**

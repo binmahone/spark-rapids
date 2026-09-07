@@ -44,6 +44,8 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.maxChainRows"
   private val maxChainBytesKey =
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.maxChainBytes"
+  private val pushSelectiveKeysetKey =
+    "spark.rapids.sql.optimizer.pushSelectiveKeysetToJoinInputs.enabled"
 
   private def conf: SparkConf = new SparkConf().set(enabledKey, "true")
 
@@ -365,6 +367,7 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
     val trustedConf = conf
       .set("spark.sql.autoBroadcastJoinThreshold", "8g")
+      .set(pushSelectiveKeysetKey, "true")
       .set("spark.rapids.shuffle.broadcast.enabled", "true")
       .set("spark.rapids.shuffle.broadcast.trustSparkPlan.enabled", "true")
       .set("spark.rapids.shuffle.broadcast.maxSize", "12g")
@@ -430,6 +433,7 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
     val trustedConf = conf
       .set("spark.sql.autoBroadcastJoinThreshold", "12g")
+      .set(pushSelectiveKeysetKey, "true")
       .set("spark.rapids.shuffle.broadcast.enabled", "false")
       .set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString)
 

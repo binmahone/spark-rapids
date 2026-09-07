@@ -52,7 +52,7 @@ case class GpuPushSelectiveKeysetToJoinInputs(spark: SparkSession)
   with Logging {
 
   private val enabledKey =
-    "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled"
+    "spark.rapids.sql.optimizer.pushSelectiveKeysetToJoinInputs.enabled"
   private val maxBroadcastRows = BigInt(512000000)
   private val maxShuffleBroadcastRows = BigInt(Int.MaxValue)
   private val maxInValues = 16

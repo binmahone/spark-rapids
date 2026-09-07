@@ -16,6 +16,10 @@
  */
 package com.nvidia.spark.rapids
 
+import java.util.concurrent.atomic.AtomicBoolean
+
+import scala.util.Try
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.network.util.JavaUtils
 import org.apache.spark.sql.SparkSession
@@ -28,10 +32,6 @@ import org.apache.spark.sql.catalyst.plans.logical.{JoinHint, LogicalPlan, Proje
 import org.apache.spark.sql.catalyst.plans.logical.SubqueryAlias
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-
-import java.util.concurrent.atomic.AtomicBoolean
-
-import scala.util.Try
 
 /**
  * Prune a large dimension by a filtered dimension chain before it reaches fact-ward joins, for
@@ -51,9 +51,10 @@ import scala.util.Try
  * rebuild defers any relation reachable only through the low-NDV pruning key until a high-NDV edge
  * is available, otherwise the low-NDV join can become a many-to-many fan-out.
  *
- * Intentionally narrow (`spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled`): a single
- * selective literal-filtered seed, a prunable chain dimension, a large victim with a non-pruning
- * (high-NDV) fact-ward edge, and an idempotent canonical output. The optional mixed probe-spine
+ * Intentionally narrow (`spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled`):
+ * a single selective literal-filtered seed, a prunable chain dimension, a large victim with a
+ * non-pruning (high-NDV) fact-ward edge, and an idempotent canonical output. The optional mixed
+ * probe-spine
  * path accepts only existence-filter joins and provably deduplicated inner joins whose conditions
  * are deterministic pure equi predicates.
  */
@@ -153,7 +154,8 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
                 Project(projectList, rewritten)
               case _ =>
                 if (input.length >= 6) {
-                  logDebug("GpuPushSelectiveDimensionChainBeforeFact: candidate cluster not rewritten")
+                  logDebug(
+                    "GpuPushSelectiveDimensionChainBeforeFact: candidate cluster not rewritten")
                 }
                 p
             }
@@ -180,7 +182,8 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
                 }
               case _ =>
                 if (input.length >= 6) {
-                  logDebug("GpuPushSelectiveDimensionChainBeforeFact: candidate cluster not rewritten")
+                  logDebug(
+                    "GpuPushSelectiveDimensionChainBeforeFact: candidate cluster not rewritten")
                 }
                 p
             }

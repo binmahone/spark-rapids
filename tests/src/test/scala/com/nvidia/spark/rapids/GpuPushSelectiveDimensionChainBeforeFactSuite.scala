@@ -21,13 +21,17 @@ import java.nio.file.Files
 
 import org.apache.commons.io.{FileUtils => ApacheFileUtils}
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeReference, EqualTo}
+import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualTo}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.Literal
+import org.apache.spark.sql.catalyst.expressions.aggregate.Average
 import org.apache.spark.sql.catalyst.plans.Inner
-import org.apache.spark.sql.catalyst.plans.logical.{BROADCAST, Filter, Join, JoinHint, LeafNode}
+import org.apache.spark.sql.catalyst.plans.LeftSemi
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, BROADCAST, Filter, Join, JoinHint}
+import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, Project}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.plans.logical.Statistics
+import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.{LongType, StringType}
 
 class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTestSuite {
@@ -113,6 +117,83 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     } finally {
       ApacheFileUtils.deleteDirectory(datasetDir)
     }
+  }
+
+  test("broadcasts a literal-contains dimension keyset using trusted statistics") {
+    val datasetDir = Files.createTempDirectory("trusted-contains-dataset").toFile
+    val partDir = datasetDir.toPath.resolve("part")
+    val metadataFile = datasetDir.toPath.resolve("trusted-metadata.properties")
+    val metadata =
+      s"""dataset.path=${datasetDir.getCanonicalPath}
+         |table.part.rowCount=6000000000
+         |column.part.p_partkey.distinctCount=6000000000
+         |""".stripMargin
+    Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
+    val trustedConf = conf
+      .set("spark.sql.autoBroadcastJoinThreshold", "12g")
+      .set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString)
+
+    try {
+      withCpuSparkSession(
+        spark => {
+          import spark.implicits._
+
+          Seq((1L, "forest green"), (2L, "red"))
+            .toDF("p_partkey", "p_name")
+            .write.parquet(partDir.toString)
+          val part = spark.read.parquet(partDir.toString)
+            .filter(col("p_name").contains("green"))
+            .select("p_partkey")
+            .queryExecution.analyzed
+          val lPartKey = AttributeReference("l_partkey", LongType)()
+          val lineitem = StatRel(Seq(lPartKey), 180000000000L)
+          val pPartKey = part.output.find(_.name == "p_partkey").get
+          val original = join(lineitem, part, EqualTo(lPartKey, pPartKey))
+          val rewritten = GpuBroadcastSelectiveFilteredDimension(spark)(original)
+
+          val rewrittenJoin = rewritten.asInstanceOf[Join]
+          assert(rewrittenJoin.hint.rightHint.exists(_.strategy.contains(BROADCAST)),
+            rewritten.treeString)
+          assert(rewrittenJoin.left.fastEquals(lineitem), rewritten.treeString)
+          assert(rewrittenJoin.right.fastEquals(part), rewritten.treeString)
+        },
+        trustedConf)
+    } finally {
+      ApacheFileUtils.deleteDirectory(datasetDir)
+    }
+  }
+
+  test("pushes an already required selective dimension below a same-fact aggregate") {
+    withCpuSparkSession(
+      spark => {
+        val outerKey = AttributeReference("fact_key", LongType)()
+        val outerValue = AttributeReference("fact_value", LongType)()
+        val innerKey = AttributeReference("fact_key", LongType)()
+        val innerValue = AttributeReference("fact_value", LongType)()
+        val dimensionKey = AttributeReference("dimension_key", LongType)()
+        val dimensionKind = AttributeReference("dimension_kind", StringType)()
+        val outerFact = StatRel(Seq(outerKey, outerValue), 180000000000L)
+        val innerFact = StatRel(Seq(innerKey, innerValue), 180000000000L)
+        val dimension = Project(
+          Seq(dimensionKey),
+          Filter(
+            EqualTo(dimensionKind, Literal("selected")),
+            StatRel(Seq(dimensionKey, dimensionKind), 1000L)))
+        val outer = join(outerFact, dimension, EqualTo(outerKey, dimensionKey))
+        val average = Alias(Average(innerValue).toAggregateExpression(), "average_value")()
+        val aggregate = Aggregate(Seq(innerKey), Seq(innerKey, average), innerFact)
+        val original = join(outer, aggregate, EqualTo(dimensionKey, innerKey))
+        val rewritten = GpuPushSelectiveDimensionFilterIntoAggregate(spark)(original)
+
+        val rewrittenAggregate = rewritten.collectFirst { case agg: Aggregate => agg }.get
+        assert(rewrittenAggregate.child.exists {
+          case Join(_, right, LeftSemi, _, hint) =>
+            right.fastEquals(dimension) &&
+              hint.rightHint.exists(_.strategy.contains(BROADCAST))
+          case _ => false
+        }, rewritten.treeString)
+      },
+      conf.set("spark.sql.autoBroadcastJoinThreshold", "12g"))
   }
 
   private case class Q8LikePlan(

@@ -41,6 +41,11 @@ class SQLExecPlugin extends (SparkSessionExtensions => Unit) {
     // This rule also self-registers after CBO, where Spark's selected join order is available.
     // It is disabled unless spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled=true.
     extensions.injectOptimizerRule(spark => GpuPushSelectiveDimensionChainBeforeFact(spark))
+    // Add a post-CBO broadcast hint when trusted metadata proves that a selectively filtered
+    // dimension keyset fits the ordinary Spark broadcast threshold.
+    extensions.injectOptimizerRule(spark => GpuBroadcastSelectiveFilteredDimension(spark))
+    // Prune the grouped copy of a fact by a selective keyset already required by the outer join.
+    extensions.injectOptimizerRule(spark => GpuPushSelectiveDimensionFilterIntoAggregate(spark))
   }
 
   private def columnarOverrides(sparkSession: SparkSession): ColumnarRule = {

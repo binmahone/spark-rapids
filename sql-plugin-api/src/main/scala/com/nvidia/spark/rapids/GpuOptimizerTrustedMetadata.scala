@@ -25,7 +25,7 @@ import scala.util.Try
 import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{And, Attribute, EqualNullSafe, EqualTo}
+import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Contains, EqualNullSafe, EqualTo}
 import org.apache.spark.sql.catalyst.expressions.{Expression, In, InSet, Literal, Or}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan}
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
@@ -116,6 +116,11 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
         inSelectivity(table, attribute, values.size)
       case InSet(attribute: Attribute, values) if values.nonEmpty =>
         inSelectivity(table, attribute, values.size)
+      case Contains(_: Attribute, literal: Literal)
+          if literal.value != null && literal.value.toString.nonEmpty =>
+        // Spark and Presto statistics do not carry substring histograms. Use a conservative,
+        // query-independent heuristic for a non-empty literal containment predicate.
+        BigDecimal("0.25")
       case _ => BigDecimal(1)
     }
 

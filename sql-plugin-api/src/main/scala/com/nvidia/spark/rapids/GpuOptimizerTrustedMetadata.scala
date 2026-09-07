@@ -53,7 +53,7 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
           rows =>
             val selectivity = plan.collect {
               case Filter(condition, _) => predicateSelectivity(table, condition)
-            }.foldLeft(BigDecimal(1))(_ * _)
+            }.foldLeft(BigDecimal(1))(_.min(_))
             val estimate = (BigDecimal(rows) * selectivity).setScale(0, BigDecimal.RoundingMode.CEILING)
             estimate.toBigInt.max(BigInt(1))
         }
@@ -80,15 +80,19 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
     }
   }
 
-  /** Unknown predicates contribute selectivity 1, which keeps the estimate conservative. */
+  /**
+   * Unknown predicates contribute selectivity 1. Conjunctions use the least selective recognized
+   * bound rather than assuming column independence, so correlated predicates cannot make an
+   * oversized branch look artificially small.
+   */
   private def predicateSelectivity(table: String, expression: Expression): BigDecimal =
     expression match {
       case And(left, right) =>
-        predicateSelectivity(table, left) * predicateSelectivity(table, right)
+        predicateSelectivity(table, left).min(predicateSelectivity(table, right))
       case Or(left, right) =>
         val leftSelectivity = predicateSelectivity(table, left)
         val rightSelectivity = predicateSelectivity(table, right)
-        (leftSelectivity + rightSelectivity - leftSelectivity * rightSelectivity).min(BigDecimal(1))
+        (leftSelectivity + rightSelectivity).min(BigDecimal(1))
       case EqualTo(attribute: Attribute, _: Literal) =>
         equalitySelectivity(table, attribute)
       case EqualTo(_: Literal, attribute: Attribute) =>

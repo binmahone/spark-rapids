@@ -1157,13 +1157,21 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
   }
 
   private def hasSmallDimensionStats(plan: LogicalPlan): Boolean =
-    positiveRowCount(plan).exists(_ <= maxSmallDimensionRows) ||
-      realScanBytes(plan) <= maxSmallDimensionSizeInBytes
+    trustedMetadata.flatMap(_.estimateRows(plan)) match {
+      case Some(rows) => rows <= maxSmallDimensionRows
+      case None =>
+        positiveRowCount(plan).exists(_ <= maxSmallDimensionRows) ||
+          realScanBytes(plan) <= maxSmallDimensionSizeInBytes
+    }
 
   private def hasPrunableChainDimensionStats(plan: LogicalPlan): Boolean =
-    hasSmallDimensionStats(plan) ||
-      positiveRowCount(plan).exists(_ <= maxPrunableChainDimensionRows) ||
-      realScanBytes(plan) <= maxPrunableChainDimensionSizeInBytes
+    trustedMetadata.flatMap(_.estimateRows(plan)) match {
+      case Some(rows) => rows <= maxPrunableChainDimensionRows
+      case None =>
+        hasSmallDimensionStats(plan) ||
+          positiveRowCount(plan).exists(_ <= maxPrunableChainDimensionRows) ||
+          realScanBytes(plan) <= maxPrunableChainDimensionSizeInBytes
+    }
 
   /**
    * A large chain may enter the expensive cost check only if its current filtered/projected
@@ -1181,9 +1189,13 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
   }
 
   private def hasBasePrunableChainDimensionStats(plan: LogicalPlan): Boolean =
-    hasSmallDimensionStats(plan) ||
-      positiveRowCount(plan).exists(_ <= maxBasePrunableChainDimensionRows) ||
-      realScanBytes(plan) <= maxBasePrunableChainDimensionSizeInBytes
+    trustedMetadata.flatMap(_.estimateRows(plan)) match {
+      case Some(rows) => rows <= maxBasePrunableChainDimensionRows
+      case None =>
+        hasSmallDimensionStats(plan) ||
+          positiveRowCount(plan).exists(_ <= maxBasePrunableChainDimensionRows) ||
+          realScanBytes(plan) <= maxBasePrunableChainDimensionSizeInBytes
+    }
 
   /**
    * Compare a conservative peer broadcast cost with the downstream victim work the prune avoids.

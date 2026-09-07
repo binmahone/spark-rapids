@@ -52,9 +52,10 @@ import org.apache.spark.sql.execution.datasources.LogicalRelation
  * is available, otherwise the low-NDV join can become a many-to-many fan-out.
  *
  * Intentionally narrow (`spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled`):
- * a single selective literal-filtered seed, a prunable chain dimension, a large victim with a
- * non-pruning (high-NDV) fact-ward edge, and an idempotent canonical output. The optional mixed
- * probe-spine
+ * one small selective literal-filtered seed, a prunable chain dimension, a large victim with a
+ * non-pruning (high-NDV) fact-ward edge, and an idempotent canonical output. Other selective
+ * entrances are accepted only when each is an independent equi-join leaf outside the pruning-key
+ * equivalence class. The optional mixed probe-spine
  * path accepts only existence-filter joins and provably deduplicated inner joins whose conditions
  * are deterministic pure equi predicates.
  */
@@ -202,7 +203,7 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
           val atomic = deduplicatePredicates(conditions.flatMap(splitConjunctivePredicates))
           val uf = equivClasses(atomic)
           buildReorderContext(items, atomic, uf) match {
-            case Some(context) => hasCompetingSelectiveEntrances(context)
+            case Some(context) => hasCompetingSelectiveEntrances(context, items, atomic)
             case None => items.count(isSelectiveFilteredDimension) > 1
           }
         }
@@ -339,11 +340,11 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
       _,
       probeSpine) = context
 
-    if (hasCompetingSelectiveEntrances(context)) {
+    if (hasCompetingSelectiveEntrances(context, items, atomic)) {
       logDebug(
         "GpuPushSelectiveDimensionChainBeforeFact: skipped because another selective " +
           "literal filter is not the chosen victim's fact-ward branch: " +
-          competingSelectiveEntrances(context).map(planSummary).mkString(" | "))
+          competingSelectiveEntrances(context, items, atomic).map(planSummary).mkString(" | "))
       return None
     }
 
@@ -982,16 +983,47 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
     }
   }
 
-  private def hasCompetingSelectiveEntrances(context: ReorderContext): Boolean =
-    competingSelectiveEntrances(context).nonEmpty
+  private def hasCompetingSelectiveEntrances(
+      context: ReorderContext,
+      items: Seq[LogicalPlan],
+      atomic: Seq[Expression]): Boolean =
+    competingSelectiveEntrances(context, items, atomic).nonEmpty
 
-  private def competingSelectiveEntrances(context: ReorderContext): Seq[LogicalPlan] =
+  private def competingSelectiveEntrances(
+      context: ReorderContext,
+      items: Seq[LogicalPlan],
+      atomic: Seq[Expression]): Seq[LogicalPlan] =
     context.others
       .filterNot(_ eq context.victim)
       .filterNot(
         candidate =>
           context.competingExemptBranches.exists(branch => sameBranch(candidate, branch)))
       .filter(hasSelectiveLiteralFilter)
+      .filterNot(isIndependentSelectiveLeaf(_, items, atomic, context.lowNdv))
+
+  /**
+   * An independent selective leaf cannot alter the low-NDV pruning proof: it has one equi-joined
+   * neighbor in the cluster and its edge belongs to a different equivalence class. Keeping such a
+   * leaf in the greedy rebuild lets unrelated filters prune their own fact branch without causing
+   * the whole dimension-chain rewrite to be rejected.
+   */
+  private def isIndependentSelectiveLeaf(
+      candidate: LogicalPlan,
+      items: Seq[LogicalPlan],
+      atomic: Seq[Expression],
+      lowNdv: AttributeSet): Boolean = {
+    val neighborsAndEdges = items
+      .filterNot(_ eq candidate)
+      .flatMap {
+        neighbor =>
+          val edges = edgePredicates(candidate.outputSet, neighbor.outputSet, atomic)
+          if (edges.nonEmpty) Some((neighbor, edges)) else None
+    }
+    neighborsAndEdges match {
+      case Seq((_, edges)) => edges.forall(edge => !edge.references.subsetOf(lowNdv))
+      case _ => false
+    }
+  }
 
   private def deduplicateBranches(branches: Seq[LogicalPlan]): Seq[LogicalPlan] =
     branches.foldLeft(Vector.empty[LogicalPlan]) {

@@ -1,0 +1,138 @@
+/*
+ * Copyright (c) 2026, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.nvidia.spark.rapids
+
+import org.apache.spark.SparkConf
+import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeReference, EqualTo}
+import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.Literal
+import org.apache.spark.sql.catalyst.plans.Inner
+import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, JoinHint, LeafNode, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.Statistics
+import org.apache.spark.sql.types.{LongType, StringType}
+
+class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTestSuite {
+
+  private val enabledKey =
+    "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled"
+
+  private def conf: SparkConf = new SparkConf().set(enabledKey, "true")
+
+  test("reorders a dimension chain with an independent selective leaf") {
+    withCpuSparkSession(
+      spark => {
+        val testPlan = q8LikePlan(addCompetingEdge = false)
+        val rewritten = GpuPushSelectiveDimensionChainBeforeFact(spark)(testPlan.plan)
+
+        assert(!rewritten.fastEquals(testPlan.plan), rewritten.treeString)
+        assert(
+          containsJoinedBranches(rewritten, testPlan.customer, testPlan.nation, testPlan.region),
+          rewritten.treeString)
+        assert(rewritten.outputSet == testPlan.plan.outputSet, rewritten.treeString)
+      },
+      conf)
+  }
+
+  test("rejects a selective entrance connected to multiple branches") {
+    withCpuSparkSession(
+      spark => {
+        val testPlan = q8LikePlan(addCompetingEdge = true)
+        val rewritten = GpuPushSelectiveDimensionChainBeforeFact(spark)(testPlan.plan)
+
+        assert(rewritten.fastEquals(testPlan.plan), rewritten.treeString)
+      },
+      conf)
+  }
+
+  private case class Q8LikePlan(
+      plan: LogicalPlan,
+      customer: LogicalPlan,
+      nation: LogicalPlan,
+      region: LogicalPlan)
+
+  private def q8LikePlan(addCompetingEdge: Boolean): Q8LikePlan = {
+    val lOrderKey = AttributeReference("l_orderkey", LongType)()
+    val lPartKey = AttributeReference("l_partkey", LongType)()
+    val lExtraKey = AttributeReference("l_extra", LongType)()
+    val pPartKey = AttributeReference("p_partkey", LongType)()
+    val pType = AttributeReference("p_type", StringType)()
+    val oOrderKey = AttributeReference("o_orderkey", LongType)()
+    val oCustKey = AttributeReference("o_custkey", LongType)()
+    val oExtraKey = AttributeReference("o_extra", LongType)()
+    val cCustKey = AttributeReference("c_custkey", LongType)()
+    val cNationKey = AttributeReference("c_nationkey", LongType)()
+    val nNationKey = AttributeReference("n_nationkey", LongType)()
+    val nRegionKey = AttributeReference("n_regionkey", LongType)()
+    val rRegionKey = AttributeReference("r_regionkey", LongType)()
+    val rName = AttributeReference("r_name", StringType)()
+
+    val lineitem = StatRel(Seq(lOrderKey, lPartKey, lExtraKey), 180000000000L)
+    val part = Filter(
+      EqualTo(pType, Literal("ECONOMY ANODIZED STEEL")),
+      StatRel(Seq(pPartKey, pType), 6000000000L))
+    val orders = StatRel(Seq(oOrderKey, oCustKey, oExtraKey), 45000000000L)
+    val customer = StatRel(Seq(cCustKey, cNationKey), 4500000000L)
+    val nation = StatRel(Seq(nNationKey, nRegionKey), 25L)
+    val region = Filter(
+      EqualTo(rName, Literal("AMERICA")),
+      StatRel(Seq(rRegionKey, rName), 5L))
+
+    val ordersCondition = if (addCompetingEdge) {
+      And(EqualTo(lOrderKey, oOrderKey), EqualTo(pPartKey, oExtraKey))
+    } else {
+      EqualTo(lOrderKey, oOrderKey)
+    }
+    val plan = join(
+      join(
+        join(
+          join(join(lineitem, part, EqualTo(pPartKey, lPartKey)), orders, ordersCondition),
+          customer,
+          EqualTo(oCustKey, cCustKey)),
+        nation,
+        EqualTo(cNationKey, nNationKey)),
+      region,
+      EqualTo(nRegionKey, rRegionKey))
+
+    Q8LikePlan(plan, customer, nation, region)
+  }
+
+  private def join(left: LogicalPlan, right: LogicalPlan, condition: Expression): Join =
+    Join(left, right, Inner, Some(condition), JoinHint.NONE)
+
+  private def containsJoinedBranches(
+      plan: LogicalPlan,
+      victim: LogicalPlan,
+      chain: LogicalPlan,
+      seed: LogicalPlan): Boolean =
+    plan.exists {
+      case Join(left, right, Inner, _, _) =>
+        sameBranch(left, victim) && containsBranch(right, chain) && containsBranch(right, seed)
+      case _ => false
+    }
+
+  private def containsBranch(plan: LogicalPlan, target: LogicalPlan): Boolean =
+    sameBranch(plan, target) || plan.children.exists(containsBranch(_, target))
+
+  private def sameBranch(left: LogicalPlan, right: LogicalPlan): Boolean =
+    left.fastEquals(right) || left.outputSet == right.outputSet
+
+  private case class StatRel(attrs: Seq[Attribute], rows: Long) extends LeafNode {
+    override def output: Seq[Attribute] = attrs
+    override def computeStats(): Statistics =
+      Statistics(sizeInBytes = BigInt(rows) * 16, rowCount = Some(BigInt(rows)))
+  }
+}

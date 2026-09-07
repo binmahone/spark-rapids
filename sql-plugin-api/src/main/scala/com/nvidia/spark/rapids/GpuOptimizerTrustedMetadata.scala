@@ -64,7 +64,8 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
     val roots = plan.collect {
       case relation: LogicalRelation =>
         relation.relation match {
-          case hadoop: HadoopFsRelation => hadoop.location.rootPaths.map(normalizePath)
+          case hadoop: HadoopFsRelation =>
+            hadoop.location.rootPaths.map(path => normalizePath(path.toString))
           case _ => Seq.empty
         }
     }.flatten.distinct

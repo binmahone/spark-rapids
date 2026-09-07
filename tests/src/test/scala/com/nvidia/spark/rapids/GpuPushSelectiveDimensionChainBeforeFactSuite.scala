@@ -27,7 +27,8 @@ import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.catalyst.expressions.aggregate.Average
 import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.LeftSemi
-import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, BROADCAST, Filter, Join, JoinHint}
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, BROADCAST, Filter, HintInfo, Join}
+import org.apache.spark.sql.catalyst.plans.logical.{JoinHint, SHUFFLE_HASH}
 import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, Project}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.plans.logical.Statistics
@@ -74,6 +75,40 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
         val rewritten = GpuPushSelectiveDimensionChainBeforeFact(spark)(testPlan.plan)
 
         assert(rewritten.fastEquals(testPlan.plan), rewritten.treeString)
+      },
+      conf)
+  }
+
+  test("preserves a partitioned join boundary while rewriting its child cluster") {
+    withCpuSparkSession(
+      spark => {
+        val testPlan = q8LikePlan(addCompetingEdge = false)
+        val stateKey = AttributeReference("state_key", LongType)()
+        val state = SelectiveDimensionStatRel(Seq(stateKey), 1000000L)
+        val probeKey = testPlan.lineitem.output.find(_.name == "l_orderkey").get
+        val partitionedHint = JoinHint(
+          None,
+          Some(HintInfo(strategy = Some(SHUFFLE_HASH))))
+        val original = Join(
+          testPlan.plan,
+          state,
+          Inner,
+          Some(EqualTo(probeKey, stateKey)),
+          partitionedHint)
+
+        val rewritten = GpuPushSelectiveDimensionChainBeforeFact(spark)(original)
+        val rewrittenJoin = rewritten.asInstanceOf[Join]
+
+        assert(!rewrittenJoin.left.fastEquals(original.left), rewritten.treeString)
+        assert(rewrittenJoin.right.fastEquals(state), rewritten.treeString)
+        assert(rewrittenJoin.hint == partitionedHint, rewritten.treeString)
+        assert(
+          containsJoinedBranches(
+            rewrittenJoin.left,
+            testPlan.customer,
+            testPlan.nation,
+            testPlan.region),
+          rewritten.treeString)
       },
       conf)
   }

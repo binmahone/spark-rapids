@@ -224,6 +224,11 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
     val conditions = scala.collection.mutable.ArrayBuffer.empty[Expression]
 
     def collect(p: LogicalPlan): Unit = stripJoinWrapper(p, 0) match {
+      case Join(_, _, Inner, _, hint) if hasNonBroadcastStrategyHint(hint) =>
+        // A partitioned or merge strategy is an execution-safety boundary. Keep the complete
+        // subtree as one cluster item so rebuilding the surrounding cluster cannot replace it.
+        // rewritePlan still descends into its children, allowing independent dimension pruning.
+        items += p
       case Join(left, right, Inner, condition, _) =>
         condition.foreach(conditions += _)
         collect(left)
@@ -238,6 +243,9 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
     collect(plan)
     if (items.length >= 2 && conditions.nonEmpty) Some((items.toSeq, conditions.toSeq)) else None
   }
+
+  private def hasNonBroadcastStrategyHint(hint: JoinHint): Boolean =
+    Seq(hint.leftHint, hint.rightHint).flatten.flatMap(_.strategy).exists(_ != BROADCAST)
 
   private def stripJoinWrapper(plan: LogicalPlan, depth: Int): LogicalPlan = plan match {
     case Project(projectList, child)

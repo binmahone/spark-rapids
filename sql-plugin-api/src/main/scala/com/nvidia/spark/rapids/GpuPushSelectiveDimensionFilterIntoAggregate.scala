@@ -42,6 +42,7 @@ case class GpuPushSelectiveDimensionFilterIntoAggregate(spark: SparkSession)
   private val enabledKey =
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled"
   private val maxDimensionScanRatio = BigDecimal("0.25")
+  private val maxBroadcastRows = BigInt(512000000)
   private val metadata = GpuOptimizerTrustedMetadata.fromSession(spark)
 
   registerPostCboPass()
@@ -202,10 +203,12 @@ case class GpuPushSelectiveDimensionFilterIntoAggregate(spark: SparkSession)
       dimension: LogicalPlan,
       aggregate: Aggregate): Boolean = {
     val threshold = BigInt(spark.sessionState.conf.autoBroadcastJoinThreshold)
+    val outputRows = estimatedOutputRows(dimension).getOrElse(return false)
     val outputBytes = estimatedOutputBytes(dimension).getOrElse(return false)
     val dimensionScanBytes = leafBytes(dimension)
     val factScanBytes = leafBytes(aggregate.child)
-    threshold >= 0 && outputBytes > 0 && outputBytes <= threshold &&
+    threshold >= 0 && outputRows > 0 && outputRows < maxBroadcastRows &&
+      outputBytes > 0 && outputBytes <= threshold &&
       dimensionScanBytes > 0 && factScanBytes > 0 &&
       BigDecimal(dimensionScanBytes) <= BigDecimal(factScanBytes) * maxDimensionScanRatio
   }
@@ -215,6 +218,10 @@ case class GpuPushSelectiveDimensionFilterIntoAggregate(spark: SparkSession)
       val bytes = plan.stats.sizeInBytes
       if (bytes > 0 && bytes < BigInt(Long.MaxValue)) Some(bytes) else None
     }
+  }
+
+  private def estimatedOutputRows(plan: LogicalPlan): Option[BigInt] = {
+    metadata.flatMap(_.estimateRows(plan)).orElse(plan.stats.rowCount.filter(_ > 0))
   }
 
   private def leafBytes(plan: LogicalPlan): BigInt =

@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
 import org.apache.commons.io.{FileUtils => ApacheFileUtils}
+
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualTo}
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -146,6 +147,22 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
       conf.set("spark.sql.autoBroadcastJoinThreshold", "2k"))
   }
 
+  test("does not hint a narrow relation above the broadcast row limit") {
+    withCpuSparkSession(
+      spark => {
+        val leftKey = AttributeReference("left_key", LongType)()
+        val rightKey = AttributeReference("right_key", LongType)()
+        val left = SelectiveDimensionStatRel(Seq(leftKey), 600000000L)
+        val right = SelectiveDimensionStatRel(Seq(rightKey), 1000000000L)
+        val rule = GpuPushSelectiveDimensionChainBeforeFact(spark)
+
+        val rejected = rule.broadcastSmallerHint(
+          left, right, allowLeft = true, allowRight = true)
+        assert(rejected == JoinHint.NONE)
+      },
+      conf.set("spark.sql.autoBroadcastJoinThreshold", "8g"))
+  }
+
   test("uses trusted path statistics to prebuild an independent selective leaf") {
     val datasetDir = Files.createTempDirectory("trusted-metadata-dataset").toFile
     val partDir = datasetDir.toPath.resolve("part")
@@ -231,6 +248,46 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     }
   }
 
+  test("does not broadcast a filtered dimension above the broadcast row limit") {
+    val datasetDir = Files.createTempDirectory("trusted-row-limit-dataset").toFile
+    val customerDir = datasetDir.toPath.resolve("customer")
+    val metadataFile = datasetDir.toPath.resolve("trusted-metadata.properties")
+    val metadata =
+      s"""dataset.path=${datasetDir.getCanonicalPath}
+         |table.customer.rowCount=4500000000
+         |column.customer.c_mktsegment.distinctCount=5
+         |""".stripMargin
+    Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
+    val trustedConf = conf
+      .set("spark.sql.autoBroadcastJoinThreshold", "8g")
+      .set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString)
+
+    try {
+      withCpuSparkSession(
+        spark => {
+          import spark.implicits._
+
+          Seq((1L, "BUILDING"), (2L, "AUTOMOBILE"))
+            .toDF("c_custkey", "c_mktsegment")
+            .write.parquet(customerDir.toString)
+          val customer = spark.read.parquet(customerDir.toString)
+            .filter("c_mktsegment = 'BUILDING'")
+            .select("c_custkey")
+            .queryExecution.analyzed
+          val orderCustomerKey = AttributeReference("o_custkey", LongType)()
+          val orders = SelectiveDimensionStatRel(Seq(orderCustomerKey), 45000000000L)
+          val customerKey = customer.output.find(_.name == "c_custkey").get
+          val original = join(customer, orders, EqualTo(customerKey, orderCustomerKey))
+          val rewritten = GpuBroadcastSelectiveFilteredDimension(spark)(original)
+
+          assert(rewritten.fastEquals(original), rewritten.treeString)
+        },
+        trustedConf)
+    } finally {
+      ApacheFileUtils.deleteDirectory(datasetDir)
+    }
+  }
+
   test("pushes an already required selective dimension below a same-fact aggregate") {
     withCpuSparkSession(
       spark => {
@@ -262,6 +319,147 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
         }, rewritten.treeString)
       },
       conf.set("spark.sql.autoBroadcastJoinThreshold", "12g"))
+  }
+
+  test("does not duplicate a dimension above the broadcast row limit") {
+    withCpuSparkSession(
+      spark => {
+        val outerKey = AttributeReference("fact_key", LongType)()
+        val outerValue = AttributeReference("fact_value", LongType)()
+        val innerKey = AttributeReference("fact_key", LongType)()
+        val innerValue = AttributeReference("fact_value", LongType)()
+        val dimensionKey = AttributeReference("dimension_key", LongType)()
+        val dimensionKind = AttributeReference("dimension_kind", StringType)()
+        val outerFact = SelectiveDimensionStatRel(Seq(outerKey, outerValue), 180000000000L)
+        val innerFact = SelectiveDimensionStatRel(Seq(innerKey, innerValue), 180000000000L)
+        val dimension = Project(
+          Seq(dimensionKey),
+          Filter(
+            EqualTo(dimensionKind, Literal("selected")),
+            SelectiveDimensionStatRel(
+              Seq(dimensionKey, dimensionKind), 600000000L)))
+        val outer = join(outerFact, dimension, EqualTo(outerKey, dimensionKey))
+        val average = Alias(Average(innerValue).toAggregateExpression(), "average_value")()
+        val aggregate = Aggregate(Seq(innerKey), Seq(innerKey, average), innerFact)
+        val original = join(outer, aggregate, EqualTo(dimensionKey, innerKey))
+        assert(dimension.stats.rowCount.exists(_ >= 512000000L), dimension.stats.toString)
+        assert(dimension.stats.sizeInBytes <= BigInt(12L << 30), dimension.stats.toString)
+        val rewritten = GpuPushSelectiveDimensionFilterIntoAggregate(spark)(original)
+
+        assert(rewritten.fastEquals(original), rewritten.treeString)
+      },
+      conf.set("spark.sql.autoBroadcastJoinThreshold", "12g"))
+  }
+
+  test("pushes a large selective keyset to both join inputs with shuffle broadcast") {
+    val datasetDir = Files.createTempDirectory("trusted-keyset-fanout-dataset").toFile
+    val partDir = datasetDir.toPath.resolve("part")
+    val metadataFile = datasetDir.toPath.resolve("trusted-metadata.properties")
+    val metadata =
+      s"""dataset.path=${datasetDir.getCanonicalPath}
+         |table.part.rowCount=6000000000
+         |column.part.p_partkey.distinctCount=6000000000
+         |""".stripMargin
+    Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
+    val trustedConf = conf
+      .set("spark.sql.autoBroadcastJoinThreshold", "8g")
+      .set("spark.rapids.shuffle.broadcast.enabled", "true")
+      .set("spark.rapids.shuffle.broadcast.trustSparkPlan.enabled", "true")
+      .set("spark.rapids.shuffle.broadcast.maxSize", "12g")
+      .set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString)
+
+    try {
+      withCpuSparkSession(
+        spark => {
+          import spark.implicits._
+
+          Seq((1L, "forest green"), (2L, "red"))
+            .toDF("p_partkey", "p_name")
+            .write.parquet(partDir.toString)
+          val part = spark.read.parquet(partDir.toString)
+            .filter(col("p_name").contains("green"))
+            .select("p_partkey")
+            .queryExecution.analyzed
+          val lPartKey = AttributeReference("l_partkey", LongType)()
+          val lSuppKey = AttributeReference("l_suppkey", LongType)()
+          val psPartKey = AttributeReference("ps_partkey", LongType)()
+          val psSuppKey = AttributeReference("ps_suppkey", LongType)()
+          val lineitem = SelectiveDimensionStatRel(
+            Seq(lPartKey, lSuppKey), 180000000000L)
+          val partsupp = SelectiveDimensionStatRel(
+            Seq(psPartKey, psSuppKey), 24000000000L)
+          val pPartKey = part.output.find(_.name == "p_partkey").get
+          val filteredLineitem = join(lineitem, part, EqualTo(lPartKey, pPartKey))
+          val original = join(
+            filteredLineitem,
+            partsupp,
+            And(EqualTo(lPartKey, psPartKey), EqualTo(lSuppKey, psSuppKey)))
+          val rewritten = GpuPushSelectiveKeysetToJoinInputs(spark)(original)
+
+          assert(!rewritten.fastEquals(original), rewritten.treeString)
+          assert(rewritten.outputSet == original.outputSet, rewritten.treeString)
+          assert(rewritten.exists {
+            case Join(left, right, LeftSemi, _, hint) =>
+              left.fastEquals(partsupp) && right.output.size == 1 &&
+                hint.rightHint.exists(_.strategy.contains(BROADCAST))
+            case _ => false
+          }, rewritten.treeString)
+          assert(rewritten.exists {
+            case Join(left, right, Inner, _, hint) =>
+              left.fastEquals(lineitem) && right.fastEquals(part) &&
+                hint.rightHint.exists(_.strategy.contains(BROADCAST))
+            case _ => false
+          }, rewritten.treeString)
+        },
+        trustedConf)
+    } finally {
+      ApacheFileUtils.deleteDirectory(datasetDir)
+    }
+  }
+
+  test("does not push an oversized keyset through ordinary driver broadcast") {
+    val datasetDir = Files.createTempDirectory("trusted-keyset-driver-broadcast-dataset").toFile
+    val partDir = datasetDir.toPath.resolve("part")
+    val metadataFile = datasetDir.toPath.resolve("trusted-metadata.properties")
+    val metadata =
+      s"""dataset.path=${datasetDir.getCanonicalPath}
+         |table.part.rowCount=6000000000
+         |""".stripMargin
+    Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
+    val trustedConf = conf
+      .set("spark.sql.autoBroadcastJoinThreshold", "12g")
+      .set("spark.rapids.shuffle.broadcast.enabled", "false")
+      .set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString)
+
+    try {
+      withCpuSparkSession(
+        spark => {
+          import spark.implicits._
+
+          Seq((1L, "forest green"), (2L, "red"))
+            .toDF("p_partkey", "p_name")
+            .write.parquet(partDir.toString)
+          val part = spark.read.parquet(partDir.toString)
+            .filter(col("p_name").contains("green"))
+            .select("p_partkey")
+            .queryExecution.analyzed
+          val lPartKey = AttributeReference("l_partkey", LongType)()
+          val psPartKey = AttributeReference("ps_partkey", LongType)()
+          val lineitem = SelectiveDimensionStatRel(Seq(lPartKey), 180000000000L)
+          val partsupp = SelectiveDimensionStatRel(Seq(psPartKey), 24000000000L)
+          val pPartKey = part.output.find(_.name == "p_partkey").get
+          val original = join(
+            join(lineitem, part, EqualTo(lPartKey, pPartKey)),
+            partsupp,
+            EqualTo(lPartKey, psPartKey))
+          val rewritten = GpuPushSelectiveKeysetToJoinInputs(spark)(original)
+
+          assert(rewritten.fastEquals(original), rewritten.treeString)
+        },
+        trustedConf)
+    } finally {
+      ApacheFileUtils.deleteDirectory(datasetDir)
+    }
   }
 
   private case class Q8LikePlan(

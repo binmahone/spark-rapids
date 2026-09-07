@@ -66,6 +66,7 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
 
   private val maxSmallDimensionSizeInBytes = BigInt(64L * 1024L * 1024L)
   private val maxSmallDimensionRows = BigInt(100000)
+  private val maxBroadcastRows = BigInt(512000000)
   private val maxPrunableChainDimensionSizeInBytesKey =
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.maxChainBytes"
   private val maxPrunableChainDimensionRowsKey =
@@ -850,14 +851,18 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
     val threshold = BigInt(spark.sessionState.conf.autoBroadcastJoinThreshold)
     val leftBytes = estimatedOutputBytes(left)
     val rightBytes = estimatedOutputBytes(right)
+    val leftRows = positiveRowCount(left)
+    val rightRows = positiveRowCount(right)
     val broadcastHint = HintInfo(strategy = Some(BROADCAST))
     if (
       allowLeft && threshold >= 0 && leftBytes > 0 && leftBytes <= threshold &&
+        leftRows.exists(rows => rows > 0 && rows < maxBroadcastRows) &&
         rightBytes > 0 && leftBytes < rightBytes
     ) {
       JoinHint(Some(broadcastHint), None)
     } else if (
       allowRight && threshold >= 0 && rightBytes > 0 && rightBytes <= threshold &&
+        rightRows.exists(rows => rows > 0 && rows < maxBroadcastRows) &&
         leftBytes > 0 && rightBytes < leftBytes
     ) {
       JoinHint(None, Some(broadcastHint))

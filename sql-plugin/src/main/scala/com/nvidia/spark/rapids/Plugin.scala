@@ -567,7 +567,7 @@ class RapidsDriverPlugin extends DriverPlugin with Logging {
     }
 
     // GpuCatalogCleanupListener releases ShuffleBufferCatalog device buffers
-    // eagerly at stage completion for GPU-resident shuffle paths (UCX,
+    // eagerly at SQL execution completion for GPU-resident shuffle paths (UCX,
     // CACHE_ONLY). Independent of the MULTITHREADED ShuffleCleanupManager
     // above: that one polls executors via custom RPC for the
     // MultithreadedShuffleBufferCatalog; this one drives RAPIDS GPU shuffle

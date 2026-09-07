@@ -23,6 +23,7 @@ import scala.collection.JavaConverters._
 import scala.util.Try
 
 import org.apache.hadoop.fs.Path
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Contains, EqualNullSafe, EqualTo}

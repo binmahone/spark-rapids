@@ -46,6 +46,8 @@ class SQLExecPlugin extends (SparkSessionExtensions => Unit) {
     extensions.injectOptimizerRule(spark => GpuBroadcastSelectiveFilteredDimension(spark))
     // Prune the grouped copy of a fact by a selective keyset already required by the outer join.
     extensions.injectOptimizerRule(spark => GpuPushSelectiveDimensionFilterIntoAggregate(spark))
+    // Apply an already-required selective keyset to both inputs of a later many-key join.
+    extensions.injectOptimizerRule(spark => GpuPushSelectiveKeysetToJoinInputs(spark))
   }
 
   private def columnarOverrides(sparkSession: SparkSession): ColumnarRule = {

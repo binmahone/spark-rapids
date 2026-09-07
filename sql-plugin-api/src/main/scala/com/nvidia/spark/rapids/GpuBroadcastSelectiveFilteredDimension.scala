@@ -43,6 +43,7 @@ case class GpuBroadcastSelectiveFilteredDimension(spark: SparkSession)
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled"
   private val maxOutputColumns = 4
   private val maxInValues = 16
+  private val maxBroadcastRows = BigInt(512000000)
   private val metadata = GpuOptimizerTrustedMetadata.fromSession(spark)
 
   registerPostCboPass()
@@ -90,7 +91,8 @@ case class GpuBroadcastSelectiveFilteredDimension(spark: SparkSession)
       return None
     }
     metadata.flatMap(_.estimate(build)).filter { estimate =>
-      estimate.sizeInBytes > 0 && estimate.sizeInBytes <= threshold &&
+      estimate.rows > 0 && estimate.rows < maxBroadcastRows &&
+        estimate.sizeInBytes > 0 && estimate.sizeInBytes <= threshold &&
         scanBytes(probe) >= estimate.sizeInBytes * 2
     }.map(estimate => estimate.rows -> estimate.sizeInBytes)
   }

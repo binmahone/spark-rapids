@@ -19,7 +19,7 @@ package com.nvidia.spark.rapids
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
-import org.apache.commons.io.FileUtils
+import org.apache.commons.io.{FileUtils => ApacheFileUtils}
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeReference, EqualTo}
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -108,7 +108,7 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
         },
         trustedConf)
     } finally {
-      FileUtils.deleteDirectory(datasetDir)
+      ApacheFileUtils.deleteDirectory(datasetDir)
     }
   }
 

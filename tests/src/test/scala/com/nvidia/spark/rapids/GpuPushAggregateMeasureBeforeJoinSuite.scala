@@ -18,6 +18,7 @@ package com.nvidia.spark.rapids
 
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.catalyst.expressions.Alias
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Join, Project}
 import org.apache.spark.sql.functions.{col, expr, max, sum}
 
@@ -151,7 +152,10 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
       val query = crossJoinMeasureQuery(spark)
       val optimized = query.queryExecution.optimizedPlan
       val measureProjects = optimized.collect {
-        case project: Project if project.projectList.exists(_.name.startsWith("_rapids_measure_")) =>
+        case project: Project if project.projectList.exists {
+              case alias: Alias => alias.name.startsWith("_rapids_measure_")
+              case _ => false
+            } =>
           project
       }
 

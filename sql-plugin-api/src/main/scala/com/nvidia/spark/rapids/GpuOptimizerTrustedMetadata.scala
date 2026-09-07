@@ -45,8 +45,10 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
 
   private val normalizedDatasetPath = normalizePath(datasetPath)
 
+  private[rapids] case class Estimate(rows: BigInt, sizeInBytes: BigInt)
+
   /** Conservatively estimate a single-table branch using recognized literal predicates. */
-  def estimateRows(plan: LogicalPlan): Option[BigInt] = {
+  def estimate(plan: LogicalPlan): Option[Estimate] = {
     tableFor(plan).flatMap {
       table =>
         tableRows.get(table).map {
@@ -54,11 +56,16 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
             val selectivity = plan.collect {
               case Filter(condition, _) => predicateSelectivity(table, condition)
             }.foldLeft(BigDecimal(1))(_.min(_))
-            val estimate = (BigDecimal(rows) * selectivity).setScale(0, BigDecimal.RoundingMode.CEILING)
-            estimate.toBigInt.max(BigInt(1))
+            val estimate = (BigDecimal(rows) * selectivity)
+              .setScale(0, BigDecimal.RoundingMode.CEILING)
+            val estimatedRows = estimate.toBigInt.max(BigInt(1))
+            val outputWidth = plan.output.map(_.dataType.defaultSize).sum.max(1)
+            Estimate(estimatedRows, estimatedRows * outputWidth)
         }
     }
   }
+
+  def estimateRows(plan: LogicalPlan): Option[BigInt] = estimate(plan).map(_.rows)
 
   private def tableFor(plan: LogicalPlan): Option[String] = {
     val roots = plan.collect {
@@ -75,7 +82,11 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
         val path = new Path(root)
         val parent = Option(path.getParent).map(p => normalizePath(p.toString))
         val table = path.getName.toLowerCase(java.util.Locale.ROOT)
-        if (parent.contains(normalizedDatasetPath) && tableRows.contains(table)) Some(table) else None
+        if (parent.contains(normalizedDatasetPath) && tableRows.contains(table)) {
+          Some(table)
+        } else {
+          None
+        }
       case _ => None
     }
   }
@@ -179,7 +190,8 @@ private[rapids] object GpuOptimizerTrustedMetadata extends Logging {
     val unknownTables = distinctCounts.keys.map(_._1).toSet -- tableRows.keySet
     if (unknownTables.nonEmpty) {
       throw new IllegalArgumentException(
-        s"Column statistics reference unknown tables in $path: ${unknownTables.toSeq.sorted.mkString(",")}")
+        s"Column statistics reference unknown tables in $path: " +
+          unknownTables.toSeq.sorted.mkString(","))
     }
 
     logWarning(

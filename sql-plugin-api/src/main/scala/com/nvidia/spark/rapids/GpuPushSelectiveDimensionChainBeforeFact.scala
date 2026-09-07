@@ -1157,16 +1157,20 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
   }
 
   private def hasSmallDimensionStats(plan: LogicalPlan): Boolean =
-    trustedMetadata.flatMap(_.estimateRows(plan)) match {
-      case Some(rows) => rows <= maxSmallDimensionRows
+    trustedMetadata.flatMap(_.estimate(plan)) match {
+      case Some(estimate) =>
+        estimate.rows <= maxSmallDimensionRows &&
+          estimate.sizeInBytes <= maxSmallDimensionSizeInBytes
       case None =>
         positiveRowCount(plan).exists(_ <= maxSmallDimensionRows) ||
           realScanBytes(plan) <= maxSmallDimensionSizeInBytes
     }
 
   private def hasPrunableChainDimensionStats(plan: LogicalPlan): Boolean =
-    trustedMetadata.flatMap(_.estimateRows(plan)) match {
-      case Some(rows) => rows <= maxPrunableChainDimensionRows
+    trustedMetadata.flatMap(_.estimate(plan)) match {
+      case Some(estimate) =>
+        estimate.rows <= maxPrunableChainDimensionRows &&
+          estimate.sizeInBytes <= maxPrunableChainDimensionSizeInBytes
       case None =>
         hasSmallDimensionStats(plan) ||
           positiveRowCount(plan).exists(_ <= maxPrunableChainDimensionRows) ||
@@ -1189,8 +1193,10 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
   }
 
   private def hasBasePrunableChainDimensionStats(plan: LogicalPlan): Boolean =
-    trustedMetadata.flatMap(_.estimateRows(plan)) match {
-      case Some(rows) => rows <= maxBasePrunableChainDimensionRows
+    trustedMetadata.flatMap(_.estimate(plan)) match {
+      case Some(estimate) =>
+        estimate.rows <= maxBasePrunableChainDimensionRows &&
+          estimate.sizeInBytes <= maxBasePrunableChainDimensionSizeInBytes
       case None =>
         hasSmallDimensionStats(plan) ||
           positiveRowCount(plan).exists(_ <= maxBasePrunableChainDimensionRows) ||

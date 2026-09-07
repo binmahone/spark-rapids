@@ -36,6 +36,8 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled"
   private val maxChainRowsKey =
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.maxChainRows"
+  private val maxChainBytesKey =
+    "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.maxChainBytes"
 
   private def conf: SparkConf = new SparkConf().set(enabledKey, "true")
 
@@ -84,6 +86,7 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
     val trustedConf = conf
       .set(maxChainRowsKey, "50000000")
+      .set(maxChainBytesKey, "2g")
       .set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString)
 
     try {

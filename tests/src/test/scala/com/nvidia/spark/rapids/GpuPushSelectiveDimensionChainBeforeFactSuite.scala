@@ -18,6 +18,7 @@ package com.nvidia.spark.rapids
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.sql.Date
 
 import org.apache.commons.io.{FileUtils => ApacheFileUtils}
 
@@ -307,6 +308,40 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
             s"$estimate\n${chain.treeString}")
         },
         trustedConf)
+    } finally {
+      ApacheFileUtils.deleteDirectory(datasetDir)
+    }
+  }
+
+  test("estimates a bounded date range from trusted min and max statistics") {
+    val datasetDir = Files.createTempDirectory("trusted-date-range-dataset").toFile
+    val ordersDir = datasetDir.toPath.resolve("orders")
+    val metadataFile = datasetDir.toPath.resolve("trusted-metadata.properties")
+    val metadata =
+      s"""dataset.path=${datasetDir.getCanonicalPath}
+         |table.orders.rowCount=45000000000
+         |column.orders.o_orderdate.distinctCount=2382
+         |column.orders.o_orderdate.min=1992-01-01
+         |column.orders.o_orderdate.max=1998-08-02
+         |""".stripMargin
+    Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
+
+    try {
+      withCpuSparkSession(
+        spark => {
+          import spark.implicits._
+
+          Seq(Date.valueOf("1993-10-01"), Date.valueOf("1994-01-01"))
+            .toDF("o_orderdate")
+            .write.parquet(ordersDir.toString)
+          val orders = spark.read.parquet(ordersDir.toString)
+            .filter("o_orderdate >= DATE '1993-10-01' AND o_orderdate < DATE '1994-01-01'")
+            .queryExecution.analyzed
+          val estimate = GpuOptimizerTrustedMetadata.load(metadataFile.toString).estimate(orders)
+
+          assert(estimate.exists(_.rows == 1721413722L), s"$estimate\n${orders.treeString}")
+        },
+        conf.set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString))
     } finally {
       ApacheFileUtils.deleteDirectory(datasetDir)
     }

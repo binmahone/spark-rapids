@@ -41,6 +41,9 @@ class SQLExecPlugin extends (SparkSessionExtensions => Unit) {
     // This rule also self-registers after CBO, where Spark's selected join order is available.
     // It is disabled unless spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled=true.
     extensions.injectOptimizerRule(spark => GpuPushSelectiveDimensionChainBeforeFact(spark))
+    // Reorder a large filtered fact chain only when trusted range and join statistics prove that
+    // the alternative reduces intermediate bytes substantially.
+    extensions.injectOptimizerRule(spark => GpuReorderSelectiveFactChain(spark))
     // Add a post-CBO broadcast hint when trusted metadata proves that a selectively filtered
     // dimension keyset fits the ordinary Spark broadcast threshold.
     extensions.injectOptimizerRule(spark => GpuBroadcastSelectiveFilteredDimension(spark))

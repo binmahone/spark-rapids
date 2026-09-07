@@ -17,6 +17,7 @@
 package com.nvidia.spark.rapids
 
 import java.io.FileInputStream
+import java.time.LocalDate
 import java.util.Properties
 
 import scala.collection.JavaConverters._
@@ -27,11 +28,13 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, Contains, EqualNullSafe}
-import org.apache.spark.sql.catalyst.expressions.{EqualTo, Expression, In, InSet, Literal, Or}
+import org.apache.spark.sql.catalyst.expressions.{EqualTo, Expression, GreaterThan, GreaterThanOrEqual}
+import org.apache.spark.sql.catalyst.expressions.{In, InSet, LessThan, LessThanOrEqual, Literal, Or}
 import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, SubqueryAlias, View}
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
+import org.apache.spark.sql.types.DateType
 
 /**
  * Read frozen optimizer metadata for path-backed tables that have no persistent catalog.
@@ -45,6 +48,7 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
     datasetPath: String,
     tableRows: Map[String, BigInt],
     distinctCounts: Map[(String, String), BigInt],
+    valueRanges: Map[(String, String), GpuOptimizerTrustedMetadata.ValueRange],
     primaryKeys: Map[String, Seq[String]],
     foreignKeys: Map[(String, Seq[String]), (String, Seq[String])]) extends Logging {
 
@@ -207,9 +211,20 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
 
   private def predicateSelectivity(
       estimate: DetailedEstimate,
+      expression: Expression): BigDecimal = {
+    val predicates = splitAnd(expression)
+    val rangeSelectivities = rangeSelectivity(
+      predicates,
+      attribute => estimate.lineage.get(attribute.exprId.id).flatMap(valueRanges.get))
+    val otherSelectivities = predicates.filterNot(isRangePredicate).map {
+      atomicPredicateSelectivity(estimate, _)
+    }
+    (rangeSelectivities ++ otherSelectivities).reduceOption(_.min(_)).getOrElse(BigDecimal(1))
+  }
+
+  private def atomicPredicateSelectivity(
+      estimate: DetailedEstimate,
       expression: Expression): BigDecimal = expression match {
-    case And(left, right) =>
-      predicateSelectivity(estimate, left).min(predicateSelectivity(estimate, right))
     case Or(left, right) =>
       (predicateSelectivity(estimate, left) + predicateSelectivity(estimate, right))
         .min(BigDecimal(1))
@@ -224,6 +239,68 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
     case Contains(_: Attribute, literal: Literal)
         if literal.value != null && literal.value.toString.nonEmpty => BigDecimal("0.25")
     case _ => BigDecimal(1)
+  }
+
+  private def rangeSelectivity(
+      predicates: Seq[Expression],
+      rangeFor: Attribute => Option[GpuOptimizerTrustedMetadata.ValueRange])
+  : Seq[BigDecimal] = {
+    predicates.flatMap(rangeBound).groupBy(_._1.exprId.id).values.flatMap { bounds =>
+      val attribute = bounds.head._1
+      rangeFor(attribute).map { domain =>
+        val lower = bounds.flatMap(_._2).foldLeft(domain.min)(_.max(_)).max(domain.min)
+        val upper = bounds.flatMap(_._3).foldLeft(domain.max)(_.min(_)).min(domain.max)
+        if (upper <= lower) {
+          BigDecimal(0)
+        } else if (domain.max == domain.min) {
+          BigDecimal(1)
+        } else {
+          ((upper - lower) / (domain.max - domain.min)).max(BigDecimal(0)).min(BigDecimal(1))
+        }
+      }
+    }.toSeq
+  }
+
+  private def isRangePredicate(expression: Expression): Boolean = rangeBound(expression).nonEmpty
+
+  private def rangeBound(
+      expression: Expression): Option[(Attribute, Option[BigDecimal], Option[BigDecimal])] =
+    expression match {
+      case GreaterThan(attribute: Attribute, literal: Literal) =>
+        literalValue(attribute, literal).map(value => (attribute, Some(value), None))
+      case GreaterThanOrEqual(attribute: Attribute, literal: Literal) =>
+        literalValue(attribute, literal).map(value => (attribute, Some(value), None))
+      case LessThan(attribute: Attribute, literal: Literal) =>
+        literalValue(attribute, literal).map(value => (attribute, None, Some(value)))
+      case LessThanOrEqual(attribute: Attribute, literal: Literal) =>
+        literalValue(attribute, literal).map(value => (attribute, None, Some(value)))
+      case GreaterThan(literal: Literal, attribute: Attribute) =>
+        literalValue(attribute, literal).map(value => (attribute, None, Some(value)))
+      case GreaterThanOrEqual(literal: Literal, attribute: Attribute) =>
+        literalValue(attribute, literal).map(value => (attribute, None, Some(value)))
+      case LessThan(literal: Literal, attribute: Attribute) =>
+        literalValue(attribute, literal).map(value => (attribute, Some(value), None))
+      case LessThanOrEqual(literal: Literal, attribute: Attribute) =>
+        literalValue(attribute, literal).map(value => (attribute, Some(value), None))
+      case _ => None
+    }
+
+  private def literalValue(attribute: Attribute, literal: Literal): Option[BigDecimal] = {
+    if (literal.value == null) {
+      None
+    } else if (attribute.dataType == DateType) {
+      literal.value match {
+        case value: Int => Some(BigDecimal(value))
+        case value: java.sql.Date => Some(BigDecimal(value.toLocalDate.toEpochDay))
+        case value: LocalDate => Some(BigDecimal(value.toEpochDay))
+        case _ => None
+      }
+    } else {
+      literal.value match {
+        case value: java.lang.Number => Try(BigDecimal(value.toString)).toOption
+        case _ => None
+      }
+    }
   }
 
   private def splitAnd(expression: Expression): Seq[Expression] = expression match {
@@ -303,10 +380,19 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
    * bound rather than assuming column independence, so correlated predicates cannot make an
    * oversized branch look artificially small.
    */
-  private def predicateSelectivity(table: String, expression: Expression): BigDecimal =
+  private def predicateSelectivity(table: String, expression: Expression): BigDecimal = {
+    val predicates = splitAnd(expression)
+    val rangeSelectivities = rangeSelectivity(
+      predicates,
+      attribute => valueRanges.get((table, normalizedColumn(attribute.name))))
+    val otherSelectivities = predicates.filterNot(isRangePredicate).map {
+      atomicPredicateSelectivity(table, _)
+    }
+    (rangeSelectivities ++ otherSelectivities).reduceOption(_.min(_)).getOrElse(BigDecimal(1))
+  }
+
+  private def atomicPredicateSelectivity(table: String, expression: Expression): BigDecimal =
     expression match {
-      case And(left, right) =>
-        predicateSelectivity(table, left).min(predicateSelectivity(table, right))
       case Or(left, right) =>
         val leftSelectivity = predicateSelectivity(table, left)
         val rightSelectivity = predicateSelectivity(table, right)
@@ -354,6 +440,8 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
 }
 
 private[rapids] object GpuOptimizerTrustedMetadata extends Logging {
+  private[rapids] case class ValueRange(min: BigDecimal, max: BigDecimal)
+
   val pathConf = "spark.rapids.sql.optimizer.trustedMetadata.path"
 
   def fromSession(spark: SparkSession): Option[GpuOptimizerTrustedMetadata] = {
@@ -396,6 +484,29 @@ private[rapids] object GpuOptimizerTrustedMetadata extends Logging {
         val column = components(1).toLowerCase(java.util.Locale.ROOT)
         (table, column) -> positiveBigInt(key, value, path)
     }
+    val rangeValues: Map[((String, String), String), BigDecimal] = values.collect {
+      case (key, value) if key.startsWith("column.") &&
+          (key.endsWith(".min") || key.endsWith(".max")) =>
+        val suffix = if (key.endsWith(".min")) ".min" else ".max"
+        val components = key.stripPrefix("column.").stripSuffix(suffix).split("\\.")
+        if (components.length != 2) {
+          throw new IllegalArgumentException(s"Invalid column range key $key in $path")
+        }
+        val table = components(0).toLowerCase(java.util.Locale.ROOT)
+        val column = components(1).toLowerCase(java.util.Locale.ROOT)
+        ((table, column), suffix.drop(1)) -> rangeValue(key, value, path)
+    }
+    val rangeColumns: Set[(String, String)] = rangeValues.keys.map(_._1).toSet
+    val valueRanges: Map[(String, String), ValueRange] = rangeColumns.map { column =>
+      val min = rangeValues.getOrElse(
+        column -> "min", throw new IllegalArgumentException(s"Missing min for $column in $path"))
+      val max = rangeValues.getOrElse(
+        column -> "max", throw new IllegalArgumentException(s"Missing max for $column in $path"))
+      if (max < min) {
+        throw new IllegalArgumentException(s"Invalid range for $column in $path: $min > $max")
+      }
+      column -> ValueRange(min, max)
+    }.toMap
     val primaryKeys = values.collect {
       case (key, value) if key.startsWith("primaryKey.") =>
         val table = key.stripPrefix("primaryKey.").toLowerCase(java.util.Locale.ROOT)
@@ -431,7 +542,7 @@ private[rapids] object GpuOptimizerTrustedMetadata extends Logging {
       s"tables=${tableRows.size} columns=${distinctCounts.size} " +
         s"primaryKeys=${primaryKeys.size} foreignKeys=${foreignKeys.size}")
     new GpuOptimizerTrustedMetadata(
-      datasetPath, tableRows, distinctCounts, primaryKeys, foreignKeys)
+      datasetPath, tableRows, distinctCounts, valueRanges, primaryKeys, foreignKeys)
   }
 
   private def columns(value: String): Seq[String] =
@@ -453,4 +564,10 @@ private[rapids] object GpuOptimizerTrustedMetadata extends Logging {
     Try(BigInt(value)).filter(_ > 0).getOrElse {
       throw new IllegalArgumentException(s"Invalid positive integer $key=$value in $path")
     }
+
+  private def rangeValue(key: String, value: String, path: String): BigDecimal = {
+    Try(BigDecimal(value)).orElse(Try(BigDecimal(LocalDate.parse(value).toEpochDay))).getOrElse {
+      throw new IllegalArgumentException(s"Invalid range value $key=$value in $path")
+    }
+  }
 }

@@ -301,8 +301,10 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
               |WHERE r_name = 'ASIA'""".stripMargin).queryExecution.analyzed
           val estimate = GpuOptimizerTrustedMetadata.load(metadataFile.toString).estimate(chain)
 
-          assert(estimate.exists(_.rows == 60000000), estimate)
-          assert(estimate.exists(_.sizeInBytes < 12L * 1024L * 1024L * 1024L), estimate)
+          assert(estimate.exists(_.rows == 60000000), s"$estimate\n${chain.treeString}")
+          assert(
+            estimate.exists(_.sizeInBytes < 12L * 1024L * 1024L * 1024L),
+            s"$estimate\n${chain.treeString}")
         },
         trustedConf)
     } finally {

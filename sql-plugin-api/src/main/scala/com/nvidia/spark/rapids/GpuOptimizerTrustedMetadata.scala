@@ -30,7 +30,7 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, Contain
 import org.apache.spark.sql.catalyst.expressions.{EqualTo, Expression, In, InSet, Literal, Or}
 import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join}
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, SubqueryAlias}
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, SubqueryAlias, View}
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 
 /**
@@ -123,18 +123,11 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
 
     case alias: SubqueryAlias =>
       estimateDetailed(alias.child).map { input =>
-        val mappings = alias.child.output.zip(alias.output).map {
-          case (source, output) => output.exprId.id -> source.exprId.id
-        }
-        DetailedEstimate(
-          input.rows,
-          mappings.flatMap {
-            case (output, source) => input.lineage.get(source).map(output -> _)
-          }.toMap,
-          mappings.flatMap {
-            case (output, source) => input.distinct.get(source).map(output -> _)
-          }.toMap)
+        remapOutput(input, alias.child, alias)
       }
+
+    case view: View =>
+      estimateDetailed(view.child).map(remapOutput(_, view.child, view))
 
     case Join(left, right, Inner, Some(condition), _) =>
       for {
@@ -153,6 +146,26 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
       }
 
     case _ => None
+  }
+
+  private def remapOutput(
+      input: DetailedEstimate,
+      source: LogicalPlan,
+      output: LogicalPlan): DetailedEstimate = {
+    val mappings = source.output.zip(output.output).map {
+      case (sourceAttribute, outputAttribute) =>
+        outputAttribute.exprId.id -> sourceAttribute.exprId.id
+    }
+    DetailedEstimate(
+      input.rows,
+      mappings.flatMap {
+        case (outputExprId, sourceExprId) =>
+          input.lineage.get(sourceExprId).map(outputExprId -> _)
+      }.toMap,
+      mappings.flatMap {
+        case (outputExprId, sourceExprId) =>
+          input.distinct.get(sourceExprId).map(outputExprId -> _)
+      }.toMap)
   }
 
   private def joinDenominator(

@@ -146,7 +146,7 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
             .select("p_partkey")
             .queryExecution.analyzed
           val lPartKey = AttributeReference("l_partkey", LongType)()
-          val lineitem = StatRel(Seq(lPartKey), 180000000000L)
+          val lineitem = SelectiveDimensionStatRel(Seq(lPartKey), 180000000000L)
           val pPartKey = part.output.find(_.name == "p_partkey").get
           val original = join(lineitem, part, EqualTo(lPartKey, pPartKey))
           val rewritten = GpuBroadcastSelectiveFilteredDimension(spark)(original)
@@ -172,13 +172,13 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
         val innerValue = AttributeReference("fact_value", LongType)()
         val dimensionKey = AttributeReference("dimension_key", LongType)()
         val dimensionKind = AttributeReference("dimension_kind", StringType)()
-        val outerFact = StatRel(Seq(outerKey, outerValue), 180000000000L)
-        val innerFact = StatRel(Seq(innerKey, innerValue), 180000000000L)
+        val outerFact = SelectiveDimensionStatRel(Seq(outerKey, outerValue), 180000000000L)
+        val innerFact = SelectiveDimensionStatRel(Seq(innerKey, innerValue), 180000000000L)
         val dimension = Project(
           Seq(dimensionKey),
           Filter(
             EqualTo(dimensionKind, Literal("selected")),
-            StatRel(Seq(dimensionKey, dimensionKind), 1000L)))
+            SelectiveDimensionStatRel(Seq(dimensionKey, dimensionKind), 1000L)))
         val outer = join(outerFact, dimension, EqualTo(outerKey, dimensionKey))
         val average = Alias(Average(innerValue).toAggregateExpression(), "average_value")()
         val aggregate = Aggregate(Seq(innerKey), Seq(innerKey, average), innerFact)
@@ -221,21 +221,23 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     val rRegionKey = AttributeReference("r_regionkey", LongType)()
     val rName = AttributeReference("r_name", StringType)()
 
-    val lineitem = StatRel(Seq(lOrderKey, lPartKey, lExtraKey), 180000000000L)
+    val lineitem = SelectiveDimensionStatRel(
+      Seq(lOrderKey, lPartKey, lExtraKey), 180000000000L)
     val part = partOverride.getOrElse {
       val pPartKey = AttributeReference("p_partkey", LongType)()
       val pType = AttributeReference("p_type", StringType)()
       Filter(
         EqualTo(pType, Literal("ECONOMY ANODIZED STEEL")),
-        StatRel(Seq(pPartKey, pType), 6000000000L))
+        SelectiveDimensionStatRel(Seq(pPartKey, pType), 6000000000L))
     }
     val pPartKey = part.output.find(_.name == "p_partkey").get
-    val orders = StatRel(Seq(oOrderKey, oCustKey, oExtraKey), 45000000000L)
-    val customer = StatRel(Seq(cCustKey, cNationKey), 4500000000L)
-    val nation = StatRel(Seq(nNationKey, nRegionKey), 25L)
+    val orders = SelectiveDimensionStatRel(
+      Seq(oOrderKey, oCustKey, oExtraKey), 45000000000L)
+    val customer = SelectiveDimensionStatRel(Seq(cCustKey, cNationKey), 4500000000L)
+    val nation = SelectiveDimensionStatRel(Seq(nNationKey, nRegionKey), 25L)
     val region = Filter(
       EqualTo(rName, Literal("AMERICA")),
-      StatRel(Seq(rRegionKey, rName), 5L))
+      SelectiveDimensionStatRel(Seq(rRegionKey, rName), 5L))
 
     val partCondition = if (addCompetingEdge) {
       And(EqualTo(pPartKey, lPartKey), EqualTo(pPartKey, oExtraKey))
@@ -300,9 +302,11 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
   private def sameBranch(left: LogicalPlan, right: LogicalPlan): Boolean =
     left.fastEquals(right) || left.outputSet == right.outputSet
 
-  private case class StatRel(attrs: Seq[Attribute], rows: Long) extends LeafNode {
-    override def output: Seq[Attribute] = attrs
-    override def computeStats(): Statistics =
-      Statistics(sizeInBytes = BigInt(rows) * 16, rowCount = Some(BigInt(rows)))
-  }
+}
+
+private[rapids] case class SelectiveDimensionStatRel(attrs: Seq[Attribute], rows: Long)
+    extends LeafNode {
+  override def output: Seq[Attribute] = attrs
+  override def computeStats(): Statistics =
+    Statistics(sizeInBytes = BigInt(rows) * 16, rowCount = Some(BigInt(rows)))
 }

@@ -842,21 +842,41 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
     broadcastSmallerHint(left, right, allowLeft = true, allowRight = true)
   }
 
-  private def broadcastSmallerHint(
+  private[rapids] def broadcastSmallerHint(
       left: LogicalPlan,
       right: LogicalPlan,
       allowLeft: Boolean,
       allowRight: Boolean): JoinHint = {
-    val leftBytes = realScanBytes(left)
-    val rightBytes = realScanBytes(right)
+    val threshold = BigInt(spark.sessionState.conf.autoBroadcastJoinThreshold)
+    val leftBytes = estimatedOutputBytes(left)
+    val rightBytes = estimatedOutputBytes(right)
     val broadcastHint = HintInfo(strategy = Some(BROADCAST))
-    if (allowLeft && leftBytes > 0 && rightBytes > 0 && leftBytes < rightBytes) {
+    if (
+      allowLeft && threshold >= 0 && leftBytes > 0 && leftBytes <= threshold &&
+        rightBytes > 0 && leftBytes < rightBytes
+    ) {
       JoinHint(Some(broadcastHint), None)
-    } else if (allowRight && leftBytes > 0 && rightBytes > 0 && rightBytes < leftBytes) {
+    } else if (
+      allowRight && threshold >= 0 && rightBytes > 0 && rightBytes <= threshold &&
+        leftBytes > 0 && rightBytes < leftBytes
+    ) {
       JoinHint(None, Some(broadcastHint))
     } else {
       JoinHint.NONE
     }
+  }
+
+  /**
+   * Estimate materialized output bytes for broadcast admission. Physical scan bytes are not a
+   * safe proxy here: a compressed multi-column scan can expand beyond both Spark's broadcast
+   * threshold and cuDF's per-column size limit. Prefer the trusted cardinality/width model when
+   * available, then fall back to Spark's output statistics.
+   */
+  private def estimatedOutputBytes(plan: LogicalPlan): BigInt = {
+    trustedMetadata.flatMap(_.estimate(plan))
+      .map(_.sizeInBytes)
+      .filter(_ > 0)
+      .getOrElse(plan.stats.sizeInBytes)
   }
 
   private def realScanBytes(plan: LogicalPlan): BigInt = {

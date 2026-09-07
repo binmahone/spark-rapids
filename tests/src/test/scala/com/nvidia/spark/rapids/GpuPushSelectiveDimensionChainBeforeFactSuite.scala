@@ -113,6 +113,39 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
       conf)
   }
 
+  test("does not hint a smaller scan whose materialized output exceeds broadcast threshold") {
+    withCpuSparkSession(
+      spark => {
+        val leftKey = AttributeReference("left_key", LongType)()
+        val rightKey = AttributeReference("right_key", LongType)()
+        val left = SelectiveDimensionStatRel(Seq(leftKey), 100L)
+        val right = SelectiveDimensionStatRel(Seq(rightKey), 200L)
+        val rule = GpuPushSelectiveDimensionChainBeforeFact(spark)
+
+        val rejected = rule.broadcastSmallerHint(
+          left, right, allowLeft = true, allowRight = true)
+        assert(rejected == JoinHint.NONE)
+      },
+      conf.set("spark.sql.autoBroadcastJoinThreshold", "1k"))
+  }
+
+  test("hints the smaller materialized output when it fits broadcast threshold") {
+    withCpuSparkSession(
+      spark => {
+        val leftKey = AttributeReference("left_key", LongType)()
+        val rightKey = AttributeReference("right_key", LongType)()
+        val left = SelectiveDimensionStatRel(Seq(leftKey), 100L)
+        val right = SelectiveDimensionStatRel(Seq(rightKey), 200L)
+        val rule = GpuPushSelectiveDimensionChainBeforeFact(spark)
+
+        val accepted = rule.broadcastSmallerHint(
+          left, right, allowLeft = true, allowRight = true)
+        assert(accepted.leftHint.exists(_.strategy.contains(BROADCAST)))
+        assert(accepted.rightHint.isEmpty)
+      },
+      conf.set("spark.sql.autoBroadcastJoinThreshold", "2k"))
+  }
+
   test("uses trusted path statistics to prebuild an independent selective leaf") {
     val datasetDir = Files.createTempDirectory("trusted-metadata-dataset").toFile
     val partDir = datasetDir.toPath.resolve("part")

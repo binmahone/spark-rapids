@@ -148,7 +148,7 @@ class GpuReorderSelectiveFactChainSuite extends SparkQueryCompareTestSuite {
   private def smallerFactSideHasShuffleHashHint(plan: LogicalPlan): Boolean = plan.exists {
     case join: Join
         if join.left.output.exists(_.name == "o_custkey") &&
-          join.left.output.exists(_.name.startsWith("_rapids_measure_")) &&
+          join.left.output.exists(_.name == "l_value") &&
           join.right.output.exists(_.name == "c_custkey") =>
       join.hint.leftHint.flatMap(_.strategy).contains(SHUFFLE_HASH) &&
         join.hint.rightHint.isEmpty

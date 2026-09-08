@@ -145,17 +145,15 @@ class ShuffleBufferCatalog extends Logging {
     blockId: ShuffleBlockId,
     compressedBatch: ColumnarBatch,
     initialSpillPriority: Long): Unit = {
-    withResource(compressedBatch) { _ =>
-      val bufferId = nextShuffleBufferId(blockId)
-      val compressed = compressedBatch.column(0).asInstanceOf[GpuCompressedColumnVector]
-      val tableMeta = compressed.getTableMeta
-      // update the table metadata for the buffer ID generated above
-      tableMeta.bufferMeta().mutateId(bufferId.tableId)
-      val buff = compressed.getTableBuffer
-      buff.incRefCount()
-      val handle = SpillableDeviceBufferHandle(buff, initialSpillPriority)
-      trackCachedHandle(bufferId, handle, tableMeta)
-    }
+    val bufferId = nextShuffleBufferId(blockId)
+    val compressed = compressedBatch.column(0).asInstanceOf[GpuCompressedColumnVector]
+    val tableMeta = compressed.getTableMeta
+    // update the table metadata for the buffer ID generated above
+    tableMeta.bufferMeta().mutateId(bufferId.tableId)
+    val buff = compressed.getTableBuffer
+    buff.incRefCount()
+    val handle = SpillableDeviceBufferHandle(buff, initialSpillPriority)
+    trackCachedHandle(bufferId, handle, tableMeta)
   }
 
   /**

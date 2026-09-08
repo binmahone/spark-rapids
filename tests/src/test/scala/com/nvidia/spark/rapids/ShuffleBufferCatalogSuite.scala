@@ -16,6 +16,7 @@
 
 package com.nvidia.spark.rapids
 
+import ai.rapids.cudf.DeviceMemoryBuffer
 import com.nvidia.spark.rapids.Arm.withResource
 import com.nvidia.spark.rapids.format.TableMeta
 import com.nvidia.spark.rapids.shuffle.RapidsShuffleTestHelper
@@ -74,6 +75,28 @@ class ShuffleBufferCatalogSuite
     val storedMetas = shuffleCatalog.blockIdToMetas(ShuffleBlockId(1, 1L, 1))
     assertResult(1)(storedMetas.size)
     shuffleCatalog.unregisterShuffle(1)
+  }
+
+  test("adding a compressed batch does not consume the caller's reference") {
+    val shuffleCatalog = new ShuffleBufferCatalog()
+    val blockId = ShuffleBlockId(1, 1L, 1)
+    val tableMeta = RapidsShuffleTestHelper.mockTableMeta(1000)
+    val compressedBatch = withResource(DeviceMemoryBuffer.allocate(1024)) { deviceBuffer =>
+      GpuCompressedColumnVector.from(deviceBuffer, tableMeta)
+    }
+
+    shuffleCatalog.registerShuffle(blockId.shuffleId)
+    withResource(compressedBatch) { batch =>
+      shuffleCatalog.addCompressedBatch(blockId, batch, -1)
+    }
+
+    val tableId = tableMeta.bufferMeta().id()
+    withResource(shuffleCatalog.getShuffleBufferHandle(tableId)) { sendHandle =>
+      withResource(sendHandle.spillable.materialize()) { materialized =>
+        assertResult(1024)(materialized.getLength)
+      }
+    }
+    shuffleCatalog.unregisterShuffle(blockId.shuffleId)
   }
 
   test("failed map cleanup only removes buffers from that shuffle map") {

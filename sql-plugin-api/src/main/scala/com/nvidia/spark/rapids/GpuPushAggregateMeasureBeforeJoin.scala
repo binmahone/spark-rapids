@@ -45,28 +45,12 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
   private val enabledKey =
     "spark.rapids.sql.optimizer.pushAggregateMeasureBeforeJoin.enabled"
 
-  registerPostCboPass()
-
   override def apply(plan: LogicalPlan): LogicalPlan = {
-    registerPostCboPass()
     if (!enabled || !plan.resolved) {
       plan
     } else {
       plan.transformDown {
         case aggregate: Aggregate => rewriteAggregate(aggregate)
-      }
-    }
-  }
-
-  private def registerPostCboPass(): Unit = {
-    if (!enabled) {
-      return
-    }
-    val experimental = spark.experimental
-    experimental.synchronized {
-      if (!experimental.extraOptimizations.exists(
-          _.isInstanceOf[GpuPushAggregateMeasureBeforeJoin])) {
-        experimental.extraOptimizations = experimental.extraOptimizations :+ this
       }
     }
   }

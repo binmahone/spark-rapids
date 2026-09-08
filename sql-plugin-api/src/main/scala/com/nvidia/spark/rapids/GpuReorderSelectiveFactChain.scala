@@ -51,10 +51,7 @@ case class GpuReorderSelectiveFactChain(spark: SparkSession)
   private val metadata = GpuOptimizerTrustedMetadata.fromSession(spark)
   private val firstRewriteLog = new AtomicBoolean(false)
 
-  registerPostCboPass()
-
   override def apply(plan: LogicalPlan): LogicalPlan = {
-    registerPostCboPass()
     if (!enabled || !plan.resolved || plan.isStreaming || metadata.isEmpty) {
       plan
     } else {
@@ -295,19 +292,6 @@ case class GpuReorderSelectiveFactChain(spark: SparkSession)
     val bytes = estimate.map(_.sizeInBytes).getOrElse("?")
     s"${plan.nodeName}[${plan.output.map(_.name).take(4).mkString(",")}] " +
       s"rows=$rows bytes=$bytes"
-  }
-
-  private def registerPostCboPass(): Unit = {
-    if (!enabled) {
-      return
-    }
-    val experimental = spark.experimental
-    experimental.synchronized {
-      if (!experimental.extraOptimizations.exists(
-          _.isInstanceOf[GpuReorderSelectiveFactChain])) {
-        experimental.extraOptimizations = experimental.extraOptimizations :+ this
-      }
-    }
   }
 
   private def enabled: Boolean =

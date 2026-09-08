@@ -33,6 +33,10 @@ public final class DictionaryEncodingPrototype {
       return keys.getColumn(0).getDeviceMemorySize() + indices.getDeviceMemorySize();
     }
 
+    private DType indexType() {
+      return indices.getType();
+    }
+
     private Table decode() {
       return keys.gather(indices);
     }
@@ -44,6 +48,16 @@ public final class DictionaryEncodingPrototype {
     }
   }
 
+  private static DType chooseIndexType(long keyCount) {
+    if (keyCount <= Byte.MAX_VALUE + 1L) {
+      return DType.INT8;
+    }
+    if (keyCount <= Short.MAX_VALUE + 1L) {
+      return DType.INT16;
+    }
+    return DType.INT32;
+  }
+
   private static Encoded encode(ColumnVector input) {
     try (Table inputTable = new Table(input);
          Table unsortedKeys = inputTable.dropDuplicates(
@@ -51,9 +65,13 @@ public final class DictionaryEncodingPrototype {
       Table sortedKeys = unsortedKeys.orderBy(OrderByArg.asc(0));
       boolean succeeded = false;
       try {
-        ColumnVector indices = sortedKeys.lowerBound(inputTable, OrderByArg.asc(0));
-        succeeded = true;
-        return new Encoded(sortedKeys, indices);
+        try (ColumnVector int32Indices =
+                 sortedKeys.lowerBound(inputTable, OrderByArg.asc(0))) {
+          DType indexType = chooseIndexType(sortedKeys.getRowCount());
+          ColumnVector indices = int32Indices.castTo(indexType);
+          succeeded = true;
+          return new Encoded(sortedKeys, indices);
+        }
       } finally {
         if (!succeeded) {
           sortedKeys.close();
@@ -101,6 +119,7 @@ public final class DictionaryEncodingPrototype {
       long[] decodeNs = new long[repeats];
       long encodedBytes = -1;
       long keyCount = -1;
+      DType indexType = null;
       for (int i = 0; i < repeats; ++i) {
         Cuda.DEFAULT_STREAM.sync();
         long encodeStart = System.nanoTime();
@@ -109,6 +128,7 @@ public final class DictionaryEncodingPrototype {
           encodeNs[i] = System.nanoTime() - encodeStart;
           encodedBytes = encoded.deviceBytes();
           keyCount = encoded.keys.getRowCount();
+          indexType = encoded.indexType();
 
           long decodeStart = System.nanoTime();
           try (Table decoded = encoded.decode()) {
@@ -121,9 +141,9 @@ public final class DictionaryEncodingPrototype {
 
       double ratio = encodedBytes / (double) rawBytes;
       System.out.printf(Locale.ROOT,
-          "RESULT,%s,%s,%d,%d,%d,%d,%.6f,%.3f,%.3f%n",
-          name, input.getType(), input.getRowCount(), keyCount, rawBytes, encodedBytes,
-          ratio, median(encodeNs), median(decodeNs));
+          "RESULT,%s,%s,%s,%d,%d,%d,%d,%.6f,%.3f,%.3f%n",
+          name, input.getType(), indexType, input.getRowCount(), keyCount, rawBytes,
+          encodedBytes, ratio, median(encodeNs), median(decodeNs));
     }
   }
 
@@ -180,7 +200,7 @@ public final class DictionaryEncodingPrototype {
     Cuda.setDevice(0);
     Rmm.initialize(RmmAllocationMode.CUDA_ASYNC, null, 64L * 1024 * 1024 * 1024);
     try {
-      System.out.println("name,type,rows,key_count,raw_bytes,encoded_bytes,ratio," +
+      System.out.println("name,type,index_type,rows,key_count,raw_bytes,encoded_bytes,ratio," +
           "encode_median_ms,decode_median_ms");
       benchmark("shippriority_constant_int32", () -> {
         try (Scalar zero = Scalar.fromInt(0)) {

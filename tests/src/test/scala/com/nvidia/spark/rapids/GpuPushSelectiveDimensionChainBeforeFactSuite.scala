@@ -27,7 +27,7 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, Attribu
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.catalyst.expressions.aggregate.Average
-import org.apache.spark.sql.catalyst.plans.Inner
+import org.apache.spark.sql.catalyst.plans.{FullOuter, Inner}
 import org.apache.spark.sql.catalyst.plans.LeftSemi
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, BROADCAST, Filter, HintInfo, Join}
 import org.apache.spark.sql.catalyst.plans.logical.{JoinHint, SHUFFLE_HASH}
@@ -555,6 +555,61 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
             join(lineitem, part, EqualTo(lPartKey, pPartKey)),
             partsupp,
             EqualTo(lPartKey, psPartKey))
+          val rewritten = GpuPushSelectiveKeysetToJoinInputs(spark)(original)
+
+          assert(rewritten.fastEquals(original), rewritten.treeString)
+        },
+        trustedConf)
+    } finally {
+      ApacheFileUtils.deleteDirectory(datasetDir)
+    }
+  }
+
+  test("does not infer key equivalence through a full outer join") {
+    val datasetDir = Files.createTempDirectory("trusted-keyset-outer-join-dataset").toFile
+    val partDir = datasetDir.toPath.resolve("part")
+    val metadataFile = datasetDir.toPath.resolve("trusted-metadata.properties")
+    val metadata =
+      s"""dataset.path=${datasetDir.getCanonicalPath}
+         |table.part.rowCount=6000000000
+         |column.part.p_partkey.distinctCount=6000000000
+         |""".stripMargin
+    Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
+    val trustedConf = conf
+      .set("spark.sql.autoBroadcastJoinThreshold", "8g")
+      .set(pushSelectiveKeysetKey, "true")
+      .set("spark.rapids.shuffle.broadcast.enabled", "true")
+      .set("spark.rapids.shuffle.broadcast.trustSparkPlan.enabled", "true")
+      .set("spark.rapids.shuffle.broadcast.maxSize", "12g")
+      .set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString)
+
+    try {
+      withCpuSparkSession(
+        spark => {
+          import spark.implicits._
+
+          Seq((1L, "forest green"), (2L, "red"))
+            .toDF("p_partkey", "p_name")
+            .write.parquet(partDir.toString)
+          val part = spark.read.parquet(partDir.toString)
+            .filter(col("p_name").contains("green"))
+            .select("p_partkey")
+            .queryExecution.analyzed
+          val lineitemKey = AttributeReference("l_partkey", LongType)()
+          val bridgeKey = AttributeReference("bridge_partkey", LongType)()
+          val targetKey = AttributeReference("target_partkey", LongType)()
+          val lineitem = SelectiveDimensionStatRel(Seq(lineitemKey), 180000000000L)
+          val bridge = SelectiveDimensionStatRel(Seq(bridgeKey), 24000000000L)
+          val target = SelectiveDimensionStatRel(Seq(targetKey), 24000000000L)
+          val partKey = part.output.find(_.name == "p_partkey").get
+          val filteredLineitem = join(lineitem, part, EqualTo(lineitemKey, partKey))
+          val outer = Join(
+            filteredLineitem,
+            bridge,
+            FullOuter,
+            Some(EqualTo(lineitemKey, bridgeKey)),
+            JoinHint.NONE)
+          val original = join(outer, target, EqualTo(bridgeKey, targetKey))
           val rewritten = GpuPushSelectiveKeysetToJoinInputs(spark)(original)
 
           assert(rewritten.fastEquals(original), rewritten.treeString)

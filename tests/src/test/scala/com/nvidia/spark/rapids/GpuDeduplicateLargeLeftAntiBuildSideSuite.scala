@@ -47,8 +47,9 @@ class GpuDeduplicateLargeLeftAntiBuildSideSuite extends SparkQueryCompareTestSui
         Seq(1L, 2L, 3L).toDF("c_custkey").createOrReplaceTempView("customer")
         val sql =
           """SELECT c_custkey
-            |FROM customer LEFT ANTI JOIN orders
-            |ON c_custkey = o_custkey
+            |FROM customer
+            |WHERE NOT EXISTS (
+            |  SELECT * FROM orders WHERE o_custkey = c_custkey)
             |""".stripMargin
 
         spark.conf.set(GpuOptimizerTrustedMetadata.pathConf, "")

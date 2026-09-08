@@ -348,6 +348,7 @@ class RapidsShuffleServerSuite extends RapidsShuffleTestHelper {
       when(mockRequestHandler.getShuffleHandle(ArgumentMatchers.eq(1)))
         .thenReturn(rapidsBuffer)
 
+      val mockServerConnection = mock[ServerConnection]
       val server = spy(new RapidsShuffleServer(
         mockTransport,
         mockServerConnection,

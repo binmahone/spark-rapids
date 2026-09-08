@@ -353,12 +353,23 @@ class RapidsShuffleServer(transport: RapidsShuffleTransport,
       if (toTryAgain != null) {
         // we failed at least 1 time to copy to the bounce buffer
         if (bssBuffers.isEmpty) {
-          // we were not able to handle anything, error out.
-          val ise = new IllegalStateException("Unable to prepare any sends. " +
-              "This issue can occur when requesting too many shuffle blocks. " +
-              "The sends will not be retried.")
-          supressedErrors.foreach(ise.addSuppressed)
-          throw ise
+          val allFailuresAreOom = supressedErrors.forall {
+            case ex: RapidsShuffleSendPrepareException =>
+              ex.getCause.isInstanceOf[OutOfMemoryError]
+            case _ => false
+          }
+          if (allFailuresAreOom) {
+            logWarning(s"GPU memory exhausted while preparing ${toTryAgain.size} sends. " +
+                "The sends will be retried after allowing other GPU work to make progress.")
+            Thread.sleep(10)
+          } else {
+            // We were not able to handle anything due to a non-memory failure.
+            val ise = new IllegalStateException("Unable to prepare any sends. " +
+                "This issue can occur when requesting too many shuffle blocks. " +
+                "The sends will not be retried.")
+            supressedErrors.foreach(ise.addSuppressed)
+            throw ise
+          }
         } else {
           // we at least handled 1 `BufferSendState`, lets continue to retry
           logWarning(s"Unable to prepare ${toTryAgain.size} sends. " +
@@ -366,8 +377,8 @@ class RapidsShuffleServer(transport: RapidsShuffleTransport,
               "The sends will be retried.")
         }
 
-        // If we are still able to handle at least one `BufferSendState`, add any
-        // others that also failed due back to the queue.
+        // Requeue sends that could not acquire enough memory. Non-memory failures
+        // reach this point only when another send made progress.
         addToContinueQueue(toTryAgain.toSeq)
       }
 

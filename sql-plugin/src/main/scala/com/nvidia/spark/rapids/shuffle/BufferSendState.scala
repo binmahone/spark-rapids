@@ -226,6 +226,11 @@ class BufferSendState(
           }
           needsCleanup = false
         } catch {
+          case oom: OutOfMemoryError =>
+            throw new RapidsShuffleSendPrepareException(
+              s"GPU memory exhausted while preparing a shuffle send for executor " +
+                  s"${peerExecutorId} and header " +
+                  s"${TransportUtils.toHex(peerBufferReceiveHeader)}", oom)
           case ex: Exception =>
             throw new RapidsShuffleSendPrepareException(
               s"Error while copying to bounce buffer for executor ${peerExecutorId} and " +

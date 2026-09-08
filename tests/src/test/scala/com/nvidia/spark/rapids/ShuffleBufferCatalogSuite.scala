@@ -16,9 +16,9 @@
 
 package com.nvidia.spark.rapids
 
-import ai.rapids.cudf.DeviceMemoryBuffer
-import com.nvidia.spark.rapids.Arm.withResource
-import com.nvidia.spark.rapids.format.TableMeta
+import ai.rapids.cudf.{Cuda, DeviceMemoryBuffer}
+import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
+import com.nvidia.spark.rapids.format.{CodecType, TableMeta}
 import com.nvidia.spark.rapids.shuffle.RapidsShuffleTestHelper
 import com.nvidia.spark.rapids.spill.SpillFramework
 import org.scalatest.BeforeAndAfterEach
@@ -97,6 +97,34 @@ class ShuffleBufferCatalogSuite
       }
     }
     shuffleCatalog.unregisterShuffle(blockId.shuffleId)
+  }
+
+  test("received compressed buffer remains compressed until coalesce") {
+    val receivedCatalog = new ShuffleReceivedBufferCatalog()
+    RapidsShuffleTestHelper.withMockContiguousTable(1000) { contiguousTable =>
+      val compressedSize = contiguousTable.getBuffer.getLength
+      val tableMeta = MetaUtils.buildTableMeta(
+        Some(1), contiguousTable, CodecType.NVCOMP_LZ4, compressedSize)
+      closeOnExcept(DeviceMemoryBuffer.allocate(compressedSize)) { receivedBuffer =>
+        receivedBuffer.copyFromDeviceBufferAsync(
+          0, contiguousTable.getBuffer, 0, compressedSize, Cuda.DEFAULT_STREAM)
+        Cuda.DEFAULT_STREAM.sync()
+        val handle = receivedCatalog.addBuffer(receivedBuffer, tableMeta, -1)
+
+        val (batch, memoryUsedBytes) =
+          receivedCatalog.getColumnarBatchAndRemove(handle, Array[DataType](IntegerType))
+        withResource(batch) { compressedBatch =>
+          assert(GpuCompressedColumnVector.isBatchCompressed(compressedBatch))
+          assertResult(1000)(compressedBatch.numRows())
+          assertResult(compressedSize)(memoryUsedBytes)
+          val compressedColumn =
+            compressedBatch.column(0).asInstanceOf[GpuCompressedColumnVector]
+          assertResult(CodecType.NVCOMP_LZ4)(
+            compressedColumn.getTableMeta.bufferMeta().codecBufferDescrs(0).codec())
+          assertResult(compressedSize)(compressedColumn.getTableBuffer.getLength)
+        }
+      }
+    }
   }
 
   test("failed map cleanup only removes buffers from that shuffle map") {

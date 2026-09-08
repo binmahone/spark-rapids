@@ -231,6 +231,7 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
          |column.orders.o_custkey.distinctCount=2
          |table.lineitem.rowCount=120000000000
          |column.lineitem.l_orderkey.distinctCount=3
+         |column.lineitem.l_returnflag.distinctCount=3
          |table.nation.rowCount=2
          |column.nation.n_nationkey.distinctCount=2
          |primaryKey.customer=c_custkey
@@ -262,8 +263,8 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
           (12L, 2L, Date.valueOf("1993-11-01")))
           .toDF("o_orderkey", "o_custkey", "o_orderdate")
           .write.parquet(datasetDir.toPath.resolve("orders").toString)
-        Seq((10L, 3.0), (10L, 5.0), (11L, 7.0), (12L, 11.0))
-          .toDF("l_orderkey", "l_value")
+        Seq((10L, 3.0, "R"), (10L, 5.0, "N"), (11L, 7.0, "R"), (12L, 11.0, "R"))
+          .toDF("l_orderkey", "l_value", "l_returnflag")
           .write.parquet(datasetDir.toPath.resolve("lineitem").toString)
         Seq((0L, "nation-0"), (1L, "nation-1"))
           .toDF("n_nationkey", "n_name")
@@ -279,7 +280,7 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
             |JOIN orders ON c_custkey = o_custkey
             |  AND o_orderdate >= DATE '1993-10-01'
             |  AND o_orderdate < DATE '1994-01-01'
-            |JOIN lineitem ON o_orderkey = l_orderkey AND l_value > 0
+            |JOIN lineitem ON o_orderkey = l_orderkey AND l_returnflag = 'R'
             |JOIN nation ON c_nationkey = n_nationkey
             |GROUP BY c_custkey, c_name, n_name
             |""".stripMargin

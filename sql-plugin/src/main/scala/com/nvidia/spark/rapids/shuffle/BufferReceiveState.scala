@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -162,22 +162,6 @@ class BufferReceiveState(
     }
   }
 
-  private def logDeviceCopy(
-      phase: String,
-      mode: String,
-      destination: BaseDeviceMemoryBuffer,
-      destinationOffset: Long,
-      source: BaseDeviceMemoryBuffer,
-      sourceOffset: Long,
-      copyLength: Long,
-      fullSize: Long): Unit = {
-    logWarning(s"UCX_RECEIVE_D2D_COPY_$phase state=${TransportUtils.toHex(id)} mode=$mode " +
-      s"dst=${TransportUtils.toHex(destination.getAddress)} dstOffset=$destinationOffset " +
-      s"dstLength=${destination.getLength} src=${TransportUtils.toHex(source.getAddress)} " +
-      s"srcOffset=$sourceOffset srcLength=${source.getLength} copyLength=$copyLength " +
-      s"fullSize=$fullSize")
-  }
-
   /**
    * When a receive is complete, the client calls `consumeWindow` to copy out
    * of the bounce buffer in this `BufferReceiveState` any complete batches, or to
@@ -209,20 +193,12 @@ class BufferReceiveState(
             contigBuffer = Rmm.alloc(b.rangeSize(), stream)
             toClose.append(contigBuffer)
 
-            logDeviceCopy("BEGIN", "complete", contigBuffer, 0,
-              deviceBounceBuffer, bounceBufferByteOffset, b.rangeSize(), fullSize)
             contigBuffer.copyFromDeviceBufferAsync(0, deviceBounceBuffer,
               bounceBufferByteOffset, b.rangeSize(), stream)
-            logDeviceCopy("QUEUED", "complete", contigBuffer, 0,
-              deviceBounceBuffer, bounceBufferByteOffset, b.rangeSize(), fullSize)
           } else {
             if (workingOn != null) {
-              logDeviceCopy("BEGIN", "continue", workingOn, workingOnOffset,
-                deviceBounceBuffer, bounceBufferByteOffset, b.rangeSize(), fullSize)
               workingOn.copyFromDeviceBufferAsync(workingOnOffset, deviceBounceBuffer,
                 bounceBufferByteOffset, b.rangeSize(), stream)
-              logDeviceCopy("QUEUED", "continue", workingOn, workingOnOffset,
-                deviceBounceBuffer, bounceBufferByteOffset, b.rangeSize(), fullSize)
 
               workingOnOffset += b.rangeSize()
               if (workingOnOffset == fullSize) {
@@ -235,12 +211,8 @@ class BufferReceiveState(
               workingOn = Rmm.alloc(fullSize, stream)
               toClose.append(workingOn)
 
-              logDeviceCopy("BEGIN", "initial", workingOn, 0,
-                deviceBounceBuffer, bounceBufferByteOffset, b.rangeSize(), fullSize)
               workingOn.copyFromDeviceBufferAsync(0, deviceBounceBuffer,
                 bounceBufferByteOffset, b.rangeSize(), stream)
-              logDeviceCopy("QUEUED", "initial", workingOn, 0,
-                deviceBounceBuffer, bounceBufferByteOffset, b.rangeSize(), fullSize)
 
               workingOnOffset += b.rangeSize()
             }

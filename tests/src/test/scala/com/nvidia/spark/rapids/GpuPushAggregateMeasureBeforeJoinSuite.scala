@@ -226,10 +226,10 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
          |table.customer.rowCount=2
          |column.customer.c_custkey.distinctCount=2
          |column.customer.c_nationkey.distinctCount=2
-         |table.orders.rowCount=3
+         |table.orders.rowCount=30000000000
          |column.orders.o_orderkey.distinctCount=3
          |column.orders.o_custkey.distinctCount=2
-         |table.lineitem.rowCount=4
+         |table.lineitem.rowCount=120000000000
          |column.lineitem.l_orderkey.distinctCount=3
          |table.nation.rowCount=2
          |column.nation.n_nationkey.distinctCount=2
@@ -275,9 +275,11 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
         }
         val sql =
           """SELECT c_custkey, c_name, n_name, SUM(l_value) AS revenue
-            |FROM orders
-            |JOIN lineitem ON o_orderkey = l_orderkey
-            |JOIN customer ON o_custkey = c_custkey
+            |FROM customer
+            |JOIN orders ON c_custkey = o_custkey
+            |  AND o_orderdate >= DATE '1993-10-01'
+            |  AND o_orderdate < DATE '1994-01-01'
+            |JOIN lineitem ON o_orderkey = l_orderkey AND l_value > 0
             |JOIN nation ON c_nationkey = n_nationkey
             |GROUP BY c_custkey, c_name, n_name
             |""".stripMargin
@@ -291,6 +293,12 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
         assert(optimized.treeString.contains("_rapids_lookup_pre_sum_"), optimized.treeString)
         assert(optimized.collect { case aggregate: Aggregate => aggregate }.size >= 2,
           optimized.treeString)
+        val pushedAggregate = optimized.collectFirst {
+          case aggregate: Aggregate if aggregate.output.exists(
+              _.name.startsWith("_rapids_lookup_pre_sum_")) => aggregate
+        }.getOrElse(fail(optimized.treeString))
+        assert(!pushedAggregate.groupingExpressions.exists(_.references.exists(
+          _.name.startsWith("c_"))), optimized.treeString)
       }, testConf)
     } finally {
       ApacheFileUtils.deleteDirectory(datasetDir)

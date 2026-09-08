@@ -72,7 +72,11 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
 
   private case class SumTarget(expression: AggregateExpression, function: Sum)
 
-  private case class LookupJoin(join: Join, lookup: LogicalPlan, lookupOnRight: Boolean)
+  private case class LookupJoin(
+      join: Join,
+      lookup: LogicalPlan,
+      lookupOnRight: Boolean,
+      projectsAbove: Seq[Project])
 
   /**
    * Partially aggregate global sums by the equi-join keys on their source side. The final global
@@ -203,8 +207,16 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
     val preAggregate = Aggregate(preGrouping, preGrouping ++ preSums, preProject)
     val restored = lookups.foldLeft[LogicalPlan](preAggregate) {
       case (current, lookup) =>
-        if (lookup.lookupOnRight) lookup.join.copy(left = current)
+        val joined = if (lookup.lookupOnRight) lookup.join.copy(left = current)
         else lookup.join.copy(right = current)
+        lookup.projectsAbove.reverse.foldLeft[LogicalPlan](joined) {
+          case (projectChild, original) =>
+            val retained = original.projectList.filter(
+              _.references.subsetOf(projectChild.outputSet))
+            val carriedSums = preSums.map(_.toAttribute).filter(projectChild.outputSet.contains)
+              .filterNot(attribute => retained.exists(_.toAttribute.semanticEquals(attribute)))
+            Project(retained ++ carriedSums, projectChild)
+        }
     }
     val postLookup = project match {
       case Some(original) =>
@@ -228,23 +240,37 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
   private def peelLookupJoins(
       source: LogicalPlan,
       metadata: GpuOptimizerTrustedMetadata): (LogicalPlan, Seq[LookupJoin]) = {
-    def loop(current: LogicalPlan, outer: List[LookupJoin]): (LogicalPlan, Seq[LookupJoin]) = {
+    def loop(
+        current: LogicalPlan,
+        outer: List[LookupJoin],
+        projectsAbove: Vector[Project]): (LogicalPlan, Seq[LookupJoin]) = {
       current match {
-        case join @ Join(left, right, Inner, Some(condition), JoinHint.NONE) =>
+        case project @ Project(projectList, child)
+            if projectList.forall(_.isInstanceOf[Attribute]) =>
+          loop(child, outer, projectsAbove :+ project)
+        case join @ Join(left, right, Inner, Some(condition), _) =>
           metadata.cardinalityPreservingLookupKeys(left, right, condition) match {
-            case Some(_) => loop(left, LookupJoin(join, right, lookupOnRight = true) :: outer)
+            case Some(_) => loop(
+              left,
+              LookupJoin(join, right, lookupOnRight = true, projectsAbove) :: outer,
+              Vector.empty)
             case None =>
               metadata.cardinalityPreservingLookupKeys(right, left, condition) match {
                 case Some(_) => loop(
                   right,
-                  LookupJoin(join, left, lookupOnRight = false) :: outer)
-                case None => (current, outer)
+                  LookupJoin(join, left, lookupOnRight = false, projectsAbove) :: outer,
+                  Vector.empty)
+                case None => (rewrapProjects(current, projectsAbove), outer)
               }
           }
-        case _ => (current, outer)
+        case _ => (rewrapProjects(current, projectsAbove), outer)
       }
     }
-    loop(source, Nil)
+
+    def rewrapProjects(plan: LogicalPlan, projects: Seq[Project]): LogicalPlan =
+      projects.reverse.foldLeft(plan) { case (child, project) => project.copy(child = child) }
+
+    loop(source, Nil, Vector.empty)
   }
 
   private def supportedSumTargets(aggregate: Aggregate): Option[Seq[SumTarget]] = {

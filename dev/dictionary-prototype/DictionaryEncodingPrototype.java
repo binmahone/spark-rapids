@@ -3,11 +3,14 @@ import ai.rapids.cudf.ColumnVector;
 import ai.rapids.cudf.Cuda;
 import ai.rapids.cudf.DType;
 import ai.rapids.cudf.OrderByArg;
+import ai.rapids.cudf.ParquetChunkedReader;
+import ai.rapids.cudf.ParquetOptions;
 import ai.rapids.cudf.Rmm;
 import ai.rapids.cudf.RmmAllocationMode;
 import ai.rapids.cudf.Scalar;
 import ai.rapids.cudf.Table;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.function.Supplier;
@@ -147,6 +150,52 @@ public final class DictionaryEncodingPrototype {
     }
   }
 
+  private static ColumnVector readFirstRowGroup(String file, String column) {
+    ParquetOptions options = ParquetOptions.builder()
+        .includeColumn(column)
+        .withRowGroups(new int[] {0})
+        .build();
+    long chunkLimit = 512L * 1024 * 1024;
+    try (ParquetChunkedReader reader =
+             new ParquetChunkedReader(chunkLimit, options, new File(file))) {
+      if (!reader.hasNext()) {
+        throw new IllegalStateException("No Parquet data for " + file + ":" + column);
+      }
+      try (Table chunk = reader.readChunk()) {
+        if (chunk.getNumberOfColumns() != 1) {
+          throw new IllegalStateException("Expected one column from " + file + ":" + column);
+        }
+        return chunk.getColumn(0).incRefCount();
+      }
+    }
+  }
+
+  private static void benchmarkRealTpch(String root, int repeats) {
+    String customer = root + "/customer/part.0.parquet";
+    String lineitem = root + "/lineitem/part.0.parquet";
+    String orders = root + "/orders/part.0.parquet";
+    String part = root + "/part/part.0.parquet";
+
+    benchmark("real_customer_c_mktsegment", () ->
+        readFirstRowGroup(customer, "c_mktsegment"), repeats);
+    benchmark("real_customer_c_nationkey", () ->
+        readFirstRowGroup(customer, "c_nationkey"), repeats);
+    benchmark("real_customer_c_custkey", () ->
+        readFirstRowGroup(customer, "c_custkey"), repeats);
+    benchmark("real_orders_o_orderdate", () ->
+        readFirstRowGroup(orders, "o_orderdate"), repeats);
+    benchmark("real_orders_o_shippriority", () ->
+        readFirstRowGroup(orders, "o_shippriority"), repeats);
+    benchmark("real_lineitem_l_orderkey", () ->
+        readFirstRowGroup(lineitem, "l_orderkey"), repeats);
+    benchmark("real_lineitem_l_shipmode", () ->
+        readFirstRowGroup(lineitem, "l_shipmode"), repeats);
+    benchmark("real_lineitem_l_returnflag", () ->
+        readFirstRowGroup(lineitem, "l_returnflag"), repeats);
+    benchmark("real_part_p_type", () ->
+        readFirstRowGroup(part, "p_type"), repeats);
+  }
+
   private static ColumnVector sequenceInt32(int rows) {
     try (Scalar start = Scalar.fromInt(0); Scalar step = Scalar.fromInt(1)) {
       return ColumnVector.sequence(start, step, rows);
@@ -202,6 +251,10 @@ public final class DictionaryEncodingPrototype {
     try {
       System.out.println("name,type,index_type,rows,key_count,raw_bytes,encoded_bytes,ratio," +
           "encode_median_ms,decode_median_ms");
+      if (args.length > 2) {
+        benchmarkRealTpch(args[2], repeats);
+        return;
+      }
       benchmark("shippriority_constant_int32", () -> {
         try (Scalar zero = Scalar.fromInt(0)) {
           return ColumnVector.fromScalar(zero, rows);

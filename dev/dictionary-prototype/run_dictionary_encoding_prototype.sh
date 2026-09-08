@@ -10,6 +10,7 @@ readonly RAPIDS_JAR=${WORK_ROOT}/artifacts/cudf-spark-main-build/job-14453/rapid
 readonly SPARK_HOME=${WORK_ROOT}/software/spark-3.5.3-bin-hadoop3
 readonly ROWS=${DICTIONARY_PROTOTYPE_ROWS:-10000000}
 readonly REPEATS=${DICTIONARY_PROTOTYPE_REPEATS:-3}
+readonly TPCH_ROOT=${DICTIONARY_PROTOTYPE_TPCH_ROOT:-}
 
 mkdir -p "${RESULT_DIR}/classes"
 test -f "${SOURCE}"
@@ -21,6 +22,7 @@ test -d "${SPARK_HOME}/jars"
   echo "node=${SLURMD_NODENAME:-unknown}"
   echo "rows=${ROWS}"
   echo "repeats=${REPEATS}"
+  echo "tpch_root=${TPCH_ROOT:-synthetic}"
   echo "source_sha256=$(sha256sum "${SOURCE}" | awk '{print $1}')"
   echo "rapids_jar_sha256=$(sha256sum "${RAPIDS_JAR}" | awk '{print $1}')"
   nvidia-smi --query-gpu=name,uuid,memory.total --format=csv,noheader
@@ -29,7 +31,12 @@ test -d "${SPARK_HOME}/jars"
 javac -cp "${RAPIDS_JAR}:${SPARK_HOME}/jars/*" \
   -d "${RESULT_DIR}/classes" "${SOURCE}"
 
+JAVA_ARGS=("${ROWS}" "${REPEATS}")
+if [[ -n "${TPCH_ROOT}" ]]; then
+  JAVA_ARGS+=("${TPCH_ROOT}")
+fi
+
 java -Xms1g -Xmx4g \
   -cp "${RESULT_DIR}/classes:${RAPIDS_JAR}:${SPARK_HOME}/jars/*" \
-  DictionaryEncodingPrototype "${ROWS}" "${REPEATS}" \
+  DictionaryEncodingPrototype "${JAVA_ARGS[@]}" \
   2>&1 | tee "${RESULT_DIR}/prototype.log"

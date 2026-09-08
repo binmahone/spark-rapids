@@ -288,6 +288,7 @@ public final class DictionaryEncodingPrototype {
   private static void benchmarkRealTpch(String root, int repeats) {
     String customer = root + "/customer/part.0.parquet";
     String lineitem = root + "/lineitem/part.0.parquet";
+    String nation = root + "/nation/part.0.parquet";
     String orders = root + "/orders/part.0.parquet";
     String part = root + "/part/part.0.parquet";
 
@@ -301,14 +302,26 @@ public final class DictionaryEncodingPrototype {
         readFirstRowGroup(orders, "o_orderdate"), repeats);
     benchmark("real_orders_o_shippriority", () ->
         readFirstRowGroup(orders, "o_shippriority"), repeats);
+    benchmark("real_orders_o_orderpriority", () ->
+        readFirstRowGroup(orders, "o_orderpriority"), repeats);
     benchmark("real_lineitem_l_orderkey", () ->
         readFirstRowGroup(lineitem, "l_orderkey"), repeats);
     benchmark("real_lineitem_l_shipmode", () ->
         readFirstRowGroup(lineitem, "l_shipmode"), repeats);
     benchmark("real_lineitem_l_returnflag", () ->
         readFirstRowGroup(lineitem, "l_returnflag"), repeats);
+    benchmark("real_lineitem_l_linestatus", () ->
+        readFirstRowGroup(lineitem, "l_linestatus"), repeats);
+    benchmark("real_nation_n_name", () ->
+        readFirstRowGroup(nation, "n_name"), repeats);
+    benchmark("real_part_p_mfgr", () ->
+        readFirstRowGroup(part, "p_mfgr"), repeats);
+    benchmark("real_part_p_brand", () ->
+        readFirstRowGroup(part, "p_brand"), repeats);
     benchmark("real_part_p_type", () ->
         readFirstRowGroup(part, "p_type"), repeats);
+    benchmark("real_part_p_container", () ->
+        readFirstRowGroup(part, "p_container"), repeats);
   }
 
   private static ColumnVector sequenceInt32(int rows) {

@@ -1,7 +1,11 @@
 import ai.rapids.cudf.BinaryOp;
+import ai.rapids.cudf.BaseDeviceMemoryBuffer;
 import ai.rapids.cudf.ColumnVector;
+import ai.rapids.cudf.ContiguousTable;
 import ai.rapids.cudf.Cuda;
 import ai.rapids.cudf.DType;
+import ai.rapids.cudf.DeviceMemoryBuffer;
+import ai.rapids.cudf.HostMemoryBuffer;
 import ai.rapids.cudf.OrderByArg;
 import ai.rapids.cudf.ParquetChunkedReader;
 import ai.rapids.cudf.ParquetOptions;
@@ -9,6 +13,12 @@ import ai.rapids.cudf.Rmm;
 import ai.rapids.cudf.RmmAllocationMode;
 import ai.rapids.cudf.Scalar;
 import ai.rapids.cudf.Table;
+import ai.rapids.cudf.nvcomp.BatchedCompressor;
+import ai.rapids.cudf.nvcomp.BatchedDecompressor;
+import ai.rapids.cudf.nvcomp.BatchedLZ4Compressor;
+import ai.rapids.cudf.nvcomp.BatchedLZ4Decompressor;
+import ai.rapids.cudf.nvcomp.BatchedZstdCompressor;
+import ai.rapids.cudf.nvcomp.BatchedZstdDecompressor;
 
 import java.io.File;
 import java.util.Arrays;
@@ -22,6 +32,8 @@ import java.util.function.Supplier;
 public final class DictionaryEncodingPrototype {
   private static final int DEFAULT_ROWS = 10_000_000;
   private static final int DEFAULT_REPEATS = 3;
+  private static final long NVCOMP_CHUNK_SIZE = 64L * 1024;
+  private static final long NVCOMP_MAX_INTERMEDIATE_SIZE = 1024L * 1024 * 1024;
 
   private static final class Encoded implements AutoCloseable {
     private final Table keys;
@@ -147,6 +159,109 @@ public final class DictionaryEncodingPrototype {
           "RESULT,%s,%s,%s,%d,%d,%d,%d,%.6f,%.3f,%.3f%n",
           name, input.getType(), indexType, input.getRowCount(), keyCount, rawBytes,
           encodedBytes, ratio, median(encodeNs), median(decodeNs));
+
+      benchmarkCodec(name, input, "lz4", repeats);
+      benchmarkCodec(name, input, "zstd", repeats);
+    }
+  }
+
+  private static DeviceMemoryBuffer compress(
+      BatchedCompressor compressor, DeviceMemoryBuffer input) {
+    input.incRefCount();
+    DeviceMemoryBuffer[] outputs = compressor.compress(
+        new BaseDeviceMemoryBuffer[] {input}, Cuda.DEFAULT_STREAM);
+    if (outputs.length != 1) {
+      for (DeviceMemoryBuffer output : outputs) {
+        output.close();
+      }
+      throw new IllegalStateException("Expected one compressed buffer");
+    }
+    return outputs[0];
+  }
+
+  private static void verifyBuffers(DeviceMemoryBuffer expected, DeviceMemoryBuffer actual) {
+    if (expected.getLength() != actual.getLength()) {
+      throw new IllegalStateException("Decompressed buffer length mismatch");
+    }
+    if (expected.getLength() > Integer.MAX_VALUE) {
+      throw new IllegalStateException("Prototype verification buffer exceeds Java array limit");
+    }
+    int size = (int) expected.getLength();
+    byte[] expectedBytes = new byte[size];
+    byte[] actualBytes = new byte[size];
+    try (HostMemoryBuffer expectedHost = HostMemoryBuffer.allocate(size);
+         HostMemoryBuffer actualHost = HostMemoryBuffer.allocate(size)) {
+      expectedHost.copyFromDeviceBuffer(expected);
+      actualHost.copyFromDeviceBuffer(actual);
+      expectedHost.getBytes(expectedBytes, 0, 0, size);
+      actualHost.getBytes(actualBytes, 0, 0, size);
+    }
+    if (!Arrays.equals(expectedBytes, actualBytes)) {
+      throw new IllegalStateException("Decompressed bytes differ from packed input");
+    }
+  }
+
+  private static void benchmarkCodec(
+      String name, ColumnVector input, String codec, int repeats) {
+    BatchedCompressor compressor;
+    BatchedDecompressor decompressor;
+    if ("lz4".equals(codec)) {
+      compressor = new BatchedLZ4Compressor(
+          NVCOMP_CHUNK_SIZE, NVCOMP_MAX_INTERMEDIATE_SIZE);
+      decompressor = new BatchedLZ4Decompressor(NVCOMP_CHUNK_SIZE);
+    } else if ("zstd".equals(codec)) {
+      compressor = new BatchedZstdCompressor(
+          NVCOMP_CHUNK_SIZE, NVCOMP_MAX_INTERMEDIATE_SIZE);
+      decompressor = new BatchedZstdDecompressor(NVCOMP_CHUNK_SIZE);
+    } else {
+      throw new IllegalArgumentException("Unsupported codec: " + codec);
+    }
+
+    try (Table inputTable = new Table(input)) {
+      ContiguousTable[] packedTables = inputTable.contiguousSplit();
+      if (packedTables.length != 1) {
+        for (ContiguousTable packed : packedTables) {
+          packed.close();
+        }
+        throw new IllegalStateException("Expected one packed table");
+      }
+      try (ContiguousTable packed = packedTables[0]) {
+        DeviceMemoryBuffer packedBuffer = packed.getBuffer();
+        long packedBytes = packedBuffer.getLength();
+        long[] compressNs = new long[repeats];
+        long[] decompressNs = new long[repeats];
+        long compressedBytes = -1;
+
+        for (int i = -1; i < repeats; ++i) {
+          Cuda.DEFAULT_STREAM.sync();
+          long compressStart = System.nanoTime();
+          try (DeviceMemoryBuffer compressed = compress(compressor, packedBuffer)) {
+            Cuda.DEFAULT_STREAM.sync();
+            long currentCompressNs = System.nanoTime() - compressStart;
+            compressedBytes = compressed.getLength();
+
+            try (DeviceMemoryBuffer output = DeviceMemoryBuffer.allocate(packedBytes)) {
+              compressed.incRefCount();
+              long decompressStart = System.nanoTime();
+              decompressor.decompressAsync(
+                  new BaseDeviceMemoryBuffer[] {compressed},
+                  new BaseDeviceMemoryBuffer[] {output}, Cuda.DEFAULT_STREAM);
+              Cuda.DEFAULT_STREAM.sync();
+              long currentDecompressNs = System.nanoTime() - decompressStart;
+              verifyBuffers(packedBuffer, output);
+              if (i >= 0) {
+                compressNs[i] = currentCompressNs;
+                decompressNs[i] = currentDecompressNs;
+              }
+            }
+          }
+        }
+
+        System.out.printf(Locale.ROOT,
+            "CODEC_RESULT,%s,%s,%d,%d,%d,%.6f,%.3f,%.3f%n",
+            name, codec, input.getRowCount(), packedBytes, compressedBytes,
+            compressedBytes / (double) packedBytes, median(compressNs), median(decompressNs));
+      }
     }
   }
 
@@ -251,6 +366,8 @@ public final class DictionaryEncodingPrototype {
     try {
       System.out.println("name,type,index_type,rows,key_count,raw_bytes,encoded_bytes,ratio," +
           "encode_median_ms,decode_median_ms");
+      System.out.println("codec_name,codec,rows,packed_bytes,compressed_bytes,ratio," +
+          "compress_median_ms,decompress_median_ms");
       if (args.length > 2) {
         benchmarkRealTpch(args[2], repeats);
         return;

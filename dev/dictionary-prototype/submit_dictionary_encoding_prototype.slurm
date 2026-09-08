@@ -15,6 +15,7 @@ set -euo pipefail
 readonly WORK_ROOT=/home/prestouser/mahonem/260908_nvl72_ucx_compression
 readonly IMAGE=${PROTOTYPE_CONTAINER_IMAGE:-nvcr.io#nvidia/cuda:13.1.0-base-ubuntu24.04}
 readonly MOUNTS=/scratch:/scratch,/home/prestouser:/home/prestouser,/raid:/raid
+readonly SRUN=/cm/local/apps/slurm/25.05/bin/srun
 
 mkdir -p "${WORK_ROOT}/logs/dictionary-prototype"
 
@@ -31,7 +32,7 @@ if ((HOME_FREE_BYTES < 20 * 1024 * 1024 * 1024)); then
   exit 1
 fi
 
-srun --nodes=1 --ntasks=1 \
+"${SRUN}" --nodes=1 --ntasks=1 \
   --container-image="${IMAGE}" \
   --container-mounts="${MOUNTS}" \
   --container-remap-root \

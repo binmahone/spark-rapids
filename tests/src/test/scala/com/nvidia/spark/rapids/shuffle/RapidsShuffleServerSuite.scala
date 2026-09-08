@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2026, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -320,6 +320,50 @@ class RapidsShuffleServerSuite extends RapidsShuffleTestHelper {
 
       // the spillable that materialized we need to close
       verify(mockMaterialized, times(1)).close()
+    }
+  }
+
+  test("when GPU OOM prevents all sends, re-queue instead of terminating the executor") {
+    val mockSendBuffer = mock[SendBounceBuffers]
+    val mockDeviceBounceBuffer = mock[BounceBuffer]
+    val mockDeviceMemoryBuffer = mock[DeviceMemoryBuffer]
+    when(mockDeviceBounceBuffer.buffer).thenReturn(mockDeviceMemoryBuffer)
+    when(mockSendBuffer.bounceBufferSize).thenReturn(1024)
+    when(mockSendBuffer.hostBounceBuffer).thenReturn(None)
+    when(mockSendBuffer.deviceBounceBuffer).thenReturn(mockDeviceBounceBuffer)
+
+    val tr = ShuffleMetadata.buildTransferRequest(0, Seq(1))
+    when(mockTransaction.releaseMessage()).thenReturn(
+      new MetadataTransportBuffer(new RefCountedDirectByteBuffer(tr)))
+
+    val mockRequestHandler = mock[RapidsShuffleRequestHandler]
+    val bb = ByteBuffer.allocateDirect(123)
+    withResource(new RefCountedDirectByteBuffer(bb)) { _ =>
+      val tableMeta = MetaUtils.buildTableMeta(1, 456, bb, 100)
+      val mockHandle = mock[SpillableDeviceBufferHandle]
+      when(mockHandle.sizeInBytes).thenReturn(tableMeta.bufferMeta().size())
+      val oom = new OutOfMemoryError("GPU allocation failed in test")
+      when(mockHandle.materialize()).thenThrow(oom)
+      val rapidsBuffer = RapidsShuffleHandle(mockHandle, tableMeta)
+      when(mockRequestHandler.getShuffleHandle(ArgumentMatchers.eq(1)))
+        .thenReturn(rapidsBuffer)
+
+      val server = spy(new RapidsShuffleServer(
+        mockTransport,
+        mockServerConnection,
+        RapidsShuffleTestHelper.makeMockBlockManager("1", "foo"),
+        mockRequestHandler,
+        mockExecutor,
+        mockBssExecutor,
+        mockConf))
+
+      val bss = new BufferSendState(mockTransaction, mockSendBuffer, mockRequestHandler, null)
+      server.doHandleTransferRequest(Seq(bss))
+
+      verify(server, times(1)).addToContinueQueue(Seq(bss))
+      verify(mockHandle, times(1)).materialize()
+      verify(mockSendBuffer, times(0)).close()
+      bss.close()
     }
   }
 

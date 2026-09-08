@@ -137,7 +137,7 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
       case ((target, inputAlias), index) =>
         Alias(
           target.expression.copy(aggregateFunction = target.function.copy(
-            child = inputAlias.toAttribute)),
+            child = inputAlias.toAttribute), resultId = NamedExpression.newExprId),
           s"_rapids_pre_sum_$index")()
     }
     val preAggregate = Aggregate(
@@ -213,7 +213,7 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
       case ((target, inputAlias), index) =>
         Alias(
           target.expression.copy(aggregateFunction = target.function.copy(
-            child = inputAlias.toAttribute)),
+            child = inputAlias.toAttribute), resultId = NamedExpression.newExprId),
           s"_rapids_lookup_pre_sum_$index")()
     }
     val preAggregate = Aggregate(preGrouping, preGrouping ++ preSums, preProject)

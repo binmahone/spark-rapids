@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2026, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -320,6 +320,80 @@ class RapidsShuffleServerSuite extends RapidsShuffleTestHelper {
 
       // the spillable that materialized we need to close
       verify(mockMaterialized, times(1)).close()
+    }
+  }
+
+  test("when GPU OOM prevents all sends, retry only until the shuffle fetch timeout") {
+    val mockSendBuffer = mock[SendBounceBuffers]
+    val mockDeviceBounceBuffer = mock[BounceBuffer]
+    val mockDeviceMemoryBuffer = mock[DeviceMemoryBuffer]
+    val mockServerConnection = mock[ServerConnection]
+    when(mockDeviceBounceBuffer.buffer).thenReturn(mockDeviceMemoryBuffer)
+    when(mockSendBuffer.bounceBufferSize).thenReturn(1024)
+    when(mockSendBuffer.hostBounceBuffer).thenReturn(None)
+    when(mockSendBuffer.deviceBounceBuffer).thenReturn(mockDeviceBounceBuffer)
+
+    val tr = ShuffleMetadata.buildTransferRequest(0, Seq(1, 2))
+    when(mockTransaction.releaseMessage()).thenReturn(
+      new MetadataTransportBuffer(new RefCountedDirectByteBuffer(tr)))
+
+    val mockRequestHandler = mock[RapidsShuffleRequestHandler]
+    val bb = ByteBuffer.allocateDirect(123)
+    withResource(new RefCountedDirectByteBuffer(bb)) { _ =>
+      val tableMeta = MetaUtils.buildTableMeta(1, 456, bb, 100)
+      val mockHandle = mock[SpillableDeviceBufferHandle]
+      val mockHandleThatThrows = mock[SpillableDeviceBufferHandle]
+      val mockMaterialized = mock[DeviceMemoryBuffer]
+      when(mockHandle.sizeInBytes).thenReturn(tableMeta.bufferMeta().size())
+      when(mockHandle.materialize()).thenReturn(mockMaterialized)
+      when(mockHandleThatThrows.sizeInBytes).thenReturn(tableMeta.bufferMeta().size())
+      val oom = new OutOfMemoryError("GPU allocation failed in test")
+      when(mockHandleThatThrows.materialize()).thenThrow(oom)
+      val rapidsBuffer = RapidsShuffleHandle(mockHandle, tableMeta)
+      val rapidsBufferThatThrows = RapidsShuffleHandle(mockHandleThatThrows, tableMeta)
+      when(mockRequestHandler.getShuffleHandle(ArgumentMatchers.eq(1)))
+        .thenReturn(rapidsBuffer)
+      when(mockRequestHandler.getShuffleHandle(ArgumentMatchers.eq(2)))
+        .thenReturn(rapidsBufferThatThrows)
+
+      var nowNanos = 0L
+      val server = spy(new RapidsShuffleServer(
+        mockTransport,
+        mockServerConnection,
+        RapidsShuffleTestHelper.makeMockBlockManager("1", "foo"),
+        mockRequestHandler,
+        mockExecutor,
+        mockBssExecutor,
+        mockConf) {
+        override private[shuffle] def currentTimeNanos(): Long = nowNanos
+        override private[shuffle] def oomRetryTimeoutNanos: Long = 1L
+        override private[shuffle] def waitBeforeOomRetry(backoffMillis: Long): Unit = {}
+      })
+
+      val bss = new BufferSendState(mockTransaction, mockSendBuffer, mockRequestHandler, null)
+      assertResult(10L)(server.oomRetryBackoffMillis(1))
+      assertResult(20L)(server.oomRetryBackoffMillis(2))
+      assertResult(100L)(server.oomRetryBackoffMillis(5))
+      assertResult(100L)(server.oomRetryBackoffMillis(1000))
+      server.doHandleTransferRequest(Seq(bss))
+
+      verify(server, times(1)).addToContinueQueue(Seq(bss))
+      verify(server, times(1)).waitBeforeOomRetry(10L)
+      verify(mockSendBuffer, times(0)).close()
+
+      nowNanos = 1L
+      val ex = intercept[IllegalStateException] {
+        server.doHandleTransferRequest(Seq(bss))
+      }
+      assert(ex.getMessage.contains("GPU memory remained exhausted"))
+      assertResult(1)(ex.getSuppressed.length)
+      assertResult(oom)(ex.getSuppressed.head.getCause)
+      verify(server, times(1)).addToContinueQueue(Seq(bss))
+      verify(server, times(1)).waitBeforeOomRetry(10L)
+      verify(mockHandle, times(2)).materialize()
+      verify(mockHandleThatThrows, times(2)).materialize()
+      verify(mockMaterialized, times(2)).close()
+      verify(mockSendBuffer, times(1)).close()
     }
   }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2026, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,6 +118,30 @@ class BufferSendState(
 
   private[this] var acquiredBuffs: Seq[RangeBuffer] = Seq.empty
 
+  private[this] var oomRetryStartNanos: Option[Long] = None
+  private[this] var oomRetryAttempts: Int = 0
+
+  private[shuffle] def recordOomAndGetRetryAttempt(
+      nowNanos: Long,
+      timeoutNanos: Long): Option[Int] =
+    synchronized {
+      val startNanos = oomRetryStartNanos.getOrElse {
+        oomRetryStartNanos = Some(nowNanos)
+        nowNanos
+      }
+      if (nowNanos - startNanos < timeoutNanos) {
+        oomRetryAttempts += 1
+        Some(oomRetryAttempts)
+      } else {
+        None
+      }
+    }
+
+  private[this] def resetOomRetryWindow(): Unit = {
+    oomRetryStartNanos = None
+    oomRetryAttempts = 0
+  }
+
   def getRequestTransaction: Transaction = synchronized {
     transaction
   }
@@ -214,6 +238,11 @@ class BufferSendState(
           }
           needsCleanup = false
         } catch {
+          case oom: OutOfMemoryError =>
+            throw new RapidsShuffleSendPrepareException(
+              s"GPU memory exhausted while preparing a shuffle send for executor " +
+                  s"${peerExecutorId} and header " +
+                  s"${TransportUtils.toHex(peerBufferReceiveHeader)}", oom)
           case ex: Exception =>
             throw new RapidsShuffleSendPrepareException(
               s"Error while copying to bounce buffer for executor ${peerExecutorId} and " +
@@ -244,6 +273,7 @@ class BufferSendState(
     logDebug(s"Sending ${buffsToSend} for transfer request, " +
         s" [peer_executor_id=${transaction.peerExecutorId()}]")
 
+    resetOomRetryWindow()
     buffsToSend
   }
 

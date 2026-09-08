@@ -90,6 +90,16 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
     estimateDetailed(plan).flatMap(_.distinct.get(attribute.exprId.id))
   }
 
+  def isTrustedUniqueKey(plan: LogicalPlan, attributes: Seq[Attribute]): Boolean = {
+    estimateDetailed(plan).exists { estimate =>
+      val columns = attributes.map(attribute => estimate.lineage.get(attribute.exprId.id))
+      columns.forall(_.isDefined) && columns.flatten.map(_._1).distinct.size == 1 && {
+        val resolved = columns.flatten
+        primaryKeys.get(resolved.head._1).contains(resolved.map(_._2))
+      }
+    }
+  }
+
   /**
    * Return the base/lookup equi-key pairs when trusted constraints prove that an inner lookup
    * join preserves every base row exactly once.
@@ -512,7 +522,11 @@ private[rapids] object GpuOptimizerTrustedMetadata extends Logging {
   val pathConf = "spark.rapids.sql.optimizer.trustedMetadata.path"
 
   def fromSession(spark: SparkSession): Option[GpuOptimizerTrustedMetadata] = {
-    val configuredPath = spark.sessionState.conf.getConfString(pathConf, "").trim
+    fromConf(spark.sessionState.conf)
+  }
+
+  def fromConf(conf: org.apache.spark.sql.internal.SQLConf): Option[GpuOptimizerTrustedMetadata] = {
+    val configuredPath = conf.getConfString(pathConf, "").trim
     if (configuredPath.isEmpty) {
       None
     } else {

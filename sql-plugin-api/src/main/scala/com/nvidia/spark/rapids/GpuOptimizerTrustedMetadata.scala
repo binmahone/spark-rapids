@@ -86,6 +86,10 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
 
   def estimateRows(plan: LogicalPlan): Option[BigInt] = estimate(plan).map(_.rows)
 
+  def estimateDistinct(plan: LogicalPlan, attribute: Attribute): Option[BigInt] = {
+    estimateDetailed(plan).flatMap(_.distinct.get(attribute.exprId.id))
+  }
+
   /**
    * Return the base/lookup equi-key pairs when trusted constraints prove that an inner lookup
    * join preserves every base row exactly once.

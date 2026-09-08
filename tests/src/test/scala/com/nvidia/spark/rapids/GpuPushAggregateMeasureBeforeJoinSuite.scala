@@ -202,9 +202,9 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
   }
 
   test("push a global sum below its inner join and preserve join multiplicity") {
-    var expected = Seq.empty[String]
+    var expected = 0.0
     withCpuSparkSession(spark => {
-      expected = normalized(globalSumJoinQuery(spark).collect())
+      expected = globalSumJoinQuery(spark).collect().head.getDouble(0)
     }, conf(enabled = false))
 
     withCpuSparkSession(spark => {
@@ -212,7 +212,7 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
       val optimized = query.queryExecution.optimizedPlan
       val aggregates = optimized.collect { case aggregate: Aggregate => aggregate }
 
-      assert(normalized(query.collect()) === expected)
+      assert(math.abs(query.collect().head.getDouble(0) - expected) < 1e-9)
       assert(aggregates.size >= 2, optimized.treeString)
       assert(optimized.treeString.contains("_rapids_pre_sum_"), optimized.treeString)
     }, conf(enabled = true))

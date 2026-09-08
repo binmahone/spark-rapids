@@ -51,6 +51,8 @@ class SQLExecPlugin extends (SparkSessionExtensions => Unit) {
     extensions.injectOptimizerRule(spark => GpuPushSelectiveDimensionFilterIntoAggregate(spark))
     // Apply an already-required selective keyset to both inputs of a later many-key join.
     extensions.injectOptimizerRule(spark => GpuPushSelectiveKeysetToJoinInputs(spark))
+    // Deduplicate a large anti-join existence set when trusted NDV statistics prove the benefit.
+    extensions.injectOptimizerRule(spark => GpuDeduplicateLargeLeftAntiBuildSide(spark))
   }
 
   private def columnarOverrides(sparkSession: SparkSession): ColumnarRule = {

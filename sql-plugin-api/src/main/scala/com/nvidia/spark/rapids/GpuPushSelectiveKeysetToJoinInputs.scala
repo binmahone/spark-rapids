@@ -251,14 +251,28 @@ case class GpuPushSelectiveKeysetToJoinInputs(spark: SparkSession)
 
   private def equivalenceClasses(plan: LogicalPlan): EquivalenceClasses = {
     val classes = new EquivalenceClasses
-    plan.foreach {
-      node => node.expressions.foreach {
-        expression => splitAnd(expression).foreach {
-          case EqualTo(left: Attribute, right: Attribute) => classes.union(left, right)
-          case _ =>
-        }
+
+    def addEqualities(expression: Expression): Unit = {
+      splitAnd(expression).foreach {
+        case EqualTo(left: Attribute, right: Attribute) => classes.union(left, right)
+        case _ =>
       }
     }
+
+    def visit(current: LogicalPlan): Unit = current match {
+      case Join(left, right, Inner, condition, _) =>
+        condition.foreach(addEqualities)
+        visit(left)
+        visit(right)
+      case Filter(condition, child) =>
+        addEqualities(condition)
+        visit(child)
+      case Project(_, child) => visit(child)
+      case SubqueryAlias(_, child) => visit(child)
+      case _ =>
+    }
+
+    visit(plan)
     classes
   }
 

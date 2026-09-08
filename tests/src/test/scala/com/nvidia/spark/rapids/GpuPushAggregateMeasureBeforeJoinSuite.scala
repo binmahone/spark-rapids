@@ -16,6 +16,12 @@
 
 package com.nvidia.spark.rapids
 
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.sql.Date
+
+import org.apache.commons.io.{FileUtils => ApacheFileUtils}
+
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.catalyst.expressions.Alias
@@ -106,6 +112,21 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
     profit.groupBy("bucket").agg(sum("amount").as("profit"))
   }
 
+  private def globalSumJoinQuery(spark: org.apache.spark.sql.SparkSession): DataFrame = {
+    val facts = spark.range(0, 12)
+      .selectExpr(
+        "id % 4 AS join_key",
+        "CAST(id + 1 AS DOUBLE) AS price",
+        "CAST((id % 3) / 10.0 AS DOUBLE) AS discount")
+    val dimensions = spark.range(0, 6)
+      .selectExpr("id % 4 AS other_key", "id % 2 AS selected")
+      .where("selected = 1")
+
+    facts
+      .join(dimensions, col("join_key") === col("other_key"))
+      .agg(sum(expr("price * (1.0 - discount)")).as("total"))
+  }
+
   private def normalized(rows: Array[Row]): Seq[String] = rows.map(_.toString).sorted.toSeq
 
   test("pre-aggregate a distributive SUM before an inner join") {
@@ -178,5 +199,101 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
         !orderJoin.output.exists(_.name == "price"),
         optimized.treeString)
     }, conf(enabled = true))
+  }
+
+  test("push a global sum below its inner join and preserve join multiplicity") {
+    var expected = Seq.empty[String]
+    withCpuSparkSession(spark => {
+      expected = normalized(globalSumJoinQuery(spark).collect())
+    }, conf(enabled = false))
+
+    withCpuSparkSession(spark => {
+      val query = globalSumJoinQuery(spark)
+      val optimized = query.queryExecution.optimizedPlan
+      val aggregates = optimized.collect { case aggregate: Aggregate => aggregate }
+
+      assert(normalized(query.collect()) === expected)
+      assert(aggregates.size >= 2, optimized.treeString)
+      assert(optimized.treeString.contains("_rapids_pre_sum_"), optimized.treeString)
+    }, conf(enabled = true))
+  }
+
+  test("push grouped sums through trusted lookup joins") {
+    val datasetDir = Files.createTempDirectory("lookup-sum-dataset").toFile
+    val metadataFile = datasetDir.toPath.resolve("trusted-metadata.properties")
+    val metadata =
+      s"""dataset.path=${datasetDir.getCanonicalPath}
+         |table.customer.rowCount=2
+         |column.customer.c_custkey.distinctCount=2
+         |column.customer.c_nationkey.distinctCount=2
+         |table.orders.rowCount=3
+         |column.orders.o_orderkey.distinctCount=3
+         |column.orders.o_custkey.distinctCount=2
+         |table.lineitem.rowCount=4
+         |column.lineitem.l_orderkey.distinctCount=3
+         |table.nation.rowCount=2
+         |column.nation.n_nationkey.distinctCount=2
+         |primaryKey.customer=c_custkey
+         |primaryKey.orders=o_orderkey
+         |primaryKey.nation=n_nationkey
+         |foreignKey.orders.o_custkey=customer.c_custkey
+         |foreignKey.lineitem.l_orderkey=orders.o_orderkey
+         |foreignKey.customer.c_nationkey=nation.n_nationkey
+         |notNull.customer=c_custkey,c_nationkey
+         |notNull.orders=o_orderkey,o_custkey
+         |notNull.lineitem=l_orderkey
+         |notNull.nation=n_nationkey
+         |""".stripMargin
+    Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
+    val testConf = conf(enabled = true)
+      .set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString)
+      .set("spark.rapids.sql.optimizer.reorderSelectiveFactChain.enabled", "true")
+
+    try {
+      withCpuSparkSession(spark => {
+        import spark.implicits._
+
+        Seq((1L, "customer-1", 0L), (2L, "customer-2", 1L))
+          .toDF("c_custkey", "c_name", "c_nationkey")
+          .write.parquet(datasetDir.toPath.resolve("customer").toString)
+        Seq(
+          (10L, 1L, Date.valueOf("1993-11-01")),
+          (11L, 1L, Date.valueOf("1993-12-01")),
+          (12L, 2L, Date.valueOf("1993-11-01")))
+          .toDF("o_orderkey", "o_custkey", "o_orderdate")
+          .write.parquet(datasetDir.toPath.resolve("orders").toString)
+        Seq((10L, 3.0), (10L, 5.0), (11L, 7.0), (12L, 11.0))
+          .toDF("l_orderkey", "l_value")
+          .write.parquet(datasetDir.toPath.resolve("lineitem").toString)
+        Seq((0L, "nation-0"), (1L, "nation-1"))
+          .toDF("n_nationkey", "n_name")
+          .write.parquet(datasetDir.toPath.resolve("nation").toString)
+
+        Seq("customer", "orders", "lineitem", "nation").foreach { table =>
+          spark.read.parquet(datasetDir.toPath.resolve(table).toString)
+            .createOrReplaceTempView(table)
+        }
+        val sql =
+          """SELECT c_custkey, c_name, n_name, SUM(l_value) AS revenue
+            |FROM orders
+            |JOIN lineitem ON o_orderkey = l_orderkey
+            |JOIN customer ON o_custkey = c_custkey
+            |JOIN nation ON c_nationkey = n_nationkey
+            |GROUP BY c_custkey, c_name, n_name
+            |""".stripMargin
+        spark.conf.set(enabledKey, "false")
+        val expected = normalized(spark.sql(sql).collect())
+        spark.conf.set(enabledKey, "true")
+        val query = spark.sql(sql)
+        val optimized = query.queryExecution.optimizedPlan
+
+        assert(normalized(query.collect()) === expected)
+        assert(optimized.treeString.contains("_rapids_lookup_pre_sum_"), optimized.treeString)
+        assert(optimized.collect { case aggregate: Aggregate => aggregate }.size >= 2,
+          optimized.treeString)
+      }, testConf)
+    } finally {
+      ApacheFileUtils.deleteDirectory(datasetDir)
+    }
   }
 }

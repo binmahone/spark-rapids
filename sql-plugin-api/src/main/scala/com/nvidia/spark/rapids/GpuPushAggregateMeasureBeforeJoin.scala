@@ -80,7 +80,244 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
       return aggregate
     }
 
-    rewriteAliasedMeasure(aggregate).getOrElse(rewriteDirectMeasure(aggregate))
+    pushGlobalSumsThroughJoin(aggregate)
+      .orElse(pushSumsThroughLookupJoins(aggregate))
+      .orElse(rewriteAliasedMeasure(aggregate))
+      .getOrElse(rewriteDirectMeasure(aggregate))
+  }
+
+  private case class SumTarget(expression: AggregateExpression, function: Sum)
+
+  private case class LookupJoin(join: Join, lookup: LogicalPlan, lookupOnRight: Boolean)
+
+  /**
+   * Partially aggregate global sums by the equi-join keys on their source side. The final global
+   * sum remains above the join, so filtering and multiplicity on the other side retain their
+   * original semantics.
+   */
+  private def pushGlobalSumsThroughJoin(aggregate: Aggregate): Option[LogicalPlan] = {
+    if (aggregate.groupingExpressions.nonEmpty) {
+      return None
+    }
+    val (project, join) = aggregate.child match {
+      case p @ Project(_, child: Join) => (Some(p), child)
+      case child: Join => (None, child)
+      case _ => return None
+    }
+    if (join.joinType != Inner || join.hint != JoinHint.NONE ||
+        join.condition.isEmpty) {
+      return None
+    }
+
+    val targets = supportedSumTargets(aggregate).getOrElse(return None)
+    val mappedInputs = targets.map { target =>
+      mapThroughProject(target.function.child, project).getOrElse(return None)
+    }
+    val allReferences = AttributeSet(mappedInputs.flatMap(_.references))
+    val sourceOnLeft = allReferences.subsetOf(join.left.outputSet)
+    val sourceOnRight = allReferences.subsetOf(join.right.outputSet)
+    if (sourceOnLeft == sourceOnRight) {
+      return None
+    }
+    val source = if (sourceOnLeft) join.left else join.right
+    if (source.exists(_.isInstanceOf[Aggregate])) {
+      return None
+    }
+
+    val groupingKeys = joinKeysForSide(
+      join.condition.get,
+      source.outputSet,
+      if (sourceOnLeft) join.right.outputSet else join.left.outputSet)
+      .getOrElse(return None)
+    val inputAliases = mappedInputs.zipWithIndex.map {
+      case (input, index) => Alias(input, s"_rapids_global_sum_input_$index")()
+    }
+    val preProject = Project(groupingKeys ++ inputAliases, source)
+    val preSums = targets.zip(inputAliases).zipWithIndex.map {
+      case ((target, inputAlias), index) =>
+        Alias(
+          target.expression.copy(aggregateFunction = target.function.copy(
+            child = inputAlias.toAttribute)),
+          s"_rapids_pre_sum_$index")()
+    }
+    val preAggregate = Aggregate(
+      groupingKeys,
+      groupingKeys ++ preSums,
+      preProject)
+    val rewrittenJoin = if (sourceOnLeft) {
+      join.copy(left = preAggregate)
+    } else {
+      join.copy(right = preAggregate)
+    }
+    val replacements = targets.map(_.expression).zip(preSums.map(_.toAttribute))
+    val rewrittenExpressions = replaceAggregateSums(aggregate.aggregateExpressions, replacements)
+    logWarning(
+      "GpuPushAggregateMeasureBeforeJoin: pushed global SUMs below an inner join " +
+        s"groupingKeys=${groupingKeys.map(_.name).mkString(",")}")
+    Some(aggregate.copy(aggregateExpressions = rewrittenExpressions, child = rewrittenJoin))
+  }
+
+  /**
+   * Move grouped sums below trusted PK/FK lookup joins. A final aggregation is retained after the
+   * lookup chain, which is conservative when several lookup keys map to the same payload value.
+   */
+  private def pushSumsThroughLookupJoins(aggregate: Aggregate): Option[LogicalPlan] = {
+    if (aggregate.groupingExpressions.isEmpty) {
+      return None
+    }
+    val metadata = GpuOptimizerTrustedMetadata.fromSession(spark).getOrElse(return None)
+    val (project, source) = aggregate.child match {
+      case p @ Project(_, child) => (Some(p), child)
+      case child => (None, child)
+    }
+    val (base, lookups) = peelLookupJoins(source, metadata)
+    if (lookups.isEmpty || base.exists(_.isInstanceOf[Aggregate])) {
+      return None
+    }
+
+    val targets = supportedSumTargets(aggregate).getOrElse(return None)
+    val mappedInputs = targets.map { target =>
+      mapThroughProject(target.function.child, project).getOrElse(return None)
+    }
+    if (!mappedInputs.forall(_.references.subsetOf(base.outputSet))) {
+      return None
+    }
+
+    val mappedGrouping = aggregate.groupingExpressions.map { expression =>
+      mapThroughProject(expression, project).getOrElse(return None)
+    }
+    val baseGrouping = mappedGrouping.filter(_.references.subsetOf(base.outputSet))
+    if (!baseGrouping.forall(_.isInstanceOf[Attribute])) {
+      return None
+    }
+    val lookupBaseKeys = lookups.flatMap { lookup =>
+      val currentBase = if (lookup.lookupOnRight) lookup.join.left else lookup.join.right
+      metadata.cardinalityPreservingLookupKeys(
+        currentBase,
+        lookup.lookup,
+        lookup.join.condition.get).toSeq.flatten.map(_._1).filter(base.outputSet.contains)
+    }
+    val preGrouping = (baseGrouping.map(_.asInstanceOf[Attribute]) ++ lookupBaseKeys)
+      .foldLeft(Vector.empty[Attribute]) { (result, attribute) =>
+        if (result.exists(_.semanticEquals(attribute))) result else result :+ attribute
+      }
+    if (preGrouping.isEmpty) {
+      return None
+    }
+
+    val inputAliases = mappedInputs.zipWithIndex.map {
+      case (input, index) => Alias(input, s"_rapids_lookup_sum_input_$index")()
+    }
+    val preProject = Project(preGrouping ++ inputAliases, base)
+    val preSums = targets.zip(inputAliases).zipWithIndex.map {
+      case ((target, inputAlias), index) =>
+        Alias(
+          target.expression.copy(aggregateFunction = target.function.copy(
+            child = inputAlias.toAttribute)),
+          s"_rapids_lookup_pre_sum_$index")()
+    }
+    val preAggregate = Aggregate(preGrouping, preGrouping ++ preSums, preProject)
+    val restored = lookups.foldLeft[LogicalPlan](preAggregate) {
+      case (current, lookup) =>
+        if (lookup.lookupOnRight) lookup.join.copy(left = current)
+        else lookup.join.copy(right = current)
+    }
+    val postLookup = project match {
+      case Some(original) =>
+        val retained = original.projectList.filter(
+          _.references.subsetOf(restored.outputSet))
+        Project(retained ++ preSums.map(_.toAttribute), restored)
+      case None => restored
+    }
+    if (!aggregate.groupingExpressions.forall(_.references.subsetOf(postLookup.outputSet))) {
+      return None
+    }
+
+    val replacements = targets.map(_.expression).zip(preSums.map(_.toAttribute))
+    val rewrittenExpressions = replaceAggregateSums(aggregate.aggregateExpressions, replacements)
+    logWarning(
+      "GpuPushAggregateMeasureBeforeJoin: pushed SUMs below trusted lookup joins " +
+        s"lookupCount=${lookups.size} preGrouping=${preGrouping.map(_.name).mkString(",")}")
+    Some(aggregate.copy(aggregateExpressions = rewrittenExpressions, child = postLookup))
+  }
+
+  private def peelLookupJoins(
+      source: LogicalPlan,
+      metadata: GpuOptimizerTrustedMetadata): (LogicalPlan, Seq[LookupJoin]) = {
+    def loop(current: LogicalPlan, outer: List[LookupJoin]): (LogicalPlan, Seq[LookupJoin]) = {
+      current match {
+        case join @ Join(left, right, Inner, Some(condition), JoinHint.NONE) =>
+          metadata.cardinalityPreservingLookupKeys(left, right, condition) match {
+            case Some(_) => loop(left, LookupJoin(join, right, lookupOnRight = true) :: outer)
+            case None =>
+              metadata.cardinalityPreservingLookupKeys(right, left, condition) match {
+                case Some(_) => loop(
+                  right,
+                  LookupJoin(join, left, lookupOnRight = false) :: outer)
+                case None => (current, outer)
+              }
+          }
+        case _ => (current, outer)
+      }
+    }
+    loop(source, Nil)
+  }
+
+  private def supportedSumTargets(aggregate: Aggregate): Option[Seq[SumTarget]] = {
+    val allAggregates = aggregate.aggregateExpressions.flatMap(_.collect {
+      case expression: AggregateExpression => expression
+    })
+    val targets = allAggregates.collect {
+      case expression @ AggregateExpression(sum: Sum, _, false, None, _)
+          if sum.child.dataType == sum.dataType => SumTarget(expression, sum)
+    }
+    if (targets.nonEmpty && targets.size == allAggregates.size) Some(targets) else None
+  }
+
+  private def mapThroughProject(
+      expression: Expression,
+      project: Option[Project]): Option[Expression] = project match {
+    case None => Some(expression)
+    case Some(value) =>
+      val assignments = value.projectList.map(named => named.toAttribute.exprId -> named).toMap
+      val mapped = expression.transformDown {
+        case attribute: Attribute if assignments.contains(attribute.exprId) =>
+          assignments(attribute.exprId) match {
+            case alias: Alias => alias.child
+            case source: Attribute => source
+            case other => other
+          }
+      }
+      if (mapped.references.subsetOf(value.child.outputSet)) Some(mapped) else None
+  }
+
+  private def joinKeysForSide(
+      condition: Expression,
+      sourceOutput: AttributeSet,
+      otherOutput: AttributeSet): Option[Seq[Attribute]] = {
+    val keys = splitConjunctivePredicates(condition).map {
+      case EqualTo(left: Attribute, right: Attribute)
+          if sourceOutput.contains(left) && otherOutput.contains(right) => Some(left)
+      case EqualTo(left: Attribute, right: Attribute)
+          if sourceOutput.contains(right) && otherOutput.contains(left) => Some(right)
+      case _ => None
+    }
+    if (keys.nonEmpty && keys.forall(_.isDefined)) Some(keys.flatten.distinct) else None
+  }
+
+  private def replaceAggregateSums(
+      expressions: Seq[NamedExpression],
+      replacements: Seq[(AggregateExpression, Attribute)]): Seq[NamedExpression] = {
+    expressions.map { named =>
+      named.transformDown {
+        case current: AggregateExpression =>
+          replacements.collectFirst {
+            case (target, replacement) if current.semanticEquals(target) =>
+              val sum = current.aggregateFunction.asInstanceOf[Sum]
+              current.copy(aggregateFunction = sum.copy(child = replacement))
+          }.getOrElse(current)
+      }.asInstanceOf[NamedExpression]
+    }
   }
 
   private def rewriteDirectMeasure(aggregate: Aggregate): LogicalPlan = {

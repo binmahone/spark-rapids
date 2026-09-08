@@ -29,7 +29,8 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, Contains, EqualNullSafe}
 import org.apache.spark.sql.catalyst.expressions.{EqualTo, Expression, GreaterThan, GreaterThanOrEqual}
-import org.apache.spark.sql.catalyst.expressions.{In, InSet, LessThan, LessThanOrEqual, Literal, Or}
+import org.apache.spark.sql.catalyst.expressions.{In, InSet, IsNotNull, LessThan, LessThanOrEqual}
+import org.apache.spark.sql.catalyst.expressions.{Literal, Or}
 import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, SubqueryAlias, View}
@@ -50,7 +51,8 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
     distinctCounts: Map[(String, String), BigInt],
     valueRanges: Map[(String, String), GpuOptimizerTrustedMetadata.ValueRange],
     primaryKeys: Map[String, Seq[String]],
-    foreignKeys: Map[(String, Seq[String]), (String, Seq[String])]) extends Logging {
+    foreignKeys: Map[(String, Seq[String]), (String, Seq[String])],
+    notNullColumns: Map[String, Set[String]]) extends Logging {
 
   private val normalizedDatasetPath = normalizePath(datasetPath)
 
@@ -83,6 +85,67 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
   }
 
   def estimateRows(plan: LogicalPlan): Option[BigInt] = estimate(plan).map(_.rows)
+
+  /**
+   * Return the base/lookup equi-key pairs when trusted constraints prove that an inner lookup
+   * join preserves every base row exactly once.
+   */
+  def cardinalityPreservingLookupKeys(
+      base: LogicalPlan,
+      lookup: LogicalPlan,
+      condition: Expression): Option[Seq[(Attribute, Attribute)]] = {
+    for {
+      baseEstimate <- estimateDetailed(base)
+      lookupEstimate <- estimateDetailed(lookup)
+      if onlyConstraintPreservingFilters(lookup, lookupEstimate)
+      pairs <- equiPairs(condition, base.outputSet, lookup.outputSet)
+      sourceColumns <- columnsFor(pairs.map(_._1), baseEstimate)
+      targetColumns <- columnsFor(pairs.map(_._2), lookupEstimate)
+      if sourceColumns.map(_._1).distinct.size == 1
+      if targetColumns.map(_._1).distinct.size == 1
+      sourceTable = sourceColumns.head._1
+      targetTable = targetColumns.head._1
+      sourceNames = sourceColumns.map(_._2)
+      targetNames = targetColumns.map(_._2)
+      if primaryKeys.get(targetTable).contains(targetNames)
+      if foreignKeys.get(sourceTable -> sourceNames).contains(targetTable -> targetNames)
+      if sourceNames.forall(notNullColumns.getOrElse(sourceTable, Set.empty).contains)
+    } yield pairs
+  }
+
+  private def columnsFor(
+      attributes: Seq[Attribute],
+      estimate: DetailedEstimate): Option[Seq[(String, String)]] = {
+    val columns = attributes.map(attribute => estimate.lineage.get(attribute.exprId.id))
+    if (columns.forall(_.isDefined)) Some(columns.flatten) else None
+  }
+
+  private def equiPairs(
+      condition: Expression,
+      baseOutput: org.apache.spark.sql.catalyst.expressions.AttributeSet,
+      lookupOutput: org.apache.spark.sql.catalyst.expressions.AttributeSet)
+  : Option[Seq[(Attribute, Attribute)]] = {
+    val pairs = splitAnd(condition).map {
+      case EqualTo(left: Attribute, right: Attribute)
+          if baseOutput.contains(left) && lookupOutput.contains(right) => Some(left -> right)
+      case EqualTo(left: Attribute, right: Attribute)
+          if baseOutput.contains(right) && lookupOutput.contains(left) => Some(right -> left)
+      case _ => None
+    }
+    if (pairs.nonEmpty && pairs.forall(_.isDefined)) Some(pairs.flatten) else None
+  }
+
+  private def onlyConstraintPreservingFilters(
+      plan: LogicalPlan,
+      estimate: DetailedEstimate): Boolean = {
+    plan.collect { case Filter(condition, _) => splitAnd(condition) }.flatten.forall {
+      case IsNotNull(attribute: Attribute) =>
+        estimate.lineage.get(attribute.exprId.id).exists {
+          case (table, column) => notNullColumns.getOrElse(table, Set.empty).contains(column)
+        }
+      case _ => false
+    }
+  }
 
   /** Estimate projected/filter/join dimension chains from frozen row counts and NDVs. */
   private def estimateDetailed(plan: LogicalPlan): Option[DetailedEstimate] = plan match {
@@ -518,6 +581,11 @@ private[rapids] object GpuOptimizerTrustedMetadata extends Logging {
         val target = qualifiedColumns(value, key, path)
         source -> target
     }
+    val notNullColumns = values.collect {
+      case (key, value) if key.startsWith("notNull.") =>
+        val table = key.stripPrefix("notNull.").toLowerCase(java.util.Locale.ROOT)
+        table -> columns(value).toSet
+    }
     if (tableRows.isEmpty) {
       throw new IllegalArgumentException(s"No table row counts in trusted metadata $path")
     }
@@ -540,9 +608,11 @@ private[rapids] object GpuOptimizerTrustedMetadata extends Logging {
     logWarning(
       s"Loaded trusted optimizer metadata path=$path dataset=$datasetPath " +
       s"tables=${tableRows.size} columns=${distinctCounts.size} " +
-        s"primaryKeys=${primaryKeys.size} foreignKeys=${foreignKeys.size}")
+        s"primaryKeys=${primaryKeys.size} foreignKeys=${foreignKeys.size} " +
+        s"notNullTables=${notNullColumns.size}")
     new GpuOptimizerTrustedMetadata(
-      datasetPath, tableRows, distinctCounts, valueRanges, primaryKeys, foreignKeys)
+      datasetPath, tableRows, distinctCounts, valueRanges, primaryKeys, foreignKeys,
+      notNullColumns)
   }
 
   private def columns(value: String): Seq[String] =

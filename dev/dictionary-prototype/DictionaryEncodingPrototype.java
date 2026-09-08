@@ -2,7 +2,6 @@ import ai.rapids.cudf.BinaryOp;
 import ai.rapids.cudf.ColumnVector;
 import ai.rapids.cudf.Cuda;
 import ai.rapids.cudf.DType;
-import ai.rapids.cudf.DuplicateKeepOption;
 import ai.rapids.cudf.OrderByArg;
 import ai.rapids.cudf.Rmm;
 import ai.rapids.cudf.RmmAllocationMode;
@@ -48,7 +47,7 @@ public final class DictionaryEncodingPrototype {
   private static Encoded encode(ColumnVector input) {
     try (Table inputTable = new Table(input);
          Table unsortedKeys = inputTable.dropDuplicates(
-             new int[] {0}, DuplicateKeepOption.KEEP_ANY, true)) {
+             new int[] {0}, Table.DuplicateKeepOption.KEEP_ANY, true)) {
       Table sortedKeys = unsortedKeys.orderBy(OrderByArg.asc(0));
       boolean succeeded = false;
       try {

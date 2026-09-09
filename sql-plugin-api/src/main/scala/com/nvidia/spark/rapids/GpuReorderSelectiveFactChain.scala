@@ -25,7 +25,7 @@ import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeSet, 
 import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, HintInfo, Join, JoinHint, LogicalPlan}
-import org.apache.spark.sql.catalyst.plans.logical.{Project, SHUFFLE_HASH}
+import org.apache.spark.sql.catalyst.plans.logical.{BROADCAST, Project, SHUFFLE_HASH}
 import org.apache.spark.sql.catalyst.plans.logical.SubqueryAlias
 import org.apache.spark.sql.catalyst.rules.Rule
 
@@ -179,17 +179,27 @@ case class GpuReorderSelectiveFactChain(spark: SparkSession)
       right,
       Inner,
       Some(edges.reduceLeft(And)),
-      smallerSideShuffleHashHint(left, right))
+      smallerSideJoinHint(left, right))
     val future = requiredOutput ++ AttributeSet(remainingConditions.flatMap(_.references))
     val keep = joined.output.filter(future.contains)
     if (keep.isEmpty) None else Some(Project(keep, joined))
   }
 
-  private def smallerSideShuffleHashHint(
+  private def smallerSideJoinHint(
       left: LogicalPlan,
       right: LogicalPlan): JoinHint = {
+    val broadcast = HintInfo(strategy = Some(BROADCAST))
     val shuffleHash = HintInfo(strategy = Some(SHUFFLE_HASH))
+    val broadcastThreshold = BigInt(spark.sessionState.conf.autoBroadcastJoinThreshold)
     (metadata.flatMap(_.estimate(left)), metadata.flatMap(_.estimate(right))) match {
+      case (Some(leftEstimate), Some(rightEstimate))
+          if leftEstimate.sizeInBytes <= rightEstimate.sizeInBytes &&
+            leftEstimate.sizeInBytes <= broadcastThreshold =>
+        JoinHint(Some(broadcast), None)
+      case (Some(leftEstimate), Some(rightEstimate))
+          if rightEstimate.sizeInBytes < leftEstimate.sizeInBytes &&
+            rightEstimate.sizeInBytes <= broadcastThreshold =>
+        JoinHint(None, Some(broadcast))
       case (Some(leftEstimate), Some(rightEstimate))
           if leftEstimate.sizeInBytes <= rightEstimate.sizeInBytes =>
         JoinHint(Some(shuffleHash), None)

@@ -23,7 +23,7 @@ import java.sql.Date
 import org.apache.commons.io.{FileUtils => ApacheFileUtils}
 
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan, SHUFFLE_HASH}
+import org.apache.spark.sql.catalyst.plans.logical.{BROADCAST, Join, LogicalPlan, SHUFFLE_HASH}
 
 class GpuReorderSelectiveFactChainSuite extends SparkQueryCompareTestSuite {
 
@@ -100,6 +100,7 @@ class GpuReorderSelectiveFactChainSuite extends SparkQueryCompareTestSuite {
           assert(hasDirectOrdersLineitemJoin(rewritten), rewritten.treeString)
           assert(smallerOrdersSideHasShuffleHashHint(rewritten), rewritten.treeString)
           assert(smallerFactSideHasShuffleHashHint(rewritten), rewritten.treeString)
+          assert(nationSideHasBroadcastHint(rewritten), rewritten.treeString)
           spark.conf.set(enabledKey, "false")
           val baselineRows = spark.sql(query).collect().toSeq
           spark.conf.set(enabledKey, "true")
@@ -152,6 +153,14 @@ class GpuReorderSelectiveFactChainSuite extends SparkQueryCompareTestSuite {
           join.right.output.exists(_.name == "c_custkey") =>
       join.hint.leftHint.flatMap(_.strategy).contains(SHUFFLE_HASH) &&
         join.hint.rightHint.isEmpty
+    case _ => false
+  }
+
+  private def nationSideHasBroadcastHint(plan: LogicalPlan): Boolean = plan.exists {
+    case join: Join
+        if join.right.output.exists(_.name == "n_nationkey") =>
+      join.hint.leftHint.isEmpty &&
+        join.hint.rightHint.flatMap(_.strategy).contains(BROADCAST)
     case _ => false
   }
 }

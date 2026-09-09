@@ -51,6 +51,8 @@ class SQLExecPlugin extends (SparkSessionExtensions => Unit) {
     extensions.injectOptimizerRule(spark => GpuPushSelectiveDimensionFilterIntoAggregate(spark))
     // Apply an already-required selective keyset to both inputs of a later many-key join.
     extensions.injectOptimizerRule(spark => GpuPushSelectiveKeysetToJoinInputs(spark))
+    // Use trusted input cardinalities to select the smaller shuffled-hash build side.
+    extensions.injectOptimizerRule(spark => GpuPreferSmallerShuffleHashBuild(spark))
     // Deduplicate a large anti-join existence set when trusted NDV statistics prove the benefit.
     extensions.injectOptimizerRule(spark => GpuDeduplicateLargeLeftAntiBuildSide(spark))
   }

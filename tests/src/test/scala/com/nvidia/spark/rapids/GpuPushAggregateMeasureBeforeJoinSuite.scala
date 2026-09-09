@@ -24,7 +24,7 @@ import org.apache.commons.io.{FileUtils => ApacheFileUtils}
 
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, Row}
-import org.apache.spark.sql.catalyst.expressions.Alias
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute}
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Join, Project}
 import org.apache.spark.sql.functions.{col, expr, max, sum}
 
@@ -261,10 +261,10 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
           .toDF("c_custkey", "c_name", "c_nationkey")
           .write.parquet(datasetDir.toPath.resolve("customer").toString)
         Seq(
-          (10L, 1L, Date.valueOf("1993-11-01")),
-          (11L, 1L, Date.valueOf("1993-12-01")),
-          (12L, 2L, Date.valueOf("1993-11-01")))
-          .toDF("o_orderkey", "o_custkey", "o_orderdate")
+          (10L, 1L, Date.valueOf("1993-11-01"), 0L, 3.0),
+          (11L, 1L, Date.valueOf("1993-12-01"), 0L, 5.0),
+          (12L, 2L, Date.valueOf("1993-11-01"), 1L, 7.0))
+          .toDF("o_orderkey", "o_custkey", "o_orderdate", "o_nationkey", "o_value")
           .write.parquet(datasetDir.toPath.resolve("orders").toString)
         Seq((10L, 3.0, "R"), (10L, 5.0, "N"), (11L, 7.0, "R"), (12L, 11.0, "R"))
           .toDF("l_orderkey", "l_value", "l_returnflag")
@@ -325,6 +325,41 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
           coarseOptimized.treeString)
         assert(coarseOptimized.collect { case aggregate: Aggregate => aggregate }.size >= 2,
           coarseOptimized.treeString)
+
+        val filteringLookupSql =
+          """SELECT c_name, SUM(o_value) AS revenue
+            |FROM orders
+            |JOIN customer ON o_custkey = c_custkey
+            |  AND o_nationkey = c_nationkey
+            |GROUP BY c_name
+            |""".stripMargin
+        spark.conf.set(enabledKey, "false")
+        val filteringLookupExpected = normalized(spark.sql(filteringLookupSql).collect())
+        spark.conf.set(enabledKey, "true")
+        val filteringLookupQuery = spark.sql(filteringLookupSql)
+        val filteringLookupOptimized = filteringLookupQuery.queryExecution.optimizedPlan
+
+        assert(normalized(filteringLookupQuery.collect()) === filteringLookupExpected)
+        assert(filteringLookupOptimized.treeString.contains("_rapids_lookup_pre_sum_"),
+          filteringLookupOptimized.treeString)
+        val filteringPreAggregate = filteringLookupOptimized.collectFirst {
+          case aggregate: Aggregate if aggregate.output.exists(
+              _.name.startsWith("_rapids_lookup_pre_sum_")) => aggregate
+        }.getOrElse(fail(filteringLookupOptimized.treeString))
+        val filteringPreGrouping = filteringPreAggregate.groupingExpressions
+          .map(_.asInstanceOf[Attribute].name).toSet
+        assert(filteringPreGrouping === Set("o_custkey", "o_nationkey"),
+          filteringLookupOptimized.treeString)
+
+        val unrelatedUniqueSql =
+          """SELECT c_name, SUM(l_value) AS revenue
+            |FROM lineitem
+            |JOIN customer ON l_orderkey = c_custkey
+            |GROUP BY c_name
+            |""".stripMargin
+        val unrelatedUniqueOptimized = spark.sql(unrelatedUniqueSql).queryExecution.optimizedPlan
+        assert(!unrelatedUniqueOptimized.treeString.contains("_rapids_lookup_pre_sum_"),
+          unrelatedUniqueOptimized.treeString)
       }, testConf)
     } finally {
       ApacheFileUtils.deleteDirectory(datasetDir)

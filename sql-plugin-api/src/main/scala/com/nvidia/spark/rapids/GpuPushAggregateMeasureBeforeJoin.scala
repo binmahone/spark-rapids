@@ -180,7 +180,7 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
     }
     val lookupBaseKeys = lookups.flatMap { lookup =>
       val currentBase = if (lookup.lookupOnRight) lookup.join.left else lookup.join.right
-      metadata.cardinalityPreservingLookupKeys(
+      metadata.cardinalityNonIncreasingLookupKeys(
         currentBase,
         lookup.lookup,
         lookup.join.condition.get).toSeq.flatten.map(_._1).filter(base.outputSet.contains)
@@ -352,13 +352,13 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
             if projectList.forall(_.isInstanceOf[Attribute]) =>
           loop(child, outer, projectsAbove :+ project)
         case join @ Join(left, right, Inner, Some(condition), _) =>
-          metadata.cardinalityPreservingLookupKeys(left, right, condition) match {
+          metadata.cardinalityNonIncreasingLookupKeys(left, right, condition) match {
             case Some(_) => loop(
               left,
               LookupJoin(join, right, lookupOnRight = true, projectsAbove) :: outer,
               Vector.empty)
             case None =>
-              metadata.cardinalityPreservingLookupKeys(right, left, condition) match {
+              metadata.cardinalityNonIncreasingLookupKeys(right, left, condition) match {
                 case Some(_) => loop(
                   right,
                   LookupJoin(join, left, lookupOnRight = false, projectsAbove) :: outer,

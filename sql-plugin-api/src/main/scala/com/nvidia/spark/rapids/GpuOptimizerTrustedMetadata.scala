@@ -127,6 +127,39 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
     } yield pairs
   }
 
+  /**
+   * Return every equi-key pair when a trusted FK/PK subset proves that an inner lookup join can
+   * emit at most one row for each base row. Additional equi-predicates may filter a base row, but
+   * cannot duplicate it. This weaker contract is sufficient for aggregation pushed below the
+   * join when the pre-aggregation groups by every returned base key.
+   */
+  def cardinalityNonIncreasingLookupKeys(
+      base: LogicalPlan,
+      lookup: LogicalPlan,
+      condition: Expression): Option[Seq[(Attribute, Attribute)]] = {
+    for {
+      baseEstimate <- estimateDetailed(base)
+      lookupEstimate <- estimateDetailed(lookup)
+      if !lookup.exists(_.isInstanceOf[Join])
+      pairs <- equiPairs(condition, base.outputSet, lookup.outputSet)
+      sourceColumns <- columnsFor(pairs.map(_._1), baseEstimate)
+      targetColumns <- columnsFor(pairs.map(_._2), lookupEstimate)
+      if containsTrustedForeignKey(sourceColumns, targetColumns)
+    } yield pairs
+  }
+
+  private def containsTrustedForeignKey(
+      sourceColumns: Seq[(String, String)],
+      targetColumns: Seq[(String, String)]): Boolean = {
+    val joinedColumns = sourceColumns.zip(targetColumns).toSet
+    foreignKeys.exists { case ((sourceTable, sourceNames), (targetTable, targetNames)) =>
+      primaryKeys.get(targetTable).contains(targetNames) &&
+        sourceNames.zip(targetNames).forall { case (sourceName, targetName) =>
+          joinedColumns.contains((sourceTable -> sourceName) -> (targetTable -> targetName))
+        }
+    }
+  }
+
   private def columnsFor(
       attributes: Seq[Attribute],
       estimate: DetailedEstimate): Option[Seq[(String, String)]] = {

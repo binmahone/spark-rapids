@@ -31,7 +31,7 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, Contain
 import org.apache.spark.sql.catalyst.expressions.{EqualTo, Expression, GreaterThan, GreaterThanOrEqual}
 import org.apache.spark.sql.catalyst.expressions.{In, InSet, IsNotNull, LessThan, LessThanOrEqual}
 import org.apache.spark.sql.catalyst.expressions.{Literal, Or}
-import org.apache.spark.sql.catalyst.plans.Inner
+import org.apache.spark.sql.catalyst.plans.{Inner, LeftSemi}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, SubqueryAlias, View}
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
@@ -214,10 +214,9 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
       for {
         leftEstimate <- estimateDetailed(left)
         rightEstimate <- estimateDetailed(right)
-        denominator <- joinDenominator(condition, leftEstimate, rightEstimate)
+        rows <- foreignKeyLookupRows(condition, leftEstimate, rightEstimate)
+          .orElse(joinRowsFromDenominator(condition, leftEstimate, rightEstimate))
       } yield {
-        val rows = ((leftEstimate.rows * rightEstimate.rows + denominator - 1) / denominator)
-          .max(BigInt(1))
         DetailedEstimate(
           rows,
           leftEstimate.lineage ++ rightEstimate.lineage,
@@ -225,6 +224,18 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
             case (exprId, ndv) => exprId -> ndv.min(rows)
           })
       }
+
+    case Join(left, right, LeftSemi, Some(condition), _) =>
+      for {
+        leftEstimate <- estimateDetailed(left)
+        rightEstimate <- estimateDetailed(right)
+        rows <- foreignKeyLookupRows(
+          condition, leftEstimate, rightEstimate, requireLeftAsForeignKey = true)
+      } yield leftEstimate.copy(
+        rows = rows,
+        distinct = leftEstimate.distinct.map {
+          case (exprId, ndv) => exprId -> ndv.min(rows)
+        })
 
     case _ => None
   }
@@ -263,6 +274,86 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
       case _ => None
     }
     if (candidates.nonEmpty) Some(candidates.max.max(BigInt(1))) else None
+  }
+
+  private def joinRowsFromDenominator(
+      condition: Expression,
+      left: DetailedEstimate,
+      right: DetailedEstimate): Option[BigInt] = {
+    joinDenominator(condition, left, right).map { denominator =>
+      ((left.rows * right.rows + denominator - 1) / denominator).max(BigInt(1))
+    }
+  }
+
+  /**
+   * Estimate a PK/FK lookup join, including a lookup side reduced by deterministic filters or a
+   * prior semi join. The target primary key is unique, so the fraction of retained target rows is
+   * also the upper-bound match fraction for non-null source foreign keys.
+   */
+  private def foreignKeyLookupRows(
+      condition: Expression,
+      left: DetailedEstimate,
+      right: DetailedEstimate,
+      requireLeftAsForeignKey: Boolean = false): Option[BigInt] = {
+    val pairs = equiPairsFromEstimates(condition, left, right).getOrElse(return None)
+    val orientations = Seq((left, right, pairs)) ++ {
+      if (requireLeftAsForeignKey) Seq.empty else Seq((right, left, pairs.map(_.swap)))
+    }
+    orientations.iterator.flatMap {
+      case (source, target, orientedPairs) =>
+        foreignKeyTarget(orientedPairs).flatMap {
+          case (sourceTable, sourceColumns, targetTable, targetColumns) =>
+            val sourceNotNull = sourceColumns.forall(
+              notNullColumns.getOrElse(sourceTable, Set.empty).contains)
+            val targetIsPrimary = primaryKeys.get(targetTable).contains(targetColumns)
+            val declaredForeignKey = foreignKeys.get(sourceTable -> sourceColumns)
+              .contains(targetTable -> targetColumns)
+            tableRows.get(targetTable).filter(_ => sourceNotNull && targetIsPrimary &&
+              declaredForeignKey).map { targetBaseRows =>
+              val retainedTargetRows = target.rows.min(targetBaseRows)
+              ((source.rows * retainedTargetRows + targetBaseRows - 1) / targetBaseRows)
+                .max(BigInt(1)).min(source.rows)
+            }
+        }
+    }.toSeq.headOption
+  }
+
+  private def equiPairsFromEstimates(
+      condition: Expression,
+      left: DetailedEstimate,
+      right: DetailedEstimate): Option[Seq[((String, String), (String, String))]] = {
+    val pairs = splitAnd(condition).map {
+      case EqualTo(leftAttribute: Attribute, rightAttribute: Attribute) =>
+        for {
+          leftColumn <- left.lineage.get(leftAttribute.exprId.id)
+          rightColumn <- right.lineage.get(rightAttribute.exprId.id)
+        } yield leftColumn -> rightColumn
+      case _ => None
+    }
+    if (pairs.nonEmpty && pairs.forall(_.isDefined)) Some(pairs.flatten) else None
+  }
+
+  private def foreignKeyTarget(
+      pairs: Seq[((String, String), (String, String))])
+  : Option[(String, Seq[String], String, Seq[String])] = {
+    val sourceTables = pairs.map(_._1._1).distinct
+    val targetTables = pairs.map(_._2._1).distinct
+    if (sourceTables.size != 1 || targetTables.size != 1) {
+      None
+    } else {
+      val sourceTable = sourceTables.head
+      val targetTable = targetTables.head
+      val actualPairs = pairs.map {
+        case ((_, sourceColumn), (_, targetColumn)) => sourceColumn -> targetColumn
+      }.toSet
+      foreignKeys.collectFirst {
+        case ((declaredSourceTable, sourceColumns),
+              (declaredTargetTable, targetColumns))
+            if declaredSourceTable == sourceTable && declaredTargetTable == targetTable &&
+              sourceColumns.zip(targetColumns).toSet == actualPairs =>
+          (sourceTable, sourceColumns, targetTable, targetColumns)
+      }
+    }
   }
 
   private def trustedJoinDenominator(

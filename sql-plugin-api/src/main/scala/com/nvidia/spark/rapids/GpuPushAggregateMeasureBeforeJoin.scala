@@ -78,6 +78,8 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
       lookupOnRight: Boolean,
       projectsAbove: Seq[Project])
 
+  private case class LookupRewrite(plan: LogicalPlan, eliminatedFinalAggregate: Boolean)
+
   /**
    * Partially aggregate global sums by the equi-join keys on their source side. The final global
    * sum remains above the join, so filtering and multiplicity on the other side retain their
@@ -148,17 +150,36 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
   /**
    * Move grouped sums below trusted PK/FK lookup joins. A final aggregation is retained after the
    * lookup chain, which is conservative when several lookup keys map to the same payload value.
+   * Prefer a cardinality-preserving rewrite that removes the final aggregate; otherwise allow
+   * filtering lookups to push the partial aggregate farther down the join chain.
    */
   private def pushSumsThroughLookupJoins(aggregate: Aggregate): Option[LogicalPlan] = {
     if (aggregate.groupingExpressions.isEmpty) {
       return None
     }
     val metadata = GpuOptimizerTrustedMetadata.fromSession(spark).getOrElse(return None)
+    val preserving = rewriteSumsThroughLookupJoins(
+      aggregate,
+      metadata,
+      allowFilteringLookup = false)
+    preserving.filter(_.eliminatedFinalAggregate)
+      .orElse(rewriteSumsThroughLookupJoins(
+        aggregate,
+        metadata,
+        allowFilteringLookup = true))
+      .orElse(preserving)
+      .map(_.plan)
+  }
+
+  private def rewriteSumsThroughLookupJoins(
+      aggregate: Aggregate,
+      metadata: GpuOptimizerTrustedMetadata,
+      allowFilteringLookup: Boolean): Option[LookupRewrite] = {
     val (project, source) = aggregate.child match {
       case p @ Project(_, child) => (Some(p), child)
       case child => (None, child)
     }
-    val (base, lookups) = peelLookupJoins(source, metadata)
+    val (base, lookups) = peelLookupJoins(source, metadata, allowFilteringLookup)
     if (lookups.isEmpty || base.exists(_.isInstanceOf[Aggregate])) {
       return None
     }
@@ -180,10 +201,12 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
     }
     val lookupBaseKeys = lookups.flatMap { lookup =>
       val currentBase = if (lookup.lookupOnRight) lookup.join.left else lookup.join.right
-      metadata.cardinalityNonIncreasingLookupKeys(
+      lookupKeys(
+        metadata,
         currentBase,
         lookup.lookup,
-        lookup.join.condition.get).toSeq.flatten.map(_._1).filter(base.outputSet.contains)
+        lookup.join.condition.get,
+        allowFilteringLookup).toSeq.flatten.map(_._1).filter(base.outputSet.contains)
     }
     val preGrouping = (baseGrouping.map(_.asInstanceOf[Attribute]) ++ lookupBaseKeys)
       .foldLeft(Vector.empty[Attribute]) { (result, attribute) =>
@@ -241,7 +264,7 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
           "GpuPushAggregateMeasureBeforeJoin: eliminated a redundant SUM after trusted " +
             s"lookup joins lookupCount=${lookups.size} " +
             s"uniqueKeys=${preGrouping.map(_.name).mkString(",")}")
-        Some(projected)
+        Some(LookupRewrite(projected, eliminatedFinalAggregate = true))
       case None =>
         val rewrittenExpressions = replaceAggregateSums(
           aggregate.aggregateExpressions,
@@ -249,16 +272,18 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
         logWarning(
           "GpuPushAggregateMeasureBeforeJoin: pushed SUMs below trusted lookup joins " +
             s"lookupCount=${lookups.size} preGrouping=${preGrouping.map(_.name).mkString(",")}")
-        Some(aggregate.copy(aggregateExpressions = rewrittenExpressions, child = postLookup))
+        Some(LookupRewrite(
+          aggregate.copy(aggregateExpressions = rewrittenExpressions, child = postLookup),
+          eliminatedFinalAggregate = false))
     }
   }
 
   /**
-   * The pre-aggregate emits at most one row for each pre-grouping key. Trusted lookup joins retain
-   * exactly one row for every input row. If the final grouping contains an equivalent attribute
-   * for every pre-grouping key, each final group therefore contains at most one row and SUM is an
-   * identity operation. Keep the original output expression IDs by projecting the rewritten
-   * aggregate expressions.
+   * The pre-aggregate emits at most one row for each pre-grouping key. Trusted lookup joins emit
+   * at most one row for every input row. If the final grouping contains an equivalent attribute
+   * for every pre-grouping key, each surviving final group therefore contains at most one row and
+   * SUM is an identity operation. Keep the original output expression IDs by projecting the
+   * rewritten aggregate expressions.
    */
   private def eliminateRedundantLookupAggregate(
       aggregate: Aggregate,
@@ -342,7 +367,8 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
 
   private def peelLookupJoins(
       source: LogicalPlan,
-      metadata: GpuOptimizerTrustedMetadata): (LogicalPlan, Seq[LookupJoin]) = {
+      metadata: GpuOptimizerTrustedMetadata,
+      allowFilteringLookup: Boolean): (LogicalPlan, Seq[LookupJoin]) = {
     def loop(
         current: LogicalPlan,
         outer: List[LookupJoin],
@@ -352,13 +378,13 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
             if projectList.forall(_.isInstanceOf[Attribute]) =>
           loop(child, outer, projectsAbove :+ project)
         case join @ Join(left, right, Inner, Some(condition), _) =>
-          metadata.cardinalityNonIncreasingLookupKeys(left, right, condition) match {
+          lookupKeys(metadata, left, right, condition, allowFilteringLookup) match {
             case Some(_) => loop(
               left,
               LookupJoin(join, right, lookupOnRight = true, projectsAbove) :: outer,
               Vector.empty)
             case None =>
-              metadata.cardinalityNonIncreasingLookupKeys(right, left, condition) match {
+              lookupKeys(metadata, right, left, condition, allowFilteringLookup) match {
                 case Some(_) => loop(
                   right,
                   LookupJoin(join, left, lookupOnRight = false, projectsAbove) :: outer,
@@ -374,6 +400,19 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
       projects.reverse.foldLeft(plan) { case (child, project) => project.copy(child = child) }
 
     loop(source, Nil, Vector.empty)
+  }
+
+  private def lookupKeys(
+      metadata: GpuOptimizerTrustedMetadata,
+      base: LogicalPlan,
+      lookup: LogicalPlan,
+      condition: Expression,
+      allowFilteringLookup: Boolean): Option[Seq[(Attribute, Attribute)]] = {
+    if (allowFilteringLookup) {
+      metadata.cardinalityNonIncreasingLookupKeys(base, lookup, condition)
+    } else {
+      metadata.cardinalityPreservingLookupKeys(base, lookup, condition)
+    }
   }
 
   private def supportedSumTargets(aggregate: Aggregate): Option[Seq[SumTarget]] = {

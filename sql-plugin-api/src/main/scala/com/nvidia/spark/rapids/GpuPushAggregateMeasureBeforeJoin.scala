@@ -230,11 +230,114 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
     }
 
     val replacements = targets.map(_.expression).zip(preSums.map(_.toAttribute))
-    val rewrittenExpressions = replaceAggregateSums(aggregate.aggregateExpressions, replacements)
-    logWarning(
-      "GpuPushAggregateMeasureBeforeJoin: pushed SUMs below trusted lookup joins " +
-        s"lookupCount=${lookups.size} preGrouping=${preGrouping.map(_.name).mkString(",")}")
-    Some(aggregate.copy(aggregateExpressions = rewrittenExpressions, child = postLookup))
+    val eliminated = eliminateRedundantLookupAggregate(
+      aggregate,
+      postLookup,
+      preGrouping,
+      replacements)
+    eliminated match {
+      case Some(projected) =>
+        logWarning(
+          "GpuPushAggregateMeasureBeforeJoin: eliminated a redundant SUM after trusted " +
+            s"lookup joins lookupCount=${lookups.size} " +
+            s"uniqueKeys=${preGrouping.map(_.name).mkString(",")}")
+        Some(projected)
+      case None =>
+        val rewrittenExpressions = replaceAggregateSums(
+          aggregate.aggregateExpressions,
+          replacements)
+        logWarning(
+          "GpuPushAggregateMeasureBeforeJoin: pushed SUMs below trusted lookup joins " +
+            s"lookupCount=${lookups.size} preGrouping=${preGrouping.map(_.name).mkString(",")}")
+        Some(aggregate.copy(aggregateExpressions = rewrittenExpressions, child = postLookup))
+    }
+  }
+
+  /**
+   * The pre-aggregate emits at most one row for each pre-grouping key. Trusted lookup joins retain
+   * exactly one row for every input row. If the final grouping contains an equivalent attribute
+   * for every pre-grouping key, each final group therefore contains at most one row and SUM is an
+   * identity operation. Keep the original output expression IDs by projecting the rewritten
+   * aggregate expressions.
+   */
+  private def eliminateRedundantLookupAggregate(
+      aggregate: Aggregate,
+      child: LogicalPlan,
+      preGrouping: Seq[Attribute],
+      replacements: Seq[(AggregateExpression, Attribute)]): Option[LogicalPlan] = {
+    val finalGrouping = aggregate.groupingExpressions.collect { case attribute: Attribute =>
+      attribute
+    }
+    if (finalGrouping.size != aggregate.groupingExpressions.size) {
+      return None
+    }
+
+    val equivalence = equalityClasses(child)
+    val preservesUniqueKey = preGrouping.forall { uniqueKey =>
+      finalGrouping.exists(equivalence.connected(uniqueKey, _))
+    }
+    if (!preservesUniqueKey) {
+      return None
+    }
+
+    val projected = aggregate.aggregateExpressions.map { named =>
+      named.transformDown {
+        case current: AggregateExpression =>
+          replacements.collectFirst {
+            case (target, replacement) if current.semanticEquals(target) => replacement
+          }.getOrElse(current)
+      }.asInstanceOf[NamedExpression]
+    }
+    if (projected.exists(_.exists(_.isInstanceOf[AggregateExpression])) ||
+        projected.exists(expression => !expression.references.subsetOf(child.outputSet))) {
+      None
+    } else {
+      Some(Project(projected, child))
+    }
+  }
+
+  private def equalityClasses(plan: LogicalPlan): EqualityClasses = {
+    val classes = new EqualityClasses
+    plan.foreach {
+      case Join(_, _, Inner, Some(condition), _) =>
+        splitConjunctivePredicates(condition).foreach {
+          case EqualTo(left: Attribute, right: Attribute) => classes.union(left, right)
+          case _ =>
+        }
+      case Filter(condition, _) =>
+        splitConjunctivePredicates(condition).foreach {
+          case EqualTo(left: Attribute, right: Attribute) => classes.union(left, right)
+          case _ =>
+        }
+      case _ =>
+    }
+    classes
+  }
+
+  private final class EqualityClasses {
+    private val parent = scala.collection.mutable.HashMap.empty[Long, Long]
+
+    private def find(value: Long): Long = {
+      val current = parent.getOrElseUpdate(value, value)
+      if (current == value) {
+        value
+      } else {
+        val root = find(current)
+        parent.update(value, root)
+        root
+      }
+    }
+
+    def union(left: Attribute, right: Attribute): Unit = {
+      val leftRoot = find(left.exprId.id)
+      val rightRoot = find(right.exprId.id)
+      if (leftRoot != rightRoot) {
+        parent.update(leftRoot, rightRoot)
+      }
+    }
+
+    def connected(left: Attribute, right: Attribute): Boolean =
+      left.semanticEquals(right) || find(left.exprId.id) == find(right.exprId.id)
   }
 
   private def peelLookupJoins(

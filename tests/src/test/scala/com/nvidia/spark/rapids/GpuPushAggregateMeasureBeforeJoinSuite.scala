@@ -257,7 +257,7 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
       withCpuSparkSession(spark => {
         import spark.implicits._
 
-        Seq((1L, "customer-1", 0L), (2L, "customer-2", 1L))
+        Seq((1L, "customer-1", 0L), (2L, "customer-2", 0L))
           .toDF("c_custkey", "c_name", "c_nationkey")
           .write.parquet(datasetDir.toPath.resolve("customer").toString)
         Seq(
@@ -295,7 +295,7 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
 
         assert(normalized(query.collect()) === expected)
         assert(optimized.treeString.contains("_rapids_lookup_pre_sum_"), optimized.treeString)
-        assert(optimized.collect { case aggregate: Aggregate => aggregate }.size >= 2,
+        assert(optimized.collect { case aggregate: Aggregate => aggregate }.size === 1,
           optimized.treeString)
         val pushedAggregate = optimized.collectFirst {
           case aggregate: Aggregate if aggregate.output.exists(
@@ -303,6 +303,28 @@ class GpuPushAggregateMeasureBeforeJoinSuite extends SparkQueryCompareTestSuite 
         }.getOrElse(fail(optimized.treeString))
         assert(!pushedAggregate.groupingExpressions.exists(_.references.exists(
           _.name.startsWith("c_"))), optimized.treeString)
+
+        val coarseSql =
+          """SELECT n_name, SUM(l_value) AS revenue
+            |FROM customer
+            |JOIN orders ON c_custkey = o_custkey
+            |  AND o_orderdate >= DATE '1993-10-01'
+            |  AND o_orderdate < DATE '1994-01-01'
+            |JOIN lineitem ON o_orderkey = l_orderkey AND l_returnflag = 'R'
+            |JOIN nation ON c_nationkey = n_nationkey
+            |GROUP BY n_name
+            |""".stripMargin
+        spark.conf.set(enabledKey, "false")
+        val coarseExpected = normalized(spark.sql(coarseSql).collect())
+        spark.conf.set(enabledKey, "true")
+        val coarseQuery = spark.sql(coarseSql)
+        val coarseOptimized = coarseQuery.queryExecution.optimizedPlan
+
+        assert(normalized(coarseQuery.collect()) === coarseExpected)
+        assert(coarseOptimized.treeString.contains("_rapids_lookup_pre_sum_"),
+          coarseOptimized.treeString)
+        assert(coarseOptimized.collect { case aggregate: Aggregate => aggregate }.size >= 2,
+          coarseOptimized.treeString)
       }, testConf)
     } finally {
       ApacheFileUtils.deleteDirectory(datasetDir)

@@ -324,10 +324,15 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
       right: DetailedEstimate): Option[Seq[((String, String), (String, String))]] = {
     val pairs = splitAnd(condition).map {
       case EqualTo(leftAttribute: Attribute, rightAttribute: Attribute) =>
-        for {
+        val direct = for {
           leftColumn <- left.lineage.get(leftAttribute.exprId.id)
           rightColumn <- right.lineage.get(rightAttribute.exprId.id)
         } yield leftColumn -> rightColumn
+        val reversed = for {
+          leftColumn <- left.lineage.get(rightAttribute.exprId.id)
+          rightColumn <- right.lineage.get(leftAttribute.exprId.id)
+        } yield leftColumn -> rightColumn
+        direct.orElse(reversed)
       case _ => None
     }
     if (pairs.nonEmpty && pairs.forall(_.isDefined)) Some(pairs.flatten) else None

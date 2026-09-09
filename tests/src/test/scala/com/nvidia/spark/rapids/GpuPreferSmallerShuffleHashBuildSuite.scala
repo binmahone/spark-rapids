@@ -133,17 +133,20 @@ class GpuPreferSmallerShuffleHashBuildSuite extends SparkQueryCompareTestSuite {
 
           val rewritten = optimized(
             spark,
-            """SELECT fact_orderkey
-              |FROM fact
-              |JOIN (
-              |  SELECT lookup_a, lookup_b
-              |  FROM lookup
-              |  WHERE EXISTS (
-              |    SELECT 1
-              |    FROM filter_keys
-              |    WHERE filter_key = lookup_a AND filter_key = 1)) filtered_lookup
-              |ON fact_a = lookup_a AND fact_b = lookup_b
-              |JOIN orders ON fact_orderkey = order_key
+            """SELECT grouped.fact_orderkey
+              |FROM (
+              |  SELECT fact_orderkey, SUM(fact_a) AS total
+              |  FROM fact
+              |  JOIN (
+              |    SELECT lookup_a, lookup_b
+              |    FROM lookup
+              |    WHERE EXISTS (
+              |      SELECT 1
+              |      FROM filter_keys
+              |      WHERE filter_key = lookup_a AND filter_key = 1)) filtered_lookup
+              |  ON fact_a = lookup_a AND fact_b = lookup_b
+              |  GROUP BY fact_orderkey) grouped
+              |JOIN orders ON grouped.fact_orderkey = order_key
               |""".stripMargin)
           assert(rewritten.exists {
             case join: Join if join.right.output.exists(_.name == "order_key") =>

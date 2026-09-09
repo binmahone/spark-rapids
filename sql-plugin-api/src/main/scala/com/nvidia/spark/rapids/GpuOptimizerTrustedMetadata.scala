@@ -32,7 +32,7 @@ import org.apache.spark.sql.catalyst.expressions.{EqualTo, Expression, GreaterTh
 import org.apache.spark.sql.catalyst.expressions.{In, InSet, IsNotNull, LessThan, LessThanOrEqual}
 import org.apache.spark.sql.catalyst.expressions.{Literal, Or}
 import org.apache.spark.sql.catalyst.plans.{Inner, LeftSemi}
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join}
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter, Join}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, SubqueryAlias, View}
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.types.DateType
@@ -209,6 +209,44 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
 
     case view: View =>
       estimateDetailed(view.child).map(remapOutput(_, view.child, view))
+
+    case aggregate: Aggregate =>
+      estimateDetailed(aggregate.child).flatMap { input =>
+        val groupingAttributes = aggregate.groupingExpressions.map {
+          case attribute: Attribute => Some(attribute)
+          case Alias(attribute: Attribute, _) => Some(attribute)
+          case _ => None
+        }
+        val groupedRows = if (groupingAttributes.isEmpty) {
+          Some(BigInt(1))
+        } else if (groupingAttributes.forall(_.isDefined)) {
+          val distinct = groupingAttributes.flatten.distinct.map { attribute =>
+            input.distinct.get(attribute.exprId.id)
+          }
+          if (distinct.forall(_.isDefined)) {
+            Some(distinct.flatten.product.min(input.rows).max(BigInt(1)))
+          } else {
+            None
+          }
+        } else {
+          None
+        }
+        groupedRows.map { rows =>
+          val mappings = aggregate.aggregateExpressions.zip(aggregate.output).flatMap {
+            case (source: Attribute, output) => Some(output.exprId.id -> source.exprId.id)
+            case (Alias(source: Attribute, _), output) => Some(output.exprId.id -> source.exprId.id)
+            case _ => None
+          }
+          DetailedEstimate(
+            rows,
+            mappings.flatMap {
+              case (output, source) => input.lineage.get(source).map(output -> _)
+            }.toMap,
+            mappings.flatMap {
+              case (output, source) => input.distinct.get(source).map(output -> _.min(rows))
+            }.toMap)
+        }
+      }
 
     case Join(left, right, Inner, Some(condition), _) =>
       for {

@@ -25,6 +25,12 @@ import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter, Join, JoinHint}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.catalyst.trees.TreeNodeTag
+
+object GpuPushAggregateMeasureBeforeJoin {
+  private[rapids] val generatedLookupPreAggregate =
+    TreeNodeTag[Boolean]("rapids.optimizer.generatedLookupPreAggregate")
+}
 
 /**
  * Reduce a SUM measure before an inner-join cluster.
@@ -60,7 +66,9 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
   }
 
   private def rewriteAggregate(aggregate: Aggregate): LogicalPlan = {
-    if (!containsJoin(aggregate.child)) {
+    if (aggregate.getTagValue(
+        GpuPushAggregateMeasureBeforeJoin.generatedLookupPreAggregate).contains(true) ||
+        !containsJoin(aggregate.child)) {
       return aggregate
     }
 
@@ -228,6 +236,9 @@ case class GpuPushAggregateMeasureBeforeJoin(spark: SparkSession)
           s"_rapids_lookup_pre_sum_$index")()
     }
     val preAggregate = Aggregate(preGrouping, preGrouping ++ preSums, preProject)
+    preAggregate.setTagValue(
+      GpuPushAggregateMeasureBeforeJoin.generatedLookupPreAggregate,
+      true)
     val restored = lookups.foldLeft[LogicalPlan](preAggregate) {
       case (current, lookup) =>
         val joined = if (lookup.lookupOnRight) lookup.join.copy(left = current)

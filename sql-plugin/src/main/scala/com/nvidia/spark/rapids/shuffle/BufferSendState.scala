@@ -137,9 +137,11 @@ class BufferSendState(
       }
     }
 
-  private[this] def resetOomRetryWindow(): Unit = {
-    oomRetryStartNanos = None
-    oomRetryAttempts = 0
+  private[shuffle] def resetOomRetryWindow(): Unit = synchronized {
+    if (oomRetryStartNanos.isDefined) {
+      oomRetryStartNanos = None
+      oomRetryAttempts = 0
+    }
   }
 
   def getRequestTransaction: Transaction = synchronized {
@@ -206,7 +208,15 @@ class BufferSendState(
             // using `releaseAcquiredToCatalog`
             //these are closed later, after we synchronize streams
             val spillable = blockRange.block.bufferHandle.spillable
-            val buff = spillable.materialize()
+            val buff = try {
+              spillable.materialize()
+            } catch {
+              case oom: OutOfMemoryError =>
+                throw new RapidsShuffleSendPrepareException(
+                  s"GPU memory exhausted while materializing a shuffle buffer for executor " +
+                      s"${peerExecutorId} and header " +
+                      s"${TransportUtils.toHex(peerBufferReceiveHeader)}", oom)
+            }
             buff match {
               case _: DeviceMemoryBuffer =>
                 deviceBuffs += blockRange.rangeSize()
@@ -238,11 +248,8 @@ class BufferSendState(
           }
           needsCleanup = false
         } catch {
-          case oom: OutOfMemoryError =>
-            throw new RapidsShuffleSendPrepareException(
-              s"GPU memory exhausted while preparing a shuffle send for executor " +
-                  s"${peerExecutorId} and header " +
-                  s"${TransportUtils.toHex(peerBufferReceiveHeader)}", oom)
+          case ex: RapidsShuffleSendPrepareException =>
+            throw ex
           case ex: Exception =>
             throw new RapidsShuffleSendPrepareException(
               s"Error while copying to bounce buffer for executor ${peerExecutorId} and " +

@@ -28,6 +28,7 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito._
 
+import org.apache.spark.shuffle.rapids.RapidsShuffleSendPrepareException
 import org.apache.spark.storage.ShuffleBlockBatchId
 
 class MockRapidsShuffleRequestHandler(mockBuffers: Seq[RapidsShuffleHandle])
@@ -323,7 +324,7 @@ class RapidsShuffleServerSuite extends RapidsShuffleTestHelper {
     }
   }
 
-  test("when GPU OOM prevents all sends, retry only until the shuffle fetch timeout") {
+  test("when GPU OOM prevents all sends, stop the request at the shuffle fetch timeout") {
     val mockSendBuffer = mock[SendBounceBuffers]
     val mockDeviceBounceBuffer = mock[BounceBuffer]
     val mockDeviceMemoryBuffer = mock[DeviceMemoryBuffer]
@@ -367,34 +368,58 @@ class RapidsShuffleServerSuite extends RapidsShuffleTestHelper {
         mockConf) {
         override private[shuffle] def currentTimeNanos(): Long = nowNanos
         override private[shuffle] def oomRetryTimeoutNanos: Long = 1L
-        override private[shuffle] def waitBeforeOomRetry(backoffMillis: Long): Unit = {}
+        override private[shuffle] def waitBeforeOomRetry(): Unit = {}
       })
 
       val bss = new BufferSendState(mockTransaction, mockSendBuffer, mockRequestHandler, null)
-      assertResult(10L)(server.oomRetryBackoffMillis(1))
-      assertResult(20L)(server.oomRetryBackoffMillis(2))
-      assertResult(100L)(server.oomRetryBackoffMillis(5))
-      assertResult(100L)(server.oomRetryBackoffMillis(1000))
       server.doHandleTransferRequest(Seq(bss))
 
       verify(server, times(1)).addToContinueQueue(Seq(bss))
-      verify(server, times(1)).waitBeforeOomRetry(10L)
+      verify(server, times(1)).waitBeforeOomRetry()
       verify(mockSendBuffer, times(0)).close()
 
       nowNanos = 1L
-      val ex = intercept[IllegalStateException] {
-        server.doHandleTransferRequest(Seq(bss))
-      }
-      assert(ex.getMessage.contains("GPU memory remained exhausted"))
-      assertResult(1)(ex.getSuppressed.length)
-      assertResult(oom)(ex.getSuppressed.head.getCause)
+      server.doHandleTransferRequest(Seq(bss))
       verify(server, times(1)).addToContinueQueue(Seq(bss))
-      verify(server, times(1)).waitBeforeOomRetry(10L)
+      verify(server, times(1)).waitBeforeOomRetry()
       verify(mockHandle, times(2)).materialize()
       verify(mockHandleThatThrows, times(2)).materialize()
       verify(mockMaterialized, times(2)).close()
       verify(mockSendBuffer, times(1)).close()
     }
+  }
+
+  test("OOM retry accounting resets after shuffle send progress") {
+    val bss = mock[BufferSendState]
+    val failed = new RapidsShuffleSendPrepareException(
+      "GPU memory exhausted while materializing a shuffle buffer",
+      new OutOfMemoryError("GPU allocation failed in test"))
+    val successfulBuffer = mock[MemoryBuffer]
+    when(bss.hasMoreSends).thenReturn(true)
+    when(bss.getBufferToSend()).thenReturn(successfulBuffer)
+
+    val failedBss = mock[BufferSendState]
+    when(failedBss.hasMoreSends).thenReturn(true)
+    when(failedBss.getBufferToSend()).thenAnswer(_ => throw failed)
+
+    val mockServerConnection = mock[ServerConnection]
+    val mockRequestHandler = mock[RapidsShuffleRequestHandler]
+    when(mockServerConnection.send(
+      any(), any(), any(), any[MemoryBuffer](), any[TransactionCallback]()))
+      .thenReturn(mockTransaction)
+    val server = spy(new RapidsShuffleServer(
+      mockTransport,
+      mockServerConnection,
+      RapidsShuffleTestHelper.makeMockBlockManager("1", "foo"),
+      mockRequestHandler,
+      mockExecutor,
+      mockBssExecutor,
+      mockConf))
+
+    server.doHandleTransferRequest(Seq(bss, failedBss))
+
+    verify(failedBss, times(1)).resetOomRetryWindow()
+    verify(server, times(1)).addToContinueQueue(Seq(failedBss))
   }
 
   test("when we fail to prepare a send, re-queue the request if anything can be handled") {

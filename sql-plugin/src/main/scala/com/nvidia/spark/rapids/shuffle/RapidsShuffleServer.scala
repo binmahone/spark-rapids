@@ -23,6 +23,7 @@ import scala.collection.mutable.ArrayBuffer
 import ai.rapids.cudf.{Cuda, MemoryBuffer}
 import com.nvidia.spark.rapids.{NvtxRegistry, RapidsConf, RapidsShuffleHandle, ShuffleMetadata}
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
+import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.format.TableMeta
 
 import org.apache.spark.internal.Logging
@@ -97,13 +98,23 @@ class RapidsShuffleServer(transport: RapidsShuffleTransport,
   private[shuffle] def oomRetryTimeoutNanos: Long =
     TimeUnit.SECONDS.toNanos(GpuShuffleEnv.shuffleFetchTimeoutSeconds)
 
-  private[shuffle] def oomRetryBackoffMillis(retryAttempt: Int): Long = {
-    val shift = math.min(retryAttempt - 1, 4)
-    math.min(10L << shift, 100L)
-  }
+  private[this] val oomRetryDelayMillis = 10L
 
-  private[shuffle] def waitBeforeOomRetry(backoffMillis: Long): Unit =
-    Thread.sleep(backoffMillis)
+  private[shuffle] def waitBeforeOomRetry(): Unit = Thread.sleep(oomRetryDelayMillis)
+
+  private def stopOomRetries(
+      states: Seq[BufferSendState],
+      errors: Seq[Throwable],
+      reason: String): Unit = {
+    val failure = new IllegalStateException(
+      s"Unable to prepare any sends. $reason The sends will not be retried.")
+    errors.foreach(failure.addSuppressed)
+    states.foreach(_.safeClose(failure))
+    logError(failure.getMessage, failure)
+    bssExec.synchronized {
+      bssExec.notifyAll()
+    }
+  }
 
   private object ShuffleServerOps {
     /**
@@ -366,6 +377,7 @@ class RapidsShuffleServer(transport: RapidsShuffleTransport,
 
       if (toTryAgain != null) {
         // we failed at least 1 time to copy to the bounce buffer
+        var shouldRequeue = true
         if (bssBuffers.isEmpty) {
           val allFailuresAreOom = supressedErrors.forall {
             case ex: RapidsShuffleSendPrepareException =>
@@ -382,30 +394,34 @@ class RapidsShuffleServer(transport: RapidsShuffleTransport,
           val withinOomRetryWindow = allFailuresAreOom && retryAttempts.forall(_.isDefined)
           if (withinOomRetryWindow) {
             val retryAttempt = retryAttempts.flatten.max
-            val backoffMillis = oomRetryBackoffMillis(retryAttempt)
             val message = s"GPU memory exhausted while preparing ${toTryAgain.size} sends. " +
-                s"Retry attempt $retryAttempt will start after $backoffMillis ms."
+                s"Retry attempt $retryAttempt will start after $oomRetryDelayMillis ms."
             if (retryAttempt == 1 || retryAttempt % 100 == 0) {
               logWarning(message)
             } else {
               logDebug(message)
             }
-            waitBeforeOomRetry(backoffMillis)
+            // This allocation runs on the shuffle server's non-task thread. Yield to task threads
+            // so they can spill and release GPU memory before this retry.
+            waitBeforeOomRetry()
           } else {
-            // We were not able to handle anything due to a non-memory failure or the OOM
-            // recovery window expired.
-            val reason = if (allFailuresAreOom) {
-              "GPU memory remained exhausted until the shuffle fetch timeout."
+            if (allFailuresAreOom) {
+              stopOomRetries(toTryAgain.toSeq, supressedErrors.toSeq,
+                "GPU memory remained exhausted until the shuffle fetch timeout.")
+              shouldRequeue = false
             } else {
-              "This issue can occur when requesting too many shuffle blocks."
+              // Preserve the existing fail-fast behavior for non-memory preparation failures.
+              val ise = new IllegalStateException("Unable to prepare any sends. " +
+                  "This issue can occur when requesting too many shuffle blocks. " +
+                  "The sends will not be retried.")
+              supressedErrors.foreach(ise.addSuppressed)
+              throw ise
             }
-            val ise = new IllegalStateException(
-              s"Unable to prepare any sends. $reason The sends will not be retried.")
-            supressedErrors.foreach(ise.addSuppressed)
-            throw ise
           }
         } else {
-          // we at least handled 1 `BufferSendState`, lets continue to retry
+          // Forward progress means this is not a continuous zero-progress interval. Start a new
+          // OOM retry window if the remaining sends later become the only work that cannot proceed.
+          toTryAgain.foreach(_.resetOomRetryWindow())
           logWarning(s"Unable to prepare ${toTryAgain.size} sends. " +
               "This issue can occur when requesting many shuffle blocks. " +
               "The sends will be retried.")
@@ -413,7 +429,9 @@ class RapidsShuffleServer(transport: RapidsShuffleTransport,
 
         // Requeue sends that could not acquire enough memory. Non-memory failures
         // reach this point only when another send made progress.
-        addToContinueQueue(toTryAgain.toSeq)
+        if (shouldRequeue) {
+          addToContinueQueue(toTryAgain.toSeq)
+        }
       }
 
       serverStream.sync()

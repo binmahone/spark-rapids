@@ -118,6 +118,9 @@ class BufferSendState(
 
   private[this] var acquiredBuffs: Seq[RangeBuffer] = Seq.empty
 
+  // A retry window belongs to this transfer request. Its first materialization OOM starts an
+  // episode, and only a successful preparation by this state resets the episode. Results from
+  // other BufferSendState instances that happen to share a server batch do not affect it.
   private[this] var oomRetryStartNanos: Option[Long] = None
   private[this] var oomRetryAttempts: Int = 0
 
@@ -213,9 +216,9 @@ class BufferSendState(
             } catch {
               case oom: OutOfMemoryError =>
                 throw new RapidsShuffleSendPrepareException(
-                  s"GPU memory exhausted while materializing a shuffle buffer for executor " +
+                  s"Memory exhausted while materializing a shuffle buffer for executor " +
                       s"${peerExecutorId} and header " +
-                      s"${TransportUtils.toHex(peerBufferReceiveHeader)}", oom)
+                      s"${TransportUtils.toHex(peerBufferReceiveHeader)}: ${oom.toString}", oom)
             }
             buff match {
               case _: DeviceMemoryBuffer =>
@@ -280,6 +283,7 @@ class BufferSendState(
     logDebug(s"Sending ${buffsToSend} for transfer request, " +
         s" [peer_executor_id=${transaction.peerExecutorId()}]")
 
+    // Preparing this state's next send ends its continuous materialization-OOM episode.
     resetOomRetryWindow()
     buffsToSend
   }

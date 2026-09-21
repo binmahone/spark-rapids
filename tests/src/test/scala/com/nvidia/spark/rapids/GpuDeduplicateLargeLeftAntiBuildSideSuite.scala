@@ -25,6 +25,9 @@ import org.apache.spark.sql.catalyst.plans.logical.Aggregate
 
 class GpuDeduplicateLargeLeftAntiBuildSideSuite extends SparkQueryCompareTestSuite {
 
+  private val enabledConf =
+    "spark.rapids.sql.optimizer.deduplicateLargeLeftAntiBuildSide.enabled"
+
   test("deduplicate a repeated left-anti existence key") {
     val datasetDir = Files.createTempDirectory("left-anti-deduplicate-dataset").toFile
     val metadataFile = datasetDir.toPath.resolve("trusted-metadata.properties")
@@ -55,11 +58,50 @@ class GpuDeduplicateLargeLeftAntiBuildSideSuite extends SparkQueryCompareTestSui
         spark.conf.set(GpuOptimizerTrustedMetadata.pathConf, "")
         val expected = spark.sql(sql).collect().toSeq
         spark.conf.set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString)
+        spark.conf.set(enabledConf, "true")
         val query = spark.sql(sql)
         val optimized = query.queryExecution.optimizedPlan
 
         assert(query.collect().toSeq === expected)
         assert(optimized.collect { case aggregate: Aggregate => aggregate }.nonEmpty,
+          optimized.treeString)
+      }, new SparkConf())
+    } finally {
+      ApacheFileUtils.deleteDirectory(datasetDir)
+    }
+  }
+
+  test("leave a repeated left-anti existence key unchanged when disabled") {
+    val datasetDir = Files.createTempDirectory("left-anti-deduplicate-disabled").toFile
+    val metadataFile = datasetDir.toPath.resolve("trusted-metadata.properties")
+    val metadata =
+      s"""dataset.path=${datasetDir.getCanonicalPath}
+         |table.orders.rowCount=6
+         |column.orders.o_custkey.distinctCount=2
+         |""".stripMargin
+    Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
+
+    try {
+      withCpuSparkSession(spark => {
+        import spark.implicits._
+
+        Seq(1L, 1L, 1L, 2L, 2L, 2L)
+          .toDF("o_custkey")
+          .write.parquet(datasetDir.toPath.resolve("orders").toString)
+        spark.read.parquet(datasetDir.toPath.resolve("orders").toString)
+          .createOrReplaceTempView("orders")
+        Seq(1L, 2L, 3L).toDF("c_custkey").createOrReplaceTempView("customer")
+
+        spark.conf.set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString)
+        spark.conf.set(enabledConf, "false")
+        val optimized = spark.sql(
+          """SELECT c_custkey
+            |FROM customer
+            |WHERE NOT EXISTS (
+            |  SELECT * FROM orders WHERE o_custkey = c_custkey)
+            |""".stripMargin).queryExecution.optimizedPlan
+
+        assert(optimized.collect { case aggregate: Aggregate => aggregate }.isEmpty,
           optimized.treeString)
       }, new SparkConf())
     } finally {

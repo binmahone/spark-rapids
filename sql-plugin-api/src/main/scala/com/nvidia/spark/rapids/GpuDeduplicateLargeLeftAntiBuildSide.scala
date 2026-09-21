@@ -31,9 +31,14 @@ case class GpuDeduplicateLargeLeftAntiBuildSide(spark: SparkSession)
   extends Rule[LogicalPlan]
   with Logging {
 
+  private val enabledConf =
+    "spark.rapids.sql.optimizer.deduplicateLargeLeftAntiBuildSide.enabled"
   private val minReductionRatio = BigInt(2)
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
+    if (!spark.conf.getOption(enabledConf).exists(_.toBoolean)) {
+      return plan
+    }
     registerPostSubqueryPass()
     if (!plan.resolved) {
       plan

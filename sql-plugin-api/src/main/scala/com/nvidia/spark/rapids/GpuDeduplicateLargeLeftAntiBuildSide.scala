@@ -36,10 +36,10 @@ case class GpuDeduplicateLargeLeftAntiBuildSide(spark: SparkSession)
   private val minReductionRatio = BigInt(2)
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
+    registerPostSubqueryPass()
     if (!spark.conf.getOption(enabledConf).exists(_.toBoolean)) {
       return plan
     }
-    registerPostSubqueryPass()
     if (!plan.resolved) {
       plan
     } else {

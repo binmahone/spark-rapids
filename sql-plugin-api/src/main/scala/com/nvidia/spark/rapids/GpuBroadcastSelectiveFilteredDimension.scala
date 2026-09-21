@@ -45,6 +45,8 @@ case class GpuBroadcastSelectiveFilteredDimension(spark: SparkSession)
     "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.costGate.enabled"
   private val minNetworkSavingsRatioKey =
     "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.minNetworkSavingsRatio"
+  private val peerCountKey =
+    "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.peerCount"
   private val broadcastMaxSizeKey = "spark.rapids.shuffle.broadcast.maxSize"
   private val maxOutputColumns = 4
   private val maxInValues = 16
@@ -113,8 +115,9 @@ case class GpuBroadcastSelectiveFilteredDimension(spark: SparkSession)
     }
     val maxBuildBytes = BigInt(JavaUtils.byteStringAsBytes(
       spark.sessionState.conf.getConfString(broadcastMaxSizeKey, "4g")))
+    val executorInstances = spark.sparkContext.getConf.get("spark.executor.instances", "1")
     val peers = spark.sessionState.conf
-      .getConfString("spark.executor.instances", "1").toLong.max(1L)
+      .getConfString(peerCountKey, executorInstances).toLong.max(1L)
     if (buildBytes > maxBuildBytes || peers <= 1) {
       return false
     }

@@ -264,7 +264,7 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     val trustedConf = conf
       .set("spark.sql.autoBroadcastJoinThreshold", "1g")
       .set("spark.rapids.shuffle.broadcast.maxSize", "12g")
-      .set("spark.executor.instances", "8")
+      .set("spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.peerCount", "8")
       .set(
         "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.costGate.enabled",
         "true")
@@ -314,7 +314,7 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     val trustedConf = conf
       .set("spark.sql.autoBroadcastJoinThreshold", "1g")
       .set("spark.rapids.shuffle.broadcast.maxSize", "12g")
-      .set("spark.executor.instances", "32")
+      .set("spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.peerCount", "32")
       .set(
         "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.costGate.enabled",
         "true")

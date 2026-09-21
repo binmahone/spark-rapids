@@ -24,7 +24,7 @@ import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical.{BROADCAST, Filter, HintInfo, Join, JoinHint}
 import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan, Project, SubqueryAlias}
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.util.Utils
+import org.apache.spark.network.util.JavaUtils
 
 /**
  * Broadcast a selectively filtered single-table build after CBO has fixed the join order.
@@ -111,7 +111,7 @@ case class GpuBroadcastSelectiveFilteredDimension(spark: SparkSession)
     if (!costGateEnabled || buildBytes <= autoBroadcastThreshold || probeBytes <= 0) {
       return false
     }
-    val maxBuildBytes = BigInt(Utils.byteStringAsBytes(
+    val maxBuildBytes = BigInt(JavaUtils.byteStringAsBytes(
       spark.sessionState.conf.getConfString(broadcastMaxSizeKey, "4g")))
     val peers = spark.sessionState.conf
       .getConfString("spark.executor.instances", "1").toLong.max(1L)

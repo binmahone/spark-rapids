@@ -24,16 +24,16 @@ import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical.{BROADCAST, Filter, HintInfo, Join, JoinHint}
 import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan, Project, SubqueryAlias}
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.util.Utils
 
 /**
  * Broadcast a selectively filtered single-table build after CBO has fixed the join order.
  *
  * Spark cannot estimate literal substring predicates from ordinary column statistics. A large
- * dimension can therefore remain a shuffled build even when its projected keyset fits the normal
- * broadcast threshold, forcing the much larger probe branch through an avoidable exchange. This
- * rule uses the same frozen path-bound metadata as the other Wild optimizer rules and applies a
- * query-independent selectivity estimate. It changes only the join strategy hint; row semantics
- * and join order are unchanged.
+ * dimension can therefore remain a shuffled build even when broadcasting it costs less network
+ * traffic than repartitioning both sides. This rule uses the same frozen path-bound metadata as
+ * the other Wild optimizer rules and applies a query-independent selectivity and network-cost
+ * estimate. It changes only the join strategy hint; row semantics and join order are unchanged.
  */
 case class GpuBroadcastSelectiveFilteredDimension(spark: SparkSession)
   extends Rule[LogicalPlan]
@@ -41,6 +41,11 @@ case class GpuBroadcastSelectiveFilteredDimension(spark: SparkSession)
 
   private val enabledKey =
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled"
+  private val costGateEnabledKey =
+    "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.costGate.enabled"
+  private val minNetworkSavingsRatioKey =
+    "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.minNetworkSavingsRatio"
+  private val broadcastMaxSizeKey = "spark.rapids.shuffle.broadcast.maxSize"
   private val maxOutputColumns = 4
   private val maxInValues = 16
   private val maxBroadcastRows = BigInt(512000000)
@@ -91,10 +96,43 @@ case class GpuBroadcastSelectiveFilteredDimension(spark: SparkSession)
       return None
     }
     metadata.flatMap(_.estimate(build)).filter { estimate =>
-      estimate.rows > 0 && estimate.rows < maxBroadcastRows &&
+      val probeBytes = estimatedBytes(probe)
+      val standardBroadcast = estimate.rows > 0 && estimate.rows < maxBroadcastRows &&
         estimate.sizeInBytes > 0 && estimate.sizeInBytes <= threshold &&
-        scanBytes(probe) >= estimate.sizeInBytes * 2
+        probeBytes >= estimate.sizeInBytes * 2
+      standardBroadcast || costGatedBroadcast(estimate.sizeInBytes, probeBytes, threshold)
     }.map(estimate => estimate.rows -> estimate.sizeInBytes)
+  }
+
+  private def costGatedBroadcast(
+      buildBytes: BigInt,
+      probeBytes: BigInt,
+      autoBroadcastThreshold: BigInt): Boolean = {
+    if (!costGateEnabled || buildBytes <= autoBroadcastThreshold || probeBytes <= 0) {
+      return false
+    }
+    val maxBuildBytes = BigInt(Utils.byteStringAsBytes(
+      spark.sessionState.conf.getConfString(broadcastMaxSizeKey, "4g")))
+    val peers = spark.sessionState.conf
+      .getConfString("spark.executor.instances", "1").toLong.max(1L)
+    if (buildBytes > maxBuildBytes || peers <= 1) {
+      return false
+    }
+    val broadcastNetworkBytes = buildBytes * (peers - 1)
+    val shuffleNetworkBytes = buildBytes + probeBytes
+    val accepted = BigDecimal(shuffleNetworkBytes) >=
+      BigDecimal(broadcastNetworkBytes) * minNetworkSavingsRatio
+    if (accepted) {
+      logWarning(
+        "GpuBroadcastSelectiveFilteredDimension: cost-gated broadcast above Spark threshold " +
+          s"buildBytes=$buildBytes probeBytes=$probeBytes peers=$peers " +
+          s"broadcastNetworkBytes=$broadcastNetworkBytes " +
+          s"shuffleNetworkBytes=$shuffleNetworkBytes " +
+          s"minNetworkSavingsRatio=$minNetworkSavingsRatio " +
+          s"maxBuildBytes=$maxBuildBytes " +
+          s"autoBroadcastJoinThreshold=$autoBroadcastThreshold")
+    }
+    accepted
   }
 
   private def safeFilteredSingleTable(plan: LogicalPlan): Boolean = {
@@ -146,6 +184,11 @@ case class GpuBroadcastSelectiveFilteredDimension(spark: SparkSession)
     if (bytes > 0) bytes else plan.stats.sizeInBytes
   }
 
+  private def estimatedBytes(plan: LogicalPlan): BigInt = {
+    metadata.flatMap(_.estimate(plan)).map(_.sizeInBytes).filter(_ > 0)
+      .getOrElse(scanBytes(plan))
+  }
+
   private def logAccepted(
       build: LogicalPlan,
       estimate: (BigInt, BigInt)): Unit = {
@@ -158,6 +201,13 @@ case class GpuBroadcastSelectiveFilteredDimension(spark: SparkSession)
   private def enabled: Boolean = spark.sessionState.conf
     .getConfString(enabledKey, "false")
     .toBoolean
+
+  private def costGateEnabled: Boolean = spark.sessionState.conf
+    .getConfString(costGateEnabledKey, "false")
+    .toBoolean
+
+  private def minNetworkSavingsRatio: BigDecimal = BigDecimal(
+    spark.sessionState.conf.getConfString(minNetworkSavingsRatioKey, "1.25"))
 
   private def registerPostCboPass(): Unit = {
     if (!enabled) {

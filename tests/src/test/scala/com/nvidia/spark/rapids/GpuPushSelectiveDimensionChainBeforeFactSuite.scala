@@ -251,6 +251,101 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     }
   }
 
+  test("cost-gates a selective broadcast above the Spark threshold") {
+    val datasetDir = Files.createTempDirectory("trusted-cost-broadcast-dataset").toFile
+    val partDir = datasetDir.toPath.resolve("part")
+    val metadataFile = datasetDir.toPath.resolve("trusted-metadata.properties")
+    val metadata =
+      s"""dataset.path=${datasetDir.getCanonicalPath}
+         |table.part.rowCount=4000000000
+         |column.part.p_partkey.distinctCount=4000000000
+         |""".stripMargin
+    Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
+    val trustedConf = conf
+      .set("spark.sql.autoBroadcastJoinThreshold", "1g")
+      .set("spark.rapids.shuffle.broadcast.maxSize", "12g")
+      .set("spark.executor.instances", "8")
+      .set(
+        "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.costGate.enabled",
+        "true")
+      .set(
+        "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.minNetworkSavingsRatio",
+        "1.25")
+      .set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString)
+
+    try {
+      withCpuSparkSession(
+        spark => {
+          import spark.implicits._
+
+          Seq((1L, "forest green"), (2L, "red"))
+            .toDF("p_partkey", "p_name")
+            .write.parquet(partDir.toString)
+          val part = spark.read.parquet(partDir.toString)
+            .filter(col("p_name").contains("green"))
+            .select("p_partkey")
+            .queryExecution.analyzed
+          val lPartKey = AttributeReference("l_partkey", LongType)()
+          val lineitem = SelectiveDimensionStatRel(Seq(lPartKey), 10000000000L)
+          val pPartKey = part.output.find(_.name == "p_partkey").get
+          val original = join(lineitem, part, EqualTo(lPartKey, pPartKey))
+          val rewritten = GpuBroadcastSelectiveFilteredDimension(spark)(original)
+
+          val rewrittenJoin = rewritten.asInstanceOf[Join]
+          assert(rewrittenJoin.hint.rightHint.exists(_.strategy.contains(BROADCAST)),
+            rewritten.treeString)
+        },
+        trustedConf)
+    } finally {
+      ApacheFileUtils.deleteDirectory(datasetDir)
+    }
+  }
+
+  test("rejects an above-threshold broadcast without enough network savings") {
+    val datasetDir = Files.createTempDirectory("trusted-cost-reject-dataset").toFile
+    val partDir = datasetDir.toPath.resolve("part")
+    val metadataFile = datasetDir.toPath.resolve("trusted-metadata.properties")
+    val metadata =
+      s"""dataset.path=${datasetDir.getCanonicalPath}
+         |table.part.rowCount=4000000000
+         |column.part.p_partkey.distinctCount=4000000000
+         |""".stripMargin
+    Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
+    val trustedConf = conf
+      .set("spark.sql.autoBroadcastJoinThreshold", "1g")
+      .set("spark.rapids.shuffle.broadcast.maxSize", "12g")
+      .set("spark.executor.instances", "32")
+      .set(
+        "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.costGate.enabled",
+        "true")
+      .set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString)
+
+    try {
+      withCpuSparkSession(
+        spark => {
+          import spark.implicits._
+
+          Seq((1L, "forest green"), (2L, "red"))
+            .toDF("p_partkey", "p_name")
+            .write.parquet(partDir.toString)
+          val part = spark.read.parquet(partDir.toString)
+            .filter(col("p_name").contains("green"))
+            .select("p_partkey")
+            .queryExecution.analyzed
+          val lPartKey = AttributeReference("l_partkey", LongType)()
+          val lineitem = SelectiveDimensionStatRel(Seq(lPartKey), 1000000000L)
+          val pPartKey = part.output.find(_.name == "p_partkey").get
+          val original = join(lineitem, part, EqualTo(lPartKey, pPartKey))
+          val rewritten = GpuBroadcastSelectiveFilteredDimension(spark)(original)
+
+          assert(rewritten.fastEquals(original), rewritten.treeString)
+        },
+        trustedConf)
+    } finally {
+      ApacheFileUtils.deleteDirectory(datasetDir)
+    }
+  }
+
   test("estimates a filtered PK-FK-like dimension chain from trusted NDVs") {
     val datasetDir = Files.createTempDirectory("trusted-dimension-chain-dataset").toFile
     val regionDir = datasetDir.toPath.resolve("region")

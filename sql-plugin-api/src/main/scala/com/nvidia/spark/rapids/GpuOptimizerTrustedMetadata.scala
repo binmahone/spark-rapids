@@ -63,7 +63,7 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
       lineage: Map[Long, (String, String)],
       distinct: Map[Long, BigInt])
 
-  /** Estimate a path-bound branch from frozen cardinalities, NDVs, and declared FK relations. */
+  /** Estimate a path-bound branch from frozen cardinalities, NDVs, and value ranges. */
   def estimate(plan: LogicalPlan): Option[Estimate] = {
     estimateDetailed(plan).map { detailed =>
       val outputWidth = plan.output.map(_.dataType.defaultSize).sum.max(1)
@@ -270,21 +270,9 @@ private[rapids] final class GpuOptimizerTrustedMetadata private(
       rightAttribute: Attribute,
       left: DetailedEstimate,
       right: DetailedEstimate): Option[BigInt] = for {
-    leftColumn <- left.lineage.get(leftAttribute.exprId.id)
-    rightColumn <- right.lineage.get(rightAttribute.exprId.id)
-    if isDeclaredSingleColumnForeignKey(leftColumn, rightColumn) ||
-      isDeclaredSingleColumnForeignKey(rightColumn, leftColumn)
     leftNdv <- left.distinct.get(leftAttribute.exprId.id)
     rightNdv <- right.distinct.get(rightAttribute.exprId.id)
   } yield leftNdv.max(rightNdv)
-
-  private def isDeclaredSingleColumnForeignKey(
-      source: (String, String),
-      target: (String, String)): Boolean = {
-    val targetIsPrimary = primaryKeys.get(target._1).contains(Seq(target._2))
-    targetIsPrimary && foreignKeys.get((source._1, Seq(source._2)))
-      .contains((target._1, Seq(target._2)))
-  }
 
   private def predicateSelectivity(
       estimate: DetailedEstimate,
@@ -520,6 +508,8 @@ private[rapids] object GpuOptimizerTrustedMetadata extends Logging {
   private[rapids] case class ValueRange(min: BigDecimal, max: BigDecimal)
 
   val pathConf = "spark.rapids.sql.optimizer.trustedMetadata.path"
+  val constraintsEnabledConf =
+    "spark.rapids.sql.optimizer.trustedMetadata.constraints.enabled"
 
   def fromSession(spark: SparkSession): Option[GpuOptimizerTrustedMetadata] = {
     fromConf(spark.sessionState.conf)
@@ -530,11 +520,14 @@ private[rapids] object GpuOptimizerTrustedMetadata extends Logging {
     if (configuredPath.isEmpty) {
       None
     } else {
-      Some(load(configuredPath))
+      val constraintsEnabled = conf.getConfString(constraintsEnabledConf, "true").toBoolean
+      Some(load(configuredPath, constraintsEnabled))
     }
   }
 
-  private[rapids] def load(path: String): GpuOptimizerTrustedMetadata = {
+  private[rapids] def load(
+      path: String,
+      constraintsEnabled: Boolean = true): GpuOptimizerTrustedMetadata = {
     val properties = new Properties
     val stream = new FileInputStream(path)
     try {
@@ -588,22 +581,28 @@ private[rapids] object GpuOptimizerTrustedMetadata extends Logging {
       }
       column -> ValueRange(min, max)
     }.toMap
-    val primaryKeys = values.collect {
-      case (key, value) if key.startsWith("primaryKey.") =>
-        val table = key.stripPrefix("primaryKey.").toLowerCase(java.util.Locale.ROOT)
-        table -> columns(value)
-    }
-    val foreignKeys = values.collect {
-      case (key, value) if key.startsWith("foreignKey.") =>
-        val source = qualifiedColumns(key.stripPrefix("foreignKey."), key, path)
-        val target = qualifiedColumns(value, key, path)
-        source -> target
-    }
-    val notNullColumns = values.collect {
-      case (key, value) if key.startsWith("notNull.") =>
-        val table = key.stripPrefix("notNull.").toLowerCase(java.util.Locale.ROOT)
-        table -> columns(value).toSet
-    }
+    val primaryKeys = if (constraintsEnabled) {
+      values.collect {
+        case (key, value) if key.startsWith("primaryKey.") =>
+          val table = key.stripPrefix("primaryKey.").toLowerCase(java.util.Locale.ROOT)
+          table -> columns(value)
+      }
+    } else Map.empty[String, Seq[String]]
+    val foreignKeys = if (constraintsEnabled) {
+      values.collect {
+        case (key, value) if key.startsWith("foreignKey.") =>
+          val source = qualifiedColumns(key.stripPrefix("foreignKey."), key, path)
+          val target = qualifiedColumns(value, key, path)
+          source -> target
+      }
+    } else Map.empty[(String, Seq[String]), (String, Seq[String])]
+    val notNullColumns = if (constraintsEnabled) {
+      values.collect {
+        case (key, value) if key.startsWith("notNull.") =>
+          val table = key.stripPrefix("notNull.").toLowerCase(java.util.Locale.ROOT)
+          table -> columns(value).toSet
+      }
+    } else Map.empty[String, Set[String]]
     if (tableRows.isEmpty) {
       throw new IllegalArgumentException(s"No table row counts in trusted metadata $path")
     }

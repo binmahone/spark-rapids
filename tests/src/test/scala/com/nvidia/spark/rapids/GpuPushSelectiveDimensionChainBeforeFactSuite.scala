@@ -346,7 +346,7 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     }
   }
 
-  test("estimates a filtered PK-FK-like dimension chain from trusted NDVs") {
+  test("estimates a filtered dimension chain from NDVs without constraints") {
     val datasetDir = Files.createTempDirectory("trusted-dimension-chain-dataset").toFile
     val regionDir = datasetDir.toPath.resolve("region")
     val nationDir = datasetDir.toPath.resolve("nation")
@@ -395,7 +395,8 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
               |JOIN trusted_nation ON s_nationkey = n_nationkey
               |JOIN trusted_region ON n_regionkey = r_regionkey
               |WHERE r_name = 'ASIA'""".stripMargin).queryExecution.analyzed
-          val estimate = GpuOptimizerTrustedMetadata.load(metadataFile.toString).estimate(chain)
+          val estimate = GpuOptimizerTrustedMetadata.load(
+            metadataFile.toString, constraintsEnabled = false).estimate(chain)
 
           assert(estimate.exists(_.rows == 60000000), s"$estimate\n${chain.treeString}")
           assert(

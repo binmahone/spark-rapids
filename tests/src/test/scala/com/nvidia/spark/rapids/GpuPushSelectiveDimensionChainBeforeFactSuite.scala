@@ -204,14 +204,14 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
 
           assert(!rewritten.fastEquals(testPlan.plan), rewritten.treeString)
           assert(
-            containsDirectJoin(rewritten, testPlan.lineitem, testPlan.part),
+            containsImmediateJoin(rewritten, testPlan.lineitem, testPlan.part),
             rewritten.treeString)
           assert(rewritten.outputSet == testPlan.plan.outputSet, rewritten.treeString)
 
           spark.conf.set(independentSelectiveLeafEnabledKey, "false")
           val coreOnly = GpuPushSelectiveDimensionChainBeforeFact(spark)(testPlan.plan)
           assert(
-            !containsDirectJoin(coreOnly, testPlan.lineitem, testPlan.part),
+            !containsImmediateJoin(coreOnly, testPlan.lineitem, testPlan.part),
             coreOnly.treeString)
           assert(coreOnly.outputSet == testPlan.plan.outputSet, coreOnly.treeString)
         },
@@ -817,14 +817,14 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
   private def containsBranch(plan: LogicalPlan, target: LogicalPlan): Boolean =
     sameBranch(plan, target) || plan.children.exists(containsBranch(_, target))
 
-  private def containsDirectJoin(
+  private def containsImmediateJoin(
       plan: LogicalPlan,
       first: LogicalPlan,
       second: LogicalPlan): Boolean =
     plan.exists {
       case Join(left, right, Inner, _, _) =>
-        (containsBranch(left, first) && containsBranch(right, second)) ||
-          (containsBranch(left, second) && containsBranch(right, first))
+        (sameBranch(left, first) && sameBranch(right, second)) ||
+          (sameBranch(left, second) && sameBranch(right, first))
       case _ => false
     }
 

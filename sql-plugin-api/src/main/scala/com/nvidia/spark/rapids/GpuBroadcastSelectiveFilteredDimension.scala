@@ -39,8 +39,10 @@ case class GpuBroadcastSelectiveFilteredDimension(spark: SparkSession)
   extends Rule[LogicalPlan]
   with Logging {
 
-  private val enabledKey =
+  private val parentEnabledKey =
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled"
+  private val enabledKey =
+    "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.enabled"
   private val costGateEnabledKey =
     "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.costGate.enabled"
   private val minNetworkSavingsRatioKey =
@@ -201,9 +203,10 @@ case class GpuBroadcastSelectiveFilteredDimension(spark: SparkSession)
         s"columns=${build.output.map(_.name).mkString(",")}")
   }
 
-  private def enabled: Boolean = spark.sessionState.conf
-    .getConfString(enabledKey, "false")
-    .toBoolean
+  private def enabled: Boolean = {
+    val parentEnabled = spark.sessionState.conf.getConfString(parentEnabledKey, "false")
+    spark.sessionState.conf.getConfString(enabledKey, parentEnabled).toBoolean
+  }
 
   private def costGateEnabled: Boolean = spark.sessionState.conf
     .getConfString(costGateEnabledKey, "false")

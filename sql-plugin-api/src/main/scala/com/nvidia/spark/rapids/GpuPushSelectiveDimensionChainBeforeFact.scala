@@ -71,6 +71,8 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.maxChainBytes"
   private val maxPrunableChainDimensionRowsKey =
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.maxChainRows"
+  private val independentSelectiveLeafEnabledKey =
+    "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.independentSelectiveLeaf.enabled"
   private val maxBasePrunableChainDimensionSizeInBytes = BigInt(1L << 30)
   private val maxBasePrunableChainDimensionRows = BigInt(10000000L)
   private val maxPrunableChainDimensionSizeInBytes =
@@ -760,48 +762,56 @@ case class GpuPushSelectiveDimensionChainBeforeFact(spark: SparkSession)
       conditions: Seq[Expression],
       lowNdv: AttributeSet,
       requiredOutput: AttributeSet): (Seq[LogicalPlan], Seq[Expression]) = {
-    val candidate = rest.flatMap {
-      leaf =>
-        val neighborsAndEdges = rest
-          .filterNot(_ eq leaf)
-          .flatMap {
-            neighbor =>
-              val edges = edgePredicates(leaf.outputSet, neighbor.outputSet, conditions)
-              if (edges.nonEmpty) Some((neighbor, edges)) else None
+    if (independentSelectiveLeafEnabled) {
+      val candidate = rest.flatMap {
+        leaf =>
+          val neighborsAndEdges = rest
+            .filterNot(_ eq leaf)
+            .flatMap {
+              neighbor =>
+                val edges = edgePredicates(leaf.outputSet, neighbor.outputSet, conditions)
+                if (edges.nonEmpty) Some((neighbor, edges)) else None
+            }
+          neighborsAndEdges match {
+            case Seq((neighbor, edges))
+                if hasSelectiveLiteralFilter(leaf) &&
+                  isPotentialPrunableChainDimension(leaf) &&
+                  edges.forall(edge => !edge.references.subsetOf(lowNdv)) =>
+              Some((leaf, neighbor, edges))
+            case _ => None
           }
-        neighborsAndEdges match {
-          case Seq((neighbor, edges))
-              if hasSelectiveLiteralFilter(leaf) &&
-                isPotentialPrunableChainDimension(leaf) &&
-                edges.forall(edge => !edge.references.subsetOf(lowNdv)) =>
-            Some((leaf, neighbor, edges))
-          case _ => None
-        }
-    }
+      }
 
-    candidate.sortBy {
-      case (leaf, neighbor, _) =>
-        (conservativePlanBytes(leaf), leaf.outputSet.toString, neighbor.outputSet.toString)
-    }.headOption match {
-      case Some((leaf, neighbor, edges)) =>
-        val remainingConditions = conditions.filterNot(
-          condition => edges.exists(edge => samePredicate(condition, edge)))
-        val branchRaw = buildJoin(
-          neighbor,
-          leaf,
-          edges.reduceOption(And),
-          broadcastSmallerHint(neighbor, leaf, allowLeft = false, allowRight = true))
-        val futureRefs =
-          requiredOutput ++ AttributeSet(remainingConditions.flatMap(_.references))
-        val branch = projectForFuture(branchRaw, futureRefs)
-        logWarning(
-          "GpuPushSelectiveDimensionChainBeforeFact: prebuilt independent selective leaf " +
-            s"leaf=${planSummary(leaf)} neighbor=${planSummary(neighbor)}")
-        (rest.filterNot(item => (item eq leaf) || (item eq neighbor)) :+ branch,
-          remainingConditions)
-      case None => (rest, conditions)
+      candidate.sortBy {
+        case (leaf, neighbor, _) =>
+          (conservativePlanBytes(leaf), leaf.outputSet.toString, neighbor.outputSet.toString)
+      }.headOption match {
+        case Some((leaf, neighbor, edges)) =>
+          val remainingConditions = conditions.filterNot(
+            condition => edges.exists(edge => samePredicate(condition, edge)))
+          val branchRaw = buildJoin(
+            neighbor,
+            leaf,
+            edges.reduceOption(And),
+            broadcastSmallerHint(neighbor, leaf, allowLeft = false, allowRight = true))
+          val futureRefs =
+            requiredOutput ++ AttributeSet(remainingConditions.flatMap(_.references))
+          val branch = projectForFuture(branchRaw, futureRefs)
+          logWarning(
+            "GpuPushSelectiveDimensionChainBeforeFact: prebuilt independent selective leaf " +
+              s"leaf=${planSummary(leaf)} neighbor=${planSummary(neighbor)}")
+          (rest.filterNot(item => (item eq leaf) || (item eq neighbor)) :+ branch,
+            remainingConditions)
+        case None => (rest, conditions)
+      }
+    } else {
+      (rest, conditions)
     }
   }
+
+  private def independentSelectiveLeafEnabled: Boolean = spark.sessionState.conf
+    .getConfString(independentSelectiveLeafEnabledKey, "true")
+    .toBoolean
 
   private def projectForFuture(plan: LogicalPlan, required: AttributeSet): LogicalPlan = {
     val keep = plan.output.filter(required.contains)

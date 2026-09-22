@@ -45,6 +45,12 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.maxChainRows"
   private val maxChainBytesKey =
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.maxChainBytes"
+  private val independentSelectiveLeafEnabledKey =
+    "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.independentSelectiveLeaf.enabled"
+  private val selectiveFilteredDimensionBroadcastEnabledKey =
+    "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.enabled"
+  private val pushSelectiveDimensionFilterIntoAggregateEnabledKey =
+    "spark.rapids.sql.optimizer.pushSelectiveDimensionFilterIntoAggregate.enabled"
   private val pushSelectiveKeysetKey =
     "spark.rapids.sql.optimizer.pushSelectiveKeysetToJoinInputs.enabled"
 
@@ -68,6 +74,11 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
             testPlan.lineitem),
           rewritten.treeString)
         assert(rewritten.outputSet == testPlan.plan.outputSet, rewritten.treeString)
+
+        spark.conf.set(independentSelectiveLeafEnabledKey, "false")
+        val coreOnly = GpuPushSelectiveDimensionChainBeforeFact(spark)(testPlan.plan)
+        assert(!coreOnly.fastEquals(rewritten), coreOnly.treeString)
+        assert(coreOnly.outputSet == testPlan.plan.outputSet, coreOnly.treeString)
       },
       conf)
   }
@@ -244,6 +255,10 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
             rewritten.treeString)
           assert(rewrittenJoin.left.fastEquals(lineitem), rewritten.treeString)
           assert(rewrittenJoin.right.fastEquals(part), rewritten.treeString)
+
+          spark.conf.set(selectiveFilteredDimensionBroadcastEnabledKey, "false")
+          val disabled = GpuBroadcastSelectiveFilteredDimension(spark)(original)
+          assert(disabled.fastEquals(original), disabled.treeString)
         },
         trustedConf)
     } finally {
@@ -512,6 +527,10 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
               hint.rightHint.exists(_.strategy.contains(BROADCAST))
           case _ => false
         }, rewritten.treeString)
+
+        spark.conf.set(pushSelectiveDimensionFilterIntoAggregateEnabledKey, "false")
+        val disabled = GpuPushSelectiveDimensionFilterIntoAggregate(spark)(original)
+        assert(disabled.fastEquals(original), disabled.treeString)
       },
       conf.set("spark.sql.autoBroadcastJoinThreshold", "12g"))
   }

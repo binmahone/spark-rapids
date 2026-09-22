@@ -39,8 +39,10 @@ case class GpuPushSelectiveDimensionFilterIntoAggregate(spark: SparkSession)
   extends Rule[LogicalPlan]
   with Logging {
 
-  private val enabledKey =
+  private val parentEnabledKey =
     "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled"
+  private val enabledKey =
+    "spark.rapids.sql.optimizer.pushSelectiveDimensionFilterIntoAggregate.enabled"
   private val maxDimensionScanRatio = BigDecimal("0.25")
   private val maxBroadcastRows = BigInt(512000000)
   private val metadata = GpuOptimizerTrustedMetadata.fromSession(spark)
@@ -252,9 +254,10 @@ case class GpuPushSelectiveDimensionFilterIntoAggregate(spark: SparkSession)
     case _ => false
   }
 
-  private def enabled: Boolean = spark.sessionState.conf
-    .getConfString(enabledKey, "false")
-    .toBoolean
+  private def enabled: Boolean = {
+    val parentEnabled = spark.sessionState.conf.getConfString(parentEnabledKey, "false")
+    spark.sessionState.conf.getConfString(enabledKey, parentEnabled).toBoolean
+  }
 
   private def registerPostCboPass(): Unit = {
     if (!enabled) {

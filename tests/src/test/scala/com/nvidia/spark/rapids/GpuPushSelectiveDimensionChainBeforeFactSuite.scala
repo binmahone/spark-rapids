@@ -75,10 +75,6 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
           rewritten.treeString)
         assert(rewritten.outputSet == testPlan.plan.outputSet, rewritten.treeString)
 
-        spark.conf.set(independentSelectiveLeafEnabledKey, "false")
-        val coreOnly = GpuPushSelectiveDimensionChainBeforeFact(spark)(testPlan.plan)
-        assert(!coreOnly.fastEquals(rewritten), coreOnly.treeString)
-        assert(coreOnly.outputSet == testPlan.plan.outputSet, coreOnly.treeString)
       },
       conf)
   }
@@ -211,6 +207,13 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
             containsDirectJoin(rewritten, testPlan.lineitem, testPlan.part),
             rewritten.treeString)
           assert(rewritten.outputSet == testPlan.plan.outputSet, rewritten.treeString)
+
+          spark.conf.set(independentSelectiveLeafEnabledKey, "false")
+          val coreOnly = GpuPushSelectiveDimensionChainBeforeFact(spark)(testPlan.plan)
+          assert(
+            !containsDirectJoin(coreOnly, testPlan.lineitem, testPlan.part),
+            coreOnly.treeString)
+          assert(coreOnly.outputSet == testPlan.plan.outputSet, coreOnly.treeString)
         },
         trustedConf)
     } finally {

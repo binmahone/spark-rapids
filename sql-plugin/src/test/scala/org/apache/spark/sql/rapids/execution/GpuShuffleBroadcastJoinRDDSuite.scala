@@ -89,6 +89,7 @@ class GpuShuffleBroadcastJoinRDDSuite extends AnyFunSuite with BeforeAndAfterAll
       Seq(expectedAttribute), exchange)
 
     assert(rewritten.isInstanceOf[GpuProjectExec])
+    assert(rewritten.supportsColumnar)
     assert(rewritten.output.map(_.exprId) == Seq(expectedAttribute.exprId))
     assert(rewritten.asInstanceOf[GpuProjectExec].child.output.map(_.exprId) ==
       Seq(exchangeAttribute.exprId))

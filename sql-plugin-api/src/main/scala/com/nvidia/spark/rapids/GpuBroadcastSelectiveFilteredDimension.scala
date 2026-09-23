@@ -50,6 +50,7 @@ case class GpuBroadcastSelectiveFilteredDimension(spark: SparkSession)
   private val peerCountKey =
     "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.peerCount"
   private val broadcastMaxSizeKey = "spark.rapids.shuffle.broadcast.maxSize"
+  private val adaptiveExecutionEnabledKey = "spark.sql.adaptive.enabled"
   private val maxOutputColumns = 4
   private val maxInValues = 16
   private val maxBroadcastRows = BigInt(512000000)
@@ -104,15 +105,25 @@ case class GpuBroadcastSelectiveFilteredDimension(spark: SparkSession)
       val standardBroadcast = estimate.rows > 0 && estimate.rows < maxBroadcastRows &&
         estimate.sizeInBytes > 0 && estimate.sizeInBytes <= threshold &&
         probeBytes >= estimate.sizeInBytes * 2
-      standardBroadcast || costGatedBroadcast(estimate.sizeInBytes, probeBytes, threshold)
+      standardBroadcast || costGatedBroadcast(
+        estimate.rows, estimate.sizeInBytes, probeBytes, threshold)
     }.map(estimate => estimate.rows -> estimate.sizeInBytes)
   }
 
   private def costGatedBroadcast(
+      buildRows: BigInt,
       buildBytes: BigInt,
       probeBytes: BigInt,
       autoBroadcastThreshold: BigInt): Boolean = {
     if (!costGateEnabled || buildBytes <= autoBroadcastThreshold || probeBytes <= 0) {
+      return false
+    }
+    // AQE materializes a standard broadcast query stage before the plugin can replace it with
+    // shuffle-broadcast. Respect the standard 512M-row limit until that AQE stage boundary can
+    // be replaced directly; otherwise the eager stage fails before the Wild path can run.
+    val aqeEnabled = spark.sessionState.conf
+      .getConfString(adaptiveExecutionEnabledKey, "true").toBoolean
+    if (aqeEnabled && buildRows >= maxBroadcastRows) {
       return false
     }
     val maxBuildBytes = BigInt(JavaUtils.byteStringAsBytes(

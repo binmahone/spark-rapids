@@ -280,6 +280,7 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
          |""".stripMargin
     Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
     val trustedConf = conf
+      .set("spark.sql.adaptive.enabled", "false")
       .set("spark.sql.autoBroadcastJoinThreshold", "1g")
       .set("spark.rapids.shuffle.broadcast.maxSize", "12g")
       .set("spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.peerCount", "8")
@@ -312,6 +313,55 @@ class GpuPushSelectiveDimensionChainBeforeFactSuite extends SparkQueryCompareTes
           val rewrittenJoin = rewritten.asInstanceOf[Join]
           assert(rewrittenJoin.hint.rightHint.exists(_.strategy.contains(BROADCAST)),
             rewritten.treeString)
+        },
+        trustedConf)
+    } finally {
+      ApacheFileUtils.deleteDirectory(datasetDir)
+    }
+  }
+
+  test("rejects a cost-gated build above the standard row limit when AQE is enabled") {
+    val datasetDir = Files.createTempDirectory("trusted-aqe-cost-broadcast-dataset").toFile
+    val partDir = datasetDir.toPath.resolve("part")
+    val metadataFile = datasetDir.toPath.resolve("trusted-metadata.properties")
+    val metadata =
+      s"""dataset.path=${datasetDir.getCanonicalPath}
+         |table.part.rowCount=4000000000
+         |column.part.p_partkey.distinctCount=4000000000
+         |""".stripMargin
+    Files.write(metadataFile, metadata.getBytes(StandardCharsets.UTF_8))
+    val trustedConf = conf
+      .set("spark.sql.adaptive.enabled", "true")
+      .set("spark.sql.autoBroadcastJoinThreshold", "1g")
+      .set("spark.rapids.shuffle.broadcast.maxSize", "12g")
+      .set("spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.peerCount", "8")
+      .set(
+        "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.costGate.enabled",
+        "true")
+      .set(
+        "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.minNetworkSavingsRatio",
+        "1.25")
+      .set(GpuOptimizerTrustedMetadata.pathConf, metadataFile.toString)
+
+    try {
+      withCpuSparkSession(
+        spark => {
+          import spark.implicits._
+
+          Seq((1L, "forest green"), (2L, "red"))
+            .toDF("p_partkey", "p_name")
+            .write.parquet(partDir.toString)
+          val part = spark.read.parquet(partDir.toString)
+            .filter(col("p_name").contains("green"))
+            .select("p_partkey")
+            .queryExecution.analyzed
+          val lPartKey = AttributeReference("l_partkey", LongType)()
+          val lineitem = SelectiveDimensionStatRel(Seq(lPartKey), 10000000000L)
+          val pPartKey = part.output.find(_.name == "p_partkey").get
+          val original = join(lineitem, part, EqualTo(lPartKey, pPartKey))
+          val rewritten = GpuBroadcastSelectiveFilteredDimension(spark)(original)
+
+          assert(rewritten.fastEquals(original), rewritten.treeString)
         },
         trustedConf)
     } finally {

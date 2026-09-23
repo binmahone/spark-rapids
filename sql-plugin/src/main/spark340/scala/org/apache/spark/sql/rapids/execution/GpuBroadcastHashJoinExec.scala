@@ -215,7 +215,8 @@ object GpuBroadcastHashJoinMeta extends Logging {
    *
    * AQE exchange reuse can expose output attributes whose expression IDs differ from the
    * underlying exchange. Dropping that mapping leaves join keys bound to IDs that are absent
-   * from the rewritten build input.
+   * from the rewritten build input. A GPU projection preserves the mapping while keeping the
+   * replacement subtree columnar; a raw ReusedExchangeExec is not a GPU execution node.
    */
   private[execution] def preserveExpectedOutput(
       expectedOutput: Seq[Attribute],
@@ -225,7 +226,11 @@ object GpuBroadcastHashJoinMeta extends Logging {
     if (expectedOutput.map(_.exprId) == exchange.output.map(_.exprId)) {
       exchange
     } else {
-      ReusedExchangeExec(expectedOutput, exchange)
+      val aliases = expectedOutput.zip(exchange.output).map { case (expected, actual) =>
+        GpuAlias(actual, expected.name)(
+          expected.exprId, expected.qualifier, Some(expected.metadata))
+      }.toList
+      GpuProjectExec(aliases, exchange)
     }
   }
 

@@ -15,6 +15,7 @@
  */
 package org.apache.spark.sql.rapids.execution
 
+import com.nvidia.spark.rapids.GpuProjectExec
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.funsuite.AnyFunSuite
 
@@ -22,8 +23,7 @@ import org.apache.spark.{NarrowDependency, SparkConf, SparkContext}
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.plans.physical.SinglePartition
 import org.apache.spark.sql.execution.LocalTableScanExec
-import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, ReusedExchangeExec,
-  ShuffleExchangeExec}
+import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, ShuffleExchangeExec}
 import org.apache.spark.sql.types.IntegerType
 
 class GpuShuffleBroadcastJoinRDDSuite extends AnyFunSuite with BeforeAndAfterAll {
@@ -88,9 +88,9 @@ class GpuShuffleBroadcastJoinRDDSuite extends AnyFunSuite with BeforeAndAfterAll
     val rewritten = GpuBroadcastHashJoinMeta.preserveExpectedOutput(
       Seq(expectedAttribute), exchange)
 
-    assert(rewritten.isInstanceOf[ReusedExchangeExec])
+    assert(rewritten.isInstanceOf[GpuProjectExec])
     assert(rewritten.output.map(_.exprId) == Seq(expectedAttribute.exprId))
-    assert(rewritten.asInstanceOf[ReusedExchangeExec].child.output.map(_.exprId) ==
+    assert(rewritten.asInstanceOf[GpuProjectExec].child.output.map(_.exprId) ==
       Seq(exchangeAttribute.exprId))
   }
 }

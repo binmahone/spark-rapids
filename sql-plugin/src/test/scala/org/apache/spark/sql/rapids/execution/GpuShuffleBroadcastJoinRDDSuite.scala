@@ -19,6 +19,12 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.funsuite.AnyFunSuite
 
 import org.apache.spark.{NarrowDependency, SparkConf, SparkContext}
+import org.apache.spark.sql.catalyst.expressions.AttributeReference
+import org.apache.spark.sql.catalyst.plans.physical.SinglePartition
+import org.apache.spark.sql.execution.LocalTableScanExec
+import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, ReusedExchangeExec,
+  ShuffleExchangeExec}
+import org.apache.spark.sql.types.IntegerType
 
 class GpuShuffleBroadcastJoinRDDSuite extends AnyFunSuite with BeforeAndAfterAll {
   private var sparkContext: SparkContext = _
@@ -69,5 +75,22 @@ class GpuShuffleBroadcastJoinRDDSuite extends AnyFunSuite with BeforeAndAfterAll
     assert(GpuBroadcastHashJoinMeta.isBuildSizeEligible(Some(4096), 2048,
       trustSparkPlan = true))
     assert(GpuBroadcastHashJoinMeta.isBuildSizeEligible(None, 2048, trustSparkPlan = true))
+  }
+
+  test("replacement exchange preserves AQE reused output expression IDs") {
+    val exchangeAttribute = AttributeReference("r_regionkey", IntegerType)()
+    val expectedAttribute = exchangeAttribute.newInstance()
+    val exchange = ShuffleExchangeExec(
+      SinglePartition,
+      LocalTableScanExec(Seq(exchangeAttribute)),
+      ENSURE_REQUIREMENTS)
+
+    val rewritten = GpuBroadcastHashJoinMeta.preserveExpectedOutput(
+      Seq(expectedAttribute), exchange)
+
+    assert(rewritten.isInstanceOf[ReusedExchangeExec])
+    assert(rewritten.output.map(_.exprId) == Seq(expectedAttribute.exprId))
+    assert(rewritten.asInstanceOf[ReusedExchangeExec].child.output.map(_.exprId) ==
+      Seq(exchangeAttribute.exprId))
   }
 }

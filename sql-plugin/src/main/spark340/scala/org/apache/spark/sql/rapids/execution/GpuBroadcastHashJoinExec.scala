@@ -46,12 +46,12 @@ import com.nvidia.spark.rapids._
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.rapids.shims.GpuShuffleExchangeExec
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.adaptive.BroadcastQueryStageExec
 import org.apache.spark.sql.execution.exchange.{BroadcastExchangeExec, ENSURE_REQUIREMENTS,
-  ReusedExchangeExec}
+  Exchange, ReusedExchangeExec}
 import org.apache.spark.sql.execution.joins.BroadcastHashJoinExec
 import org.apache.spark.sql.internal.SQLConf
 
@@ -146,7 +146,7 @@ object GpuBroadcastHashJoinMeta extends Logging {
 
   /** Peel BroadcastQueryStageExec / ReusedExchangeExec wrappers to get the
    *  underlying GpuBroadcastExchangeExec on the build side. Returns None if
-   *  the structure is unexpected (e.g. AQE on, or already-rewritten). */
+   *  the structure is unexpected or already rewritten. */
   private def unwrapBroadcastExchange(
       plan: SparkPlan): Option[GpuBroadcastExchangeExec] = plan match {
     case g: GpuBroadcastExchangeExec => Some(g)
@@ -211,6 +211,24 @@ object GpuBroadcastHashJoinMeta extends Logging {
     }
   }
 
+  /** Preserve the output attributes expected by the parent when replacing an exchange.
+   *
+   * AQE exchange reuse can expose output attributes whose expression IDs differ from the
+   * underlying exchange. Dropping that mapping leaves join keys bound to IDs that are absent
+   * from the rewritten build input.
+   */
+  private[execution] def preserveExpectedOutput(
+      expectedOutput: Seq[Attribute],
+      exchange: Exchange): SparkPlan = {
+    require(expectedOutput.length == exchange.output.length,
+      "Replacement exchange output length must match the expected build output")
+    if (expectedOutput.map(_.exprId) == exchange.output.map(_.exprId)) {
+      exchange
+    } else {
+      ReusedExchangeExec(expectedOutput, exchange)
+    }
+  }
+
   /** Rewrite the broadcast exchange under the build side into a single-output
    *  shuffle exchange. Every consumer task reads partition 0 (the only
    *  partition) and gets the full build assembled from all mappers' shards. */
@@ -230,10 +248,11 @@ object GpuBroadcastHashJoinMeta extends Logging {
       GpuSinglePartitioning,
       broadcastExchange.child,
       ENSURE_REQUIREMENTS)(GpuSinglePartitioning)
+    val rewrittenBuild = preserveExpectedOutput(buildPlan.output, newExchange)
 
     buildSide match {
-      case GpuBuildLeft => (newExchange, right)
-      case GpuBuildRight => (left, newExchange)
+      case GpuBuildLeft => (rewrittenBuild, right)
+      case GpuBuildRight => (left, rewrittenBuild)
     }
   }
 }

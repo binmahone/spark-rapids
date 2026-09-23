@@ -82,7 +82,7 @@ class GpuShuffleBroadcastJoinRDDSuite extends AnyFunSuite with BeforeAndAfterAll
     val expectedAttribute = exchangeAttribute.newInstance()
     val exchange = ShuffleExchangeExec(
       SinglePartition,
-      LocalTableScanExec(Seq(exchangeAttribute)),
+      LocalTableScanExec(Seq(exchangeAttribute), Seq.empty),
       ENSURE_REQUIREMENTS)
 
     val rewritten = GpuBroadcastHashJoinMeta.preserveExpectedOutput(

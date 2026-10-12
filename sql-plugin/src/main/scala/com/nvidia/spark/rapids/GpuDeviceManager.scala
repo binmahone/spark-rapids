@@ -201,6 +201,8 @@ object GpuDeviceManager extends Logging {
     chunkedPackMemoryResource = None
     poolSizeLimit = 0L
 
+    // Shuffle transports own device buffers that must be released before forced leak cleanup.
+    GpuShuffleEnv.shutdown()
     SpillFramework.shutdown()
 
     // If we close RMM resources in the shutdown hook in `MemoryCleaner`, will
@@ -211,8 +213,6 @@ object GpuDeviceManager extends Logging {
 
     RmmSpark.clearEventHandler()
     Rmm.clearEventHandler()
-    GpuShuffleEnv.shutdown()
-
     Rmm.shutdown()
     singletonMemoryInitialized = Uninitialized
   }

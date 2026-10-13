@@ -29,7 +29,8 @@ class LargeStringDenseSpillSuite extends RmmSparkRetrySuiteBase {
   test("STRING payload above two GiB preserves every byte after host and disk spill") {
     SpillFramework.shutdown()
     SpillFramework.initialize(new RapidsConf(new SparkConf()
-      .set(RapidsConf.HOST_SPILL_STORAGE_SIZE.key, "-1")))
+      .set(RapidsConf.OFF_HEAP_LIMIT_ENABLED.key, "false")
+      .set(RapidsConf.HOST_SPILL_STORAGE_SIZE.key, "4GB")))
     val rows = 2049
     val value = "x" * (1024 * 1024)
     val expected = value.getBytes(StandardCharsets.UTF_8)

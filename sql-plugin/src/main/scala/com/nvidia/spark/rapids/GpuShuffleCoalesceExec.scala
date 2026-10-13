@@ -392,7 +392,7 @@ class KudoTableOperator(kudo: Option[KudoSerializer], readOption: CoalesceReadOp
 
 
 class KudoGpuTableOperator(dataTypes: Array[DataType])
-  extends SerializedTableOperator[KudoSerializedTableColumn, ColumnarBatch] {
+  extends SerializedTableOperator[KudoSerializedTableColumn, ColumnarBatch] with Logging {
 
   override def getDataLen(column: KudoSerializedTableColumn): Long =
     column.spillableKudoTable.header
@@ -421,6 +421,7 @@ class KudoGpuTableOperator(dataTypes: Array[DataType])
         skt.header.isExtendedFormat
       }
       if (requiresHostMerge) {
+        logDebug(s"Kudo GPU read mode selected host merge: inputBytes=$dataBufSize")
         val serializer = new KudoSerializer(GpuColumnVector.from(dataTypes))
         withResource(spillables.safeMap(_.makeKudoTable)) { tables =>
           withResource(serializer.mergeOnHost(tables)) { merged =>

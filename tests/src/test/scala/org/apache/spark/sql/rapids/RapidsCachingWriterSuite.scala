@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
 
-import ai.rapids.cudf.{Cuda, MemoryBuffer, Rmm}
+import ai.rapids.cudf.{Cuda, HostMemoryBuffer, MemoryBuffer, Rmm}
 import com.nvidia.spark.rapids.{GpuCompressedColumnVector, GpuPackedTableColumn, RapidsConf,
   RmmSparkRetrySuiteBase, ShuffleBufferCatalog, ShuffleBufferCatalogTestUtils,
   TableCompressionCodec, WithTableBuffer}
@@ -106,8 +106,7 @@ class RapidsCachingWriterSuite extends RmmSparkRetrySuiteBase with MockitoSugar 
    * Feeds `inputs` to the writer, building each batch when the writer asks for it, as an
    * upstream operator does, then fails the map task's input if `thenFail`. `afterFirstBatch` runs
    * once the first batch is cached, and `afterLastBatch` once every batch is. Afterwards the
-   * batches are closed as the shuffle exchange closes them, except compressed ones, which the
-   * catalog has already closed.
+   * batches are closed as the shuffle exchange closes them.
    */
   private def write(
       writer: RapidsCachingWriter[Int, ColumnarBatch],
@@ -139,7 +138,42 @@ class RapidsCachingWriterSuite extends RmmSparkRetrySuiteBase with MockitoSugar 
     try {
       writer.write(records ++ failure)
     } finally {
-      built.filterNot(GpuCompressedColumnVector.isBatchCompressed).safeClose()
+      built.safeClose()
+    }
+  }
+
+  test("compressed writer output survives the shuffle iterator closing its input") {
+    val catalog = new ShuffleBufferCatalog()
+    val writer = newWriter(catalog, 7901, 0L)
+    val batch = compressedBatch(16)
+    val buffer = batch.column(0).asInstanceOf[GpuCompressedColumnVector].getTableBuffer
+    try {
+      val expected = withResource(HostMemoryBuffer.allocate(buffer.getLength)) { host =>
+        host.copyFromDeviceBuffer(buffer)
+        val bytes = new Array[Byte](buffer.getLength.toInt)
+        host.getBytes(bytes, 0, 0L, bytes.length)
+        bytes
+      }
+      writer.write(Iterator((0, batch)))
+      assertResult(2)(buffer.getRefCount)
+      batch.close()
+      assertResult(1)(buffer.getRefCount)
+      assert(writer.stop(true).isDefined)
+      val tableId = catalog.blockIdToMetas(ShuffleBlockId(7901, 0L, 0))
+        .head.bufferMeta().id()
+      withResource(catalog.getShuffleBufferHandle(tableId).spillable.materialize()) { stored =>
+        withResource(HostMemoryBuffer.allocate(stored.getLength)) { host =>
+          host.copyFromDeviceBuffer(stored)
+          val actual = new Array[Byte](stored.getLength.toInt)
+          host.getBytes(actual, 0, 0L, actual.length)
+          assert(actual.sameElements(expected))
+        }
+      }
+    } finally {
+      catalog.unregisterShuffle(7901)
+      if (buffer.getRefCount > 0) {
+        batch.close()
+      }
     }
   }
 
@@ -382,8 +416,10 @@ class RapidsCachingWriterSuite extends RmmSparkRetrySuiteBase with MockitoSugar 
         }
       })
       try {
-        val e = intercept[IllegalStateException] {
-          failed.write(Iterator(1 -> cached, 0 -> closeFails))
+        val e = withResource(Array(cached, closeFails)) { _ =>
+          intercept[IllegalStateException] {
+            failed.write(Iterator(1 -> cached, 0 -> closeFails))
+          }
         }
         assertResult("injected input close failure")(e.getMessage)
         assert(failed.stop(false).isEmpty)
@@ -396,8 +432,7 @@ class RapidsCachingWriterSuite extends RmmSparkRetrySuiteBase with MockitoSugar 
         assertReadable(catalog, 1, 11L, committed)
         assertReadable(catalog, 1, 10L, survivors)
       } finally {
-        // The adds closed both inputs, and the failing close dropped its reference before it
-        // threw, so neither input is closed again here.
+        // The shuffle iterator releases its inputs before failed-writer cleanup is checked.
         buffer.setEventHandler(null)
         catalog.unregisterShuffle(1)
       }

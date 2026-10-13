@@ -25,12 +25,13 @@ import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
 import com.nvidia.spark.rapids.jni.kudo.KudoGpuSerializer
 
 import org.apache.spark.TaskContext
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.rapids.GpuShuffleEnv
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
-trait GpuPartitioning extends Partitioning {
+trait GpuPartitioning extends Partitioning with Logging {
   private[this] val (
     maxCpuBatchSize, maxCompressionBatchSize, _useGPUShuffle,
         _useKudoGPUSlicing, _useMultiThreadedShuffle) = {
@@ -285,6 +286,8 @@ trait GpuPartitioning extends Partitioning {
       (GpuColumnVector.getTotalDeviceMemoryUsed(partitionColumns) > Int.MaxValue ||
         partitionColumns.exists(col => hasWideStringOffsets(col.getBase)))
     if (requiresHostSerialization) {
+      logDebug("Kudo GPU write mode selected host serialization for wide STRING offsets " +
+        "or a table larger than Int.MaxValue")
       sliceInternalOnCpuAndClose(numRows, partitionIndexes, partitionColumns)
     } else if (usesKudoGPUSlicing && !rowsOnly) {
       sliceAndSerializeOnGpu(numRows, partitionIndexes, partitionColumns)

@@ -152,10 +152,8 @@ class ShuffleBufferCatalog(val mapIdsCanRepeat: Boolean = false) extends Logging
   }
 
   /**
-   * Adds a contiguous table shuffle table to the device storage. This does NOT take ownership of
-   * the contiguous table, so it is the responsibility of the caller to close it.
-   * The refcount of the underlying device buffer will be incremented so the contiguous table
-   * can be closed before this buffer is destroyed.
+   * Adds a contiguous shuffle table to device storage, taking ownership of the table.
+   * The catalog retains a reference to the underlying device buffer before closing the table.
    *
    * @param blockId              Spark's `ShuffleBlockId` that identifies this buffer
    * @param contigTable          contiguous table to track in storage

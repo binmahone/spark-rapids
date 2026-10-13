@@ -323,12 +323,53 @@ public class TestHashedPriorityQueue {
   public void testPriorityIteratorEmptyAndSingleton() {
     HashedPriorityQueue<TestObj> q =
         new HashedPriorityQueue<>(new TestObjPriorityComparator());
-    assertFalse(q.priorityIterator().hasNext());
+    Iterator<TestObj> empty = q.priorityIterator();
+    assertFalse(empty.hasNext());
+    assertNull(empty.next());
     TestObj obj = new TestObj("single", 1);
     q.offer(obj);
     Iterator<TestObj> iterator = q.priorityIterator();
     assertSame(obj, iterator.next());
     assertFalse(iterator.hasNext());
+    assertNull(iterator.next());
     assertSame(obj, q.peek());
+  }
+
+  @Test
+  public void testPriorityIteratorTiesMatchQueuePolling() {
+    ArrayList<TestObj> objs = buildTestObjs(1000);
+    for (TestObj obj : objs) {
+      obj.priority %= 7;
+    }
+    Collections.shuffle(objs, new Random(31));
+    HashedPriorityQueue<TestObj> q =
+        new HashedPriorityQueue<>(new TestObjPriorityComparator());
+    insertIntoQueue(q, objs.iterator());
+    Iterator<TestObj> iterator = q.priorityIterator();
+    ArrayList<TestObj> result = new ArrayList<>();
+    while (iterator.hasNext()) {
+      result.add(iterator.next());
+    }
+    assertEquals(drainQueue(q), result);
+  }
+
+  @Test
+  public void testPriorityIteratorAfterPriorityUpdates() {
+    ArrayList<TestObj> objs = buildTestObjs(1000);
+    HashedPriorityQueue<TestObj> q =
+        new HashedPriorityQueue<>(new TestObjPriorityComparator());
+    insertIntoQueue(q, objs.iterator());
+    Random random = new Random(37);
+    for (TestObj obj : objs) {
+      obj.priority = random.nextLong();
+      q.priorityUpdated(obj);
+    }
+    objs.sort(new TestObjPriorityComparator());
+    Iterator<TestObj> iterator = q.priorityIterator();
+    for (TestObj obj : objs) {
+      assertSame(obj, iterator.next());
+    }
+    assertFalse(iterator.hasNext());
+    assertEquals(objs, drainQueue(q));
   }
 }

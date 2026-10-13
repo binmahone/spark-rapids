@@ -72,16 +72,6 @@ public final class HashedPriorityQueue<T> extends AbstractQueue<T> {
     size = 0;
   }
 
-  private HashedPriorityQueue(T[] heap, int size, HashMap<T, MutableInt> locationMap,
-                              Comparator<? super T> comparator) {
-    this.comparator = comparator;
-    this.heap = Arrays.copyOf(heap, size);
-    this.size = size;
-    locationMap.forEach((T k, MutableInt v) -> {
-      this.locationMap.put(k, new MutableInt(v.intValue()));
-    });
-  }
-
   @Override
   public int size() {
     return size;
@@ -173,17 +163,46 @@ public final class HashedPriorityQueue<T> extends AbstractQueue<T> {
     return Arrays.asList(Arrays.copyOf(heap, size)).iterator();
   }
 
+  /**
+   * Returns a priority-ordered membership snapshot without changing the source queue.
+   * Traversal removes only the snapshot's heap root, so no hash index is required.
+   */
   public Iterator<T> priorityIterator() {
-    HashedPriorityQueue<T> copy = new HashedPriorityQueue<>(heap, size, locationMap, comparator);
+    T[] snapshot = Arrays.copyOf(heap, size);
     return new Iterator<T>() {
+      private int remaining = snapshot.length;
+
       @Override
       public boolean hasNext() {
-        return !copy.isEmpty();
+        return remaining != 0;
       }
 
       @Override
       public T next() {
-        return copy.poll();
+        if (remaining == 0) {
+          return null;
+        }
+        T result = snapshot[0];
+        T last = snapshot[--remaining];
+        snapshot[remaining] = null;
+        if (remaining != 0) {
+          int index = 0;
+          int firstLeaf = remaining >>> 1;
+          while (index < firstLeaf) {
+            int child = 2 * index + 1;
+            int right = child + 1;
+            if (right < remaining && comparator.compare(snapshot[child], snapshot[right]) > 0) {
+              child = right;
+            }
+            if (comparator.compare(last, snapshot[child]) <= 0) {
+              break;
+            }
+            snapshot[index] = snapshot[child];
+            index = child;
+          }
+          snapshot[index] = last;
+        }
+        return result;
       }
     };
   }

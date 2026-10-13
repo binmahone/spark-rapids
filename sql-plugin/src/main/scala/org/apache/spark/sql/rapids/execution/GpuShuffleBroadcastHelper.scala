@@ -22,7 +22,7 @@
  */
 package org.apache.spark.sql.rapids.execution
 
-import com.nvidia.spark.rapids.{ConcatAndConsumeAll, GpuCoalesceIterator, GpuColumnVector, GpuMetric, NoopMetric, RapidsConf, RequireSingleBatch}
+import com.nvidia.spark.rapids.{ConcatAndConsumeAll, GpuColumnVector, GpuCompressionAwareCoalesceIterator, GpuMetric, NoopMetric, RapidsConf, RequireSingleBatch, TableCompressionCodec}
 import com.nvidia.spark.rapids.Arm.withResource
 import com.nvidia.spark.rapids.CoalesceReadOption
 import com.nvidia.spark.rapids.GpuShuffleCoalesceUtils
@@ -93,10 +93,12 @@ object GpuShuffleBroadcastHelper extends Logging {
         CoalesceReadOption(SQLConf.get),
         shuffleMetrics)
     }
-    new GpuCoalesceIterator(
+    val rapidsConf = new RapidsConf(SQLConf.get)
+    new GpuCompressionAwareCoalesceIterator(
       coalesceInput,
       dataTypes,
       RequireSingleBatch,
+      rapidsConf.shuffleCompressionMaxBatchMemory,
       NoopMetric, // numInputRows
       NoopMetric, // numInputBatches
       NoopMetric, // numOutputRows
@@ -104,7 +106,8 @@ object GpuShuffleBroadcastHelper extends Logging {
       NoopMetric, // collectTime
       metricsMap(CONCAT_TIME),
       metricsMap(OP_TIME_LEGACY),
-      "GpuShuffleBroadcastHashJoinExec").asInstanceOf[Iterator[ColumnarBatch]]
+      "GpuShuffleBroadcastHashJoinExec",
+      TableCompressionCodec.makeCodecConfig(rapidsConf)).asInstanceOf[Iterator[ColumnarBatch]]
   }
 
   /**
@@ -156,14 +159,17 @@ object GpuShuffleBroadcastHelper extends Logging {
         CoalesceReadOption(SQLConf.get),
         shuffleMetrics)
     }
-    val it = new GpuCoalesceIterator(
+    val rapidsConf = new RapidsConf(SQLConf.get)
+    val it = new GpuCompressionAwareCoalesceIterator(
       coalesceInput,
       dataTypes,
       RequireSingleBatch,
+      rapidsConf.shuffleCompressionMaxBatchMemory,
       NoopMetric, NoopMetric, NoopMetric, NoopMetric, NoopMetric,
       metricsMap(CONCAT_TIME),
       metricsMap(OP_TIME_LEGACY),
-      "GpuShuffleBroadcastHashJoinExec").asInstanceOf[Iterator[ColumnarBatch]]
+      "GpuShuffleBroadcastHashJoinExec",
+      TableCompressionCodec.makeCodecConfig(rapidsConf)).asInstanceOf[Iterator[ColumnarBatch]]
     verifyBuildSize(
       ConcatAndConsumeAll.getSingleBatchWithVerification(it, buildOutput), maxBuildSize)
   }

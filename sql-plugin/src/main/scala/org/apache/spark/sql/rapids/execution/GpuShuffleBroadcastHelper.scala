@@ -71,11 +71,11 @@ object GpuShuffleBroadcastHelper extends Logging {
     val dataTypes = GpuColumnVector.extractTypes(buildSchema)
     val rawIter = shuffleDataIterator(shuffleData)
     // When the RAPIDS Shuffle Manager + UCX is in use, the shuffle reader
-    // returns batches that are already on the GPU (GpuColumnVectorFromBuffer
-    // wrappers over contiguous-table buffers), so we must not run them
+    // returns batches that are already on the GPU, including opaque compressed
+    // buffers, so we must not run them
     // through the host-side deserialisation path in
     // getGpuShuffleCoalesceIterator. Skip directly to the GPU coalesce step
-    // that concatenates many GPU batches into one.
+    // that decodes compressed input and concatenates GPU batches into one.
     //
     // In the non-UCX path the reader yields host-serialised batches
     // (SerializedTableColumn or KudoSerializedTableColumn) that must be

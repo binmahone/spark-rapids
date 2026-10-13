@@ -50,6 +50,20 @@ public class TestHashedPriorityQueue {
     }
   }
 
+  private static class HashCountingObj extends TestObj {
+    int hashCalls;
+
+    HashCountingObj(String name, long priority) {
+      super(name, priority);
+    }
+
+    @Override
+    public int hashCode() {
+      hashCalls += 1;
+      return name.hashCode();
+    }
+  }
+
   private ArrayList<TestObj> buildTestObjs(int size) {
     ArrayList<TestObj> objs = new ArrayList<>(size);
     for (int i = 0; i < size; ++i) {
@@ -244,5 +258,77 @@ public class TestHashedPriorityQueue {
     objs.sort(new TestObjPriorityComparator());
     ArrayList<TestObj> result = drainQueue(q);
     assertEquals(objs, result);
+  }
+
+  @Test
+  public void testPriorityIteratorOrderingAndSourcePreservation() {
+    ArrayList<TestObj> objs = buildTestObjs(1000);
+    Collections.shuffle(objs, new Random(17));
+    HashedPriorityQueue<TestObj> q =
+        new HashedPriorityQueue<>(new TestObjPriorityComparator());
+    insertIntoQueue(q, objs.iterator());
+    objs.sort(new TestObjPriorityComparator());
+    Iterator<TestObj> iterator = q.priorityIterator();
+    for (TestObj expected : objs) {
+      assertTrue(iterator.hasNext());
+      assertSame(expected, iterator.next());
+    }
+    assertFalse(iterator.hasNext());
+    assertEquals(objs.size(), q.size());
+    assertEquals(objs, drainQueue(q));
+  }
+
+  @Test
+  public void testPriorityIteratorMembershipSnapshot() {
+    ArrayList<TestObj> objs = buildTestObjs(100);
+    HashedPriorityQueue<TestObj> q =
+        new HashedPriorityQueue<>(new TestObjPriorityComparator());
+    insertIntoQueue(q, objs.iterator());
+    Iterator<TestObj> iterator = q.priorityIterator();
+    assertSame(objs.get(0), iterator.next());
+    q.clear();
+    TestObj replacement = new TestObj("replacement", -1);
+    q.offer(replacement);
+    for (int i = 1; i < objs.size(); i++) {
+      assertSame(objs.get(i), iterator.next());
+    }
+    assertFalse(iterator.hasNext());
+    assertSame(replacement, q.poll());
+  }
+
+  @Test
+  public void testPriorityIteratorDoesNotBuildOrUpdateHashIndex() {
+    ArrayList<HashCountingObj> objs = new ArrayList<>();
+    HashedPriorityQueue<TestObj> q =
+        new HashedPriorityQueue<>(new TestObjPriorityComparator());
+    for (int i = 0; i < 1000; i++) {
+      HashCountingObj obj = new HashCountingObj(Integer.toString(i), i);
+      objs.add(obj);
+      q.offer(obj);
+    }
+    for (HashCountingObj obj : objs) {
+      obj.hashCalls = 0;
+    }
+    Iterator<TestObj> iterator = q.priorityIterator();
+    for (int i = 0; i < 20; i++) {
+      assertSame(objs.get(i), iterator.next());
+    }
+    for (HashCountingObj obj : objs) {
+      assertEquals(0, obj.hashCalls);
+    }
+    assertEquals(objs.size(), q.size());
+  }
+
+  @Test
+  public void testPriorityIteratorEmptyAndSingleton() {
+    HashedPriorityQueue<TestObj> q =
+        new HashedPriorityQueue<>(new TestObjPriorityComparator());
+    assertFalse(q.priorityIterator().hasNext());
+    TestObj obj = new TestObj("single", 1);
+    q.offer(obj);
+    Iterator<TestObj> iterator = q.priorityIterator();
+    assertSame(obj, iterator.next());
+    assertFalse(iterator.hasNext());
+    assertSame(obj, q.peek());
   }
 }

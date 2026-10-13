@@ -54,7 +54,7 @@ trait GpuPartitioning extends Partitioning with Logging {
 
   def usesGPUShuffle: Boolean = _useGPUShuffle
 
-  def usesKudoGPUSlicing: Boolean = _useKudoGPUSlicing
+  def usesKudoGPUSlicing: Boolean = _useKudoGPUSlicing && !usesGPUShuffle
 
   def usesMultiThreadedShuffle: Boolean = _useMultiThreadedShuffle
 

@@ -405,7 +405,8 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
         .createWithDefault(20)
 
   val SHUFFLE_KUDO_SERIALIZER_ENABLED = conf("spark.rapids.shuffle.kudo.serializer.enabled")
-    .doc("Enable or disable the Kudo serializer for the shuffle.")
+    .doc("Enable or disable the Kudo serializer for file-based shuffle. " +
+      "The UCX and CACHE_ONLY GPU transports use packed tables.")
     .internal()
     .startupOnly()
     .booleanConf

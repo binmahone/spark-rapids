@@ -307,6 +307,43 @@ class GpuShuffleCoalesceSuite extends AnyFunSuite with BeforeAndAfterEach {
     runKudoShuffleTest(targetBatchSize = 1000, wideStrings = true)
   }
 
+  Seq(false, true).foreach { wide =>
+    test(s"GPU shuffle keeps packed tables with Kudo GPU mode enabled, wide=$wide") {
+      TrampolineUtil.cleanupAnyExistingSession()
+      val conf = createSparkConf()
+        .set(RapidsConf.SHUFFLE_MANAGER_MODE.key, "CACHE_ONLY")
+        .set("spark.shuffle.manager", ShimLoader.getRapidsShuffleManagerClass)
+      TestUtils.withGpuSparkSession(conf) { _ =>
+        GpuShuffleEnv.init(new RapidsConf(conf))
+        val indices = Array(0, 2, 2)
+        val partitioning = createGpuPartitioning(indices)
+        assert(partitioning.usesGPUShuffle)
+        assert(!partitioning.usesKudoGPUSlicing)
+        withResource(if (wide) buildWideStringBatch() else buildBatch()) { original =>
+          GpuColumnVector.incRefCounts(original)
+          withResource(partitioning.sliceInternalGpuOrCpuAndClose(original.numRows(), indices,
+              GpuColumnVector.extractColumns(original)).map(_._1)) { partitions =>
+            assert(partitions.forall(_.column(0).isInstanceOf[GpuPackedTableColumn]))
+            val tables = partitions.map(_.column(0).asInstanceOf[GpuPackedTableColumn]
+              .getContiguousTable.getTable)
+            if (wide) {
+              tables.foreach { table =>
+                val expectedWidth = if (table.getRowCount == 0) DType.INT32 else DType.INT64
+                assertResult(expectedWidth)(table.getColumn(0).getOffsetsType)
+              }
+            }
+            withResource(Table.concatenate(tables: _*)) { merged =>
+              withResource(GpuColumnVector.from(merged,
+                  GpuColumnVector.extractTypes(original))) { restored =>
+                compareBatches(original, restored)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   test("wide STRING host fallback retries after GPU split OOM") {
     runKudoShuffleTest(targetBatchSize = 1000, minSplitSize = Some(1),
       forceSplitRetry = true, wideStrings = true)

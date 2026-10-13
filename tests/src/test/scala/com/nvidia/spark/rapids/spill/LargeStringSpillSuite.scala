@@ -19,11 +19,12 @@ package com.nvidia.spark.rapids.spill
 import java.util.{Collections, Optional}
 
 import ai.rapids.cudf.{Cuda, DType, HostColumnVector, HostMemoryBuffer, Table}
-import com.nvidia.spark.rapids.{GpuCompressedColumnVector, MetaUtils, RapidsConf, RmmSparkRetrySuiteBase, TableCompressionCodec}
+import com.nvidia.spark.rapids.{GpuCompressedColumnVector, MetaUtils, RapidsConf, RmmSparkRetrySuiteBase, ShuffleReceivedBufferCatalog, TableCompressionCodec}
 import com.nvidia.spark.rapids.Arm.withResource
 import com.nvidia.spark.rapids.format.CodecType
 
 import org.apache.spark.SparkConf
+import org.apache.spark.sql.types.{DataType, StringType}
 
 class LargeStringSpillSuite extends RmmSparkRetrySuiteBase {
   private def wideTable(): Table = {
@@ -48,6 +49,42 @@ class LargeStringSpillSuite extends RmmSparkRetrySuiteBase {
       assert(host.isNull(1))
       assertResult("def")(host.getJavaString(2))
       assertResult("")(host.getJavaString(3))
+    }
+  }
+
+  test("received shuffle buffers preserve their compression metadata before unpacking") {
+    val codec = TableCompressionCodec.getCodec(CodecType.COPY,
+      TableCompressionCodec.makeCodecConfig(new RapidsConf(new SparkConf)))
+    val compressed = withResource(wideTable()) { table =>
+      withResource(codec.createBatchCompressor(0, Cuda.DEFAULT_STREAM)) { compressor =>
+        compressor.addTableToCompress(table.contiguousSplit()(0))
+        withResource(compressor.finish()) { tables =>
+          GpuCompressedColumnVector.from(tables.head)
+        }
+      }
+    }
+    withResource(compressed) { _ =>
+      val source = compressed.column(0).asInstanceOf[GpuCompressedColumnVector]
+      source.getTableBuffer.incRefCount()
+      val catalog = new ShuffleReceivedBufferCatalog()
+      val handle = catalog.addBuffer(source.getTableBuffer, source.getTableMeta, 0L)
+      val (received, bytes) = catalog.getColumnarBatchAndRemove(handle, Array[DataType](StringType))
+      withResource(received) { _ =>
+        assertResult(source.getTableBuffer.getLength)(bytes)
+        assert(GpuCompressedColumnVector.isBatchCompressed(received))
+        val vector = received.column(0).asInstanceOf[GpuCompressedColumnVector]
+        assertResult(CodecType.COPY)(vector.getTableMeta.bufferMeta().codecBufferDescrs(0).codec())
+        withResource(codec.createBatchDecompressor(1024 * 1024, Cuda.DEFAULT_STREAM)) {
+          decompressor =>
+            vector.getTableBuffer.incRefCount()
+            decompressor.addBufferToDecompress(vector.getTableBuffer,
+              vector.getTableMeta.bufferMeta())
+            withResource(decompressor.finishAsync()) { buffers =>
+              withResource(MetaUtils.getTableFromMeta(
+                buffers.head, vector.getTableMeta))(verify)
+            }
+        }
+      }
     }
   }
 

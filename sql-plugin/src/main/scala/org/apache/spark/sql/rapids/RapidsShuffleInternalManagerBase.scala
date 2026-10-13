@@ -1658,7 +1658,7 @@ class RapidsCachingWriter[K, V](
               uncompressedMetric += c.getTableMeta.bufferMeta().uncompressedSize()
               catalog.addCompressedBatch(
                 blockId,
-                batch,
+                GpuCompressedColumnVector.incRefCounts(batch),
                 SpillPriorities.OUTPUT_FOR_SHUFFLE_INITIAL_TASK_PRIORITY)
             case c =>
               throw new IllegalStateException(s"Unexpected column type: ${c.getClass}")

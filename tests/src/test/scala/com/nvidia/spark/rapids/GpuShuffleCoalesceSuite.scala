@@ -308,6 +308,36 @@ class GpuShuffleCoalesceSuite extends AnyFunSuite with BeforeAndAfterEach {
   }
 
   Seq(false, true).foreach { wide =>
+    test(s"single GPU partition keeps a packed table with Kudo GPU mode enabled, wide=$wide") {
+      TrampolineUtil.cleanupAnyExistingSession()
+      val conf = createSparkConf()
+        .set(RapidsConf.SHUFFLE_MANAGER_MODE.key, "CACHE_ONLY")
+        .set("spark.shuffle.manager", ShimLoader.getRapidsShuffleManagerClass)
+      TestUtils.withGpuSparkSession(conf) { _ =>
+        GpuShuffleEnv.init(new RapidsConf(conf))
+        assert(GpuSinglePartitioning.usesGPUShuffle)
+        assert(!GpuSinglePartitioning.usesKudoGPUSlicing)
+        withResource(if (wide) buildWideStringBatch() else buildBatch()) { original =>
+          GpuColumnVector.incRefCounts(original)
+          val output = GpuSinglePartitioning.columnarEvalAny(original)
+            .asInstanceOf[Array[(ColumnarBatch, Int)]]
+          withResource(output.map(_._1)) { partitions =>
+            assertResult(1)(partitions.length)
+            assert(partitions.head.column(0).isInstanceOf[GpuPackedTableColumn])
+            val table = partitions.head.column(0).asInstanceOf[GpuPackedTableColumn]
+              .getContiguousTable.getTable
+            if (wide) {
+              assertResult(DType.INT64)(table.getColumn(0).getOffsetsType)
+            }
+            withResource(GpuColumnVector.from(table,
+                GpuColumnVector.extractTypes(original))) { restored =>
+              compareBatches(original, restored)
+            }
+          }
+        }
+      }
+    }
+
     test(s"GPU shuffle keeps packed tables with Kudo GPU mode enabled, wide=$wide") {
       TrampolineUtil.cleanupAnyExistingSession()
       val conf = createSparkConf()

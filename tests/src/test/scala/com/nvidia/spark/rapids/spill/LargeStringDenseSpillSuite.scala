@@ -27,10 +27,18 @@ import org.apache.spark.SparkConf
 
 class LargeStringDenseSpillSuite extends RmmSparkRetrySuiteBase {
   test("STRING payload above two GiB preserves every byte after host and disk spill") {
+    checkRoundTrip("4GB", throughHost = true)
+  }
+
+  test("STRING payload above two GiB preserves every byte after direct disk spill") {
+    checkRoundTrip("1MB", throughHost = false)
+  }
+
+  private def checkRoundTrip(hostCapacity: String, throughHost: Boolean): Unit = {
     SpillFramework.shutdown()
     SpillFramework.initialize(new RapidsConf(new SparkConf()
       .set(RapidsConf.OFF_HEAP_LIMIT_ENABLED.key, "false")
-      .set(RapidsConf.HOST_SPILL_STORAGE_SIZE.key, "4GB")))
+      .set(RapidsConf.HOST_SPILL_STORAGE_SIZE.key, hostCapacity)))
     val rows = 2049
     val value = "x" * (1024 * 1024)
     val expected = value.getBytes(StandardCharsets.UTF_8)
@@ -46,10 +54,12 @@ class LargeStringDenseSpillSuite extends RmmSparkRetrySuiteBase {
       assert(SpillFramework.stores.deviceStore.spill(handle.approxSizeInBytes) > 0)
       assert(handle.dev.isEmpty)
       assert(handle.host.isDefined)
-      assert(handle.host.get.host.isDefined)
+      assertResult(throughHost)(handle.host.get.host.isDefined)
       val hostBytes = handle.host.get.sizeInBytes
       assert(hostBytes > Int.MaxValue)
-      assert(SpillFramework.stores.hostStore.spill(hostBytes) > 0)
+      if (throughHost) {
+        assert(SpillFramework.stores.hostStore.spill(hostBytes) > 0)
+      }
       assert(handle.host.get.host.isEmpty)
       assert(handle.host.get.disk.isDefined)
       withResource(handle.materialize()) { restored =>
@@ -62,7 +72,8 @@ class LargeStringDenseSpillSuite extends RmmSparkRetrySuiteBase {
           }
         }
       }
-      info(s"DENSE_SPILL_RESULT rows=$rows hostBytes=$hostBytes everyByte=PASS")
+      info(s"DENSE_SPILL_RESULT rows=$rows hostBytes=$hostBytes " +
+        s"throughHost=$throughHost everyByte=PASS")
     }
   }
 }

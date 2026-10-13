@@ -27,6 +27,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatestplus.mockito.MockitoSugar
 
 import org.apache.spark.{HashPartitioner, SparkConf}
+import org.apache.spark.executor.ShuffleWriteMetrics
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.METRIC_DATA_SIZE
 import org.apache.spark.sql.vectorized.ColumnarBatch
@@ -66,8 +67,9 @@ class RapidsCachingWriterCompressedOwnershipSuite
     when(handle.shuffleId).thenReturn(blockId.shuffleId)
     when(handle.dependency).thenReturn(dependency)
     when(dependency.partitioner).thenReturn(new HashPartitioner(1))
+    val writeMetrics = new ShuffleWriteMetrics
     val writer = new RapidsCachingWriter[Int, ColumnarBatch](null, handle, blockId.mapId,
-      null, catalog, None, Map(METRIC_DATA_SIZE -> new SQLMetric("size", 0)))
+      writeMetrics, catalog, None, Map(METRIC_DATA_SIZE -> new SQLMetric("size", 0)))
     val codec = new CopyCompressionCodec
     var expected: Array[Byte] = null
 

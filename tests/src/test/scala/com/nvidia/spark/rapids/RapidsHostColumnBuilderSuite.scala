@@ -17,6 +17,7 @@
 package com.nvidia.spark.rapids
 
 import java.nio.charset.StandardCharsets
+import java.util.Arrays
 import java.util.function.Supplier
 
 import scala.util.{Failure, Try}
@@ -519,10 +520,40 @@ class RapidsHostColumnBuilderSuite extends AnyFunSuite {
     }
   }
 
+  test("wide STRING offsets preserve append and snapshot rollback beyond Int32") {
+    val chunk = 1 << 20
+    val value = new Array[Byte](chunk)
+    Arrays.fill(value, 'x'.toByte)
+    withResource(new RapidsHostColumnBuilder(stringType, 1)) { builder =>
+      (0 until 2047).foreach(_ => builder.appendUTF8String(value))
+      builder.appendUTF8String(value, 0, chunk - 1)
+      withResource(builder.build()) { host =>
+        assertResult(DType.INT32)(host.getOffsetsType)
+        assertResult(Int.MaxValue.toLong)(host.getEndListOffset(2047))
+      }
+      builder.appendUTF8String(value, 0, 1)
+      builder.appendNull()
+      val snapshot = builder.captureState()
+      builder.appendNull()
+      builder.appendUTF8String(value)
+      builder.restoreState(snapshot)
+      builder.append("ab")
+      withResource(builder.build()) { host =>
+        assertResult(DType.INT64)(host.getOffsetsType)
+        assertResult(2051L)(host.getRowCount)
+        assertResult(1L)(host.getNullCount)
+        assert(host.isNull(2049))
+        assert(!host.isNull(2050))
+        assertResult(1L << 31)(host.getStartListOffset(2050))
+        assertResult("ab")(host.getJavaString(2050))
+      }
+    }
+  }
+
   test("the production limits are the most a cuDF column can hold") {
-    // String bytes and offset rows are bounded by Int offsets, which need one entry more than
-    // there are rows; fixed-width elements and struct rows by the original builder's caps.
-    assertResult(2147483647L)(productionLimits.maxStringBytes)
+    // String byte positions use Long offsets. Offset rows need one entry more than rows;
+    // fixed-width elements and struct rows retain their original capacity limits.
+    assertResult(Long.MaxValue)(productionLimits.maxStringBytes)
     assertResult(2147483646L)(productionLimits.maxFixedWidthElements)
     assertResult(2147483645L)(productionLimits.maxOffsetRows)
     assertResult(2147483646L)(productionLimits.maxStructRows)
@@ -536,7 +567,6 @@ class RapidsHostColumnBuilderSuite extends AnyFunSuite {
     val invalid = Seq(
       limits(stringBytes = 0),
       limits(stringBytes = -1),
-      limits(stringBytes = productionLimits.maxStringBytes + 1),
       limits(fixedWidthElements = 0),
       limits(fixedWidthElements = productionLimits.maxFixedWidthElements + 1),
       limits(offsetRows = 0),

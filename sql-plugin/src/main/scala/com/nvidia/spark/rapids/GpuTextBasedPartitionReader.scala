@@ -179,8 +179,9 @@ class HostStringColBufferer(size: Long, separator: Array[Byte]) extends LineBuff
   private var dataBuffer = HostMemoryBuffer.allocate(size)
   private var dataLocation: Long = 0
   private var rowsAllocated: Int = Math.max((size / 200).toInt, 512)
-  private var offsetsBuffer = HostMemoryBuffer.allocate((rowsAllocated + 1) *
-      DType.INT32.getSizeInBytes)
+  private var offsetsType = DType.INT32
+  private var offsetsBuffer = HostMemoryBuffer.allocate((rowsAllocated + 1L) *
+      offsetsType.getSizeInBytes)
   private var numRows: Int = 0
 
   override def getLength: Long = dataLocation
@@ -191,15 +192,26 @@ class HostStringColBufferer(size: Long, separator: Array[Byte]) extends LineBuff
     if (numRows + 1 > rowsAllocated) {
       val newRowsAllocated = math.min(rowsAllocated * 2, Int.MaxValue - 1)
       val tmpBuffer =
-        HostMemoryBuffer.allocate((newRowsAllocated + 1) * DType.INT32.getSizeInBytes)
+        HostMemoryBuffer.allocate((newRowsAllocated + 1L) * offsetsType.getSizeInBytes)
       tmpBuffer.copyFromHostBuffer(0, offsetsBuffer, 0, offsetsBuffer.getLength)
       offsetsBuffer.close()
       offsetsBuffer = tmpBuffer
       rowsAllocated = newRowsAllocated
     }
 
-    if (dataLocation + lineLen > dataBuffer.getLength) {
-      val newSize = math.max(dataBuffer.getLength * 2, lineLen)
+    val requiredLength = Math.addExact(dataLocation, lineLen.toLong)
+    if (offsetsType == DType.INT32 && requiredLength > Int.MaxValue) {
+      closeOnExcept(HostMemoryBuffer.allocate((rowsAllocated + 1L) * 8L)) { wide =>
+        (0 until numRows).foreach { row =>
+          wide.setLong(row * 8L, offsetsBuffer.getInt(row * 4L))
+        }
+        offsetsBuffer.close()
+        offsetsBuffer = wide
+        offsetsType = DType.INT64
+      }
+    }
+    if (requiredLength > dataBuffer.getLength) {
+      val newSize = math.max(Math.multiplyExact(dataBuffer.getLength, 2L), requiredLength)
       closeOnExcept(HostMemoryBuffer.allocate(newSize)) { newBuff =>
         newBuff.copyFromHostBuffer(0, dataBuffer, 0, dataLocation)
         dataBuffer.close()
@@ -207,16 +219,22 @@ class HostStringColBufferer(size: Long, separator: Array[Byte]) extends LineBuff
       }
     }
     dataBuffer.setBytes(dataLocation, line, lineOffset, lineLen)
-    offsetsBuffer.setInt(numRows * DType.INT32.getSizeInBytes, dataLocation.toInt)
+    writeOffset()
     dataLocation += lineLen
     numRows += 1
   }
 
+  private def writeOffset(): Unit = {
+    if (offsetsType == DType.INT64) offsetsBuffer.setLong(numRows * 8L, dataLocation)
+    else offsetsBuffer.setInt(numRows * 4L, Math.toIntExact(dataLocation))
+  }
+
   def getColumnAndRelease: ColumnVector = {
     // Set the last offset
-    offsetsBuffer.setInt(numRows * DType.INT32.getSizeInBytes, dataLocation.toInt)
+    writeOffset()
     withResource(new HostColumnVector(DType.STRING, numRows, Optional.of[java.lang.Long](0L),
-      dataBuffer, null, offsetsBuffer, new util.ArrayList[HostColumnVectorCore]())) { hostRet =>
+      dataBuffer, null, offsetsBuffer, new util.ArrayList[HostColumnVectorCore](),
+      offsetsType)) { hostRet =>
       dataBuffer = null
       offsetsBuffer = null
       hostRet.copyToDevice()

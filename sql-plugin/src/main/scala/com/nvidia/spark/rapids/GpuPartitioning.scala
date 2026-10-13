@@ -18,7 +18,7 @@ package com.nvidia.spark.rapids
 
 import scala.collection.mutable.ArrayBuffer
 
-import ai.rapids.cudf.{ContiguousTable, Cuda, DeviceMemoryBuffer, HostMemoryBuffer, Table}
+import ai.rapids.cudf.{ColumnView, ContiguousTable, Cuda, DeviceMemoryBuffer, DType, HostMemoryBuffer, Table}
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
@@ -269,12 +269,24 @@ trait GpuPartitioning extends Partitioning {
     }
   }
 
+  private def hasWideStringOffsets(column: ColumnView): Boolean = {
+    (column.getType == DType.STRING && column.getOffsetsType == DType.INT64) ||
+      (0 until column.getNumChildren).exists { i =>
+        withResource(column.getChildColumnView(i))(hasWideStringOffsets)
+      }
+  }
+
   def sliceInternalGpuOrCpuAndClose(numRows: Int, partitionIndexes: Array[Int],
       partitionColumns: Array[GpuColumnVector]): Array[(ColumnarBatch, Int)] = {
     // Both GPU slicers build a cuDF Table, which cannot hold a rows-only batch. The CPU
     // slicer cuts one by row count, and every shuffle writer accepts its zero-column slices.
     val rowsOnly = partitionColumns.isEmpty
-    if (usesKudoGPUSlicing && !rowsOnly) {
+    val requiresHostSerialization = usesKudoGPUSlicing && !rowsOnly &&
+      (GpuColumnVector.getTotalDeviceMemoryUsed(partitionColumns) > Int.MaxValue ||
+        partitionColumns.exists(col => hasWideStringOffsets(col.getBase)))
+    if (requiresHostSerialization) {
+      sliceInternalOnCpuAndClose(numRows, partitionIndexes, partitionColumns)
+    } else if (usesKudoGPUSlicing && !rowsOnly) {
       sliceAndSerializeOnGpu(numRows, partitionIndexes, partitionColumns)
     } else {
       val sliceOnGpu = usesGPUShuffle && !rowsOnly

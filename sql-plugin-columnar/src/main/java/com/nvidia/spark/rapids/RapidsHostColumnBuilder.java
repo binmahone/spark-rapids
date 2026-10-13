@@ -39,7 +39,7 @@ import java.util.function.Supplier;
 public final class RapidsHostColumnBuilder implements AutoCloseable {
 
   /**
-   * The most a column can hold. String data bytes are addressed by Int offsets, and offsets need
+   * The most a column can hold. STRING offsets widen to INT64 as needed, and offsets need
    * one more entry than there are rows. Fixed-width elements and struct rows stop one below
    * Integer.MAX_VALUE, where the capacity caps of the original cuDF builder stopped them.
    */
@@ -58,7 +58,7 @@ public final class RapidsHostColumnBuilder implements AutoCloseable {
     }
   }
 
-  static final Limits PRODUCTION_LIMITS = new Limits(Integer.MAX_VALUE,
+  static final Limits PRODUCTION_LIMITS = new Limits(Long.MAX_VALUE,
       Integer.MAX_VALUE - 1, Integer.MAX_VALUE - 2, Integer.MAX_VALUE - 1);
 
   private static final ThreadLocal<Limits> TEST_LIMITS = new ThreadLocal<>();
@@ -117,7 +117,8 @@ public final class RapidsHostColumnBuilder implements AutoCloseable {
   // long is to adapt HostMemoryBuffer.setXXX, which requires a long offset.
   private long currentIndex = 0;
   // Only for Strings: pointer of the byte (data) buffer
-  private int currentStringByteIndex = 0;
+  private long currentStringByteIndex = 0;
+  private DType offsetsType = DType.INT32;
   // Use bit shift instead of multiply to transform row offset to byte offset
   private int bitShiftBySize = 0;
   /**
@@ -225,7 +226,7 @@ public final class RapidsHostColumnBuilder implements AutoCloseable {
     }
     this.rows = snapshot.rows;
     this.currentIndex = snapshot.currentIndex;
-    this.currentStringByteIndex = Math.toIntExact(snapshot.currentStringByteIndex);
+    this.currentStringByteIndex = snapshot.currentStringByteIndex;
     if (snapshot.childStates != null) {
       if (snapshot.childStates.length != childBuilders.size()) {
         throw new IllegalStateException(
@@ -250,7 +251,7 @@ public final class RapidsHostColumnBuilder implements AutoCloseable {
         this.growStringBuffersAndRows(0);
         this.growValidBuffer();
         setNullAt(currentIndex++);
-        offsets.setInt(currentIndex << bitShiftByOffset, currentStringByteIndex);
+        writeStringOffset(currentIndex);
       };
     } else if (this.type == DType.STRUCT) {
       this.nullHandler = () -> {
@@ -293,7 +294,7 @@ public final class RapidsHostColumnBuilder implements AutoCloseable {
         offsets.incRefCount();
       }
       hostColumnVector = new HostColumnVector(type, rows,
-          Optional.of(nullCount), data, valid, offsets, hostColumnVectorCoreList);
+          Optional.of(nullCount), data, valid, offsets, hostColumnVectorCoreList, offsetsType);
     } finally {
       if (hostColumnVector == null) {
         // Something bad happened, and we need to clean up after ourselves
@@ -330,7 +331,7 @@ public final class RapidsHostColumnBuilder implements AutoCloseable {
         offsets.incRefCount();
       }
       ret = new HostColumnVectorCore(type, rows, Optional.of(nullCount), data, valid,
-          offsets, hostColumnVectorCoreList);
+          offsets, hostColumnVectorCoreList, offsetsType);
     } finally {
       if (ret == null) {
         // Something bad happened, and we need to clean up after ourselves
@@ -464,7 +465,7 @@ public final class RapidsHostColumnBuilder implements AutoCloseable {
    * @param stringLength number of bytes required by the next row
    */
   private void growStringBuffersAndRows(int stringLength) {
-    long currentLength = (long) currentStringByteIndex + stringLength;
+    long currentLength = Math.addExact(currentStringByteIndex, (long) stringLength);
     if (offsets == null || rows + 1 > rowCapacity || currentLength > data.getLength()) {
       checkOffsetRows();
       if (currentLength > limits.maxStringBytes) {
@@ -487,17 +488,41 @@ public final class RapidsHostColumnBuilder implements AutoCloseable {
 
     if (rows > rowCapacity) {
       long newCap = Math.min(rowCapacity * 2, limits.maxOffsetRows);
-      offsets = copyBuffer(HostMemoryBuffer.allocate((newCap + 1) << bitShiftByOffset), offsets);
+      offsets = copyBuffer(HostMemoryBuffer.allocate((newCap + 1) * offsetsType.getSizeInBytes()), offsets);
       rowCapacity = newCap;
+    }
+
+    if (offsetsType == DType.INT32 && currentLength > Integer.MAX_VALUE) {
+      HostMemoryBuffer wide = HostMemoryBuffer.allocate((rowCapacity + 1) * 8L);
+      try {
+        for (long i = 0; i <= currentIndex; i++) {
+          wide.setLong(i * 8L, offsets.getInt(i * 4L));
+        }
+      } catch (Throwable t) {
+        wide.close();
+        throw t;
+      }
+      offsets.close();
+      offsets = wide;
+      offsetsType = DType.INT64;
     }
 
     if (currentLength > data.getLength()) {
       long requiredLength = data.getLength();
       do {
-        requiredLength = requiredLength * 2;
+        requiredLength = requiredLength > limits.maxStringBytes / 2
+            ? limits.maxStringBytes : requiredLength * 2;
       } while (currentLength > requiredLength);
       requiredLength = Math.min(requiredLength, limits.maxStringBytes);
       data = copyBuffer(HostMemoryBuffer.allocate(requiredLength), data);
+    }
+  }
+
+  private void writeStringOffset(long row) {
+    if (offsetsType == DType.INT64) {
+      offsets.setLong(row * 8L, currentStringByteIndex);
+    } else {
+      offsets.setInt(row * 4L, Math.toIntExact(currentStringByteIndex));
     }
   }
 
@@ -714,7 +739,7 @@ public final class RapidsHostColumnBuilder implements AutoCloseable {
 
   @Deprecated
   public int getCurrentByteIndex() {
-    return currentStringByteIndex;
+    return Math.toIntExact(currentStringByteIndex);
   }
 
   public final long append(byte value) {
@@ -832,7 +857,7 @@ public final class RapidsHostColumnBuilder implements AutoCloseable {
       data.setBytes(currentStringByteIndex, value, srcOffset, length);
     }
     currentStringByteIndex += length;
-    offsets.setInt(++currentIndex << bitShiftByOffset, currentStringByteIndex);
+    writeStringOffset(++currentIndex);
     return length;
   }
 

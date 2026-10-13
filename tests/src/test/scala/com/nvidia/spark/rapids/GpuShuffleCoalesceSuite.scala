@@ -17,8 +17,9 @@
 package com.nvidia.spark.rapids
 
 import java.math.RoundingMode
+import java.util.{Collections, Optional}
 
-import ai.rapids.cudf.{ColumnVector, Cuda, DType, Table}
+import ai.rapids.cudf.{ColumnVector, Cuda, DType, HostColumnVector, HostMemoryBuffer, Table}
 import com.nvidia.spark.rapids.Arm.withResource
 import com.nvidia.spark.rapids.jni.RmmSpark
 import com.nvidia.spark.rapids.jni.kudo.DumpOption
@@ -26,6 +27,7 @@ import org.scalatest.BeforeAndAfterEach
 import org.scalatest.funsuite.AnyFunSuite
 
 import org.apache.spark.SparkConf
+import org.apache.spark.sql.catalyst.expressions.ExprId
 import org.apache.spark.sql.rapids.GpuShuffleEnv
 import org.apache.spark.sql.rapids.execution.TrampolineUtil
 import org.apache.spark.sql.types.{DecimalType, DoubleType, IntegerType, StringType}
@@ -45,6 +47,27 @@ class GpuShuffleCoalesceSuite extends AnyFunSuite with BeforeAndAfterEach {
         .build()) { table =>
       GpuColumnVector.from(table, Array(IntegerType, StringType, DoubleType,
         DecimalType(DType.DECIMAL64_MAX_PRECISION, 3)))
+    }
+  }
+
+  private def buildWideStringBatch(): ColumnarBatch = {
+    withResource(HostColumnVector.fromStrings("abc", null, "def", "")) { narrow =>
+      val offsets = HostMemoryBuffer.allocate(40, false)
+      Seq(0L, 3L, 3L, 6L, 6L).zipWithIndex.foreach { case (end, i) =>
+        offsets.setLong(i * 8L, end)
+      }
+      narrow.getData.incRefCount()
+      narrow.getValidity.incRefCount()
+      withResource(new HostColumnVector(DType.STRING, 4, Optional.of[java.lang.Long](1L),
+          narrow.getData, narrow.getValidity, offsets, Collections.emptyList(), DType.INT64)) {
+        wide =>
+          withResource(wide.copyToDevice()) { column =>
+            assertResult(DType.INT64)(column.getOffsetsType)
+            withResource(new Table(column)) { table =>
+              GpuColumnVector.from(table, Array(StringType))
+            }
+          }
+      }
     }
   }
 
@@ -103,10 +126,18 @@ class GpuShuffleCoalesceSuite extends AnyFunSuite with BeforeAndAfterEach {
   }
 
   private def createSparkConf(): SparkConf = {
-    new SparkConf()
+    val conf = new SparkConf()
         .set(RapidsConf.SHUFFLE_COMPRESSION_CODEC.key, "none")
         .set(RapidsConf.SHUFFLE_KUDO_WRITE_MODE.key, "GPU")
         .set(RapidsConf.SHUFFLE_KUDO_READ_MODE.key, "GPU")
+    Seq(
+      "rapids.test.gpu.allocFraction" -> RapidsConf.RMM_ALLOC_FRACTION.key,
+      "rapids.test.gpu.minAllocFraction" -> RapidsConf.RMM_ALLOC_MIN_FRACTION.key,
+      "rapids.test.gpu.maxAllocFraction" -> RapidsConf.RMM_ALLOC_MAX_FRACTION.key
+    ).foreach { case (property, key) =>
+      Option(System.getProperty(property)).foreach(value => conf.set(key, value))
+    }
+    conf
   }
 
   private def createGpuPartitioning(partitionIndices: Array[Int]): GpuPartitioning = {
@@ -194,14 +225,15 @@ class GpuShuffleCoalesceSuite extends AnyFunSuite with BeforeAndAfterEach {
   private def runKudoShuffleTest(
       targetBatchSize: Long,
       minSplitSize: Option[Long] = None,
-      forceSplitRetry: Boolean = false): Unit = {
+      forceSplitRetry: Boolean = false,
+      wideStrings: Boolean = false): Unit = {
     TrampolineUtil.cleanupAnyExistingSession()
     val conf = createSparkConf()
     TestUtils.withGpuSparkSession(conf) { _ =>
       GpuShuffleEnv.init(new RapidsConf(conf))
       val partitionIndices = Array(0, 2, 2)
       val gp = createGpuPartitioning(partitionIndices)
-      withResource(buildBatch()) { originalBatch =>
+      withResource(if (wideStrings) buildWideStringBatch() else buildBatch()) { originalBatch =>
         // incRefCounts here so we can hold onto the original batch and use it
         // below to compare the values to the coalesced results
         GpuColumnVector.incRefCounts(originalBatch)
@@ -212,6 +244,13 @@ class GpuShuffleCoalesceSuite extends AnyFunSuite with BeforeAndAfterEach {
         // Get serialized batches from the partitioning operation
         withResource(gp.sliceInternalGpuOrCpuAndClose(
           numRows, partitionIndices, columns).map(_._1)) { serializedPartitions =>
+
+          if (wideStrings) {
+            assert(serializedPartitions.forall(_.column(0).isInstanceOf[SlicedGpuColumnVector]))
+          } else {
+            assert(serializedPartitions.forall(
+              _.column(0).isInstanceOf[SlicedSerializedColumnVector]))
+          }
 
           // Simulate the full shuffle round-trip: serialize to stream, then deserialize back
           val serializedData = serializeBatchesToStream(serializedPartitions, dataTypes)
@@ -253,6 +292,24 @@ class GpuShuffleCoalesceSuite extends AnyFunSuite with BeforeAndAfterEach {
         }
       }
     }
+  }
+
+  test("project size estimation counts the actual wide STRING offsets") {
+    withResource(buildWideStringBatch()) { batch =>
+      val reference = GpuBoundReference(0, StringType, true)(ExprId(0), "string")
+      val estimated = PreProjectSplitIterator.calcMinOutputSize(batch,
+        GpuTieredProject(Seq(Seq(reference))))
+      assertResult(GpuColumnVector.getTotalDeviceMemoryUsed(batch))(estimated)
+    }
+  }
+
+  test("GPU Kudo mode selects host write and merge for wide STRING offsets") {
+    runKudoShuffleTest(targetBatchSize = 1000, wideStrings = true)
+  }
+
+  test("wide STRING host fallback retries after GPU split OOM") {
+    runKudoShuffleTest(targetBatchSize = 1000, minSplitSize = Some(1),
+      forceSplitRetry = true, wideStrings = true)
   }
 
   test("GPU kudo partitioning with deserialization") {

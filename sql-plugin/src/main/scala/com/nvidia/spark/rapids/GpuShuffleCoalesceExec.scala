@@ -356,7 +356,7 @@ class KudoTableOperator(kudo: Option[KudoSerializer], readOption: CoalesceReadOp
 
   override def getDataLen(column: KudoSerializedTableColumn): Long =
     column.spillableKudoTable.header
-    .getTotalDataLen
+    .getTotalDataLength
 
   override def getNumRows(column: KudoSerializedTableColumn): Int =
     column.spillableKudoTable.header
@@ -396,7 +396,7 @@ class KudoGpuTableOperator(dataTypes: Array[DataType])
 
   override def getDataLen(column: KudoSerializedTableColumn): Long =
     column.spillableKudoTable.header
-      .getTotalDataLen
+      .getTotalDataLength
 
   override def getNumRows(column: KudoSerializedTableColumn): Int =
     column.spillableKudoTable.header
@@ -415,35 +415,49 @@ class KudoGpuTableOperator(dataTypes: Array[DataType])
       // pinned allocation serializes on a single lock.
       val spillables = columns.map(_.spillableKudoTable)
       val dataBufSize = spillables.foldLeft(0L) { (acc, skt) =>
-        acc + skt.header.getTotalDataLen + skt.header.getSerializedSize
+        acc + skt.header.getTotalDataLength + skt.header.getSerializedSize
       }
-      val offsetsBufSize = 8L * (spillables.length + 1)
-      val dataHostBuf = HostMemoryBuffer.allocate(dataBufSize)
-      val hostBuffers = closeOnExcept(dataHostBuf) { _ =>
-        KudoBuffers(dataHostBuf, HostMemoryBuffer.allocate(offsetsBufSize))
+      val requiresHostMerge = dataBufSize > Int.MaxValue || spillables.exists { skt =>
+        skt.header.isExtendedFormat
       }
-      withResource(hostBuffers) { case KudoBuffers(dataHost, offsetsHost) =>
-        var currentOffset = 0L
-        spillables.zipWithIndex.foreach { case (skt, i) =>
-          offsetsHost.setLong(i * 8L, currentOffset)
-          skt.header.writeTo(dataHost, currentOffset)
-          currentOffset += skt.header.getSerializedSize
-          skt.materializeInto(dataHost, currentOffset)
-          currentOffset += skt.header.getTotalDataLen
+      if (requiresHostMerge) {
+        val serializer = new KudoSerializer(GpuColumnVector.from(dataTypes))
+        withResource(spillables.safeMap(_.makeKudoTable)) { tables =>
+          withResource(serializer.mergeOnHost(tables)) { merged =>
+            withResource(merged.toTable) { table =>
+              GpuColumnVector.from(table, dataTypes)
+            }
+          }
         }
-        offsetsHost.setLong(spillables.length * 8L, currentOffset)
-        val dataDevBuf = DeviceMemoryBuffer.allocate(dataHost.getLength)
-        val devBuffers = closeOnExcept(dataDevBuf) { _ =>
-          KudoBuffers(dataDevBuf, DeviceMemoryBuffer.allocate(offsetsHost.getLength))
+      } else {
+        val offsetsBufSize = 8L * (spillables.length + 1)
+        val dataHostBuf = HostMemoryBuffer.allocate(dataBufSize)
+        val hostBuffers = closeOnExcept(dataHostBuf) { _ =>
+          KudoBuffers(dataHostBuf, HostMemoryBuffer.allocate(offsetsBufSize))
         }
-        withResource(devBuffers) { case KudoBuffers(dataDev, offsetsDev) =>
-          dataDev.copyFromHostBuffer(dataHost)
-          offsetsDev.copyFromHostBuffer(offsetsHost)
+        withResource(hostBuffers) { case KudoBuffers(dataHost, offsetsHost) =>
+          var currentOffset = 0L
+          spillables.zipWithIndex.foreach { case (skt, i) =>
+            offsetsHost.setLong(i * 8L, currentOffset)
+            skt.header.writeTo(dataHost, currentOffset)
+            currentOffset += skt.header.getSerializedSize
+            skt.materializeInto(dataHost, currentOffset)
+            currentOffset += skt.header.getTotalDataLength
+          }
+          offsetsHost.setLong(spillables.length * 8L, currentOffset)
+          val dataDevBuf = DeviceMemoryBuffer.allocate(dataHost.getLength)
+          val devBuffers = closeOnExcept(dataDevBuf) { _ =>
+            KudoBuffers(dataDevBuf, DeviceMemoryBuffer.allocate(offsetsHost.getLength))
+          }
+          withResource(devBuffers) { case KudoBuffers(dataDev, offsetsDev) =>
+            dataDev.copyFromHostBuffer(dataHost)
+            offsetsDev.copyFromHostBuffer(offsetsHost)
 
-          val schema = GpuColumnVector.from(dataTypes)
-          withResource(KudoGpuSerializer.assembleFromDeviceRaw(
-              schema, dataDev, offsetsDev)) { table =>
-            GpuColumnVector.from(table, dataTypes)
+            val schema = GpuColumnVector.from(dataTypes)
+            withResource(KudoGpuSerializer.assembleFromDeviceRaw(
+                schema, dataDev, offsetsDev)) { table =>
+              GpuColumnVector.from(table, dataTypes)
+            }
           }
         }
       }

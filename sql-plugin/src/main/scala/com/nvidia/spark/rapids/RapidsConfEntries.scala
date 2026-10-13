@@ -414,7 +414,8 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
   val SHUFFLE_KUDO_WRITE_MODE = conf("spark.rapids.shuffle.kudo.serializer.write.mode")
     .doc("Kudo serializer mode. " +
       "\"CPU\": serialize shuffle outputs on the cpu. " +
-      "\"GPU\": serialize shuffle outputs on the gpu. ")
+      "\"GPU\": serialize supported shuffle outputs on the gpu, using the cpu for " +
+      "64-bit STRING offsets or device buffers exceeding the 32-bit size limit. ")
     .internal()
     .startupOnly()
     .stringConf
@@ -423,7 +424,8 @@ val SHUFFLE_COMPRESSION_LZ4_CHUNK_SIZE = conf("spark.rapids.shuffle.compression.
   val SHUFFLE_KUDO_READ_MODE = conf("spark.rapids.shuffle.kudo.serializer.read.mode")
     .doc("Kudo serializer read mode. " +
       "\"CPU\": deserialize shuffle inputs on the cpu. " +
-      "\"GPU\": deserialize shuffle inputs on the gpu. ")
+      "\"GPU\": deserialize supported shuffle inputs on the gpu, using host merge for " +
+      "extended Kudo headers or input groups exceeding the 32-bit size limit. ")
     .internal()
     .startupOnly()
     .stringConf

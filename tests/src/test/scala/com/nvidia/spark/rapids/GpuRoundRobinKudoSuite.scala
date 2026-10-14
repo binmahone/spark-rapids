@@ -33,6 +33,9 @@ class GpuRoundRobinKudoSuite extends AnyFunSuite {
     test(s"Kudo GPU round-robin preserves rows across $count partitions") {
       TrampolineUtil.cleanupAnyExistingSession()
       val conf = new SparkConf()
+        .set(RapidsConf.RMM_ALLOC_FRACTION.key, "0.125")
+        .set(RapidsConf.RMM_ALLOC_MIN_FRACTION.key, "0.10")
+        .set(RapidsConf.RMM_ALLOC_MAX_FRACTION.key, "0.125")
         .set(RapidsConf.SHUFFLE_COMPRESSION_CODEC.key, "none")
         .set(RapidsConf.SHUFFLE_MANAGER_MODE.key, "MULTITHREADED")
         .set(RapidsConf.SHUFFLE_KUDO_SERIALIZER_ENABLED.key, "true")

@@ -28,6 +28,7 @@ import org.scalatest.funsuite.AnyFunSuite
 
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.expressions.ExprId
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.rapids.GpuShuffleEnv
 import org.apache.spark.sql.rapids.execution.TrampolineUtil
 import org.apache.spark.sql.types.{DecimalType, DoubleType, IntegerType, StringType}
@@ -321,6 +322,73 @@ class GpuShuffleCoalesceSuite extends AnyFunSuite with BeforeAndAfterEach {
   }
 
   Seq(false, true).foreach { wide =>
+    test(s"single partition honors SQL disable over process shuffle settings, wide=$wide") {
+      TrampolineUtil.cleanupAnyExistingSession()
+      val conf = createSparkConf()
+        .set(RapidsConf.SHUFFLE_MANAGER_MODE.key, "CACHE_ONLY")
+        .set("spark.shuffle.manager", ShimLoader.getRapidsShuffleManagerClass)
+      TestUtils.withGpuSparkSession(conf) { _ =>
+        GpuShuffleEnv.init(new RapidsConf(conf))
+        val sqlConf = new SQLConf
+        sqlConf.setConfString(RapidsConf.SHUFFLE_MANAGER_ENABLED.key, "false")
+        sqlConf.setConfString(RapidsConf.SHUFFLE_KUDO_WRITE_MODE.key, "CPU")
+        SQLConf.withExistingConf(sqlConf) {
+          withResource(if (wide) buildWideStringBatch() else buildBatch()) { original =>
+            GpuColumnVector.incRefCounts(original)
+            val output = GpuSinglePartitioning.columnarEvalAny(original)
+              .asInstanceOf[Array[(ColumnarBatch, Int)]]
+            withResource(output.map(_._1)) { partitions =>
+              assertResult(1)(partitions.length)
+              val batch = partitions.head
+              assert(batch.column(0).isInstanceOf[SlicedGpuColumnVector])
+              assertResult(original.numRows)(batch.numRows)
+              val stringIndex = if (wide) 0 else 1
+              assertResult(if (wide) "abc" else "five")(
+                batch.column(stringIndex).getUTF8String(0).toString)
+            }
+          }
+        }
+      }
+    }
+
+    Seq("CACHE_ONLY", "MULTITHREADED").foreach { mode =>
+      test(s"single partition uses process settings without SQL settings, mode=$mode wide=$wide") {
+        TrampolineUtil.cleanupAnyExistingSession()
+        val conf = createSparkConf()
+          .set(RapidsConf.SHUFFLE_MANAGER_MODE.key, mode)
+          .set(RapidsConf.SHUFFLE_KUDO_SERIALIZER_ENABLED.key, "true")
+          .set("spark.shuffle.manager", ShimLoader.getRapidsShuffleManagerClass)
+        TestUtils.withGpuSparkSession(conf) { _ =>
+          GpuShuffleEnv.init(new RapidsConf(conf))
+          SQLConf.withExistingConf(new SQLConf) {
+            assert(SQLConf.get.getAllConfs.isEmpty)
+            withResource(if (wide) buildWideStringBatch() else buildBatch()) { original =>
+              GpuColumnVector.incRefCounts(original)
+              val output = GpuSinglePartitioning.columnarEvalAny(original)
+                .asInstanceOf[Array[(ColumnarBatch, Int)]]
+              withResource(output.map(_._1)) { partitions =>
+                assertResult(1)(partitions.length)
+                if (mode == "CACHE_ONLY") {
+                  assert(partitions.head.column(0).isInstanceOf[GpuPackedTableColumn])
+                  val table = partitions.head.column(0).asInstanceOf[GpuPackedTableColumn]
+                    .getContiguousTable.getTable
+                  withResource(GpuColumnVector.from(table,
+                      GpuColumnVector.extractTypes(original))) { restored =>
+                    compareBatches(original, restored)
+                  }
+                } else {
+                  assert(partitions.head.column(0).isInstanceOf[SlicedSerializedColumnVector])
+                  val data = partitions.head.column(0).asInstanceOf[SlicedSerializedColumnVector]
+                    .getWrap
+                  assertResult(if (wide) '1'.toByte else '0'.toByte)(data.getByte(3))
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     test(s"single GPU partition keeps a packed table with Kudo GPU mode enabled, wide=$wide") {
       TrampolineUtil.cleanupAnyExistingSession()
       val conf = createSparkConf()

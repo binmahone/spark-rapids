@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2026, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package com.nvidia.spark.rapids
 
 import com.nvidia.spark.rapids.shims.ShimExpression
 
+import org.apache.spark.SparkEnv
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.physical.{BroadcastDistribution, Distribution}
 import org.apache.spark.sql.internal.SQLConf
@@ -51,16 +52,21 @@ case object GpuSinglePartitioning extends GpuExpression with ShimExpression
     }
   }
 
-  // these next overrides are required since `GpuSinglePartitioning` is used as a static class
-  // and the RAPIDS Shuffle Manager can be enabled and disabled dynamically
+  private def partitioningConf: RapidsConf = {
+    val processConf = Option(SparkEnv.get).map(_.conf.getAll.toMap)
+      .getOrElse(Map.empty[String, String])
+    new RapidsConf(processConf ++ SQLConf.get.getAllConfs)
+  }
+
+  // SQL settings override process settings. RDD tasks can lack SQL execution properties.
   override def usesGPUShuffle: Boolean =
-    GpuShuffleEnv.useGPUShuffle(new RapidsConf(SQLConf.get))
+    GpuShuffleEnv.useGPUShuffle(partitioningConf)
 
   override def usesMultiThreadedShuffle: Boolean =
-    GpuShuffleEnv.useMultiThreadedShuffle(new RapidsConf(SQLConf.get))
+    GpuShuffleEnv.useMultiThreadedShuffle(partitioningConf)
 
   override def usesKudoGPUSlicing: Boolean =
-    new RapidsConf(SQLConf.get).shuffleKudoGpuSerializerEnabled && !usesGPUShuffle
+    partitioningConf.shuffleKudoGpuSerializerEnabled && !usesGPUShuffle
 
   override def nullable: Boolean = false
 

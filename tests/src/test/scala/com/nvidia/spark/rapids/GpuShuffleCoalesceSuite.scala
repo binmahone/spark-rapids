@@ -245,12 +245,8 @@ class GpuShuffleCoalesceSuite extends AnyFunSuite with BeforeAndAfterEach {
         withResource(gp.sliceInternalGpuOrCpuAndClose(
           numRows, partitionIndices, columns).map(_._1)) { serializedPartitions =>
 
-          if (wideStrings) {
-            assert(serializedPartitions.forall(_.column(0).isInstanceOf[SlicedGpuColumnVector]))
-          } else {
-            assert(serializedPartitions.forall(
-              _.column(0).isInstanceOf[SlicedSerializedColumnVector]))
-          }
+          assert(serializedPartitions.forall(
+            _.column(0).isInstanceOf[SlicedSerializedColumnVector]))
 
           // Simulate the full shuffle round-trip: serialize to stream, then deserialize back
           val serializedData = serializeBatchesToStream(serializedPartitions, dataTypes)
@@ -303,7 +299,24 @@ class GpuShuffleCoalesceSuite extends AnyFunSuite with BeforeAndAfterEach {
     }
   }
 
-  test("GPU Kudo mode selects host write and merge for wide STRING offsets") {
+  test("serialized buffer slices preserve byte positions above Int.MaxValue") {
+    val start = Int.MaxValue.toLong + 1
+    withResource(HostMemoryBuffer.allocate(start + 8, false)) { buffer =>
+      buffer.setLong(start, 0x123456789abcdefL)
+      withResource(new SlicedSerializedColumnVector(buffer, start, start + 8)) { column =>
+        assertResult(8L)(column.getLength)
+        assertResult(0x123456789abcdefL)(column.getWrap.getLong(0))
+        assertResult(2L)(buffer.getRefCount)
+      }
+      assertResult(1L)(buffer.getRefCount)
+      intercept[IllegalArgumentException] {
+        new SlicedSerializedColumnVector(buffer, start, start + 9)
+      }
+      assertResult(1L)(buffer.getRefCount)
+    }
+  }
+
+  test("GPU Kudo mode serializes and merges wide STRING offsets") {
     runKudoShuffleTest(targetBatchSize = 1000, wideStrings = true)
   }
 
@@ -374,7 +387,7 @@ class GpuShuffleCoalesceSuite extends AnyFunSuite with BeforeAndAfterEach {
     }
   }
 
-  test("wide STRING host fallback retries after GPU split OOM") {
+  test("wide STRING GPU merge retries after GPU split OOM") {
     runKudoShuffleTest(targetBatchSize = 1000, minSplitSize = Some(1),
       forceSplitRetry = true, wideStrings = true)
   }

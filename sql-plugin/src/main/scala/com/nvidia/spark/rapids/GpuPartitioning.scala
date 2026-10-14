@@ -43,9 +43,8 @@ trait GpuPartitioning extends Partitioning with Logging {
       GpuShuffleEnv.useMultiThreadedShuffle(rapidsConf))
   }
 
-  // Lift once GPU shuffle supports long (64-bit) serialized-slice offsets.
   // protected[rapids] so tests can override it to exercise the guard below.
-  protected[rapids] def maxGpuSerializedSliceBytes: Long = Int.MaxValue
+  protected[rapids] def maxGpuSerializedSliceBytes: Long = Long.MaxValue
 
   final def columnarEval(batch: ColumnarBatch): GpuColumnVector = {
     throw new IllegalStateException(
@@ -199,30 +198,27 @@ trait GpuPartitioning extends Partitioning with Logging {
     }
   }
 
-  private def gpuSplitAndSerialize(table: Table, slices: Int*): Array[DeviceMemoryBuffer] = {
+  private def gpuSplitAndSerialize(table: Table, extended: Boolean,
+      slices: Int*): Array[DeviceMemoryBuffer] = {
     NvtxRegistry.GPU_KUDO_SERIALIZE {
       withRetryNoSplit {
-        KudoGpuSerializer.splitAndSerializeToDevice(table, slices: _*)
+        KudoGpuSerializer.splitAndSerializeToDevice(table, extended, slices: _*)
       }
     }
   }
 
   private def sliceAndSerializeOnGpu(numRows: Int, partitionIndexes: Array[Int],
-      partitionColumns: Array[GpuColumnVector]): Array[(ColumnarBatch, Int)] = {
+      partitionColumns: Array[GpuColumnVector], extended: Boolean): Array[(ColumnarBatch, Int)] = {
     partitionColumns.foreach(_.getBase.getNullCount)
     val (dataHost, offsetsHost) = withResource(partitionColumns) { _ =>
       withResource(new Table(partitionColumns.map(_.getBase).toArray: _*)) { table =>
-        withResource(gpuSplitAndSerialize(table,
+        withResource(gpuSplitAndSerialize(table, extended,
           partitionIndexes.tail: _*)) { dmbs =>
           val data = dmbs(0)
           val offsets = dmbs(1)
-          // This bound keeps the later Long->Int narrowings lossless:
-          // offsetsHost.getLong(..).toInt and dataHost.getLength.toInt
-          // (dataHost is sized to data.getLength).
           require(data.getLength <= maxGpuSerializedSliceBytes,
             s"GPU-serialized shuffle batch is ${data.getLength} bytes, exceeding the " +
-            s"$maxGpuSerializedSliceBytes-byte (2GB) limit addressable by the Int " +
-            s"serialized-slice offsets; reduce spark.rapids.sql.batchSizeBytes")
+            s"$maxGpuSerializedSliceBytes-byte serialized buffer limit")
           closeOnExcept(Seq(HostMemoryBuffer.allocate(data.getLength),
             HostMemoryBuffer.allocate(offsets.getLength))) { seq =>
             val dataHost = seq(0)
@@ -245,10 +241,10 @@ trait GpuPartitioning extends Partitioning with Logging {
         val elemSize = offsetsHost.getLength / numSlices
 
         val res = new Array[ColumnarBatch](numPartitions)
-        var start = 0
+        var start = 0L
         var prevIndex: Int = 0
         for (i <- 1 until numPartitions) {
-          val idx = offsetsHost.getLong((i) * elemSize).toInt
+          val idx = offsetsHost.getLong((i) * elemSize)
           val partNumRows = partitionIndexes(i) - prevIndex
           if (partNumRows > 0) {
             res(i - 1) = new ColumnarBatch(Array(
@@ -261,7 +257,7 @@ trait GpuPartitioning extends Partitioning with Logging {
         val partNumRows = numRows - prevIndex
         if (partNumRows > 0) {
           res(numPartitions - 1) = new ColumnarBatch(Array(
-            new SlicedSerializedColumnVector(dataHost, start, dataHost.getLength.toInt)))
+            new SlicedSerializedColumnVector(dataHost, start, dataHost.getLength)))
           res(numPartitions - 1).setNumRows(partNumRows)
         }
 
@@ -282,15 +278,12 @@ trait GpuPartitioning extends Partitioning with Logging {
     // Both GPU slicers build a cuDF Table, which cannot hold a rows-only batch. The CPU
     // slicer cuts one by row count, and every shuffle writer accepts its zero-column slices.
     val rowsOnly = partitionColumns.isEmpty
-    val requiresHostSerialization = usesKudoGPUSlicing && !rowsOnly &&
+    val extendedFormat = usesKudoGPUSlicing && !rowsOnly &&
       (GpuColumnVector.getTotalDeviceMemoryUsed(partitionColumns) > Int.MaxValue ||
         partitionColumns.exists(col => hasWideStringOffsets(col.getBase)))
-    if (requiresHostSerialization) {
-      logDebug("Kudo GPU write mode selected host serialization for wide STRING offsets " +
-        "or a table larger than Int.MaxValue")
-      sliceInternalOnCpuAndClose(numRows, partitionIndexes, partitionColumns)
-    } else if (usesKudoGPUSlicing && !rowsOnly) {
-      sliceAndSerializeOnGpu(numRows, partitionIndexes, partitionColumns)
+    if (usesKudoGPUSlicing && !rowsOnly) {
+      logDebug(s"Kudo GPU write selected native serialization: extended=$extendedFormat")
+      sliceAndSerializeOnGpu(numRows, partitionIndexes, partitionColumns, extendedFormat)
     } else {
       val sliceOnGpu = usesGPUShuffle && !rowsOnly
       val nvtxId = if (sliceOnGpu) {

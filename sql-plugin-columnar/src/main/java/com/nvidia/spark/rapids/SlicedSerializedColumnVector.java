@@ -27,8 +27,7 @@ import org.apache.spark.unsafe.types.UTF8String;
 import static org.apache.spark.sql.types.DataTypes.NullType;
 
 /**
- * Wraps a GpuColumnVector but only points to a slice of it.  This is intended to only be used
- * during shuffle after the data is partitioned and before it is serialized.
+ * Wraps a slice of a host buffer containing serialized shuffle data.
  */
 public class SlicedSerializedColumnVector extends ColumnVector {
   private final HostMemoryBuffer wrap;
@@ -36,15 +35,18 @@ public class SlicedSerializedColumnVector extends ColumnVector {
   private static final String BAD_ACCESS_MSG = "Column is serialized";
 
   /**
-   * Sets up the data type of this column vector.
-   * Visible for testing
+   * Creates a serialized slice bounded by byte positions in the host buffer.
    */
   public SlicedSerializedColumnVector(HostMemoryBuffer w, int start, int end) {
+    this(w, (long) start, (long) end);
+  }
+
+  public SlicedSerializedColumnVector(HostMemoryBuffer w, long start, long end) {
     super(NullType);
-    this.wrap = w.slice(start, end - start);
-    assert start >= 0;
-    assert end > start; // we don't support empty slices, it should be a null
-    assert end <= w.getLength();
+    if (start < 0 || end <= start || end > w.getLength()) {
+      throw new IllegalArgumentException("Invalid serialized buffer slice");
+    }
+    this.wrap = w.slice(start, Math.subtractExact(end, start));
   }
 
   @Override

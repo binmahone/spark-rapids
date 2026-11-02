@@ -86,6 +86,7 @@ class SerializeConcatHostBuffersDeserializeBatch(
   def batch: SpillableColumnarBatch = this.synchronized {
     maybeGpuBatch.getOrElse {
       NvtxRegistry.BROADCAST_MANIFEST_BATCH {
+        val materializeStarted = System.nanoTime()
         val spillable =
           if (data == null || data.getTableHeader.getNumColumns == 0) {
             // If `data` is null or there are no columns, this is a rows-only batch
@@ -112,6 +113,8 @@ class SerializeConcatHostBuffersDeserializeBatch(
         data.safeClose()
         data = null
         batchInternal = spillable
+        logInfo(s"BROADCAST_DIAGNOSTIC gpuMaterializeMs=" +
+          s"${(System.nanoTime() - materializeStarted) / 1000000.0} rows=$numRows bytes=$dataLen")
         spillable
       }
     }
@@ -212,6 +215,7 @@ class SerializeConcatHostBuffersDeserializeBatch(
     // no-op if we already have `batchInternal` or `data` set
     if (batchInternal == null && data == null) {
       NvtxRegistry.DESERIALIZE_BATCH {
+        val decodeStarted = System.nanoTime()
         val (header, buffer) = SerializedHostTableUtils.readTableHeaderAndBuffer(in)
         withResource(buffer) { _ =>
           dataTypes = if (header.getNumColumns > 0) {
@@ -223,11 +227,15 @@ class SerializeConcatHostBuffersDeserializeBatch(
           val rowsOnly = dataTypes.isEmpty
           numRows = header.getNumRows
           dataLen = header.getDataLen
+          val concatStarted = System.nanoTime()
           data = if (!rowsOnly) {
             JCudfSerialization.concatToHostBuffer(Array(header), Array(buffer))
           } else {
             null
           }
+          logInfo(s"BROADCAST_DIAGNOSTIC streamDecodeMs=" +
+            s"${(concatStarted - decodeStarted) / 1000000.0} hostConcatMs=" +
+            s"${(System.nanoTime() - concatStarted) / 1000000.0} rows=$numRows bytes=$dataLen")
         }
       }
     }

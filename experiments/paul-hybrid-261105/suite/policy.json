@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "name": "paul-hybrid-multithreaded-sf30k-6node",
+  "classification": "Experimental Paul Hybrid reader using the job-14867 optimizer and runtime configuration",
+  "artifact_identity": {
+    "build_job": 20927,
+    "public_revision": "2ece9a9d1a73a6f5bf4aba7eefda64f60e20c01a",
+    "private_revision": "a7fa053380e5c422dbf66a5b4a20a945751f9f4d"
+  },
+  "trusted_metadata": {
+    "path": "/home/prestouser/mahonem/wild_spark_rapids/manifests/tpch-sf30000-presto-analyze-trusted-constraints.properties",
+    "sha256": "ecc77cebd112f7070def1ab5633c48761cc086cb8d41530775d17f296cb91244",
+    "supplied_to_runtime": true,
+    "semantic_constraints_enabled": false,
+    "consumed_fields": "table row counts, column NDVs, and column min/max only"
+  },
+  "benchmark_contract": {
+    "sql": "canonical TPC-H SF30000; no SQL overrides or hints",
+    "session": "one Spark application and one SparkSession",
+    "result_sink": "JVM driver collect with result digests",
+    "nodes": "presto-gb200-gcn-[06-07,12-14,17]",
+    "executors": 24,
+    "query_id_conditionals": false
+  },
+  "candidate_scope": {
+    "enabled": [
+      "E2 left-semi existence-key deduplication",
+      "E3 statistics-driven selective dimension-chain reduction",
+      "E4 cost-gated selective filtered-dimension broadcast and aggregate prefilter",
+      "E8 left-anti existence-key deduplication",
+      "F1 equivalent grouped aggregate reuse for a self-derived global extremum",
+      "F3 counted paired self-existence grouped state"
+    ],
+    "disabled": [
+      "E1 range-to-single final sort",
+      "E5 aggregate-before-join",
+      "E6 selective keyset propagation",
+      "E7 fact-chain reorder",
+      "F2 grouped-IN aggregate state reuse",
+      "general correlated scalar, IN, and projection rewrites",
+      "unique-filter push into grouped state",
+      "trusted semantic constraints"
+    ]
+  },
+  "uniform_configuration": {
+    "spark.executor.cores": "8",
+    "spark.task.resource.gpu.amount": "0.2",
+    "spark.rapids.sql.concurrentGpuTasks": "5",
+    "spark.rapids.sql.concurrentGpuTasks.dynamic": "true",
+    "spark.rapids.sql.batchSizeBytes": "2147483648",
+    "spark.rapids.sql.reader.batchSizeBytes": "2147483648",
+    "spark.rapids.sql.format.parquet.reader.type": "MULTITHREADED",
+    "spark.sql.files.maxPartitionBytes": "16g",
+    "spark.sql.files.minPartitionNum": "160",
+    "spark.sql.files.maxPartitionNum": "160",
+    "spark.sql.shuffle.partitions": "64",
+    "spark.sql.optimizer.runtime.bloomFilter.enabled": "true",
+    "spark.sql.parquet.filterPushdown": "true",
+    "spark.hadoop.parquet.filter.dictionary.enabled": "false",
+    "spark.rapids.sql.join.useShuffledSymmetricHashJoin": "false",
+    "spark.rapids.shuffle.broadcast.enabled": "true",
+    "spark.rapids.shuffle.broadcast.trustSparkPlan.enabled": "true",
+    "spark.rapids.shuffle.broadcast.maxSize": "18g",
+    "spark.rapids.shuffle.compression.codec": "none",
+    "spark.rapids.shuffle.ucx.bounceBuffers.size": "4m",
+    "spark.rapids.shuffle.ucx.bounceBuffers.device.count": "33",
+    "spark.sql.autoBroadcastJoinThreshold": "6g",
+    "spark.sql.adaptive.autoBroadcastJoinThreshold": "6g",
+    "spark.rapids.shuffle.gpuCatalog.eagerCleanup.enabled": "true",
+    "spark.rapids.sql.optimizer.rangeSortSinglePartition.enabled": "false",
+    "spark.rapids.sql.optimizer.rewriteLargeLeftSemi.enabled": "true",
+    "spark.rapids.sql.optimizer.rewriteLargeLeftSemi.thresholdMultiplier": "2",
+    "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.enabled": "true",
+    "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.maxChainRows": "50000000",
+    "spark.rapids.sql.optimizer.pushDimensionChainBeforeFact.maxChainBytes": "12g",
+    "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.costGate.enabled": "true",
+    "spark.rapids.sql.optimizer.selectiveFilteredDimensionBroadcast.minNetworkSavingsRatio": "1.25",
+    "spark.rapids.sql.optimizer.pushAggregateMeasureBeforeJoin.enabled": "false",
+    "spark.rapids.sql.optimizer.pushSelectiveKeysetToJoinInputs.enabled": "false",
+    "spark.rapids.sql.optimizer.reorderSelectiveFactChain.enabled": "false",
+    "spark.rapids.sql.optimizer.preferSmallerShuffleHashBuild.enabled": "false",
+    "spark.rapids.sql.optimizer.preferSmallerShuffleHashBuild.minSizeRatio": "1.25",
+    "spark.rapids.sql.optimizer.trustedMetadata.constraints.enabled": "false",
+    "spark.rapids.sql.optimizer.deduplicateLargeLeftAntiBuildSide.enabled": "true",
+    "spark.rapids.sql.optimizer.optimizeCorrelatedAggregateSubquery": "true",
+    "spark.rapids.sql.optimizer.optimizeCorrelatedAggregateSubquery.reuseSelfExtremum.enabled": "true",
+    "spark.rapids.sql.optimizer.optimizeCorrelatedAggregateSubquery.reuseGroupedInState.enabled": "false",
+    "spark.rapids.sql.optimizer.optimizeCorrelatedAggregateSubquery.countedSelfExistence.enabled": "true",
+    "spark.rapids.sql.optimizer.optimizeCorrelatedAggregateSubquery.generalRewrites.enabled": "false",
+    "spark.rapids.sql.optimizer.optimizeCorrelatedAggregateSubquery.pushUniqueFilterIntoGroupedState.enabled": "false",
+    "spark.rapids.memory.pinnedPool.size": "64g",
+    "spark.rapids.sql.format.parquet.hybridScan.enabled": "true",
+    "spark.rapids.sql.reader.chunked": "false",
+    "spark.rapids.sql.test.format.parquet.hybridScan.failOnFallback": "true",
+    "spark.sql.parquet.datetimeRebaseModeInRead": "EXCEPTION",
+    "spark.sql.parquet.int96RebaseModeInRead": "EXCEPTION"
+  },
+  "qualification": {
+    "preflight_queries": "6 then 1 in separate jobs",
+    "stop_conditions": "wrong result, fallback, executor loss, OOM, native crash, or query timeout",
+    "full_run": "pending preflight and eight-node availability"
+  }
+}

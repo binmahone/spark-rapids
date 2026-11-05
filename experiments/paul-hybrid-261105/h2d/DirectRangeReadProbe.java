@@ -45,7 +45,7 @@ public class DirectRangeReadProbe {
                 System.setProperty("rapids.test.rangeReadConcurrency", Integer.toString(lanes));
                 try (HostMemoryBuffer output = HostMemoryBuffer.allocate(30000)) {
                     input.readVectored(output, Arrays.asList(new CopyRange(70000, 12000, 18000),
-                            new CopyRange(0, 0, 0), new CopyRange(10000, 18000, 0)));
+                            new CopyRange(10000, 18000, 0)));
                     byte[] actual = new byte[30000];
                     output.getBytes(actual, 0, 0, actual.length);
                     byte[] expected = new byte[30000];

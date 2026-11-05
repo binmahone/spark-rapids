@@ -559,9 +559,6 @@ protected case class GpuParquetFileFilterHandler(
   private val readUseFieldId = ParquetSchemaClipShims.useFieldId(sqlConf)
   private val ignoreMissingParquetFieldId = ParquetSchemaClipShims.ignoreMissingIds(sqlConf)
 
-  private val PARQUET_ENCRYPTION_CONFS = Seq("parquet.encryption.kms.client.class",
-    "parquet.encryption.kms.client.class", "parquet.crypto.factory.class")
-
   private def isParquetTimeInInt96(parquetType: Type): Boolean = {
     parquetType match {
       case p:PrimitiveType =>

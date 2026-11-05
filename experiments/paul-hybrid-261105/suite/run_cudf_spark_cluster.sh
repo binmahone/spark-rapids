@@ -136,8 +136,10 @@ if [[ -n ${TPCH_OFFLINE_APT_CACHE:-} ]]; then
   test -d "${TPCH_OFFLINE_APT_CACHE}/lists"
   test -d "${TPCH_OFFLINE_APT_CACHE}/archives"
   mkdir -p /var/lib/apt/lists/partial /var/cache/apt/archives/partial
-  cp -a "${TPCH_OFFLINE_APT_CACHE}/lists/." /var/lib/apt/lists/
-  cp -a "${TPCH_OFFLINE_APT_CACHE}/archives/." /var/cache/apt/archives/
+  find "${TPCH_OFFLINE_APT_CACHE}/lists" -maxdepth 1 -type f ! -name lock \
+    -exec cp -t /var/lib/apt/lists/ -- {} +
+  find "${TPCH_OFFLINE_APT_CACHE}/archives" -maxdepth 1 -type f ! -name lock \
+    -exec cp -t /var/cache/apt/archives/ -- {} +
   if apt-get install --no-download -y -qq --no-install-recommends \
       openjdk-17-jre-headless python3 curl ca-certificates procps findutils numactl libucx0; then
     apt_ready=true

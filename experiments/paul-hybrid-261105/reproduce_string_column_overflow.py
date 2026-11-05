@@ -28,12 +28,16 @@ width = 300
 spark.conf.set('spark.rapids.sql.enabled', 'false')
 spark.conf.set('spark.sql.files.maxPartitionBytes', '16g')
 spark.conf.set('spark.sql.files.openCostInBytes', '0')
+spark.conf.set('spark.sql.files.minPartitionNum', '1')
+spark.conf.set('spark.sql.files.maxPartitionNum', '1')
 spark.range(rows, numPartitions=1).selectExpr('id', f"repeat('A', {width}) AS payload").write.option(
     'parquet.block.size', 64 * 1024 * 1024).option('compression', 'snappy').parquet(path)
 
 
 def query():
-    return spark.read.parquet(path).agg(
+    frame = spark.read.parquet(path)
+    assert frame.rdd.getNumPartitions() == 1
+    return frame.agg(
         F.sum(F.length('payload')).alias('payload_bytes'), F.sum('id').alias('sum_ids'))
 
 

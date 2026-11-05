@@ -59,6 +59,24 @@ mvn "${build_args[@]}" -nsu -Parm64 -Dcuda.version=cuda13 \
   -DallowConventionalDistJar=true -pl dist -am package 2>&1 | tee "$logs/package.log"
 test -s "$jar"
 sha256sum "$jar" > "$logs/jar.sha256"
+python3 - "$source_root/experiments/paul-hybrid-261105/suite/policy.json" \
+  "$own/runtime-policy.json" "$jar" "$PUBLIC_REVISION" "$PRIVATE_REVISION" <<'PY'
+import hashlib
+import json
+import sys
+from pathlib import Path
+source, target, jar, public, private = sys.argv[1:]
+policy = json.loads(Path(source).read_text())
+with open(jar, "rb") as stream:
+    digest = hashlib.file_digest(stream, "sha256").hexdigest()
+policy["artifact_identity"] = {
+    "build_job": int(__import__("os").environ["SLURM_JOB_ID"]),
+    "public_revision": public,
+    "private_revision": private,
+    "jar_sha256": digest,
+}
+Path(target).write_text(json.dumps(policy, indent=2) + "\\n")
+PY
 readonly spark=$legacy/software/spark-3.5.3-bin-hadoop3
 "$spark/bin/spark-submit" --master 'local[4]' --jars "$jar" \
   --conf spark.plugins=com.nvidia.spark.SQLPlugin \

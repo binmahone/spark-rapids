@@ -29,9 +29,12 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalLong;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Implementation of {@link RapidsInputFile} using the Hadoop file system.
@@ -143,6 +146,11 @@ public class HadoopInputFile implements RapidsInputFile {
                 throw new IllegalArgumentException("Invalid diagnostic direct-host range");
             }
         }
+        int lanes = Integer.getInteger("rapids.test.rangeReadConcurrency", 1);
+        if (lanes != 1) {
+            readParallelToHost(output, ranges, lanes);
+            return;
+        }
         boolean timing = Boolean.getBoolean("rapids.test.rangeIoTiming");
         long bytes = 0;
         long calls = 0;
@@ -193,6 +201,84 @@ public class HadoopInputFile implements RapidsInputFile {
                             + " completed=" + completed);
                 }
             }
+        }
+    }
+
+    /** Positional reads use separate channels and disjoint slices of the caller's host buffer. */
+    private void readParallelToHost(HostMemoryBuffer output,
+            List<RapidsInputFile.CopyRange> ranges, int requestedLanes) throws IOException {
+        List<RapidsInputFile.CopyRange> nonempty = new ArrayList<>();
+        for (RapidsInputFile.CopyRange range : ranges) {
+            if (range.getLength() > 0) {
+                nonempty.add(range);
+            }
+        }
+        List<RapidsInputFile.CopyRange> byOutput = new ArrayList<>(nonempty);
+        byOutput.sort(Comparator.comparingLong(RapidsInputFile.CopyRange::getOutputOffset));
+        long end = 0;
+        for (RapidsInputFile.CopyRange range : byOutput) {
+            if (range.getOutputOffset() < end) {
+                throw new IllegalArgumentException("Parallel diagnostic ranges overlap in output");
+            }
+            end = range.getOutputOffset() + range.getLength();
+        }
+        if (requestedLanes < 1 || requestedLanes > DiagnosticRangeExecutor.GLOBAL_LIMIT) {
+            throw new IllegalArgumentException("Invalid diagnostic range concurrency");
+        }
+        int lanes = Math.min(requestedLanes, Math.max(1, nonempty.size()));
+        AtomicLong bytes = new AtomicLong();
+        AtomicLong calls = new AtomicLong();
+        AtomicLong readNanos = new AtomicLong();
+        boolean completed = false;
+        int observedPeak = 0;
+        long started = System.nanoTime();
+        try {
+            observedPeak = DiagnosticRangeExecutor.run(lanes, lane -> {
+                try (FileChannel channel = FileChannel.open(Paths.get(filePath.toUri().getPath()),
+                        StandardOpenOption.READ)) {
+                    for (int index = lane; index < nonempty.size(); index += lanes) {
+                        RapidsInputFile.CopyRange range = nonempty.get(index);
+                        long remaining = range.getLength();
+                        long inputOffset = range.getInputOffset();
+                        long outputOffset = range.getOutputOffset();
+                        while (remaining > 0) {
+                            int chunk = (int) Math.min(remaining, copyBufferSize);
+                            ByteBuffer view = output.asByteBuffer(outputOffset, chunk);
+                            if (!view.isDirect()) {
+                                throw new IllegalStateException("Diagnostic host view must be direct");
+                            }
+                            long readStarted = System.nanoTime();
+                            while (view.hasRemaining()) {
+                                int count = channel.read(view, inputOffset);
+                                if (count < 0) {
+                                    throw new EOFException("Short parallel diagnostic read");
+                                }
+                                if (count == 0) {
+                                    throw new IOException("Parallel read made no progress");
+                                }
+                                inputOffset += count;
+                            }
+                            readNanos.addAndGet(System.nanoTime() - readStarted);
+                            bytes.addAndGet(chunk);
+                            calls.incrementAndGet();
+                            outputOffset += chunk;
+                            remaining -= chunk;
+                        }
+                    }
+                }
+            });
+            completed = true;
+        } finally {
+            System.err.println("RANGE_IO_TIMING mode=direct_host thread="
+                    + Thread.currentThread().getName().replace(' ', '_')
+                    + " bytes=" + bytes.get() + " calls=" + calls.get()
+                    + " readNs=" + readNanos.get() + " copyNs=0 seekNs=0 totalNs="
+                    + (System.nanoTime() - started) + " bufferBytes=" + copyBufferSize
+                    + " ranges=" + ranges.size() + " completed=" + completed);
+            System.err.println("RANGE_IO_PARALLEL requested=" + requestedLanes + " lanes=" + lanes
+                    + " observedPeak=" + observedPeak + " globalPeak="
+                    + DiagnosticRangeExecutor.globalPeak() + " globalLimit="
+                    + DiagnosticRangeExecutor.GLOBAL_LIMIT + " completed=" + completed);
         }
     }
 

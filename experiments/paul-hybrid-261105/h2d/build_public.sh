@@ -54,12 +54,20 @@ sha256sum "$jar" > "$logs/jar.sha256"
 artifact_sha=$(sha256sum "$jar" | awk '{print $1}')
 cp --reflink=never --no-clobber "$jar" "$own/artifacts/$artifact_sha.jar"
 readonly spark=$legacy/software/spark-3.5.3-bin-hadoop3
-for direct in false true; do
-for mode in false true; do
+mkdir -p "$logs/probe-classes"
+javac -cp "$jar:$spark/jars/*" -d "$logs/probe-classes" \
+  "$src/experiments/paul-hybrid-261105/h2d/DiagnosticRangeExecutorProbe.java" \
+  "$src/experiments/paul-hybrid-261105/h2d/DirectRangeReadProbe.java"
+for probe in DiagnosticRangeExecutorProbe DirectRangeReadProbe; do
+  java -cp "$logs/probe-classes:$jar:$spark/jars/*" \
+    "com.nvidia.spark.rapids.fileio.hadoop.$probe" 2>&1 | tee "$logs/$probe.log"
+done
+for combination in false:false:1 false:true:1 true:false:1 true:true:1 true:true:4; do
+  IFS=: read -r direct mode lanes <<< "$combination"
   "$spark/bin/spark-submit" --master 'local[4]' --jars "$jar" \
     --conf spark.plugins=com.nvidia.spark.SQLPlugin \
-    --conf "spark.driver.extraJavaOptions=-Drapids.test.rangeIoTiming=true -Drapids.test.directHostRead=$direct" \
-    --conf "spark.executor.extraJavaOptions=-Drapids.test.rangeIoTiming=true -Drapids.test.directHostRead=$direct" \
+    --conf "spark.driver.extraJavaOptions=-Drapids.test.rangeIoTiming=true -Drapids.test.directHostRead=$direct -Drapids.test.rangeReadConcurrency=$lanes" \
+    --conf "spark.executor.extraJavaOptions=-Drapids.test.rangeIoTiming=true -Drapids.test.directHostRead=$direct -Drapids.test.rangeReadConcurrency=$lanes" \
     --conf spark.hadoop.parquet.read.allocation.size=4096 \
     --conf spark.sql.adaptive.enabled=false \
     --conf spark.rapids.sql.concurrentGpuTasks=2 \
@@ -73,17 +81,19 @@ for mode in false true; do
     --conf spark.sql.parquet.int96RebaseModeInRead=EXCEPTION \
     --conf "spark.rapids.sql.test.format.parquet.hybridScan.packedH2D.enabled=$mode" \
     "$src/experiments/paul-hybrid-261105/reader_counterexamples.py" \
-    "$own/data/h2d-${SLURM_JOB_ID}-$mode-$direct" 2>&1 | tee "$logs/reader-cases-$mode-$direct.log"
+    "$own/data/h2d-${SLURM_JOB_ID}-$mode-$direct-$lanes" 2>&1 | tee "$logs/reader-cases-$mode-$direct-$lanes.log"
   if [[ $mode == true ]]; then
-    grep -q 'PAUL_HYBRID_H2D_COPY mode=packed-async' "$logs/reader-cases-$mode-$direct.log"
+    grep -q 'PAUL_HYBRID_H2D_COPY mode=packed-async' "$logs/reader-cases-$mode-$direct-$lanes.log"
   else
-    grep -q 'PAUL_HYBRID_H2D_COPY mode=legacy-sync' "$logs/reader-cases-$mode-$direct.log"
+    grep -q 'PAUL_HYBRID_H2D_COPY mode=legacy-sync' "$logs/reader-cases-$mode-$direct-$lanes.log"
   fi
-  grep -q 'PAUL_HYBRID_COUNTEREXAMPLES_PASS' "$logs/reader-cases-$mode-$direct.log"
-  grep -q 'RANGE_IO_TIMING' "$logs/reader-cases-$mode-$direct.log"
+  grep -q 'PAUL_HYBRID_COUNTEREXAMPLES_PASS' "$logs/reader-cases-$mode-$direct-$lanes.log"
+  grep -q 'RANGE_IO_TIMING' "$logs/reader-cases-$mode-$direct-$lanes.log"
   grep -q "RANGE_IO_OUTER mode=$([[ $direct == true ]] && echo direct_host || echo hadoop_heap)" \
-    "$logs/reader-cases-$mode-$direct.log"
-done
+    "$logs/reader-cases-$mode-$direct-$lanes.log"
+  if [[ $lanes != 1 ]]; then
+    grep -q "RANGE_IO_PARALLEL requested=$lanes" "$logs/reader-cases-$mode-$direct-$lanes.log"
+  fi
 done
 python3 - "$own/runtime-policy.json" "$own/h2d-runtime-policy.json" "$jar" <<'PY'
 import hashlib

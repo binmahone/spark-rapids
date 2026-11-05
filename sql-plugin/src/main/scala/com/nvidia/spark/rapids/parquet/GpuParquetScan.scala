@@ -30,8 +30,6 @@ import scala.language.implicitConversions
 
 import ai.rapids.cudf._
 import ai.rapids.cudf.{ParquetChunkedReader => JniParquetChunkedReader}
-import ai.rapids.cudf.ast.{AstExpression => CudfAstExpression, BinaryOperation,
-  BinaryOperator, ColumnNameReference, CompiledExpression, Literal, UnaryOperation, UnaryOperator}
 import com.github.luben.zstd.ZstdDecompressCtx
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
@@ -61,7 +59,6 @@ import org.apache.parquet.hadoop.{CodecFactory, ParquetFileReader, ParquetInputF
   ParquetOutputFormat, ParquetWriter}
 import org.apache.parquet.hadoop.ParquetFileWriter.MAGIC
 import org.apache.parquet.hadoop.metadata._
-import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.io.{InputFile, SeekableInputStream => ParquetSeekableInputStream}
 import org.apache.parquet.schema.{DecimalMetadata, GroupType, LogicalTypeAnnotation, MessageType, OriginalType, PrimitiveType, Type}
 import org.apache.parquet.schema.LogicalTypeAnnotation.{DateLogicalTypeAnnotation, IntLogicalTypeAnnotation, TimestampLogicalTypeAnnotation}
@@ -83,11 +80,7 @@ import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.rapids.{isTimestampNTZ, GpuTaskMetrics}
 import org.apache.spark.sql.rapids.execution.TrampolineUtil
-import org.apache.spark.sql.sources.{And => SourceAnd, EqualTo => SourceEqualTo, Filter,
-  GreaterThan => SourceGreaterThan, GreaterThanOrEqual => SourceGreaterThanOrEqual,
-  In => SourceIn, IsNotNull => SourceIsNotNull, IsNull => SourceIsNull,
-  LessThan => SourceLessThan, LessThanOrEqual => SourceLessThanOrEqual, Not => SourceNot,
-  Or => SourceOr, StringStartsWith => SourceStringStartsWith}
+import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector => SparkVector}
@@ -133,12 +126,7 @@ case class GpuParquetScan(
     val broadcastedConf = sparkSession.sparkContext.broadcast(
       new SerializableConfiguration(hadoopConf))
 
-    if (rapidsConf.isParquetGDSReadEnabled) {
-      logInfo("Using the GDS parquet reader")
-      GpuParquetGDSPartitionReaderFactory(sparkSession.sessionState.conf, broadcastedConf,
-        dataSchema, readDataSchema, readPartitionSchema, pushedFilters, rapidsConf,
-        rapidsConf.isParquetGDSFilterPushdownEnabled, metrics, options.asScala.toMap)
-    } else if (rapidsConf.isParquetPerFileReadEnabled) {
+    if (rapidsConf.isParquetPerFileReadEnabled) {
       logInfo("Using the original per file parquet reader")
       GpuParquetPartitionReaderFactory(sparkSession.sessionState.conf, broadcastedConf,
         dataSchema, readDataSchema, readPartitionSchema, pushedFilters, rapidsConf, metrics,
@@ -175,28 +163,6 @@ case class GpuParquetScan(
 }
 
 object GpuParquetScan {
-  private[parquet] def mapClippedBlocksToRowGroupIndices(
-      fullBlocks: Seq[BlockMetaData],
-      clippedBlocks: Iterable[BlockMetaData],
-      filePath: Path): Array[Int] = {
-    val indexByColumnChunk = fullBlocks.zipWithIndex.flatMap { case (block, index) =>
-      block.getColumns.asScala.map { column =>
-        (column.getPath.toDotString, column.getStartingPos) -> index
-      }
-    }.toMap
-
-    clippedBlocks.iterator.map { block =>
-      val matchingIndices = block.getColumns.asScala.flatMap { column =>
-        indexByColumnChunk.get((column.getPath.toDotString, column.getStartingPos))
-      }.distinct
-      require(matchingIndices.size == 1,
-        s"Unable to map clipped Parquet block to one row group in $filePath: " +
-          s"matched indices=${matchingIndices.mkString("[", ",", "]")}, " +
-          s"columns=${block.getColumns.size()}")
-      matchingIndices.head
-    }.toArray
-  }
-
   def tagSupport(scanMeta: ScanMeta[ParquetScan]): Unit = {
     val scan = scanMeta.wrapped
     val schema = StructType(scan.readDataSchema ++ scan.readPartitionSchema)
@@ -313,6 +279,38 @@ object GpuParquetScan {
       }
       ranges.map(_.getLength).sum
     }
+  }
+
+  private[parquet] def coalesceReads(ranges: Seq[CopyRange]): Seq[CopyRange] = {
+    val coalesced = new ArrayBuffer[CopyRange](ranges.length)
+    var currentRange: CopyRange = null
+    var currentRangeEnd = 0L
+
+    def addCurrentRange(): Unit = {
+      if (currentRange != null) {
+        val rangeLength = currentRangeEnd - currentRange.getInputOffset
+        if (rangeLength == currentRange.getLength) {
+          coalesced += currentRange
+        } else {
+          coalesced += new CopyRange(
+            currentRange.getInputOffset, rangeLength, currentRange.getOutputOffset)
+        }
+        currentRange = null
+        currentRangeEnd = 0L
+      }
+    }
+
+    ranges.foreach { c =>
+      if (c.getInputOffset == currentRangeEnd) {
+        currentRangeEnd += c.getLength
+      } else {
+        addCurrentRange()
+        currentRange = c
+        currentRangeEnd = c.getInputOffset + c.getLength
+      }
+    }
+    addCurrentRange()
+    coalesced.toSeq
   }
 
   def throwIfRebaseNeededInExceptionMode(table: Table, dateRebaseMode: DateTimeRebaseMode,
@@ -533,6 +531,13 @@ private[parquet] object GpuParquetFileFilterHandler {
       configuredReader: ParquetFooterReaderType.Value,
       schema: StructType): Boolean =
     configuredReader == ParquetFooterReaderType.NATIVE && canUseNativeFooterReader(schema)
+
+  private[parquet] val PARQUET_ENCRYPTION_CONFS = Seq("parquet.encryption.kms.client.class",
+    "parquet.encryption.kms.client.class", "parquet.crypto.factory.class")
+
+  /** Whether `conf` sets up Parquet decryption, which the GPU readers do not support. */
+  def isDecryptionConfigured(conf: Configuration): Boolean =
+    PARQUET_ENCRYPTION_CONFS.exists(conf.get(_) != null)
 }
 
 protected case class GpuParquetFileFilterHandler(
@@ -607,6 +612,25 @@ protected case class GpuParquetFileFilterHandler(
         readFooterBuffer(fileIO, filePath, conf))) { hmb =>
       // buffer includes header and trailing length and magic, stripped here
       hmb.slice(MAGIC.length, hmb.getLength - Integer.BYTES - MAGIC.length)
+    }
+  }
+
+  /**
+   * Read the Thrift footer of a Parquet file: the footer bytes alone, without the leading magic
+   * or the trailing footer length and magic that readFooterBuffer returns. This is what the
+   * hybrid scan reader takes.
+   */
+  def readThriftFooter(
+      fileIO: RapidsFileIO,
+      filePath: Path,
+      conf: Configuration): HostMemoryBuffer = {
+    val inputFile = fileIO.newInputFile(filePath)
+    withResource(ParquetFooterUtils.getFooterBuffer(inputFile, metrics,
+        readFooterBuffer(fileIO, filePath, conf))) { buf =>
+      // Drop the leading magic, and the trailing footer length and magic, to leave the thrift
+      // metadata the hybrid scan reader expects.
+      val thriftFooterLength = buf.getLength - MAGIC.length - FOOTER_LENGTH_SIZE - MAGIC.length
+      buf.slice(MAGIC.length, thriftFooterLength)
     }
   }
 
@@ -742,7 +766,7 @@ protected case class GpuParquetFileFilterHandler(
       // Make sure we aren't trying to read encrypted files. For now, remove the related
       // parquet confs from the hadoop configuration and try to catch the resulting
       // exception and print a useful message
-      PARQUET_ENCRYPTION_CONFS.foreach { encryptConf =>
+      GpuParquetFileFilterHandler.PARQUET_ENCRYPTION_CONFS.foreach { encryptConf =>
         if (conf.get(encryptConf) != null) {
           conf.unset(encryptConf)
         }
@@ -1240,6 +1264,25 @@ abstract class AbstractGpuParquetMultiFilePartitionReaderFactory(
       }.getOrElse(rapidsConf.getMultithreadedReaderKeepOrder)
   protected val compressCfg = CpuCompressionConfig.forParquet(rapidsConf)
 
+  // Set only for an eligible scan; scopes hybrid to the MULTITHREADED cloud reader path. Mirrors
+  // the per-file factory's eligibility check so the two paths gate identically.
+  protected val hybridScanConfig: Option[HybridScanConfig] =
+    if (rapidsConf.isParquetHybridScanEnabled) {
+      val config = HybridScanConfig(rapidsConf,
+        new HybridScanFilters(readDataSchema, isCaseSensitive, filters))
+      val eligible = HybridScanBase.isEligible(
+        rapidsConf.isParquetHybridScanEnabled, rapidsConf.testParquetHybridScanFailOnFallback,
+        readDataSchema, config.filters,
+        useChunkedReader, compressCfg.decompressSnappyCpu || compressCfg.decompressZstdCpu,
+        readUseFieldId, sqlConf.ignoreCorruptFiles,
+        GpuParquetFileFilterHandler.isDecryptionConfigured(broadcastedConf.value.value),
+        DateTimeRebaseMode.fromName(SparkShimImpl.parquetRebaseRead(sqlConf)),
+        DateTimeRebaseMode.fromName(SparkShimImpl.int96ParquetRebaseRead(sqlConf)))
+      if (eligible) Some(config) else None
+    } else {
+      None
+    }
+
   // We can't use the coalescing files reader when InputFileName, InputFileBlockStart,
   // or InputFileBlockLength because we are combining all the files into a single buffer
   // and we don't know which file is associated with each row.
@@ -1273,7 +1316,7 @@ abstract class AbstractGpuParquetMultiFilePartitionReaderFactory(
       queryUsesInputFile: Boolean,
       keepReadsInOrder: Boolean,
       combineConf: CombineConf
-  ): AbstractMultiFileCloudParquetPartitionReader
+  ): MultiFileCloudPartitionReaderBase
 
   /**
    * Build the PartitionReader for cloud reading
@@ -1490,8 +1533,21 @@ case class GpuParquetMultiFilePartitionReaderFactory(
       queryUsesInputFile: Boolean,
       keepReadsInOrder: Boolean,
       combineConf: CombineConf
-  ): AbstractMultiFileCloudParquetPartitionReader = {
-    new MultiFileCloudParquetPartitionReader(
+  ): MultiFileCloudPartitionReaderBase = hybridScanConfig match {
+    // Delta's deletion-vector factories override this method, so their reads never take hybrid.
+    case Some(config) =>
+      // The footer read needs the filter handler only the factory has.
+      val readFooter = (file: PartitionedFile, fileConf: Configuration) => {
+        val filePath = new Path(new URI(file.filePath.toString()))
+        NvtxRegistry.HYBRID_SCAN_READ_FOOTER {
+          filterHandler.readThriftFooter(fileIO, filePath, fileConf)
+        }
+      }
+      new HybridScanMultithreadedParquetPartitionReader(fileIO, conf, files, config,
+        readDataSchema, HybridScanBase.parquetOptions(readDataSchema.fieldNames), readFooter,
+        maxReadBatchSizeRows, maxReadBatchSizeBytes, maxGpuColumnSizeBytes, execMetrics,
+        partitionSchema, poolConf, maxNumFileProcessed, ignoreMissingFiles, keepReadsInOrder)
+    case None => new MultiFileCloudParquetPartitionReader(
       fileIO,
       conf,
       files,
@@ -1586,11 +1642,64 @@ case class GpuParquetPartitionReaderFactory(
     sqlConf, broadcastedConf, dataSchema, readDataSchema, partitionSchema,
     rapidsConf, metrics, params) with Logging {
 
+  // Only set for an eligible read.
+  private val hybridScanConfig = if (rapidsConf.isParquetHybridScanEnabled) {
+    val config = HybridScanConfig(rapidsConf,
+      new HybridScanFilters(readDataSchema, isCaseSensitive, filters))
+
+    val eligible = HybridScanBase.isEligible(
+      rapidsConf.isParquetHybridScanEnabled, rapidsConf.testParquetHybridScanFailOnFallback,
+      readDataSchema, config.filters,
+      useChunkedReader, compressCfg.decompressSnappyCpu || compressCfg.decompressZstdCpu,
+      readUseFieldId, sqlConf.ignoreCorruptFiles,
+      GpuParquetFileFilterHandler.isDecryptionConfigured(broadcastedConf.value.value),
+      DateTimeRebaseMode.fromName(SparkShimImpl.parquetRebaseRead(sqlConf)),
+      DateTimeRebaseMode.fromName(SparkShimImpl.int96ParquetRebaseRead(sqlConf)))
+
+    if (eligible) Some(config) else None
+  } else {
+    None
+  }
+
   override protected def buildBaseColumnarParquetReader(
       file: PartitionedFile): PartitionReader[ColumnarBatch] = {
     // we need to copy the Hadoop Configuration because filter push down can mutate it,
     // which can affect other tasks.
     val conf = new Configuration(broadcastedConf.value.value)
+    hybridScanConfig match {
+      case Some(config) => buildHybridScanReader(file, conf, config)
+      case None => buildParquetMrReader(file, conf)
+    }
+  }
+
+  /**
+   * Read the split with the hybrid scan reader. Only the footer is parsed here; which row groups
+   * and column chunks to read is decided by the reader itself, from the pushed filter if any.
+   */
+  private def buildHybridScanReader(
+      file: PartitionedFile,
+      conf: Configuration,
+      config: HybridScanConfig): PartitionReader[ColumnarBatch] = {
+    val filePath = new Path(new URI(file.filePath.toString()))
+    val startTime = System.nanoTime()
+    val footer = NvtxRegistry.HYBRID_SCAN_READ_FOOTER {
+      filterHandler.readThriftFooter(fileIO, filePath, conf)
+    }
+    metrics.get(FILTER_TIME).foreach {
+      _ += (System.nanoTime() - startTime)
+    }
+    closeOnExcept(footer) { _ =>
+      val byteSource = new HybridScanFileByteSource(fileIO, filePath, metrics)
+      val options = HybridScanBase.parquetOptions(readDataSchema.fieldNames)
+      new HybridScanPerFileParquetPartitionReader(
+        byteSource, file.start, file.length, footer, options,
+        readDataSchema, config.filters, config.filterKeepThreshold, metrics)
+    }
+  }
+
+  private def buildParquetMrReader(
+      file: PartitionedFile,
+      conf: Configuration): PartitionReader[ColumnarBatch] = {
     val startTime = System.nanoTime()
     val singleFileInfo = filterHandler.filterBlocks(fileIO, footerReadType, file, conf, filters,
       readDataSchema)
@@ -2195,7 +2304,7 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       return 0L
     }
 
-    val coalescedRanges = coalesceReads(remoteCopies)
+    val coalescedRanges = GpuParquetScan.coalesceReads(remoteCopies)
     val scheme = filePath.toUri.getScheme
     if (scheme != null && scheme.startsWith("s3")) {
       GpuTaskMetrics.get.recordPerfioS3BackendOnce()
@@ -2216,38 +2325,6 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       }
     }
     totalBytesCopied
-  }
-
-  private def coalesceReads(ranges: Seq[CopyRange]): Seq[CopyRange] = {
-    val coalesced = new ArrayBuffer[CopyRange](ranges.length)
-    var currentRange: CopyRange = null
-    var currentRangeEnd = 0L
-
-    def addCurrentRange(): Unit = {
-      if (currentRange != null) {
-        val rangeLength = currentRangeEnd - currentRange.getInputOffset
-        if (rangeLength == currentRange.getLength) {
-          coalesced += currentRange
-        } else {
-          coalesced += new CopyRange(
-            currentRange.getInputOffset, rangeLength, currentRange.getOutputOffset)
-        }
-        currentRange = null
-        currentRangeEnd = 0L
-      }
-    }
-
-    ranges.foreach { c =>
-      if (c.getInputOffset == currentRangeEnd) {
-        currentRangeEnd += c.getLength
-      } else {
-        addCurrentRange()
-        currentRange = c
-        currentRangeEnd = c.getInputOffset + c.getLength
-      }
-    }
-    addCurrentRange()
-    coalesced.toSeq
   }
 
   private def copyLocal(
@@ -2411,21 +2488,13 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
   def getParquetOptions(
       readDataSchema: StructType,
       clippedSchema: MessageType,
-      useFieldId: Boolean,
-      rowGroupIndices: Array[Int] = null,
-      filter: CompiledExpression = null): ParquetOptions = {
+      useFieldId: Boolean): ParquetOptions = {
     val includeColumns = toCudfColumnNames(readDataSchema, clippedSchema,
       isSchemaCaseSensitive, useFieldId)
-    val builder = ParquetOptions.builder()
+    ParquetOptions.builder()
         .withTimeUnit(DType.TIMESTAMP_MICROSECONDS)
         .includeColumn(includeColumns : _*)
-    if (rowGroupIndices != null) {
-      builder.withRowGroups(rowGroupIndices)
-    }
-    if (filter != null) {
-      builder.withFilter(filter)
-    }
-    builder.build()
+        .build()
   }
 
   /** conversions used by multithreaded reader and coalescing reader */
@@ -3856,455 +3925,6 @@ class ParquetPartitionReader(
           clippedParquetSchema, Array(split), debugDumpPrefix, debugDumpAlways)
         CachedGpuBatchIterator(producer, colTypes)
       }
-    }
-  }
-}
-
-private[parquet] object GpuParquetGDSFilterAst {
-  case class CompiledFilter(
-      expression: CompiledExpression,
-      pushedFilters: Seq[Filter],
-      skippedFilters: Seq[(Filter, String)])
-
-  private def resolveColumn(
-      attribute: String,
-      readDataSchema: StructType,
-      cudfColumnNames: Array[String],
-      isCaseSensitive: Boolean): Either[String, (StructField, String)] = {
-    if (readDataSchema.length != cudfColumnNames.length) {
-      Left("projected Spark and cuDF schemas have different column counts")
-    } else {
-      val index = readDataSchema.fields.indexWhere { field =>
-        if (isCaseSensitive) field.name == attribute else field.name.equalsIgnoreCase(attribute)
-      }
-      if (index < 0) Left(s"filter column $attribute is not in the read schema")
-      else Right((readDataSchema.fields(index), cudfColumnNames(index)))
-    }
-  }
-
-  private def decimalLiteral(value: Any, dataType: DecimalType): Either[String, Literal] = {
-    val decimal = value match {
-      case d: java.math.BigDecimal => Some(d)
-      case d: Decimal => Some(d.toJavaBigDecimal)
-      case _ => None
-    }
-    decimal match {
-      case Some(d) =>
-        try {
-          val scaled = d.setScale(dataType.scale)
-          Right(Literal.ofDecimal(DecimalUtil.createCudfDecimal(dataType), scaled.unscaledValue()))
-        } catch {
-          case e: ArithmeticException =>
-            Left(s"decimal literal cannot use $dataType: ${e.getMessage}")
-        }
-      case None => Left(s"unsupported decimal literal ${value.getClass.getName}")
-    }
-  }
-
-  private def literal(value: Any, dataType: DataType): Either[String, Literal] = {
-    if (value == null) {
-      return Left("null comparison literals are not supported")
-    }
-    (dataType, value) match {
-      case (BooleanType, v: java.lang.Boolean) => Right(Literal.ofBoolean(v))
-      case (ByteType, v: java.lang.Number) => Right(Literal.ofByte(v.byteValue()))
-      case (ShortType, v: java.lang.Number) => Right(Literal.ofShort(v.shortValue()))
-      case (IntegerType, v: java.lang.Number) => Right(Literal.ofInt(v.intValue()))
-      case (LongType, v: java.lang.Number) => Right(Literal.ofLong(v.longValue()))
-      case (FloatType, v: java.lang.Number) => Right(Literal.ofFloat(v.floatValue()))
-      case (DoubleType, v: java.lang.Number) => Right(Literal.ofDouble(v.doubleValue()))
-      case (StringType, v: String) => Right(Literal.ofString(v))
-      case (DateType, v: java.sql.Date) =>
-        Right(Literal.ofTimestampDaysFromInt(Math.toIntExact(v.toLocalDate.toEpochDay)))
-      case (DateType, v: java.time.LocalDate) =>
-        Right(Literal.ofTimestampDaysFromInt(Math.toIntExact(v.toEpochDay)))
-      case (DateType, v: java.lang.Number) =>
-        Right(Literal.ofTimestampDaysFromInt(v.intValue()))
-      case (d: DecimalType, _) => decimalLiteral(value, d)
-      case _ => Left(s"unsupported literal ${value.getClass.getName} for $dataType")
-    }
-  }
-
-  private def comparison(
-      operator: BinaryOperator,
-      attribute: String,
-      value: Any,
-      readDataSchema: StructType,
-      cudfColumnNames: Array[String],
-      isCaseSensitive: Boolean): Either[String, CudfAstExpression] = {
-    resolveColumn(attribute, readDataSchema, cudfColumnNames, isCaseSensitive) match {
-      case Left(reason) => Left(reason)
-      case Right((field, cudfName)) =>
-        literal(value, field.dataType) match {
-          case Left(reason) => Left(reason)
-          case Right(lit) =>
-            Right(new BinaryOperation(operator, new ColumnNameReference(cudfName), lit))
-        }
-    }
-  }
-
-  private def combine(
-      operator: BinaryOperator,
-      left: Either[String, CudfAstExpression],
-      right: Either[String, CudfAstExpression]): Either[String, CudfAstExpression] = {
-    (left, right) match {
-      case (Right(leftAst), Right(rightAst)) =>
-        Right(new BinaryOperation(operator, leftAst, rightAst))
-      case (Left(reason), _) => Left(reason)
-      case (_, Left(reason)) => Left(reason)
-    }
-  }
-
-  private def in(
-      attribute: String,
-      values: Array[Any],
-      readDataSchema: StructType,
-      cudfColumnNames: Array[String],
-      isCaseSensitive: Boolean): Either[String, CudfAstExpression] = {
-    if (values.isEmpty) {
-      return Left("empty IN lists are not pushed")
-    }
-    resolveColumn(attribute, readDataSchema, cudfColumnNames, isCaseSensitive) match {
-      case Left(reason) => Left(reason)
-      case Right((field, cudfName)) =>
-        var root: CudfAstExpression = null
-        var index = 0
-        while (index < values.length) {
-          literal(values(index), field.dataType) match {
-            case Left(reason) => return Left(reason)
-            case Right(lit) =>
-              val equal = new BinaryOperation(
-                BinaryOperator.EQUAL, new ColumnNameReference(cudfName), lit)
-              root = if (root == null) equal else {
-                new BinaryOperation(BinaryOperator.NULL_LOGICAL_OR, root, equal)
-              }
-          }
-          index += 1
-        }
-        Right(root)
-    }
-  }
-
-  private def stringStartsWith(
-      attribute: String,
-      prefix: String,
-      readDataSchema: StructType,
-      cudfColumnNames: Array[String],
-      isCaseSensitive: Boolean): Either[String, CudfAstExpression] = {
-    if (prefix.isEmpty || !prefix.forall(ch => ch >= ' ' && ch < 127)) {
-      return Left("StringStartsWith requires a non-empty ASCII prefix")
-    }
-    val last = prefix.last
-    if (last == 126) {
-      return Left("StringStartsWith prefix has no supported ASCII upper bound")
-    }
-    val upper = prefix.dropRight(1) + (last + 1).toChar
-    combine(BinaryOperator.NULL_LOGICAL_AND,
-      comparison(BinaryOperator.GREATER_EQUAL, attribute, prefix,
-        readDataSchema, cudfColumnNames, isCaseSensitive),
-      comparison(BinaryOperator.LESS, attribute, upper,
-        readDataSchema, cudfColumnNames, isCaseSensitive))
-  }
-
-  private def convert(
-      filter: Filter,
-      readDataSchema: StructType,
-      cudfColumnNames: Array[String],
-      isCaseSensitive: Boolean): Either[String, CudfAstExpression] = filter match {
-    case SourceAnd(left, right) =>
-      combine(BinaryOperator.NULL_LOGICAL_AND,
-        convert(left, readDataSchema, cudfColumnNames, isCaseSensitive),
-        convert(right, readDataSchema, cudfColumnNames, isCaseSensitive))
-    case SourceOr(left, right) =>
-      combine(BinaryOperator.NULL_LOGICAL_OR,
-        convert(left, readDataSchema, cudfColumnNames, isCaseSensitive),
-        convert(right, readDataSchema, cudfColumnNames, isCaseSensitive))
-    case SourceNot(child) =>
-      convert(child, readDataSchema, cudfColumnNames, isCaseSensitive) match {
-        case Left(reason) => Left(reason)
-        case Right(childAst) => Right(new UnaryOperation(UnaryOperator.NOT, childAst))
-      }
-    case SourceIsNull(attribute) =>
-      resolveColumn(attribute, readDataSchema, cudfColumnNames, isCaseSensitive) match {
-        case Left(reason) => Left(reason)
-        case Right((_, cudfName)) =>
-          Right(new UnaryOperation(UnaryOperator.IS_NULL, new ColumnNameReference(cudfName)))
-      }
-    case SourceIsNotNull(attribute) =>
-      resolveColumn(attribute, readDataSchema, cudfColumnNames, isCaseSensitive) match {
-        case Left(reason) => Left(reason)
-        case Right((_, cudfName)) =>
-          val isNull = new UnaryOperation(UnaryOperator.IS_NULL, new ColumnNameReference(cudfName))
-          Right(new UnaryOperation(UnaryOperator.NOT, isNull))
-      }
-    case SourceEqualTo(attribute, value) => comparison(BinaryOperator.EQUAL, attribute, value,
-      readDataSchema, cudfColumnNames, isCaseSensitive)
-    case SourceGreaterThan(attribute, value) => comparison(BinaryOperator.GREATER, attribute, value,
-      readDataSchema, cudfColumnNames, isCaseSensitive)
-    case SourceGreaterThanOrEqual(attribute, value) => comparison(BinaryOperator.GREATER_EQUAL,
-      attribute, value, readDataSchema, cudfColumnNames, isCaseSensitive)
-    case SourceLessThan(attribute, value) => comparison(BinaryOperator.LESS, attribute, value,
-      readDataSchema, cudfColumnNames, isCaseSensitive)
-    case SourceLessThanOrEqual(attribute, value) => comparison(BinaryOperator.LESS_EQUAL, attribute,
-      value, readDataSchema, cudfColumnNames, isCaseSensitive)
-    case SourceIn(attribute, values) =>
-      in(attribute, values, readDataSchema, cudfColumnNames, isCaseSensitive)
-    case SourceStringStartsWith(attribute, prefix) =>
-      stringStartsWith(attribute, prefix, readDataSchema, cudfColumnNames, isCaseSensitive)
-    case other => Left(s"unsupported Spark data source filter ${other.getClass.getName}")
-  }
-
-  private def nullRejectingAttribute(filter: Filter): Option[String] = filter match {
-    case SourceEqualTo(attribute, _) => Some(attribute)
-    case SourceGreaterThan(attribute, _) => Some(attribute)
-    case SourceGreaterThanOrEqual(attribute, _) => Some(attribute)
-    case SourceLessThan(attribute, _) => Some(attribute)
-    case SourceLessThanOrEqual(attribute, _) => Some(attribute)
-    case SourceIn(attribute, _) => Some(attribute)
-    case SourceStringStartsWith(attribute, _) => Some(attribute)
-    case _ => None
-  }
-
-  def compile(
-      filters: Array[Filter],
-      readDataSchema: StructType,
-      cudfColumnNames: Array[String],
-      isCaseSensitive: Boolean): Either[String, CompiledFilter] = {
-    if (filters.isEmpty) {
-      return Left("no filters were provided")
-    }
-    val converted = filters.map { filter =>
-      filter -> convert(filter, readDataSchema, cudfColumnNames, isCaseSensitive)
-    }
-    val nullRejectingAttributes = converted.flatMap {
-      case (filter, Right(_)) =>
-        nullRejectingAttribute(filter).map { attribute =>
-          if (isCaseSensitive) attribute else attribute.toLowerCase(Locale.ROOT)
-        }
-      case _ => None
-    }.toSet
-    var root: CudfAstExpression = null
-    val pushed = ArrayBuffer[Filter]()
-    val skipped = ArrayBuffer[(Filter, String)]()
-    var index = 0
-    while (index < converted.length) {
-      val (filter, expression) = converted(index)
-      val redundantIsNotNull = filter match {
-        case SourceIsNotNull(attribute) =>
-          val key = if (isCaseSensitive) attribute else attribute.toLowerCase(Locale.ROOT)
-          nullRejectingAttributes.contains(key)
-        case _ => false
-      }
-      if (redundantIsNotNull) {
-        skipped += filter -> "redundant with another null-rejecting pushed predicate"
-      } else expression match {
-        case Left(reason) => skipped += filter -> reason
-        case Right(expression) =>
-          pushed += filter
-          root = if (root == null) expression else {
-            new BinaryOperation(BinaryOperator.NULL_LOGICAL_AND, root, expression)
-          }
-      }
-      index += 1
-    }
-    if (root == null) {
-      Left(skipped.map { case (filter, reason) => s"$filter: $reason" }.mkString("; "))
-    } else {
-      Right(CompiledFilter(root.compile(), pushed.toSeq, skipped.toSeq))
-    }
-  }
-}
-
-case class GpuParquetGDSPartitionReaderFactory(
-    @transient sqlConf: SQLConf,
-    broadcastedConf: Broadcast[SerializableConfiguration],
-    dataSchema: StructType,
-    readDataSchema: StructType,
-    partitionSchema: StructType,
-    filters: Array[Filter],
-    @transient rapidsConf: RapidsConf,
-    gdsFilterPushdownEnabled: Boolean,
-    metrics: Map[String, GpuMetric],
-    @transient params: Map[String, String])
-  extends GpuParquetPartitionReaderFactoryBase(
-    sqlConf, broadcastedConf, dataSchema, readDataSchema, partitionSchema,
-    rapidsConf, metrics, params) with Logging {
-
-  override protected def buildBaseColumnarParquetReader(
-      file: PartitionedFile): PartitionReader[ColumnarBatch] = {
-    val conf = new Configuration(broadcastedConf.value.value)
-    val startTime = System.nanoTime()
-    val singleFileInfo = filterHandler.filterBlocks(fileIO, footerReadType, file, conf, filters,
-      readDataSchema)
-    metrics.get(FILTER_TIME).foreach {
-      _ += (System.nanoTime() - startTime)
-    }
-
-    val footer = withResource(ParquetFileReader.open(
-      HadoopInputFile.fromPath(singleFileInfo.filePath, conf))) { reader =>
-      reader.getFooter
-    }
-    // BlockMetaData.getStartingPos is not stable after clipping to the projected schema because
-    // it is derived from the earliest retained column chunk. Match physical column chunks instead.
-    val rowGroupIndices = GpuParquetScan.mapClippedBlocksToRowGroupIndices(
-      footer.getBlocks.asScala.toSeq, singleFileInfo.blocks, singleFileInfo.filePath)
-
-    new ParquetGDSPartitionReader(
-      fileIO, conf, file, singleFileInfo.filePath, singleFileInfo.blocks,
-      singleFileInfo.schema, isCaseSensitive, readDataSchema,
-      targetSizeBytes, maxChunkedReaderMemoryUsageSizeBytes, compressCfg,
-      metrics, singleFileInfo.dateRebaseMode, singleFileInfo.timestampRebaseMode,
-      singleFileInfo.hasInt96Timestamps, readUseFieldId, rowGroupIndices, filters,
-      gdsFilterPushdownEnabled)
-  }
-}
-
-class GDSParquetTableReader(
-    chunkSizeByteLimit: Long,
-    maxChunkedReaderMemoryUsageSizeBytes: Long,
-    opts: ParquetOptions,
-    file: java.io.File,
-    metrics: Map[String, GpuMetric],
-    readDataSchema: StructType,
-    splits: Array[PartitionedFile],
-    filter: Option[CompiledExpression]) extends GpuDataProducer[Table] with Logging {
-
-  private val delegate = new JniParquetChunkedReader(
-    chunkSizeByteLimit, maxChunkedReaderMemoryUsageSizeBytes, opts, file)
-  private lazy val splitsString = splits.mkString("; ")
-  private var closed = false
-
-  override def hasNext: Boolean = delegate.hasNext
-
-  override def next: Table = {
-    val table = NvtxIdWithMetrics(NvtxRegistry.PARQUET_DECODE, metrics(GPU_DECODE_TIME)) {
-      try {
-        delegate.readChunk()
-      } catch {
-        case e: Exception =>
-          throw new IOException(s"Error when processing $splitsString", e)
-      }
-    }
-    if (table == null) {
-      return null
-    }
-    closeOnExcept(table) { _ =>
-      if (readDataSchema.length != table.getNumberOfColumns) {
-        throw new QueryExecutionException(
-          s"Expected ${readDataSchema.length} columns but read " +
-            s"${table.getNumberOfColumns} from $splitsString")
-      }
-    }
-    metrics(NUM_OUTPUT_BATCHES) += 1
-    table
-  }
-
-  override def close(): Unit = synchronized {
-    if (!closed) {
-      closed = true
-      try {
-        delegate.close()
-      } finally {
-        filter.foreach(_.close())
-      }
-    }
-  }
-}
-
-class ParquetGDSPartitionReader(
-    override val fileIO: RapidsFileIO,
-    override val conf: Configuration,
-    split: PartitionedFile,
-    filePath: Path,
-    clippedBlocks: Iterable[BlockMetaData],
-    clippedParquetSchema: MessageType,
-    override val isSchemaCaseSensitive: Boolean,
-    readDataSchema: StructType,
-    targetBatchSizeBytes: Long,
-    maxChunkedReaderMemoryUsageSizeBytes: Long,
-    override val compressCfg: CpuCompressionConfig,
-    override val execMetrics: Map[String, GpuMetric],
-    dateRebaseMode: DateTimeRebaseMode,
-    timestampRebaseMode: DateTimeRebaseMode,
-    hasInt96Timestamps: Boolean,
-    useFieldId: Boolean,
-    rowGroupIndices: Array[Int],
-    filters: Array[Filter],
-    nativeFilterPushdownEnabled: Boolean) extends FilePartitionReaderBase(conf, execMetrics)
-  with ParquetPartitionReaderBase {
-
-  private var initialized = false
-
-  override def next(): Boolean = {
-    if (batchIter.hasNext) {
-      return true
-    }
-    if (isDone) {
-      return false
-    }
-    if (!initialized) {
-      initialized = true
-      if (clippedParquetSchema.getFieldCount == 0) {
-        val rowCount = Math.toIntExact(clippedBlocks.iterator.map(_.getRowCount).sum)
-        if (rowCount == 0) {
-          isDone = true
-          return false
-        }
-        GpuSemaphore.acquireIfNecessary(TaskContext.get())
-        val nullColumns = readDataSchema.fields.safeMap { field =>
-          GpuColumnVector.fromNull(rowCount, field.dataType).asInstanceOf[SparkVector]
-        }
-        batchIter = new SingleGpuColumnarBatchIterator(
-          new ColumnarBatch(nullColumns.toArray, rowCount))
-        return true
-      }
-
-      if (dateRebaseMode != DateTimeRebaseCorrected ||
-          timestampRebaseMode != DateTimeRebaseCorrected || hasInt96Timestamps) {
-        throw new UnsupportedOperationException(
-          "The GDS Parquet reader requires corrected date/timestamp rebasing and no INT96 data")
-      }
-
-      GpuSemaphore.acquireIfNecessary(TaskContext.get())
-      val cudfColumnNames = toCudfColumnNames(
-        readDataSchema, clippedParquetSchema, isSchemaCaseSensitive, useFieldId)
-      val compiledFilter = if (nativeFilterPushdownEnabled) {
-        GpuParquetGDSFilterAst.compile(
-          filters, readDataSchema, cudfColumnNames.toArray, isSchemaCaseSensitive) match {
-          case Right(compiled) =>
-            val skipped = compiled.skippedFilters.map {
-              case (filter, reason) => s"$filter ($reason)"
-            }.mkString("; ")
-            logInfo(s"GDS_NATIVE_FILTER_AST_ENABLED " +
-              s"pushed=${compiled.pushedFilters.mkString(" AND ")} skipped=$skipped")
-            Some(compiled.expression)
-          case Left(reason) =>
-            logWarning(s"GDS_NATIVE_FILTER_AST_DISABLED reason=$reason")
-            None
-        }
-      } else {
-        None
-      }
-      val producer = try {
-        val parseOpts = getParquetOptions(
-          readDataSchema, clippedParquetSchema, useFieldId, rowGroupIndices,
-          compiledFilter.orNull)
-        val javaFile = new java.io.File(new URI(filePath.toString).getPath)
-        new GDSParquetTableReader(
-          targetBatchSizeBytes, maxChunkedReaderMemoryUsageSizeBytes, parseOpts, javaFile,
-          execMetrics, readDataSchema, Array(split), compiledFilter)
-      } catch {
-        case t: Throwable =>
-          compiledFilter.foreach(_.close())
-          throw t
-      }
-      batchIter = CachedGpuBatchIterator(producer, readDataSchema.fields.map(_.dataType))
-    }
-    if (batchIter.hasNext) {
-      true
-    } else {
-      isDone = true
-      false
     }
   }
 }

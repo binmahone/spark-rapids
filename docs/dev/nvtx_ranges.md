@@ -73,6 +73,7 @@ get map|Getting join map
 GpuPartitioner|GPU partitioner operation
 Sort next output batch|Fetching next sorted output batch
 existence join batch|Processing batch for existence join
+HybridScan filter dict|Pruning row groups using dictionary pages
 TOP N Offset|Computing top N rows with offset
 sort_order|Computing sort order for data
 broadcast collect|Collecting data for broadcast
@@ -135,10 +136,12 @@ sort copy boundaries|Copying boundary data for sort operation
 WaitingForWrites|Rapids Shuffle Manager (multi threaded) is waiting for any queued writes to finish before finalizing the map output writer
 Project AST|Applying AST-based projection to batch
 ORC readBatches|Reading ORC batches
+HybridScan materialize|Materializing a table from column chunk data
 Shuffle Transfer Request|Handling shuffle data transfer request
 consumeWindow|Consuming transfer window
 orc buffer file split|Splitting ORC file into buffer chunks for reading
 parquet clip schema|Clipping Parquet schema to required columns
+HybridScan read footer|Reading Parquet footer bytes for a hybrid scan read
 AbstractGpuCoalesceIterator|Default range for a code path in the AbstractGpuCoalesceIterator for an op which is not explicitly documented in its own range
 Client.fetch|Fetching data from shuffle server
 Columnar batch serialize|Serializing columnar batch for shuffle or storage
@@ -192,6 +195,7 @@ parquet get blocks with filter|Retrieving Parquet blocks after applying filters
 dynamic sort heuristic|Applying dynamic sort heuristic for aggregation
 shuffle concat load batch|Concatenating and loading batch in shuffle operation
 parquet read footer bytes|Reading raw footer bytes from Parquet file
+HybridScan read data|Reading column chunk byte ranges into host memory
 spill batch|Spilling join batch
 Fast Sample Exec|Fast sampling rows from data
 partition for join|Hash partitioning data for join operation

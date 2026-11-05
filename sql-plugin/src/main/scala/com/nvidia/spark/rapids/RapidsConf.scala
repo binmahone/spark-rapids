@@ -317,7 +317,7 @@ class ConfBuilder(val key: String, val register: ConfEntry[_] => Unit) {
 
 object RapidsReaderType extends Enumeration {
   type RapidsReaderType = Value
-  val AUTO, COALESCING, MULTITHREADED, PERFILE, GDS = Value
+  val AUTO, COALESCING, MULTITHREADED, PERFILE = Value
 }
 
 object RapidsConf extends Logging {
@@ -1485,11 +1485,39 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
     .checkValues(RapidsReaderType.values.map(_.toString))
     .createWithDefault(RapidsReaderType.AUTO.toString)
 
-  val PARQUET_GDS_FILTER_PUSHDOWN_ENABLED =
-    conf("spark.rapids.sql.format.parquet.gds.filterPushdown.enabled")
-      .doc("Enables full supported Spark data source filter pushdown into the cuDF AST for the " +
-        "GDS Parquet reader. Unsupported top-level conjuncts remain as Spark filters and are " +
-        "not included in the AST.")
+  val PARQUET_HYBRID_SCAN_ENABLED =
+    conf("spark.rapids.sql.format.parquet.hybridScan.enabled")
+      .doc("Internal temporary configuration to let Parquet reads use the libcudf hybrid scan " +
+          "reader while it is under development. It does not have the checks needed to be " +
+          "correct on every file and must not be used in production. When true, the reader " +
+          "bypasses parquet-mr: it parses only the footer, prunes row groups with the hybrid " +
+          "scan reader, and reads only the column chunk byte ranges the read needs. It applies " +
+          "only to non-chunked PERFILE reads; any other read falls back to the " +
+          "parquet-mr path.")
+      .internal()
+      .booleanConf
+      .createWithDefault(false)
+
+  val PARQUET_HYBRID_SCAN_SINGLE_STAGE_FILTER_KEEP_THRESHOLD =
+    conf("spark.rapids.sql.format.parquet.hybridScan.singleStage.filterKeepThreshold")
+      .doc("Largest fraction of rows the pushed filter may keep for a single-stage hybrid scan " +
+          "read to still apply it. A single-stage read decodes every projected column whatever " +
+          "the filter says, so applying it cannot save any decoding; it only shrinks the batch " +
+          "leaving the scan, at the cost of evaluating the filter and copying the rows that " +
+          "survive. A filter that rejects almost nothing therefore costs more than the smaller " +
+          "batch saves. Above this fraction the rows are all returned and Spark's own filter " +
+          "above the scan removes the rest, which it does regardless. 1 always applies the " +
+          s"filter. Only used when ${PARQUET_HYBRID_SCAN_ENABLED.key} is true.")
+      .internal()
+      .doubleConf
+      .checkValue(v => v > 0 && v <= 1, "The keep threshold must be in the range (0, 1].")
+      .createWithDefault(0.9)
+
+  val TEST_PARQUET_HYBRID_SCAN_FAIL_ON_FALLBACK =
+    conf("spark.rapids.sql.test.format.parquet.hybridScan.failOnFallback")
+      .doc("Only to be used in tests. When true and the hybrid scan reader is enabled, fail a " +
+        "PERFILE Parquet scan that would fall back to the parquet-mr path instead of reading it.")
+      .internal()
       .booleanConf
       .createWithDefault(false)
 
@@ -3794,11 +3822,13 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val isParquetPerFileReadEnabled: Boolean =
     RapidsReaderType.withName(get(PARQUET_READER_TYPE)) == RapidsReaderType.PERFILE
 
-  lazy val isParquetGDSReadEnabled: Boolean =
-    RapidsReaderType.withName(get(PARQUET_READER_TYPE)) == RapidsReaderType.GDS
+  lazy val isParquetHybridScanEnabled: Boolean = get(PARQUET_HYBRID_SCAN_ENABLED)
 
-  lazy val isParquetGDSFilterPushdownEnabled: Boolean =
-    get(PARQUET_GDS_FILTER_PUSHDOWN_ENABLED)
+  lazy val testParquetHybridScanFailOnFallback: Boolean =
+    get(TEST_PARQUET_HYBRID_SCAN_FAIL_ON_FALLBACK)
+
+  lazy val hybridScanSingleStageFilterKeepThreshold: Double =
+    get(PARQUET_HYBRID_SCAN_SINGLE_STAGE_FILTER_KEEP_THRESHOLD)
 
   lazy val isParquetAutoReaderEnabled: Boolean =
     RapidsReaderType.withName(get(PARQUET_READER_TYPE)) == RapidsReaderType.AUTO

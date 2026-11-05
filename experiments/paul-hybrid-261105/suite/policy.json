@@ -15,7 +15,7 @@
     "limitations under the License."
   ],
   "schema_version": 1,
-  "name": "paul-hybrid-multithreaded-sf30k-6node",
+  "name": "paul-hybrid-multithreaded-sf30k-5node",
   "classification": "Experimental Paul Hybrid reader using the job-14867 optimizer and runtime configuration",
   "artifact_identity": {
     "build_job": 20927,
@@ -33,8 +33,8 @@
     "sql": "canonical TPC-H SF30000; no SQL overrides or hints",
     "session": "one Spark application and one SparkSession",
     "result_sink": "JVM driver collect with result digests",
-    "nodes": "presto-gb200-gcn-[06-07,12-14,17]",
-    "executors": 24,
+    "nodes": "presto-gb200-gcn-[06-07,12-14]",
+    "executors": 20,
     "query_id_conditionals": false
   },
   "candidate_scope": {

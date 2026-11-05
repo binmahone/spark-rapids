@@ -48,8 +48,17 @@ test "$(git -C "$private_root" rev-parse HEAD)" = "${PRIVATE_REVISION:?}"
 test -z "$(git -C "$source_root" status --short)"
 test -z "$(git -C "$private_root" status --short)"
 build_args=(-B -ntp -Dmaven.repo.local="$repository" -Dmaven.wagon.rto=30000
-  -Dbuildver=353 -Dmaven.scaladoc.skip=true -DskipTests)
+  -Dbuildver=353 -Dmaven.scaladoc.skip=true -DskipTests -nsu)
 cd "$source_root"
+mvn -B -ntp -U -Dmaven.repo.local="$repository" dependency:get \
+  -Dartifact=com.nvidia:cudf-spark-jni:26.12.0-SNAPSHOT:jar:cuda13-arm64 \
+  -Dtransitive=false \
+  -DremoteRepositories=snapshots-repo::default::https://central.sonatype.com/repository/maven-snapshots/ \
+  2>&1 | tee "$logs/jni-download.log"
+printf '%s  %s\n' \
+  2f2862d1b25fda6aa3aaa8af5070770c8e48bcc044d270f54deadf2755dbe6c5 \
+  "$repository/com/nvidia/cudf-spark-jni/26.12.0-SNAPSHOT/cudf-spark-jni-26.12.0-SNAPSHOT-cuda13-arm64.jar" \
+  | sha256sum --check | tee "$logs/jni-integrity.log"
 mvn "${build_args[@]}" -Parm64 -Dcuda.version=cuda13 -pl sql-plugin-api -am install \
   2>&1 | tee "$logs/api-build.log"
 cd "$private_root"
@@ -59,6 +68,19 @@ mvn "${build_args[@]}" -nsu -Parm64 -Dcuda.version=cuda13 \
   -DallowConventionalDistJar=true -pl dist -am package 2>&1 | tee "$logs/package.log"
 test -s "$jar"
 sha256sum "$jar" > "$logs/jar.sha256"
+python3 - "$jar" <<'PY'
+import sys
+from zipfile import ZipFile
+with ZipFile(sys.argv[1]) as jar:
+    expected = {
+        "cudf-spark-jni-version-info.properties": "7a8227ea9ee7bbedf69384cd688b92128141bf72",
+        "cudf-java-version-info.properties": "d984f0a215980763781ae1b26be3816875c18cd9",
+    }
+    for name, revision in expected.items():
+        data = jar.read(name).decode()
+        assert "revision=" + revision in data, (name, data)
+        print(name + "\n" + data, flush=True)
+PY
 python3 - "$source_root/experiments/paul-hybrid-261105/suite/policy.json" \
   "$own/runtime-policy.json" "$jar" "$PUBLIC_REVISION" "$PRIVATE_REVISION" <<'PY'
 import hashlib

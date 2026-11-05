@@ -20,7 +20,13 @@ readonly source_root=$own/src/cudf-spark
 readonly private_root=$own/src/cudf-spark-private
 readonly repository=$own/maven-repository
 readonly logs=$own/logs/job-${SLURM_JOB_ID:?}
+readonly jar=$source_root/dist/target/rapids-4-spark_2.12-26.10.0-SNAPSHOT-cuda13-arm64.jar
 mkdir -p "$logs" "$repository"
+if [[ -s "$jar" ]]; then
+  mkdir -p "$own/artifacts"
+  previous_sha=$(sha256sum "$jar" | awk '{print $1}')
+  cp --reflink=never --no-clobber "$jar" "$own/artifacts/$previous_sha.jar"
+fi
 df -hT / /home/mahonem /scratch | tee "$logs/capacity.txt"
 test "$(df -PB1 /home/mahonem | awk 'NR==2 {print $4}')" -gt 53687091200
 test "$(df -PB1 / | awk 'NR==2 {print $4}')" -gt 2147483648
@@ -51,7 +57,6 @@ mvn "${build_args[@]}" -pl core -am install 2>&1 | tee "$logs/private-build.log"
 cd "$source_root"
 mvn "${build_args[@]}" -nsu -Parm64 -Dcuda.version=cuda13 \
   -DallowConventionalDistJar=true -pl dist -am package 2>&1 | tee "$logs/package.log"
-readonly jar=$source_root/dist/target/rapids-4-spark_2.12-26.10.0-SNAPSHOT-cuda13-arm64.jar
 test -s "$jar"
 sha256sum "$jar" > "$logs/jar.sha256"
 readonly spark=$legacy/software/spark-3.5.3-bin-hadoop3

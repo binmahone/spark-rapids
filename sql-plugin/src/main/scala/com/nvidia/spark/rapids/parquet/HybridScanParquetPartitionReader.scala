@@ -16,15 +16,18 @@
 
 package com.nvidia.spark.rapids.parquet
 
-import ai.rapids.cudf.{ByteRange, DeviceMemoryBuffer, DType, HostMemoryBuffer, HybridScanReader, ParquetOptions, Table}
+import java.util.concurrent.atomic.AtomicBoolean
+
+import ai.rapids.cudf.{ByteRange, Cuda, DeviceMemoryBuffer, DType, HostMemoryBuffer, HybridScanReader, ParquetOptions, Table}
 import ai.rapids.cudf.ast.{AstExpression, CompiledExpression}
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.GpuMetric._
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
+import com.nvidia.spark.rapids.jni.PackedHostToDeviceCopy
 
-import org.apache.spark.TaskContext
+import org.apache.spark.{SparkEnv, TaskContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.util.RebaseDateTime
 import org.apache.spark.sql.connector.read.PartitionReader
@@ -216,7 +219,7 @@ private[parquet] trait HybridScanBase extends Logging {
     GpuSemaphore.acquireIfNecessary(TaskContext.get())
     // The host pages outlive each attempt, so a retry copies them again.
     val kept = withRetryNoSplit[Array[Int]] {
-      withResource(copyToDevice(hostPages)) { dictPages =>
+      withDeviceCopies(hostPages) { dictPages =>
         reader.filterRowGroupsWithDictionaryPages(dictPages, rowGroups)
       }
     }
@@ -296,7 +299,7 @@ private[parquet] trait HybridScanBase extends Logging {
     NvtxRegistry.HYBRID_SCAN_MATERIALIZE {
       // The host chunks outlive each attempt, so a retry copies them again.
       withRetryNoSplit[Table] {
-        withResource(copyToDevice(fetched.hostChunks)) { deviceChunks =>
+        withDeviceCopies(fetched.hostChunks) { deviceChunks =>
           reader.materializeAllColumns(fetched.rowGroups, deviceChunks)
         }
       }
@@ -393,6 +396,32 @@ private[parquet] trait HybridScanBase extends Logging {
       }
     }
   }
+
+  /** Keep copy ownership alive through the operation that consumes the device buffers. */
+  private def withDeviceCopies[T](hostChunks: Array[HostMemoryBuffer])(
+      consume: Array[DeviceMemoryBuffer] => T): T = {
+    val env = SparkEnv.get
+    val packed = env != null && env.conf.getBoolean(
+      "spark.rapids.sql.test.format.parquet.hybridScan.packedH2D.enabled", false)
+    if (packed) {
+      val maxPackBytes = env.conf.getSizeAsBytes(
+        "spark.rapids.sql.reader.batchSizeBytes", 2L * 1024 * 1024 * 1024)
+      withResource(new Cuda.Event()) { event =>
+        withResource(PackedHostToDeviceCopy.copyAsync(
+            hostChunks, Cuda.DEFAULT_STREAM, maxPackBytes, event)) { copy =>
+          copy.makeStreamWait(Cuda.DEFAULT_STREAM)
+          copy.setFreeStream(Cuda.DEFAULT_STREAM)
+          HybridScanBase.reportCopyBranch(true, hostChunks.length, maxPackBytes)
+          consume(copy.getBuffers)
+        }
+      }
+    } else {
+      withResource(copyToDevice(hostChunks)) { copies =>
+        HybridScanBase.reportCopyBranch(false, hostChunks.length, 0L)
+        consume(copies)
+      }
+    }
+  }
 }
 
 /**
@@ -402,6 +431,17 @@ private[parquet] trait HybridScanBase extends Logging {
  * class.
  */
 object HybridScanBase extends Logging {
+
+  private val reportedLegacyCopy = new AtomicBoolean(false)
+  private val reportedPackedCopy = new AtomicBoolean(false)
+
+  private[parquet] def reportCopyBranch(packed: Boolean, chunks: Int, maxPackBytes: Long): Unit = {
+    val reported = if (packed) reportedPackedCopy else reportedLegacyCopy
+    if (reported.compareAndSet(false, true)) {
+      val mode = if (packed) "packed-async" else "legacy-sync"
+      logWarning(s"PAUL_HYBRID_H2D_COPY mode=$mode chunks=$chunks maxPackBytes=$maxPackBytes")
+    }
+  }
 
   /** Parse the footer into a reader. The caller owns and closes both the reader and the footer. */
   private[parquet] def openReader(

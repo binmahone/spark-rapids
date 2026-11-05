@@ -48,7 +48,7 @@ export TPCH_PERSIST_FULL_RESULT=true
 export TPCH_RESULT_SINK_POLICY=jvm-driver-collect-all
 export TPCH_OFFLINE_APT_CACHE=$legacy/artifacts/apt-cache/ubuntu2404-arm64-cuda13.1
 export TPCH_SUBMIT_SCRIPT=$own/scripts/run_sf30k.slurm
-export TPCH_EXPERIMENT_PROFILE=paul-hybrid-multithreaded-sf30k-${SLURM_JOB_NUM_NODES}node
+export TPCH_EXPERIMENT_PROFILE=${TPCH_EXPERIMENT_PROFILE:-paul-hybrid-multithreaded-sf30k-${SLURM_JOB_NUM_NODES}node}
 export TPCH_RAPIDS_VERSION=26.10.0-SNAPSHOT-paul-hybrid-experiment
 export TPCH_ENABLE_NODE_TELEMETRY=true
 export HEAD_NODE

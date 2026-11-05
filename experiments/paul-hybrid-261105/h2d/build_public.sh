@@ -57,6 +57,8 @@ readonly spark=$legacy/software/spark-3.5.3-bin-hadoop3
 for mode in false true; do
   "$spark/bin/spark-submit" --master 'local[4]' --jars "$jar" \
     --conf spark.plugins=com.nvidia.spark.SQLPlugin \
+    --conf spark.driver.extraJavaOptions=-Drapids.test.rangeIoTiming=true \
+    --conf spark.executor.extraJavaOptions=-Drapids.test.rangeIoTiming=true \
     --conf spark.sql.adaptive.enabled=false \
     --conf spark.rapids.sql.concurrentGpuTasks=2 \
     --conf spark.rapids.memory.gpu.allocFraction=0.1 \
@@ -76,6 +78,8 @@ for mode in false true; do
     grep -q 'PAUL_HYBRID_H2D_COPY mode=legacy-sync' "$logs/reader-cases-$mode.log"
   fi
   grep -q 'PAUL_HYBRID_COUNTEREXAMPLES_PASS' "$logs/reader-cases-$mode.log"
+  grep -q 'RANGE_IO_TIMING' "$logs/reader-cases-$mode.log"
+  grep -q 'RANGE_IO_OUTER' "$logs/reader-cases-$mode.log"
 done
 python3 - "$own/runtime-policy.json" "$own/h2d-runtime-policy.json" "$jar" <<'PY'
 import hashlib

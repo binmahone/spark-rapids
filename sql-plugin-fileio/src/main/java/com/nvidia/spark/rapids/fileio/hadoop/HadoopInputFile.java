@@ -87,8 +87,19 @@ public class HadoopInputFile implements RapidsInputFile {
         if (copyRanges.isEmpty()) {
             return;
         }
+        boolean timing = Boolean.getBoolean("rapids.test.rangeIoTiming");
+        long started = timing ? System.nanoTime() : 0;
         byte[] copyBuffer = new byte[getCopyBufferAllocationSize(copyRanges, copyBufferSize)];
-        RapidsInputFile.readVectoredUsingCopyBuffer(this, output, copyRanges, copyBuffer);
+        long allocated = timing ? System.nanoTime() : 0;
+        try {
+            RapidsInputFile.readVectoredUsingCopyBuffer(this, output, copyRanges, copyBuffer);
+        } finally {
+            if (timing) {
+                System.err.println("RANGE_IO_OUTER thread=" + Thread.currentThread().getName()
+                        .replace(' ', '_') + " allocateNs=" + (allocated - started)
+                        + " totalNs=" + (System.nanoTime() - started) + " path=" + filePath);
+            }
+        }
     }
 
     static int getCopyBufferAllocationSize(

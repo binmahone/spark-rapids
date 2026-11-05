@@ -37,7 +37,7 @@ export TPCH_EXPECTED_EXECUTORS=$((SLURM_JOB_NUM_NODES * 4))
 export TPCH_EXECUTORS_PER_NODE=4
 export TPCH_PARQUET_READER_TYPE=MULTITHREADED
 export TPCH_PARQUET_DICTIONARY_FILTER_ENABLED=false
-export TPCH_POLICY_MANIFEST_PATH=$own/runtime-policy.json
+export TPCH_POLICY_MANIFEST_PATH=${TPCH_POLICY_MANIFEST_PATH:?Specify the submission policy snapshot}
 export TPCH_APPLICATION=$own/scripts/run_tpch_suite.py
 export TPCH_RAPIDS_JAR=$own/src/cudf-spark/dist/target/rapids-4-spark_2.12-26.10.0-SNAPSHOT-cuda13-arm64.jar
 export TPCH_RAPIDS_UCX_RUNTIME=$legacy/artifacts/ucx-5025d2a2-cuda13-aarch64/runtime/usr
@@ -48,7 +48,7 @@ export TPCH_PERSIST_FULL_RESULT=true
 export TPCH_RESULT_SINK_POLICY=jvm-driver-collect-all
 export TPCH_OFFLINE_APT_CACHE=$legacy/artifacts/apt-cache/ubuntu2404-arm64-cuda13.1
 export TPCH_SUBMIT_SCRIPT=$own/scripts/run_sf30k.slurm
-export TPCH_EXPERIMENT_PROFILE=paul-hybrid-multithreaded-sf30k-5node
+export TPCH_EXPERIMENT_PROFILE=paul-hybrid-multithreaded-sf30k-${SLURM_JOB_NUM_NODES}node
 export TPCH_RAPIDS_VERSION=26.10.0-SNAPSHOT-paul-hybrid-experiment
 export TPCH_ENABLE_NODE_TELEMETRY=true
 export HEAD_NODE

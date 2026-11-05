@@ -5,8 +5,8 @@ readonly smoke_job=${2:?Specify the successful build and smoke Slurm job}
 readonly nodes=${3:-5}
 readonly scan_profile=${4:-baseline}
 case "$scan_profile" in
-  baseline|split512m) ;;
-  *) echo 'Supported scan profiles: baseline or split512m' >&2; exit 2 ;;
+  baseline|split512m|split1g|split2g) ;;
+  *) echo 'Supported scan profiles: baseline, split512m, split1g, split2g' >&2; exit 2 ;;
 esac
 case "$nodes" in
   5) readonly nodelist='presto-gb200-gcn-[06-07,12-14]' ;;
@@ -46,10 +46,11 @@ assert policy['artifact_identity']['build_job'] == int(sys.argv[2])
 policy['name'] = f'paul-hybrid-multithreaded-sf30k-{sys.argv[3]}node'
 policy['benchmark_contract']['nodes'] = sys.argv[4]
 policy['benchmark_contract']['executors'] = int(sys.argv[3]) * 4
-if sys.argv[6] == 'split512m':
-    policy['name'] += '-split512m'
+split_sizes = {'split512m': '512m', 'split1g': '1g', 'split2g': '2g'}
+if sys.argv[6] in split_sizes:
+    policy['name'] += '-' + sys.argv[6]
     conf = policy['uniform_configuration']
-    conf['spark.sql.files.maxPartitionBytes'] = '512m'
+    conf['spark.sql.files.maxPartitionBytes'] = split_sizes[sys.argv[6]]
     # A high partition-count ceiling preserves the requested byte-size splits.
     conf['spark.sql.files.maxPartitionNum'] = '65536'
 Path(sys.argv[5]).write_text(json.dumps(policy, indent=2) + '\n')

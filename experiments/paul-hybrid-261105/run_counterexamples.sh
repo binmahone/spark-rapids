@@ -19,6 +19,12 @@ readonly legacy=/home/prestouser/mahonem/wild_spark_rapids
 readonly source_root=$own/src/cudf-spark
 readonly logs=$own/logs/job-${SLURM_JOB_ID:?}
 readonly jar=$source_root/dist/target/rapids-4-spark_2.12-26.10.0-SNAPSHOT-cuda13-arm64.jar
+readonly program=${HYBRID_TEST_PROGRAM:-reader_counterexamples.py}
+case "$program" in
+  reader_counterexamples.py) readonly pass_marker=PAUL_HYBRID_COUNTEREXAMPLES_PASS ;;
+  reproduce_string_column_overflow.py) readonly pass_marker=PAUL_HYBRID_TEST_PASS ;;
+  *) echo "Unsupported test program: $program" >&2; exit 2 ;;
+esac
 mkdir -p "$logs" /var/lib/apt/lists/partial /var/cache/apt/archives/partial
 readonly cache=$legacy/artifacts/apt-cache/ubuntu2404-arm64-cuda13.1
 find "$cache/lists" -maxdepth 1 -type f ! -name lock -exec cp -t /var/lib/apt/lists/ -- {} +
@@ -38,6 +44,6 @@ printf '%s  %s\n' c04f75de16ddc862b814ee78bfc88c2ee6bc9f8f2a1343c143990a3da7e7f7
   --conf spark.rapids.memory.gpu.allocFraction=0.1 \
   --conf spark.rapids.memory.gpu.maxAllocFraction=0.2 \
   --conf spark.rapids.memory.gpu.minAllocFraction=0.05 \
-  "$source_root/experiments/paul-hybrid-261105/reader_counterexamples.py" \
+  "$source_root/experiments/paul-hybrid-261105/$program" \
   "$own/data/counterexamples-${SLURM_JOB_ID}" 2>&1 | tee "$logs/reader-counterexamples.log"
-grep -q '^PAUL_HYBRID_COUNTEREXAMPLES_PASS$' "$logs/reader-counterexamples.log"
+grep -q "^${pass_marker}$" "$logs/reader-counterexamples.log"

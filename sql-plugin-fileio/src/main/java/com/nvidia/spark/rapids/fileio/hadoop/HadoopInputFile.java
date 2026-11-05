@@ -23,7 +23,12 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
+import java.io.EOFException;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalLong;
@@ -89,15 +94,104 @@ public class HadoopInputFile implements RapidsInputFile {
         }
         boolean timing = Boolean.getBoolean("rapids.test.rangeIoTiming");
         long started = timing ? System.nanoTime() : 0;
+        if (Boolean.getBoolean("rapids.test.directHostRead")) {
+            try {
+                readDirectToHost(output, copyRanges);
+            } finally {
+                if (timing) {
+                    System.err.println("RANGE_IO_OUTER mode=direct_host thread="
+                            + Thread.currentThread().getName().replace(' ', '_')
+                            + " allocateNs=0 totalNs=" + (System.nanoTime() - started)
+                            + " path=" + filePath);
+                }
+            }
+            return;
+        }
         byte[] copyBuffer = new byte[getCopyBufferAllocationSize(copyRanges, copyBufferSize)];
         long allocated = timing ? System.nanoTime() : 0;
         try {
             RapidsInputFile.readVectoredUsingCopyBuffer(this, output, copyRanges, copyBuffer);
         } finally {
             if (timing) {
-                System.err.println("RANGE_IO_OUTER thread=" + Thread.currentThread().getName()
+                System.err.println("RANGE_IO_OUTER mode=hadoop_heap thread="
+                        + Thread.currentThread().getName()
                         .replace(' ', '_') + " allocateNs=" + (allocated - started)
                         + " totalNs=" + (System.nanoTime() - started) + " path=" + filePath);
+            }
+        }
+    }
+
+    /** Diagnostic local-file read with the same ranges and chunk cap, without heap staging. */
+    private void readDirectToHost(HostMemoryBuffer output, List<RapidsInputFile.CopyRange> ranges)
+            throws IOException {
+        Objects.requireNonNull(output, "output can't be null");
+        Objects.requireNonNull(ranges, "ranges can't be null");
+        String scheme = filePath.toUri().getScheme();
+        String authority = filePath.toUri().getAuthority();
+        if ((scheme != null && !"file".equals(scheme))
+                || (authority != null && !authority.isEmpty())
+                || !filePath.toUri().getPath().startsWith("/")) {
+            throw new IOException("Diagnostic direct-host reads require an absolute local file");
+        }
+        for (RapidsInputFile.CopyRange range : ranges) {
+            Objects.requireNonNull(range, "range can't be null");
+            long length = range.getLength();
+            long offset = range.getOutputOffset();
+            if (range.getInputOffset() < 0 || length < 0 || offset < 0
+                    || offset > output.getLength() || length > output.getLength() - offset
+                    || range.getInputOffset() > Long.MAX_VALUE - length) {
+                throw new IllegalArgumentException("Invalid diagnostic direct-host range");
+            }
+        }
+        boolean timing = Boolean.getBoolean("rapids.test.rangeIoTiming");
+        long bytes = 0;
+        long calls = 0;
+        long readNanos = 0;
+        boolean completed = false;
+        try (FileChannel channel = FileChannel.open(Paths.get(filePath.toUri().getPath()),
+                StandardOpenOption.READ)) {
+            long started = timing ? System.nanoTime() : 0;
+            try {
+                for (RapidsInputFile.CopyRange range : ranges) {
+                    long remaining = range.getLength();
+                    long inputOffset = range.getInputOffset();
+                    long outputOffset = range.getOutputOffset();
+                    while (remaining > 0) {
+                        int chunk = (int) Math.min(remaining, copyBufferSize);
+                        ByteBuffer view = output.asByteBuffer(outputOffset, chunk);
+                        if (!view.isDirect()) {
+                            throw new IllegalStateException("Diagnostic host view must be direct");
+                        }
+                        long readStarted = timing ? System.nanoTime() : 0;
+                        while (view.hasRemaining()) {
+                            int count = channel.read(view, inputOffset);
+                            if (count < 0) {
+                                throw new EOFException("Short diagnostic direct-host read");
+                            }
+                            if (count == 0) {
+                                throw new IOException("Diagnostic direct-host read made no progress");
+                            }
+                            inputOffset += count;
+                        }
+                        if (timing) {
+                            readNanos += System.nanoTime() - readStarted;
+                        }
+                        bytes += chunk;
+                        calls++;
+                        outputOffset += chunk;
+                        remaining -= chunk;
+                    }
+                }
+                completed = true;
+            } finally {
+                if (timing) {
+                    System.err.println("RANGE_IO_TIMING mode=direct_host thread="
+                            + Thread.currentThread().getName().replace(' ', '_')
+                            + " bytes=" + bytes + " calls=" + calls + " readNs=" + readNanos
+                            + " copyNs=0 seekNs=0 totalNs=" + (System.nanoTime() - started)
+                            + " bufferBytes=" + copyBufferSize + " ranges=" + ranges.size()
+                            + " completed=" + completed);
+                }
             }
         }
     }

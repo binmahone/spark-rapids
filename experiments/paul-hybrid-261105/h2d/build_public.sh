@@ -54,11 +54,13 @@ sha256sum "$jar" > "$logs/jar.sha256"
 artifact_sha=$(sha256sum "$jar" | awk '{print $1}')
 cp --reflink=never --no-clobber "$jar" "$own/artifacts/$artifact_sha.jar"
 readonly spark=$legacy/software/spark-3.5.3-bin-hadoop3
+for direct in false true; do
 for mode in false true; do
   "$spark/bin/spark-submit" --master 'local[4]' --jars "$jar" \
     --conf spark.plugins=com.nvidia.spark.SQLPlugin \
-    --conf spark.driver.extraJavaOptions=-Drapids.test.rangeIoTiming=true \
-    --conf spark.executor.extraJavaOptions=-Drapids.test.rangeIoTiming=true \
+    --conf "spark.driver.extraJavaOptions=-Drapids.test.rangeIoTiming=true -Drapids.test.directHostRead=$direct" \
+    --conf "spark.executor.extraJavaOptions=-Drapids.test.rangeIoTiming=true -Drapids.test.directHostRead=$direct" \
+    --conf spark.hadoop.parquet.read.allocation.size=4096 \
     --conf spark.sql.adaptive.enabled=false \
     --conf spark.rapids.sql.concurrentGpuTasks=2 \
     --conf spark.rapids.memory.gpu.allocFraction=0.1 \
@@ -71,15 +73,17 @@ for mode in false true; do
     --conf spark.sql.parquet.int96RebaseModeInRead=EXCEPTION \
     --conf "spark.rapids.sql.test.format.parquet.hybridScan.packedH2D.enabled=$mode" \
     "$src/experiments/paul-hybrid-261105/reader_counterexamples.py" \
-    "$own/data/h2d-${SLURM_JOB_ID}-$mode" 2>&1 | tee "$logs/reader-cases-$mode.log"
+    "$own/data/h2d-${SLURM_JOB_ID}-$mode-$direct" 2>&1 | tee "$logs/reader-cases-$mode-$direct.log"
   if [[ $mode == true ]]; then
-    grep -q 'PAUL_HYBRID_H2D_COPY mode=packed-async' "$logs/reader-cases-$mode.log"
+    grep -q 'PAUL_HYBRID_H2D_COPY mode=packed-async' "$logs/reader-cases-$mode-$direct.log"
   else
-    grep -q 'PAUL_HYBRID_H2D_COPY mode=legacy-sync' "$logs/reader-cases-$mode.log"
+    grep -q 'PAUL_HYBRID_H2D_COPY mode=legacy-sync' "$logs/reader-cases-$mode-$direct.log"
   fi
-  grep -q 'PAUL_HYBRID_COUNTEREXAMPLES_PASS' "$logs/reader-cases-$mode.log"
-  grep -q 'RANGE_IO_TIMING' "$logs/reader-cases-$mode.log"
-  grep -q 'RANGE_IO_OUTER' "$logs/reader-cases-$mode.log"
+  grep -q 'PAUL_HYBRID_COUNTEREXAMPLES_PASS' "$logs/reader-cases-$mode-$direct.log"
+  grep -q 'RANGE_IO_TIMING' "$logs/reader-cases-$mode-$direct.log"
+  grep -q "RANGE_IO_OUTER mode=$([[ $direct == true ]] && echo direct_host || echo hadoop_heap)" \
+    "$logs/reader-cases-$mode-$direct.log"
+done
 done
 python3 - "$own/runtime-policy.json" "$own/h2d-runtime-policy.json" "$jar" <<'PY'
 import hashlib

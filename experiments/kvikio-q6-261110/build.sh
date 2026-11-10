@@ -51,6 +51,8 @@ site=$("$python" -c 'import site; print(site.getsitepackages()[0])')
 cufile_include=$("$python" -c 'import pathlib,site; print(next((pathlib.Path(site.getsitepackages()[0])/"nvidia").rglob("cufile.h")).parent)')
 test -s "$cufile_include/cufile.h"
 g++ -std=c++20 -O2 -shared -fPIC -pthread \
+  -DKVIKIO_LIBCURL_FOUND -DKVIKIO_CUFILE_FOUND -DKVIKIO_CUFILE_VERSION_API_FOUND \
+  -DBS_THREAD_POOL_ENABLE_PAUSE=1 \
   -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
   -I"$site/libkvikio/include" -I"$site/rapids_logger/include" \
   -I"$cufile_include" -I/host-cuda-include \

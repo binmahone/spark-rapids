@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+set -euo pipefail
+readonly build=${1:?Specify the successful build-and-correctness job}
+readonly backend=${2:?Specify filechannel or kvikio}
+readonly dependency=${3:-}
+readonly here=$(cd "$(dirname "$0")" && pwd)
+readonly revision=$(git -C "$here" rev-parse HEAD)
+[[ "$build" =~ ^[0-9]+$ ]]
+[[ "$backend" == filechannel || "$backend" == kvikio ]]
+[[ -z "$dependency" || "$dependency" =~ ^[0-9]+$ ]]
+test -z "$(git -C "$here" status --short)"
+ssh -F /home/nvidia/mahone_gluten/cluster_ssh_config -o ConnectTimeout=12 \
+  presto-cp-02-via-mac bash -s -- "$build" "$backend" "$dependency" "$revision" <<'REMOTE'
+set -euo pipefail
+readonly build=$1
+readonly backend=$2
+readonly dependency=$3
+readonly revision=$4
+readonly root=/home/mahonem/paul_q6_kvikio_261110
+readonly previous=/home/mahonem/paul_hybrid_multithreaded_261105
+readonly source=$root/src/cudf-spark
+readonly output=$root/builds/job-$build
+readonly nodes='presto-gb200-gcn-[04,07-08,10,13-16]'
+export SLURM_CONF=/cm/shared/apps/slurm/etc/slurm/slurm.conf
+readonly slurm=/cm/local/apps/slurm/current/bin
+test "$("$slurm/sacct" -j "$build" -X -n -o State | xargs)" = COMPLETED
+grep -q '^KVIKIO_Q6_BUILD_AND_CASES_PASS$' "$output/full.log"
+test -z "$(git -C "$source" status --short)"
+git -C "$source" pull --ff-only
+test "$(git -C "$source" rev-parse HEAD)" = "$revision"
+mkdir -p "$root/policies"
+export TPCH_POLICY_MANIFEST_PATH
+TPCH_POLICY_MANIFEST_PATH=$(mktemp "$root/policies/q6-$backend-XXXXXXXX.json")
+python3 - "$previous/h2d-runtime-policy.json" "$output/rapids-kvikio-q6.jar.identity.json" \
+  "$TPCH_POLICY_MANIFEST_PATH" "$backend" "$nodes" "$output" "$build" <<'PY'
+import json
+from pathlib import Path
+import sys
+base, identity, target, backend, nodes, output, build = sys.argv[1:]
+policy = json.loads(Path(base).read_text())
+assert policy['artifact_identity']['jar_sha256'] == 'ab3b63e7bf10d4e304dfdfd6c06b236b7898c6c82859bdc65c01184522aab432'
+identity = json.loads(Path(identity).read_text())
+policy['name'] = 'q6-native-host-ab-' + backend
+policy['artifact_identity']['build_job'] = int(build)
+policy['artifact_identity']['jar_sha256'] = identity['jar_sha256']
+policy['artifact_identity']['public_revision'] = identity['source_revision']
+policy['artifact_identity']['kvikio_bridge_sha256'] = identity['bridge_sha256']
+policy['benchmark_contract']['nodes'] = nodes
+policy['benchmark_contract']['executors'] = 32
+conf = policy['uniform_configuration']
+conf['spark.rapids.sql.multiThreadedRead.numThreads'] = '16'
+conf['spark.rapids.sql.test.format.parquet.hybridScan.packedH2D.enabled'] = 'true'
+conf['spark.executorEnv.JAVA_TOOL_OPTIONS'] = (
+    '-Drapids.test.rangeIoTiming=true -Drapids.test.directHostRead=true '
+    '-Drapids.test.rangeReadConcurrency=4 '
+    '-Drapids.test.kvikioHostRead=' + str(backend == 'kvikio').lower() + ' '
+    '-Drapids.test.kvikioLibrary=' + output + '/libkvikio_host_diagnostic.so '
+    '-Drapids.test.kvikioThreads=32 -Drapids.test.kvikioTaskBytes=4194304 '
+    '-Drapids.test.kvikioRangeWindow=1')
+Path(target).write_text(json.dumps(policy, indent=2) + '\n')
+PY
+chmod 444 "$TPCH_POLICY_MANIFEST_PATH"
+export TPCH_RAPIDS_JAR=$output/rapids-kvikio-q6.jar
+export TPCH_EXPERIMENT_PROFILE=q6-native-host-ab-$backend
+dependency_args=()
+if [[ -n "$dependency" ]]; then
+  dependency_args=("--dependency=afterok:$dependency" --kill-on-invalid-dep=yes)
+fi
+"$slurm/sbatch" --parsable --nodelist="$nodes" --no-requeue \
+  "${dependency_args[@]}" --job-name="mahonem-q6-$backend" \
+  --output="$previous/logs/slurm-%j.out" --error="$previous/logs/slurm-%j.err" \
+  --export=ALL,TPCH_RAPIDS_JAR,TPCH_POLICY_MANIFEST_PATH,TPCH_EXPERIMENT_PROFILE \
+  "$source/experiments/kvikio-q6-261110/run_q6.slurm"
+REMOTE

@@ -18,7 +18,7 @@ ssh -F /home/nvidia/mahone_gluten/cluster_ssh_config -o ConnectTimeout=12 \
 set -uo pipefail
 for suffix in 04 07 08 10 13 14 15 16 17; do
   node=presto-gb200-gcn-$suffix
-  ssh -o BatchMode=yes -o ConnectTimeout=8 "$node" \
+  timeout 30 ssh -o BatchMode=yes -o ConnectTimeout=8 "$node" \
     'hostname; timeout 8 stat -c "dataset_size=%s" /scratch/prestouser/tpch-rs-float-no-delta/scale-30000/lineitem/part.0.parquet;
     timeout 8 dd if=/scratch/prestouser/tpch-rs-float-no-delta/scale-30000/lineitem/part.0.parquet of=/dev/null bs=16 count=1 status=none;
     df -h /raid /tmp; nvidia-smi --query-gpu=name,memory.total,memory.used --format=csv,noheader'

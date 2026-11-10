@@ -16,6 +16,7 @@ set -euo pipefail
 readonly build=${1:?Specify the successful build-and-correctness job}
 readonly backend=${2:?Specify filechannel or kvikio}
 readonly dependency=${3:--}
+readonly nodes=${4:-presto-gb200-gcn-[04,07-08,10,13-16]}
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly revision=$(git -C "$here" rev-parse HEAD)
 [[ "$build" =~ ^[0-9]+$ ]]
@@ -23,7 +24,7 @@ readonly revision=$(git -C "$here" rev-parse HEAD)
 [[ "$dependency" == - || "$dependency" =~ ^[0-9]+$ ]]
 test -z "$(git -C "$here" status --short)"
 ssh -F /home/nvidia/mahone_gluten/cluster_ssh_config -o ConnectTimeout=12 \
-  presto-cp-02-via-mac bash -s -- "$build" "$backend" "$dependency" "$revision" <<'REMOTE'
+  presto-cp-02-via-mac bash -s -- "$build" "$backend" "$dependency" "$revision" "$nodes" <<'REMOTE'
 set -euo pipefail
 readonly build=$1
 readonly backend=$2
@@ -33,9 +34,11 @@ readonly root=/home/mahonem/paul_q6_kvikio_261110
 readonly previous=/home/mahonem/paul_hybrid_multithreaded_261105
 readonly source=$root/src/cudf-spark
 readonly output=$root/builds/job-$build
-readonly nodes='presto-gb200-gcn-[04,07-08,10,13-16]'
+readonly nodes=$5
 export SLURM_CONF=/cm/shared/apps/slurm/etc/slurm/slurm.conf
 readonly slurm=/cm/local/apps/slurm/current/bin
+readonly node_count=$("$slurm/scontrol" show hostnames "$nodes" | wc -l)
+[[ "$node_count" -ge 1 && "$node_count" -le 8 ]]
 test "$("$slurm/sacct" -j "$build" -X -n -o State | xargs)" = COMPLETED
 grep -q '^KVIKIO_Q6_BUILD_AND_CASES_PASS$' "$output/full.log"
 test -z "$(git -C "$source" status --short)"
@@ -45,11 +48,11 @@ mkdir -p "$root/policies"
 export TPCH_POLICY_MANIFEST_PATH
 TPCH_POLICY_MANIFEST_PATH=$(mktemp "$root/policies/q6-$backend-XXXXXXXX.json")
 python3 - "$previous/h2d-runtime-policy.json" "$output/rapids-kvikio-q6.jar.identity.json" \
-  "$TPCH_POLICY_MANIFEST_PATH" "$backend" "$nodes" "$output" "$build" <<'PY'
+  "$TPCH_POLICY_MANIFEST_PATH" "$backend" "$nodes" "$output" "$build" "$node_count" <<'PY'
 import json
 from pathlib import Path
 import sys
-base, identity, target, backend, nodes, output, build = sys.argv[1:]
+base, identity, target, backend, nodes, output, build, node_count = sys.argv[1:]
 policy = json.loads(Path(base).read_text())
 assert policy['artifact_identity']['jar_sha256'] == 'ab3b63e7bf10d4e304dfdfd6c06b236b7898c6c82859bdc65c01184522aab432'
 identity = json.loads(Path(identity).read_text())
@@ -59,8 +62,9 @@ policy['artifact_identity']['jar_sha256'] = identity['jar_sha256']
 policy['artifact_identity']['public_revision'] = identity['source_revision']
 policy['artifact_identity']['kvikio_bridge_sha256'] = identity['bridge_sha256']
 policy['benchmark_contract']['nodes'] = nodes
-policy['benchmark_contract']['executors'] = 32
+policy['benchmark_contract']['executors'] = int(node_count) * 4
 conf = policy['uniform_configuration']
+conf['spark.executor.instances'] = str(int(node_count) * 4)
 conf['spark.rapids.sql.multiThreadedRead.numThreads'] = '16'
 conf['spark.rapids.sql.test.format.parquet.hybridScan.packedH2D.enabled'] = 'true'
 conf['spark.executorEnv.JAVA_TOOL_OPTIONS'] = (
@@ -79,7 +83,7 @@ dependency_args=()
 if [[ "$dependency" != - ]]; then
   dependency_args=("--dependency=afterok:$dependency" --kill-on-invalid-dep=yes)
 fi
-"$slurm/sbatch" --parsable --nodelist="$nodes" --no-requeue \
+"$slurm/sbatch" --parsable --nodes="$node_count" --nodelist="$nodes" --no-requeue \
   "${dependency_args[@]}" --job-name="mahonem-q6-$backend" \
   --output="$previous/logs/slurm-%j.out" --error="$previous/logs/slurm-%j.err" \
   --export=ALL,TPCH_RAPIDS_JAR,TPCH_POLICY_MANIFEST_PATH,TPCH_EXPERIMENT_PROFILE \

@@ -20,7 +20,7 @@ readonly nodes=${4:-presto-gb200-gcn-[04,07-08,10,13-16]}
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly revision=$(git -C "$here" rev-parse HEAD)
 [[ "$build" =~ ^[0-9]+$ ]]
-[[ "$backend" == filechannel || "$backend" == kvikio ]]
+[[ "$backend" == filechannel || "$backend" == kvikio || "$backend" == kvikio-window4 ]]
 [[ "$dependency" == - || "$dependency" =~ ^[0-9]+$ ]]
 test -z "$(git -C "$here" status --short)"
 ssh -F /home/nvidia/mahone_gluten/cluster_ssh_config -o ConnectTimeout=12 \
@@ -70,10 +70,10 @@ conf['spark.rapids.sql.test.format.parquet.hybridScan.packedH2D.enabled'] = 'tru
 conf['spark.executorEnv.JAVA_TOOL_OPTIONS'] = (
     '-Drapids.test.rangeIoTiming=true -Drapids.test.directHostRead=true '
     '-Drapids.test.rangeReadConcurrency=4 '
-    '-Drapids.test.kvikioHostRead=' + str(backend == 'kvikio').lower() + ' '
+    '-Drapids.test.kvikioHostRead=' + str(backend.startswith('kvikio')).lower() + ' '
     '-Drapids.test.kvikioLibrary=' + output + '/libkvikio_host_diagnostic.so '
     '-Drapids.test.kvikioThreads=32 -Drapids.test.kvikioTaskBytes=4194304 '
-    '-Drapids.test.kvikioRangeWindow=1')
+    '-Drapids.test.kvikioRangeWindow=' + ('4' if backend == 'kvikio-window4' else '1'))
 Path(target).write_text(json.dumps(policy, indent=2) + '\n')
 PY
 chmod 444 "$TPCH_POLICY_MANIFEST_PATH"

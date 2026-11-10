@@ -15,12 +15,12 @@
 set -euo pipefail
 readonly build=${1:?Specify the successful build-and-correctness job}
 readonly backend=${2:?Specify filechannel or kvikio}
-readonly dependency=${3:-}
+readonly dependency=${3:--}
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly revision=$(git -C "$here" rev-parse HEAD)
 [[ "$build" =~ ^[0-9]+$ ]]
 [[ "$backend" == filechannel || "$backend" == kvikio ]]
-[[ -z "$dependency" || "$dependency" =~ ^[0-9]+$ ]]
+[[ "$dependency" == - || "$dependency" =~ ^[0-9]+$ ]]
 test -z "$(git -C "$here" status --short)"
 ssh -F /home/nvidia/mahone_gluten/cluster_ssh_config -o ConnectTimeout=12 \
   presto-cp-02-via-mac bash -s -- "$build" "$backend" "$dependency" "$revision" <<'REMOTE'
@@ -76,7 +76,7 @@ chmod 444 "$TPCH_POLICY_MANIFEST_PATH"
 export TPCH_RAPIDS_JAR=$output/rapids-kvikio-q6.jar
 export TPCH_EXPERIMENT_PROFILE=q6-native-host-ab-$backend
 dependency_args=()
-if [[ -n "$dependency" ]]; then
+if [[ "$dependency" != - ]]; then
   dependency_args=("--dependency=afterok:$dependency" --kill-on-invalid-dep=yes)
 fi
 "$slurm/sbatch" --parsable --nodelist="$nodes" --no-requeue \

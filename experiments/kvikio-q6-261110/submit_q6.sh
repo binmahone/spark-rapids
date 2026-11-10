@@ -17,14 +17,16 @@ readonly build=${1:?Specify the successful build-and-correctness job}
 readonly backend=${2:?Specify filechannel or kvikio}
 readonly dependency=${3:--}
 readonly nodes=${4:-presto-gb200-gcn-[04,07-08,10,13-16]}
+readonly profile=${5:-false}
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly revision=$(git -C "$here" rev-parse HEAD)
 [[ "$build" =~ ^[0-9]+$ ]]
 [[ "$backend" == filechannel || "$backend" == kvikio || "$backend" == kvikio-window4 ]]
 [[ "$dependency" == - || "$dependency" =~ ^[0-9]+$ ]]
+[[ "$profile" == true || "$profile" == false ]]
 test -z "$(git -C "$here" status --short)"
 ssh -F /home/nvidia/mahone_gluten/cluster_ssh_config -o ConnectTimeout=12 \
-  presto-cp-02-via-mac bash -s -- "$build" "$backend" "$dependency" "$revision" "$nodes" <<'REMOTE'
+  presto-cp-02-via-mac bash -s -- "$build" "$backend" "$dependency" "$revision" "$nodes" "$profile" <<'REMOTE'
 set -euo pipefail
 readonly build=$1
 readonly backend=$2
@@ -35,6 +37,9 @@ readonly previous=/home/mahonem/paul_hybrid_multithreaded_261105
 readonly source=$root/src/cudf-spark
 readonly output=$root/builds/job-$build
 readonly nodes=$5
+export TPCH_ENABLE_ASYNC_PROFILER=$6
+export TPCH_ASYNC_PROFILER_EXECUTORS=0
+export TPCH_ASYNC_PROFILER_OPTIONS=jfr,event=cpu,wall=10ms
 export SLURM_CONF=/cm/shared/apps/slurm/etc/slurm/slurm.conf
 readonly slurm=/cm/local/apps/slurm/current/bin
 readonly node_count=$("$slurm/scontrol" show hostnames "$nodes" | wc -l)
@@ -86,6 +91,6 @@ fi
 "$slurm/sbatch" --parsable --nodes="$node_count" --nodelist="$nodes" --no-requeue \
   "${dependency_args[@]}" --job-name="mahonem-q6-$backend" \
   --output="$previous/logs/slurm-%j.out" --error="$previous/logs/slurm-%j.err" \
-  --export=ALL,TPCH_RAPIDS_JAR,TPCH_POLICY_MANIFEST_PATH,TPCH_EXPERIMENT_PROFILE \
+  --export=ALL,TPCH_RAPIDS_JAR,TPCH_POLICY_MANIFEST_PATH,TPCH_EXPERIMENT_PROFILE,TPCH_ENABLE_ASYNC_PROFILER,TPCH_ASYNC_PROFILER_EXECUTORS,TPCH_ASYNC_PROFILER_OPTIONS \
   "$source/experiments/kvikio-q6-261110/run_q6.slurm"
 REMOTE

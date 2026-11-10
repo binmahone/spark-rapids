@@ -31,6 +31,7 @@ export PATH="$root/tools:$PATH"
   -r "$scripts/requirements-host.txt"
 "$python" -c 'import kvikio, numpy, pyarrow; print(kvikio.__version__)'
 g++ --version
+if [[ "${KVIKIO_MATRIX_MODE:-all}" == all ]]; then
 for count in 1 4; do
   files=()
   for ((i=0; i<count; i++)); do
@@ -45,4 +46,15 @@ for count in 1 4; do
       "$output/$count-files-$cache" "$count" "$cache"
   done
 done
+fi
+files=()
+for ((i=0; i<16; i++)); do
+  files+=("$table/part.$i.parquet")
+done
+"$python" "$scripts/range_benchmark.py" plan --files "${files[@]}" \
+  --output "$output/ranges-16-files.json"
+/cm/local/apps/slurm/current/bin/srun --ntasks=1 \
+  --cpus-per-task="${SLURM_CPUS_PER_TASK:-40}" \
+  bash "$scripts/run_executor_shape.sh" "$python" "$output/ranges-16-files.json" \
+    "$output/16-files-executor-shape"
 printf '%s\n' KVIKIO_HOST_RANGE_MATRIX_COMPLETE

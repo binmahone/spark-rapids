@@ -3,17 +3,24 @@ set -euo pipefail
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly revision=$(git -C "$here" rev-parse HEAD)
 readonly node=${1:-presto-gb200-gcn-02}
+readonly mode=${2:-all}
 [[ "$node" =~ ^presto-gb200-gcn-[0-9]{2}$ ]]
+[[ "$mode" == all || "$mode" == executor ]]
 test -z "$(git -C "$here" status --short)"
 readonly uv=/usr/local/bin/uv
 readonly uv_sha=$(sha256sum "$uv" | awk '{print $1}')
-ssh -F /home/nvidia/mahone_gluten/cluster_ssh_config -o ConnectTimeout=12 \
-  presto-cp-02-via-mac 'mkdir -p /home/mahonem/kvikio_range_validation_261110/tools'
-scp -F /home/nvidia/mahone_gluten/cluster_ssh_config "$uv" \
-  presto-cp-02-via-mac:/home/mahonem/kvikio_range_validation_261110/tools/uv
+remote_uv_sha=$(ssh -F /home/nvidia/mahone_gluten/cluster_ssh_config -o ConnectTimeout=12 \
+  presto-cp-02-via-mac 'mkdir -p /home/mahonem/kvikio_range_validation_261110/tools;
+    if test -x /home/mahonem/kvikio_range_validation_261110/tools/uv; then
+      sha256sum /home/mahonem/kvikio_range_validation_261110/tools/uv | cut -d " " -f 1
+    fi')
+if [[ "$remote_uv_sha" != "$uv_sha" ]]; then
+  scp -F /home/nvidia/mahone_gluten/cluster_ssh_config "$uv" \
+    presto-cp-02-via-mac:/home/mahonem/kvikio_range_validation_261110/tools/uv
+fi
 ssh -F /home/nvidia/mahone_gluten/cluster_ssh_config \
   -o ConnectTimeout=12 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 \
-  presto-cp-02-via-mac bash -s -- "$revision" "$node" "$uv_sha" <<'REMOTE'
+  presto-cp-02-via-mac bash -s -- "$revision" "$node" "$uv_sha" "$mode" <<'REMOTE'
 set -euo pipefail
 readonly revision=$1
 readonly node=$2
@@ -36,8 +43,9 @@ fi
 test "$(git -C "$source" rev-parse HEAD)" = "$revision"
 export KVIKIO_STUDY_ROOT=$root
 export KVIKIO_SOURCE_REVISION=$revision
+export KVIKIO_MATRIX_MODE=$4
 /cm/local/apps/slurm/current/bin/sbatch --parsable --nodelist="$node" \
   --output="$root/logs/slurm-%j.out" --error="$root/logs/slurm-%j.err" \
-  --export=ALL,KVIKIO_STUDY_ROOT,KVIKIO_SOURCE_REVISION \
+  --export=ALL,KVIKIO_STUDY_ROOT,KVIKIO_SOURCE_REVISION,KVIKIO_MATRIX_MODE \
   "$source/experiments/kvikio-range-261110/run_nvl72_host.slurm"
 REMOTE

@@ -137,6 +137,40 @@ def read_file_kvikio(file, buffer, kvikio, window, task_bytes):
     return total
 
 
+def read_file_posix_parallel(file, buffer, pool, window):
+    pending = []
+    total = 0
+    first_error = None
+    fd = os.open(file["path"], os.O_RDONLY)
+    try:
+        try:
+            for offset, length, target in target_slices(file, buffer):
+                pending.append((pool.submit(fill_posix, fd, target, offset), length))
+                if len(pending) >= window:
+                    future, expected = pending.pop(0)
+                    count = future.result()
+                    if count != expected:
+                        raise EOFError("Short concurrent POSIX read")
+                    total += count
+        except BaseException as error:
+            first_error = error
+        finally:
+            for future, expected in pending:
+                try:
+                    count = future.result()
+                    if count != expected:
+                        raise EOFError("Short concurrent POSIX read")
+                    total += count
+                except BaseException as error:
+                    if first_error is None:
+                        first_error = error
+        if first_error is not None:
+            raise first_error
+    finally:
+        os.close(fd)
+    return total
+
+
 def digest(buffer):
     return hashlib.sha256(memoryview(buffer)).hexdigest()
 
@@ -170,7 +204,9 @@ def run(args):
     emit({"kind": "provenance", "host": platform.node(), "machine": platform.machine(),
           "backend": args.backend, "versions": versions, "native_buffer_bytes": total_bytes,
           "manifest_sha256": hashlib.sha256(document_bytes).hexdigest(),
-          "file_workers": args.file_workers, "kvikio_threads": args.threads,
+          "file_workers": args.file_workers,
+          "kvikio_threads": args.threads if args.backend == "kvikio" else None,
+          "posix_pool_threads": args.threads if args.backend == "posix-parallel" else None,
           "range_window": args.window, "task_bytes": args.task_bytes,
           "cache_policy": args.cache_policy,
           "transport": "POSIX to native host memory; no GDS or H2D",
@@ -192,11 +228,15 @@ def run(args):
                     os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
                 finally:
                     os.close(fd)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=args.file_workers) as scheduler:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=args.threads) as posix_pool, \
+                concurrent.futures.ThreadPoolExecutor(max_workers=args.file_workers) as scheduler:
             start = time.perf_counter_ns()
             if args.backend == "kvikio":
                 futures = [scheduler.submit(read_file_kvikio, f, b, kvikio,
                                             args.window, args.task_bytes)
+                           for f, b in zip(files, buffers)]
+            elif args.backend == "posix-parallel":
+                futures = [scheduler.submit(read_file_posix_parallel, f, b, posix_pool, args.window)
                            for f, b in zip(files, buffers)]
             else:
                 futures = [scheduler.submit(read_file_posix, f, b) for f, b in zip(files, buffers)]
@@ -239,7 +279,7 @@ def main():
     p.set_defaults(action=plan)
     p = commands.add_parser("run")
     p.add_argument("--manifest", required=True)
-    p.add_argument("--backend", choices=["posix", "kvikio"], required=True)
+    p.add_argument("--backend", choices=["posix", "posix-parallel", "kvikio"], required=True)
     p.add_argument("--threads", type=int, default=4)
     p.add_argument("--window", type=int, default=4)
     p.add_argument("--task-bytes", type=int, default=0,

@@ -23,6 +23,8 @@ common=(--manifest "$manifest" --file-workers "$file_workers" --repeats 3 --max-
   --cache-policy "$cache_policy")
 "$python" "$here/range_benchmark.py" run "${common[@]}" --backend posix \
   | tee "$output/posix-serial-ranges.jsonl"
+"$python" "$here/range_benchmark.py" run "${common[@]}" --backend posix-parallel \
+  --threads 32 --window 4 | tee "$output/posix-parallel-window-4.jsonl"
 # A fixed global pool isolates submission-window changes from total thread count.
 for window in 1 2 4 8 4 2 1; do
   ordinal=$(find "$output" -name 'kvikio-*.jsonl' | wc -l)

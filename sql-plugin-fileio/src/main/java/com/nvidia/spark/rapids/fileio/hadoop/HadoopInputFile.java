@@ -97,6 +97,10 @@ public class HadoopInputFile implements RapidsInputFile {
         }
         boolean timing = Boolean.getBoolean("rapids.test.rangeIoTiming");
         long started = timing ? System.nanoTime() : 0;
+        if (Boolean.getBoolean("rapids.test.kvikioHostRead")) {
+            KvikioHostRangeReader.read(filePath.toUri(), output, copyRanges);
+            return;
+        }
         if (Boolean.getBoolean("rapids.test.directHostRead")) {
             try {
                 readDirectToHost(output, copyRanges);

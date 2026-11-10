@@ -12,7 +12,7 @@ readonly root=${KVIKIO_STUDY_ROOT:?Set the isolated personal-home study director
 readonly revision=${KVIKIO_SOURCE_REVISION:?Pin the source revision}
 readonly source=$root/src/cudf-spark
 readonly scripts=$source/experiments/kvikio-range-261110
-readonly python=${KVIKIO_PYTHON:?Set the isolated Python executable on the compute node}
+readonly python=$root/host-only-venv/bin/python
 readonly table=/scratch/prestouser/tpch-rs-float-no-delta/scale-30000/lineitem
 readonly output=$root/evidence/job-${SLURM_JOB_ID:?}
 mkdir -p "$output"
@@ -23,6 +23,11 @@ hostname
 id -un
 df -hT /home/mahonem /scratch
 test -d "$table"
+if [[ ! -x "$python" ]]; then
+  python3 -m venv "$root/host-only-venv"
+fi
+"$python" -m pip install --disable-pip-version-check --no-deps --only-binary=:all: \
+  --timeout 25 --retries 1 -r "$scripts/requirements-host.txt"
 "$python" -c 'import kvikio, numpy, pyarrow; print(kvikio.__version__)'
 g++ --version
 for count in 1 4; do
@@ -33,7 +38,9 @@ for count in 1 4; do
   "$python" "$scripts/range_benchmark.py" plan --files "${files[@]}" \
     --output "$output/ranges-$count-files.json"
   for cache in warm advise-drop; do
-    bash "$scripts/run_host_matrix.sh" "$python" "$output/ranges-$count-files.json" \
+    /cm/local/apps/slurm/current/bin/srun --ntasks=1 \
+      --cpus-per-task="${SLURM_CPUS_PER_TASK:-40}" \
+      bash "$scripts/run_host_matrix.sh" "$python" "$output/ranges-$count-files.json" \
       "$output/$count-files-$cache" "$count" "$cache"
   done
 done

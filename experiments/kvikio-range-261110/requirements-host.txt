@@ -1,0 +1,7 @@
+numpy==2.2.6
+pyarrow==21.0.0
+rapids-logger==0.3.0
+libkvikio-cu13==26.10.0
+kvikio-cu13==26.10.0
+cuda-pathfinder==1.8.6
+nvidia-cufile==1.20.0.107

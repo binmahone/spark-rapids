@@ -29,10 +29,13 @@ test "$(df -PB1 /home/mahonem | awk 'NR==2 {print $4}')" -gt 10737418240
 test "$(df -PB1 / | awk 'NR==2 {print $4}')" -gt 4294967296
 readonly apt_cache=$legacy/artifacts/apt-cache/ubuntu2404-arm64-cuda13.1
 mkdir -p /var/lib/apt/lists/partial /var/cache/apt/archives/partial
+mkdir -p "$root/apt-cache/partial"
 find "$apt_cache/lists" -maxdepth 1 -type f ! -name lock -exec cp -t /var/lib/apt/lists/ -- {} +
 find "$apt_cache/archives" -maxdepth 1 -type f ! -name lock -exec cp -t /var/cache/apt/archives/ -- {} +
+find "$apt_cache/archives" -maxdepth 1 -type f ! -name lock -exec cp -n -t "$root/apt-cache" -- {} +
 export DEBIAN_FRONTEND=noninteractive
-apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 \
+apt-get -o Dir::Cache::archives="$root/apt-cache" \
+  -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 \
   install -y -qq --no-install-recommends openjdk-17-jdk-headless g++ git python3 libnuma1
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
 export PATH="$legacy/tools/maven/bin:$JAVA_HOME/bin:$PATH"
@@ -45,10 +48,12 @@ mvn -B -ntp -nsu -Dmaven.repo.local="$repo" -Dbuildver=353 -Parm64 \
   -Dcuda.version=cuda13 -Dmaven.scaladoc.skip=true \
   -pl sql-plugin-fileio -am install 2>&1 | tee "$output/fileio-build.log"
 site=$("$python" -c 'import site; print(site.getsitepackages()[0])')
+cufile_include=$("$python" -c 'import pathlib,site; print(next((pathlib.Path(site.getsitepackages()[0])/"nvidia").rglob("cufile.h")).parent)')
+test -s "$cufile_include/cufile.h"
 g++ -std=c++20 -O2 -shared -fPIC -pthread \
   -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
   -I"$site/libkvikio/include" -I"$site/rapids_logger/include" \
-  -I"$site/nvidia/cufile/include" -I/host-cuda-include \
+  -I"$cufile_include" -I/host-cuda-include \
   "$scripts/kvikio_host_jni.cpp" \
   -L"$site/libkvikio/lib64" -lkvikio -L"$site/rapids_logger/lib64" -lrapids_logger -ldl \
   -Wl,-rpath,"$site/libkvikio/lib64:$site/rapids_logger/lib64" \

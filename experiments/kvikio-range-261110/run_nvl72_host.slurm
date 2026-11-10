@@ -13,6 +13,7 @@ readonly revision=${KVIKIO_SOURCE_REVISION:?Pin the source revision}
 readonly source=$root/src/cudf-spark
 readonly scripts=$source/experiments/kvikio-range-261110
 readonly python=$root/host-only-venv/bin/python
+readonly uv=$root/tools/uv
 readonly table=/scratch/prestouser/tpch-rs-float-no-delta/scale-30000/lineitem
 readonly output=$root/evidence/job-${SLURM_JOB_ID:?}
 mkdir -p "$output"
@@ -23,11 +24,11 @@ hostname
 id -un
 df -hT /home/mahonem /scratch
 test -d "$table"
-if [[ ! -x "$python" ]]; then
-  python3 -m venv "$root/host-only-venv"
-fi
-"$python" -m pip install --disable-pip-version-check --no-deps --only-binary=:all: \
-  --timeout 25 --retries 1 -r "$scripts/requirements-host.txt"
+export PATH="$root/tools:$PATH"
+"$uv" --version
+"$uv" venv --allow-existing --python /usr/bin/python3 "$root/host-only-venv"
+"$uv" pip install --python "$python" --no-deps --only-binary=:all: \
+  -r "$scripts/requirements-host.txt"
 "$python" -c 'import kvikio, numpy, pyarrow; print(kvikio.__version__)'
 g++ --version
 for count in 1 4; do

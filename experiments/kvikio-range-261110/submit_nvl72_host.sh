@@ -5,15 +5,22 @@ readonly revision=$(git -C "$here" rev-parse HEAD)
 readonly node=${1:-presto-gb200-gcn-02}
 [[ "$node" =~ ^presto-gb200-gcn-[0-9]{2}$ ]]
 test -z "$(git -C "$here" status --short)"
+readonly uv=/usr/local/bin/uv
+readonly uv_sha=$(sha256sum "$uv" | awk '{print $1}')
+ssh -F /home/nvidia/mahone_gluten/cluster_ssh_config -o ConnectTimeout=12 \
+  presto-cp-02-via-mac 'mkdir -p /home/mahonem/kvikio_range_validation_261110/tools'
+scp -F /home/nvidia/mahone_gluten/cluster_ssh_config "$uv" \
+  presto-cp-02-via-mac:/home/mahonem/kvikio_range_validation_261110/tools/uv
 ssh -F /home/nvidia/mahone_gluten/cluster_ssh_config \
   -o ConnectTimeout=12 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 \
-  presto-cp-02-via-mac bash -s -- "$revision" "$node" <<'REMOTE'
+  presto-cp-02-via-mac bash -s -- "$revision" "$node" "$uv_sha" <<'REMOTE'
 set -euo pipefail
 readonly revision=$1
 readonly node=$2
 readonly root=/home/mahonem/kvikio_range_validation_261110
 readonly source=$root/src/cudf-spark
 readonly branch=test/kvikio-range-validation-261110
+printf '%s  %s\n' "$3" "$root/tools/uv" | sha256sum --check
 export SLURM_CONF=/cm/shared/apps/slurm/etc/slurm/slurm.conf
 test "$(df -PB1 /home/mahonem | awk 'NR==2 {print $4}')" -gt 10737418240
 mkdir -p "$root/src" "$root/logs"

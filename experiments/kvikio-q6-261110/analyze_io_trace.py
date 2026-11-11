@@ -96,9 +96,16 @@ for path in sorted(args.directory.glob('*.bin')):
         per_thread[r.tid].append((r, call or r.file))
     gaps, resubmission, requeue, owner_counts = [], [], [], []
     task_reads = Counter((r.call, r.task) for r in selected)
+    chains = defaultdict(list)
+    for r, call, enqueue in assigned:
+        continuous = (r.call, r.task) in starts and task_reads[(r.call, r.task)] > 1
+        # A multi-read task defines a chain even when several tasks share the same descriptor.
+        chain = ('task', r.task) if continuous else ('fd', r.fd)
+        chains[(call or r.file, chain)].append((r, enqueue))
     for values in per_fd.values():
-        values.sort(key=lambda value: value[0].begin)
         owner_counts.append(len(set(r.tid for r, _ in values)))
+    for values in chains.values():
+        values.sort(key=lambda value: value[0].begin)
         for (a, _), (b, enqueue) in zip(values, values[1:]):
             gaps.append(b.begin - a.end)
             if enqueue and ((enqueue.call, enqueue.task) not in starts or
@@ -120,10 +127,11 @@ for path in sorted(args.directory.glob('*.bin')):
              'read_wall': stats([r.end - r.begin for r in selected]),
              'read_cpu': stats([r.cpu for r in selected]), 'task_queue': stats(queue),
              'public_submit_to_io_start': stats(public_queue),
-             'same_fd_between_read_gap': stats(gaps),
-             'same_fd_completion_to_next_submission': stats(resubmission),
-             'same_fd_next_submission_to_io': stats(requeue),
+             'read_chain_between_read_gap': stats(gaps),
+             'read_chain_completion_to_next_submission': stats(resubmission),
+             'read_chain_next_submission_to_io': stats(requeue),
              'distinct_workers_per_file_fd_mean': statistics.mean(owner_counts),
+             'distinct_workers_per_file_mean': statistics.mean(len(set(r.tid for r in values)) for values in per_file.values()),
              'worker_successive_read_file_change_fraction': switches / transitions if transitions else None,
              'file_peak_concurrency': dict(Counter(peak(v) for v in per_file.values())),
              'bulk_call_wall': stats([ends[k].begin - r.begin for k, r in calls.items()

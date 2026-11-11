@@ -61,6 +61,8 @@ base, identity, target, backend, nodes, output, build, node_count = sys.argv[1:]
 policy = json.loads(Path(base).read_text())
 assert policy['artifact_identity']['jar_sha256'] == 'ab3b63e7bf10d4e304dfdfd6c06b236b7898c6c82859bdc65c01184522aab432'
 identity = json.loads(Path(identity).read_text())
+if backend.endswith('-fd4'):
+    assert 4 in identity.get('supported_file_handle_limits', []), 'Build lacks independent-file-handle selection'
 policy['name'] = 'q6-native-host-ab-' + backend
 policy['artifact_identity']['build_job'] = int(build)
 policy['artifact_identity']['jar_sha256'] = identity['jar_sha256']

@@ -19,6 +19,7 @@ readonly dependency=${3:--}
 readonly nodes=${4:-presto-gb200-gcn-[04,07-08,10,13-16]}
 readonly profile=${5:-false}
 readonly trace=${6:-false}
+readonly file_threads=${7:-16}
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly revision=$(git -C "$here" rev-parse HEAD)
 [[ "$build" =~ ^[0-9]+$ ]]
@@ -26,9 +27,10 @@ readonly revision=$(git -C "$here" rev-parse HEAD)
 [[ "$dependency" == - || "$dependency" =~ ^[0-9]+$ ]]
 [[ "$profile" == true || "$profile" == false ]]
 [[ "$trace" == true || "$trace" == false ]]
+[[ "$file_threads" =~ ^[0-9]+$ && "$file_threads" -ge 1 && "$file_threads" -le 64 ]]
 test -z "$(git -C "$here" status --short)"
 ssh -F /home/nvidia/mahone_gluten/cluster_ssh_config -o ConnectTimeout=12 \
-  presto-cp-02-via-mac bash -s -- "$build" "$backend" "$dependency" "$revision" "$nodes" "$profile" "$trace" <<'REMOTE'
+  presto-cp-02-via-mac bash -s -- "$build" "$backend" "$dependency" "$revision" "$nodes" "$profile" "$trace" "$file_threads" <<'REMOTE'
 set -euo pipefail
 readonly build=$1
 readonly backend=$2
@@ -46,6 +48,7 @@ export SLURM_CONF=/cm/shared/apps/slurm/etc/slurm/slurm.conf
 readonly slurm=/cm/local/apps/slurm/current/bin
 readonly node_count=$("$slurm/scontrol" show hostnames "$nodes" | wc -l)
 readonly trace=$7
+readonly file_threads=$8
 readonly trace_host=$("$slurm/scontrol" show hostnames "$nodes" | sed -n '1p')
 [[ "$node_count" -ge 1 && "$node_count" -le 8 ]]
 test "$("$slurm/sacct" -j "$build" -X -n -o State | xargs)" = COMPLETED
@@ -59,11 +62,11 @@ TPCH_POLICY_MANIFEST_PATH=$(mktemp "$root/policies/q6-$backend-XXXXXXXX.json")
 readonly trace_directory=$root/traces/$(basename "$TPCH_POLICY_MANIFEST_PATH" .json)
 if [[ "$trace" == true ]]; then mkdir -p "$trace_directory"; chmod 700 "$trace_directory"; fi
 python3 - "$previous/h2d-runtime-policy.json" "$output/rapids-kvikio-q6.jar.identity.json" \
-  "$TPCH_POLICY_MANIFEST_PATH" "$backend" "$nodes" "$output" "$build" "$node_count" "$trace" "$trace_host" "$trace_directory" <<'PY'
+  "$TPCH_POLICY_MANIFEST_PATH" "$backend" "$nodes" "$output" "$build" "$node_count" "$trace" "$trace_host" "$trace_directory" "$file_threads" <<'PY'
 import json
 from pathlib import Path
 import sys
-base, identity, target, backend, nodes, output, build, node_count, trace, trace_host, trace_directory = sys.argv[1:]
+base, identity, target, backend, nodes, output, build, node_count, trace, trace_host, trace_directory, file_threads = sys.argv[1:]
 policy = json.loads(Path(base).read_text())
 assert policy['artifact_identity']['jar_sha256'] == 'ab3b63e7bf10d4e304dfdfd6c06b236b7898c6c82859bdc65c01184522aab432'
 identity = json.loads(Path(identity).read_text())
@@ -76,6 +79,8 @@ if backend == 'kvikio-direct4-fd4':
 if trace == 'true':
     assert identity.get('io_tracer_sha256'), 'Build lacks syscall tracing'
 policy['name'] = 'q6-native-host-ab-' + backend
+if file_threads != '16':
+    policy['name'] += '-files' + file_threads
 policy['artifact_identity']['build_job'] = int(build)
 policy['artifact_identity']['jar_sha256'] = identity['jar_sha256']
 policy['artifact_identity']['public_revision'] = identity['source_revision']
@@ -84,7 +89,7 @@ policy['benchmark_contract']['nodes'] = nodes
 policy['benchmark_contract']['executors'] = int(node_count) * 4
 conf = policy['uniform_configuration']
 conf['spark.executor.instances'] = str(int(node_count) * 4)
-conf['spark.rapids.sql.multiThreadedRead.numThreads'] = '16'
+conf['spark.rapids.sql.multiThreadedRead.numThreads'] = file_threads
 conf['spark.rapids.sql.test.format.parquet.hybridScan.packedH2D.enabled'] = 'true'
 conf['spark.executorEnv.RAPIDS_TEST_KVIKIO_FILE_HANDLES'] = '4' if backend.endswith('-fd4') or backend == 'kvikio-lanes4' else '1'
 conf['spark.executorEnv.RAPIDS_TEST_KVIKIO_LANE_TASKS'] = '4' if backend == 'kvikio-lanes4' else '0'

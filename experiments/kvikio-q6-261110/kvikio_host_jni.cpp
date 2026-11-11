@@ -16,6 +16,7 @@
 
 #include <jni.h>
 #include <kvikio/defaults.hpp>
+#include <kvikio/detail/posix_io.hpp>
 #include <kvikio/file_handle.hpp>
 #include <kvikio/threadpool_wrapper.hpp>
 #include <kvikio/utils.hpp>
@@ -138,6 +139,11 @@ Java_com_nvidia_spark_rapids_fileio_hadoop_KvikioHostRangeReader_readNative(
       }
     }
     auto const started = Clock::now();
+    auto const* lane_setting = std::getenv("RAPIDS_TEST_KVIKIO_LANE_TASKS");
+    bool const lane_tasks = lane_setting != nullptr && std::string(lane_setting) == "4";
+    if (lane_setting != nullptr && !lane_tasks && std::string(lane_setting) != "0") {
+      throw std::invalid_argument("Diagnostic lane tasks must be zero or four");
+    }
     auto const handle_count = std::min({file_handle_limit(), window, static_cast<int>(offsets.size())});
     std::vector<std::unique_ptr<kvikio::FileHandle>> sources;
     sources.reserve(handle_count);
@@ -150,7 +156,12 @@ Java_com_nvidia_spark_rapids_fileio_hadoop_KvikioHostRangeReader_readNative(
     long long wait_ns = 0;
     auto const file_bytes = sources.front()->nbytes();
     // Allocate future slots before submitting work; destination memory and the file outlive all IO.
-    std::vector<std::future<std::size_t>> futures(offsets.size());
+    auto const work_items = lane_tasks ? std::min<size_t>(4, offsets.size()) : offsets.size();
+    std::vector<std::future<std::size_t>> futures(work_items);
+    std::vector<std::size_t> expected(work_items, 0);
+    for (size_t i = 0; i < offsets.size(); ++i) {
+      expected[lane_tasks ? i % work_items : i] += lengths[i];
+    }
     size_t submitted = 0;
     size_t consumed  = 0;
     jlong total      = 0;
@@ -160,24 +171,50 @@ Java_com_nvidia_spark_rapids_fileio_hadoop_KvikioHostRangeReader_readNative(
       auto const wait_started = Clock::now();
       auto count = futures[index].get();
       wait_ns += elapsed_ns(wait_started);
-      if (count != static_cast<std::size_t>(lengths[index])) {
+      if (count != expected[index]) {
         throw EndOfFile("Short diagnostic KvikIO read");
       }
       total += count;
     };
     try {
-      for (size_t i = 0; i < offsets.size(); ++i) {
-        auto offset = static_cast<std::size_t>(offsets[i]);
-        auto length = static_cast<std::size_t>(lengths[i]);
-        if (offset > file_bytes || length > file_bytes - offset) {
-          throw EndOfFile("Requested range exceeds the file length");
+      if (lane_tasks) {
+        // Coarse tasks use KvikIO's pool and POSIX implementation without nested pool submissions.
+        // Each task completes one strided lane, matching the FileChannel diagnostic's granularity.
+        for (size_t lane = 0; lane < work_items; ++lane) {
+          auto const submit_started = Clock::now();
+          futures[lane] = pool->submit_task([&, lane]() -> std::size_t {
+            auto const& source = *sources[lane % sources.size()];
+            std::size_t result = 0;
+            for (size_t i = lane; i < offsets.size(); i += work_items) {
+              auto const offset = static_cast<std::size_t>(offsets[i]);
+              auto const length = static_cast<std::size_t>(lengths[i]);
+              if (offset > file_bytes || length > file_bytes - offset) {
+                throw EndOfFile("Requested lane range exceeds the file length");
+              }
+              auto const count = kvikio::detail::posix_host_read<kvikio::detail::PartialIO::NO>(
+                source.fd(false), buffer + destinations[i], length, offset);
+              if (count != length) { throw EndOfFile("Short diagnostic KvikIO lane read"); }
+              result += count;
+            }
+            return result;
+          });
+          submit_ns += elapsed_ns(submit_started);
+          ++submitted;
         }
-        auto const submit_started = Clock::now();
-        futures[i] = sources[i % sources.size()]->pread(
-          buffer + destinations[i], length, offset, task_bytes, 0, false, pool.get());
-        submit_ns += elapsed_ns(submit_started);
-        ++submitted;
-        if (submitted - consumed >= static_cast<std::size_t>(window)) { consume(); }
+      } else {
+        for (size_t i = 0; i < offsets.size(); ++i) {
+          auto offset = static_cast<std::size_t>(offsets[i]);
+          auto length = static_cast<std::size_t>(lengths[i]);
+          if (offset > file_bytes || length > file_bytes - offset) {
+            throw EndOfFile("Requested range exceeds the file length");
+          }
+          auto const submit_started = Clock::now();
+          futures[i] = sources[i % sources.size()]->pread(
+            buffer + destinations[i], length, offset, task_bytes, 0, false, pool.get());
+          submit_ns += elapsed_ns(submit_started);
+          ++submitted;
+          if (submitted - consumed >= static_cast<std::size_t>(window)) { consume(); }
+        }
       }
     } catch (...) {
       failure = std::current_exception();
@@ -192,9 +229,10 @@ Java_com_nvidia_spark_rapids_fileio_hadoop_KvikioHostRangeReader_readNative(
     }
     std::fprintf(stderr,
       "KVIKIO_NATIVE_TIMING handles=%d ranges=%zu bytes=%lld openNs=%lld submitNs=%lld "
-      "waitNs=%lld totalNs=%lld completed=%s path=%s\n",
+      "waitNs=%lld totalNs=%lld completed=%s scheduling=%s path=%s\n",
       handle_count, offsets.size(), static_cast<long long>(total), open_ns, submit_ns,
-      wait_ns, elapsed_ns(started), failure ? "false" : "true", filename.c_str());
+      wait_ns, elapsed_ns(started), failure ? "false" : "true",
+      lane_tasks ? "strided-lanes" : "per-range", filename.c_str());
     if (failure) { std::rethrow_exception(failure); }
     return total;
   } catch (EndOfFile const& error) {

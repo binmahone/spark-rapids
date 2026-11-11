@@ -21,7 +21,7 @@ readonly profile=${5:-false}
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly revision=$(git -C "$here" rev-parse HEAD)
 [[ "$build" =~ ^[0-9]+$ ]]
-[[ "$backend" == filechannel || "$backend" == kvikio || "$backend" == kvikio-window4 || "$backend" == kvikio-range4 || "$backend" == kvikio-range4-fd4 || "$backend" == kvikio-range128 || "$backend" == kvikio-range128-fd4 ]]
+[[ "$backend" == filechannel || "$backend" == kvikio || "$backend" == kvikio-window4 || "$backend" == kvikio-range4 || "$backend" == kvikio-range4-fd4 || "$backend" == kvikio-range128 || "$backend" == kvikio-range128-fd4 || "$backend" == kvikio-lanes4 ]]
 [[ "$dependency" == - || "$dependency" =~ ^[0-9]+$ ]]
 [[ "$profile" == true || "$profile" == false ]]
 test -z "$(git -C "$here" status --short)"
@@ -63,6 +63,8 @@ assert policy['artifact_identity']['jar_sha256'] == 'ab3b63e7bf10d4e304dfdfd6c06
 identity = json.loads(Path(identity).read_text())
 if backend.endswith('-fd4'):
     assert 4 in identity.get('supported_file_handle_limits', []), 'Build lacks independent-file-handle selection'
+if backend == 'kvikio-lanes4':
+    assert identity.get('supports_strided_lane_tasks', False), 'Build lacks coarse lane task submission'
 policy['name'] = 'q6-native-host-ab-' + backend
 policy['artifact_identity']['build_job'] = int(build)
 policy['artifact_identity']['jar_sha256'] = identity['jar_sha256']
@@ -74,16 +76,17 @@ conf = policy['uniform_configuration']
 conf['spark.executor.instances'] = str(int(node_count) * 4)
 conf['spark.rapids.sql.multiThreadedRead.numThreads'] = '16'
 conf['spark.rapids.sql.test.format.parquet.hybridScan.packedH2D.enabled'] = 'true'
-conf['spark.executorEnv.RAPIDS_TEST_KVIKIO_FILE_HANDLES'] = '4' if backend.endswith('-fd4') else '1'
+conf['spark.executorEnv.RAPIDS_TEST_KVIKIO_FILE_HANDLES'] = '4' if backend.endswith('-fd4') or backend == 'kvikio-lanes4' else '1'
+conf['spark.executorEnv.RAPIDS_TEST_KVIKIO_LANE_TASKS'] = '4' if backend == 'kvikio-lanes4' else '0'
 conf['spark.executorEnv.JAVA_TOOL_OPTIONS'] = (
     '-Drapids.test.rangeIoTiming=true -Drapids.test.directHostRead=true '
     '-Drapids.test.rangeReadConcurrency=4 '
     '-Drapids.test.kvikioHostRead=' + str(backend.startswith('kvikio')).lower() + ' '
     '-Drapids.test.kvikioLibrary=' + output + '/libkvikio_host_diagnostic.so '
     '-Drapids.test.kvikioThreads=32 -Drapids.test.kvikioTaskBytes='
-    + ('9223372036854775807' if backend.startswith('kvikio-range') else '4194304') + ' '
+    + ('9223372036854775807' if backend.startswith('kvikio-range') or backend == 'kvikio-lanes4' else '4194304') + ' '
     '-Drapids.test.kvikioRangeWindow=' + ('128' if backend.startswith('kvikio-range128')
-      else '4' if backend == 'kvikio-window4' or backend.startswith('kvikio-range4') else '1'))
+      else '4' if backend == 'kvikio-window4' or backend.startswith('kvikio-range4') or backend == 'kvikio-lanes4' else '1'))
 Path(target).write_text(json.dumps(policy, indent=2) + '\n')
 PY
 chmod 444 "$TPCH_POLICY_MANIFEST_PATH"

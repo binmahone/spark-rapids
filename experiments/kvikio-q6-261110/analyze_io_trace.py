@@ -87,8 +87,30 @@ for path in sorted(args.directory.glob('*.bin')):
         assert unmatched == 0, (path, unmatched)
         assert sum(r.result for r in selected) == sum(r.bytes for r in calls.values() if r.bytes > 100_000_000), path
     per_file = defaultdict(list)
+    per_fd = defaultdict(list)
+    per_thread = defaultdict(list)
     for r, call, _ in assigned:
         per_file[call or r.file].append(r)
+    for r, call, enqueue in assigned:
+        per_fd[(call or r.file, r.fd)].append((r, enqueue))
+        per_thread[r.tid].append((r, call or r.file))
+    gaps, resubmission, requeue, owner_counts = [], [], [], []
+    task_reads = Counter((r.call, r.task) for r in selected)
+    for values in per_fd.values():
+        values.sort(key=lambda value: value[0].begin)
+        owner_counts.append(len(set(r.tid for r, _ in values)))
+        for (a, _), (b, enqueue) in zip(values, values[1:]):
+            gaps.append(b.begin - a.end)
+            if enqueue and ((enqueue.call, enqueue.task) not in starts or
+                            task_reads[(b.call, b.task)] == 1):
+                resubmission.append(enqueue.begin - a.end)
+                requeue.append(b.begin - enqueue.begin)
+    switches = transitions = 0
+    for values in per_thread.values():
+        values.sort(key=lambda value: value[0].begin)
+        for (_, a), (_, b) in zip(values, values[1:]):
+            transitions += 1
+            switches += a != b
     queue = [starts[key].begin - r.begin for key, r in enqueues.items()
              if key in starts and (args.probe or calls[key[0]].bytes > 100_000_000)]
     public_queue = [r.begin - enq.begin for r, _, enq in assigned if enq and not r.call]
@@ -98,6 +120,11 @@ for path in sorted(args.directory.glob('*.bin')):
              'read_wall': stats([r.end - r.begin for r in selected]),
              'read_cpu': stats([r.cpu for r in selected]), 'task_queue': stats(queue),
              'public_submit_to_io_start': stats(public_queue),
+             'same_fd_between_read_gap': stats(gaps),
+             'same_fd_completion_to_next_submission': stats(resubmission),
+             'same_fd_next_submission_to_io': stats(requeue),
+             'distinct_workers_per_file_fd_mean': statistics.mean(owner_counts),
+             'worker_successive_read_file_change_fraction': switches / transitions if transitions else None,
              'file_peak_concurrency': dict(Counter(peak(v) for v in per_file.values())),
              'bulk_call_wall': stats([ends[k].begin - r.begin for k, r in calls.items()
                                      if k in ends and (args.probe or r.bytes > 100_000_000)])}

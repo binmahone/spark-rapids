@@ -21,7 +21,7 @@ readonly profile=${5:-false}
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly revision=$(git -C "$here" rev-parse HEAD)
 [[ "$build" =~ ^[0-9]+$ ]]
-[[ "$backend" == filechannel || "$backend" == kvikio || "$backend" == kvikio-window4 ]]
+[[ "$backend" == filechannel || "$backend" == kvikio || "$backend" == kvikio-window4 || "$backend" == kvikio-range4 ]]
 [[ "$dependency" == - || "$dependency" =~ ^[0-9]+$ ]]
 [[ "$profile" == true || "$profile" == false ]]
 test -z "$(git -C "$here" status --short)"
@@ -77,8 +77,9 @@ conf['spark.executorEnv.JAVA_TOOL_OPTIONS'] = (
     '-Drapids.test.rangeReadConcurrency=4 '
     '-Drapids.test.kvikioHostRead=' + str(backend.startswith('kvikio')).lower() + ' '
     '-Drapids.test.kvikioLibrary=' + output + '/libkvikio_host_diagnostic.so '
-    '-Drapids.test.kvikioThreads=32 -Drapids.test.kvikioTaskBytes=4194304 '
-    '-Drapids.test.kvikioRangeWindow=' + ('4' if backend == 'kvikio-window4' else '1'))
+    '-Drapids.test.kvikioThreads=32 -Drapids.test.kvikioTaskBytes='
+    + ('9223372036854775807' if backend == 'kvikio-range4' else '4194304') + ' '
+    '-Drapids.test.kvikioRangeWindow=' + ('4' if backend in ('kvikio-window4', 'kvikio-range4') else '1'))
 Path(target).write_text(json.dumps(policy, indent=2) + '\n')
 PY
 chmod 444 "$TPCH_POLICY_MANIFEST_PATH"

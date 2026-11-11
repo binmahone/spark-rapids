@@ -23,6 +23,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--base", required=True)
 parser.add_argument("--classes", required=True)
 parser.add_argument("--native", required=True)
+parser.add_argument("--tracer", required=True)
 parser.add_argument("--source-revision", required=True)
 parser.add_argument("--output", required=True)
 args = parser.parse_args()
@@ -37,6 +38,8 @@ identity = {"base_jar_sha256": expected_base, "source_revision": args.source_rev
             "bridge_sha256": hashlib.sha256(Path(args.native).read_bytes()).hexdigest(),
             "supported_file_handle_limits": [1, 2, 3, 4],
             "supports_strided_lane_tasks": True,
+            "supports_direct_range_tasks": True,
+            "io_tracer_sha256": hashlib.sha256(Path(args.tracer).read_bytes()).hexdigest(),
             "class_sha256": {name: hashlib.sha256(data).hexdigest()
                              for name, data in replacement.items()},
             "scope": "Only range IO changes; base cuDF, JNI, H2D, optimizer, and shuffle retained"}

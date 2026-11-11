@@ -60,6 +60,7 @@ g++ -std=c++20 -O2 -shared -fPIC -pthread \
   -L"$site/libkvikio/lib64" -lkvikio -L"$site/rapids_logger/lib64" -lrapids_logger -ldl \
   -Wl,-rpath,"$site/libkvikio/lib64:$site/rapids_logger/lib64" \
   -o "$output/libkvikio_host_diagnostic.so"
+g++ -std=c++20 -O2 -shared -fPIC -pthread "$scripts/io_trace.cpp" -ldl -o "$output/libio_trace.so"
 ldd "$output/libkvikio_host_diagnostic.so" | tee "$output/native-dependencies.txt"
 sha256sum "$output/libkvikio_host_diagnostic.so" "$site/libkvikio/lib64/libkvikio.so" \
   > "$output/native.sha256"
@@ -67,15 +68,19 @@ class_file=$(find "$source/sql-plugin-fileio/target" -path '*/classes/com/nvidia
 test "$(printf '%s\n' "$class_file" | wc -l)" -eq 1
 classes=${class_file%/com/nvidia/spark/rapids/fileio/hadoop/HadoopInputFile.class}
 "$python" "$scripts/package_diagnostic.py" --base "$base" --classes "$classes" \
-  --native "$output/libkvikio_host_diagnostic.so" --source-revision "$KVIKIO_SOURCE_REVISION" \
+  --native "$output/libkvikio_host_diagnostic.so" --tracer "$output/libio_trace.so" --source-revision "$KVIKIO_SOURCE_REVISION" \
   --output "$output/rapids-kvikio-q6.jar" | tee "$output/identity.json"
 readonly jar=$output/rapids-kvikio-q6.jar
 readonly spark=$legacy/software/spark-3.5.3-bin-hadoop3
 mkdir -p "$output/probe-classes"
 javac -cp "$jar:$spark/jars/*" -d "$output/probe-classes" "$scripts/KvikioRangeReadProbe.java"
-for variant in filechannel:4:1:1:0 kvikio:4:1:1:0 kvikio:4:4:1:0 kvikio:4:4:4:0 kvikio:4:4:4:4; do
-  IFS=: read -r backend lanes window handles lane_tasks <<< "$variant"
+mkdir -p "$output/trace-probes"
+for variant in filechannel:4:1:1:0:0 kvikio:4:1:1:0:0 kvikio:4:4:1:0:0 kvikio:4:4:4:0:0 kvikio:4:4:4:4:0 kvikio:4:4:4:0:1; do
+  IFS=: read -r backend lanes window handles lane_tasks direct_tasks <<< "$variant"
   RAPIDS_TEST_KVIKIO_FILE_HANDLES=$handles RAPIDS_TEST_KVIKIO_LANE_TASKS=$lane_tasks \
+    RAPIDS_TEST_KVIKIO_DIRECT_TASKS=$direct_tasks LD_PRELOAD="$output/libio_trace.so" \
+    RAPIDS_IO_TRACE_HOST="$(hostname)" RAPIDS_IO_TRACE_GPU="${CUDA_VISIBLE_DEVICES:-0}" \
+    RAPIDS_IO_TRACE_DIR="$output/trace-probes" RAPIDS_IO_TRACE_PREFIX=/tmp/kvikio-range-probe- \
     java -cp "$output/probe-classes:$jar:$spark/jars/*" \
     -Drapids.test.directHostRead=true -Drapids.test.rangeIoTiming=true \
     -Drapids.test.rangeReadConcurrency="$lanes" \
@@ -84,12 +89,16 @@ for variant in filechannel:4:1:1:0 kvikio:4:1:1:0 kvikio:4:4:1:0 kvikio:4:4:4:0 
     -Drapids.test.kvikioThreads=32 -Drapids.test.kvikioTaskBytes=4194304 \
     -Drapids.test.kvikioRangeWindow="$window" \
     com.nvidia.spark.rapids.fileio.hadoop.KvikioRangeReadProbe \
-    2>&1 | tee "$output/probe-$backend-$window-$handles-$lane_tasks.log"
-  grep -q '^KVIKIO_RANGE_READ_PROBE_PASS' "$output/probe-$backend-$window-$handles-$lane_tasks.log"
+    2>&1 | tee "$output/probe-$backend-$window-$handles-$lane_tasks-$direct_tasks.log"
+  grep -q '^KVIKIO_RANGE_READ_PROBE_PASS' "$output/probe-$backend-$window-$handles-$lane_tasks-$direct_tasks.log"
 done
-grep -q 'KVIKIO_NATIVE_TIMING handles=4 ranges=4 .*completed=true scheduling=strided-lanes' "$output/probe-kvikio-4-4-4.log"
+python3 "$scripts/analyze_io_trace.py" "$output/trace-probes" --probe > "$output/trace-probe-analysis.log"
+grep -q 'KVIKIO_NATIVE_TIMING handles=4 ranges=4 .*completed=true scheduling=strided-lanes' "$output/probe-kvikio-4-4-4-0.log"
+grep -q 'KVIKIO_NATIVE_TIMING handles=4 ranges=4 .*completed=true scheduling=direct-per-range' "$output/probe-kvikio-4-4-0-1.log"
 export RAPIDS_TEST_KVIKIO_FILE_HANDLES=4
-export RAPIDS_TEST_KVIKIO_LANE_TASKS=4
+for scheduling in direct-per-range strided-lanes; do
+export RAPIDS_TEST_KVIKIO_LANE_TASKS=$([[ "$scheduling" == strided-lanes ]] && echo 4 || echo 0)
+export RAPIDS_TEST_KVIKIO_DIRECT_TASKS=$([[ "$scheduling" == direct-per-range ]] && echo 1 || echo 0)
 "$spark/bin/spark-submit" --master 'local[4]' --jars "$jar" \
   --conf spark.plugins=com.nvidia.spark.SQLPlugin \
   --conf "spark.driver.extraJavaOptions=-Drapids.test.kvikioHostRead=true -Drapids.test.kvikioRangeWindow=4 -Drapids.test.kvikioLibrary=$output/libkvikio_host_diagnostic.so" \
@@ -105,8 +114,9 @@ export RAPIDS_TEST_KVIKIO_LANE_TASKS=4
   --conf spark.sql.parquet.int96RebaseModeInRead=EXCEPTION \
   --conf spark.rapids.sql.test.format.parquet.hybridScan.packedH2D.enabled=true \
   "$source/experiments/paul-hybrid-261105/reader_counterexamples.py" \
-  "$root/data/probe-${SLURM_JOB_ID}" 2>&1 | tee "$output/hybrid-correctness.log"
-grep -q '^PAUL_HYBRID_COUNTEREXAMPLES_PASS' "$output/hybrid-correctness.log"
-grep -q 'KVIKIO_HOST_RANGE .*completed=true' "$output/hybrid-correctness.log"
-grep -q 'KVIKIO_NATIVE_TIMING .*completed=true scheduling=strided-lanes' "$output/hybrid-correctness.log"
+  "$root/data/probe-${SLURM_JOB_ID}-$scheduling" 2>&1 | tee "$output/hybrid-correctness-$scheduling.log"
+grep -q '^PAUL_HYBRID_COUNTEREXAMPLES_PASS' "$output/hybrid-correctness-$scheduling.log"
+grep -q 'KVIKIO_HOST_RANGE .*completed=true' "$output/hybrid-correctness-$scheduling.log"
+grep -q "KVIKIO_NATIVE_TIMING .*completed=true scheduling=$scheduling" "$output/hybrid-correctness-$scheduling.log"
+done
 printf '%s\n' KVIKIO_Q6_BUILD_AND_CASES_PASS

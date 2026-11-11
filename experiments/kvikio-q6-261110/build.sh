@@ -108,4 +108,5 @@ export RAPIDS_TEST_KVIKIO_LANE_TASKS=4
   "$root/data/probe-${SLURM_JOB_ID}" 2>&1 | tee "$output/hybrid-correctness.log"
 grep -q '^PAUL_HYBRID_COUNTEREXAMPLES_PASS' "$output/hybrid-correctness.log"
 grep -q 'KVIKIO_HOST_RANGE .*completed=true' "$output/hybrid-correctness.log"
+grep -q 'KVIKIO_NATIVE_TIMING .*completed=true scheduling=strided-lanes' "$output/hybrid-correctness.log"
 printf '%s\n' KVIKIO_Q6_BUILD_AND_CASES_PASS

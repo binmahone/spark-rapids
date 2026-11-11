@@ -21,6 +21,10 @@
 #include <kvikio/utils.hpp>
 
 #include <dlfcn.h>
+#include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <cstdint>
 #include <exception>
 #include <future>
@@ -33,6 +37,26 @@
 namespace {
 std::unique_ptr<kvikio::ThreadPool> pool;
 std::mutex initialization_mutex;
+
+using Clock = std::chrono::steady_clock;
+
+long long elapsed_ns(Clock::time_point start)
+{
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count();
+}
+
+int file_handle_limit()
+{
+  auto const* value = std::getenv("RAPIDS_TEST_KVIKIO_FILE_HANDLES");
+  if (value == nullptr) { return 1; }
+  std::string text(value);
+  size_t consumed = 0;
+  auto limit = std::stoi(text, &consumed);
+  if (consumed != text.size() || limit < 1 || limit > 4) {
+    throw std::invalid_argument("Diagnostic file handle limit must be between one and four");
+  }
+  return limit;
+}
 
 class EndOfFile : public std::runtime_error {
  public:
@@ -104,6 +128,7 @@ Java_com_nvidia_spark_rapids_fileio_hadoop_KvikioHostRangeReader_readNative(
     if (offsets.size() != lengths.size() || offsets.size() != destinations.size()) {
       throw std::invalid_argument("Mismatched range arrays");
     }
+    if (offsets.empty()) { return 0; }
     auto* buffer = reinterpret_cast<std::uint8_t*>(static_cast<std::uintptr_t>(address));
     if (!kvikio::is_host_memory(buffer)) { throw std::invalid_argument("Expected native host memory"); }
     for (size_t i = 0; i < offsets.size(); ++i) {
@@ -112,7 +137,18 @@ Java_com_nvidia_spark_rapids_fileio_hadoop_KvikioHostRangeReader_readNative(
         throw std::invalid_argument("Range is outside destination memory");
       }
     }
-    kvikio::FileHandle source(filename, "r", kvikio::FileHandle::m644, kvikio::CompatMode::ON);
+    auto const started = Clock::now();
+    auto const handle_count = std::min({file_handle_limit(), window, static_cast<int>(offsets.size())});
+    std::vector<std::unique_ptr<kvikio::FileHandle>> sources;
+    sources.reserve(handle_count);
+    for (int i = 0; i < handle_count; ++i) {
+      sources.push_back(std::make_unique<kvikio::FileHandle>(
+        filename, "r", kvikio::FileHandle::m644, kvikio::CompatMode::ON));
+    }
+    auto const open_ns = elapsed_ns(started);
+    long long submit_ns = 0;
+    long long wait_ns = 0;
+    auto const file_bytes = sources.front()->nbytes();
     // Allocate future slots before submitting work; destination memory and the file outlive all IO.
     std::vector<std::future<std::size_t>> futures(offsets.size());
     size_t submitted = 0;
@@ -121,7 +157,9 @@ Java_com_nvidia_spark_rapids_fileio_hadoop_KvikioHostRangeReader_readNative(
     std::exception_ptr failure;
     auto consume = [&] {
       auto index = consumed++;
+      auto const wait_started = Clock::now();
       auto count = futures[index].get();
+      wait_ns += elapsed_ns(wait_started);
       if (count != static_cast<std::size_t>(lengths[index])) {
         throw EndOfFile("Short diagnostic KvikIO read");
       }
@@ -131,11 +169,13 @@ Java_com_nvidia_spark_rapids_fileio_hadoop_KvikioHostRangeReader_readNative(
       for (size_t i = 0; i < offsets.size(); ++i) {
         auto offset = static_cast<std::size_t>(offsets[i]);
         auto length = static_cast<std::size_t>(lengths[i]);
-        if (offset > source.nbytes() || length > source.nbytes() - offset) {
+        if (offset > file_bytes || length > file_bytes - offset) {
           throw EndOfFile("Requested range exceeds the file length");
         }
-        futures[i] = source.pread(buffer + destinations[i], length, offset, task_bytes,
-                                  0, false, pool.get());
+        auto const submit_started = Clock::now();
+        futures[i] = sources[i % sources.size()]->pread(
+          buffer + destinations[i], length, offset, task_bytes, 0, false, pool.get());
+        submit_ns += elapsed_ns(submit_started);
         ++submitted;
         if (submitted - consumed >= static_cast<std::size_t>(window)) { consume(); }
       }
@@ -150,6 +190,11 @@ Java_com_nvidia_spark_rapids_fileio_hadoop_KvikioHostRangeReader_readNative(
         if (!failure) { failure = std::current_exception(); }
       }
     }
+    std::fprintf(stderr,
+      "KVIKIO_NATIVE_TIMING handles=%d ranges=%zu bytes=%lld openNs=%lld submitNs=%lld "
+      "waitNs=%lld totalNs=%lld completed=%s path=%s\n",
+      handle_count, offsets.size(), static_cast<long long>(total), open_ns, submit_ns,
+      wait_ns, elapsed_ns(started), failure ? "false" : "true", filename.c_str());
     if (failure) { std::rethrow_exception(failure); }
     return total;
   } catch (EndOfFile const& error) {

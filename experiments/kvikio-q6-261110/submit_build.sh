@@ -15,9 +15,10 @@
 set -euo pipefail
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly revision=$(git -C "$here" rev-parse HEAD)
+readonly node=${1:-presto-gb200-gcn-04}
 test -z "$(git -C "$here" status --short)"
 ssh -F /home/nvidia/mahone_gluten/cluster_ssh_config -o ConnectTimeout=12 \
-  presto-cp-02-via-mac bash -s -- "$revision" <<'REMOTE'
+  presto-cp-02-via-mac bash -s -- "$revision" "$node" <<'REMOTE'
 set -euo pipefail
 export SLURM_CONF=/cm/shared/apps/slurm/etc/slurm/slurm.conf
 export KVIKIO_SOURCE_REVISION=$1
@@ -33,7 +34,7 @@ else
   git -C "$source" pull --ff-only
 fi
 test "$(git -C "$source" rev-parse HEAD)" = "$KVIKIO_SOURCE_REVISION"
-/cm/local/apps/slurm/current/bin/sbatch --parsable --nodelist=presto-gb200-gcn-04 \
+/cm/local/apps/slurm/current/bin/sbatch --parsable --nodelist="$2" \
   --output="$root/logs/slurm-%j.out" --error="$root/logs/slurm-%j.err" \
   --export=ALL,KVIKIO_SOURCE_REVISION "$source/experiments/kvikio-q6-261110/build.slurm"
 REMOTE

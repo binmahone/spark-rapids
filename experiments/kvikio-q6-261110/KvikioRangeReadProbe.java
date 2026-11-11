@@ -58,10 +58,28 @@ public final class KvikioRangeReadProbe {
                     if (!Arrays.equals(expected, actual)) {
                         throw new AssertionError("Wrong bytes or overwritten destination guard");
                     }
+                    byte[] fourExpected = new byte[expected.length];
+                    Arrays.fill(fourExpected, (byte) 0x5a);
+                    output.setBytes(0, fourExpected, 0, fourExpected.length);
+                    List<CopyRange> fourRanges = Arrays.asList(
+                            new CopyRange(8 * mib + 7, mib + 13, 0),
+                            new CopyRange(3 * mib + 19, mib + 13, 2 * mib),
+                            new CopyRange(mib + 37, mib + 13, 4 * mib),
+                            new CopyRange(6 * mib + 51, mib + 13, 6 * mib));
+                    for (CopyRange range : fourRanges) {
+                        System.arraycopy(source, (int) range.getInputOffset(), fourExpected,
+                                (int) range.getOutputOffset(), (int) range.getLength());
+                    }
+                    input.readVectored(output, fourRanges);
+                    output.getBytes(actual, 0, 0, actual.length);
+                    if (!Arrays.equals(fourExpected, actual)) {
+                        throw new AssertionError("Wrong four-range bytes or destination guard");
+                    }
                     input.readVectored(output, Collections.emptyList());
                     try {
                         input.readVectored(output, Arrays.asList(new CopyRange(0, mib, 0),
-                                new CopyRange(source.length - 10, 100, 2 * mib)));
+                                new CopyRange(mib, mib, mib), new CopyRange(2 * mib, mib, 2 * mib),
+                                new CopyRange(source.length - 10, 100, 4 * mib)));
                         throw new AssertionError("Expected EOF after a valid submitted range");
                     } catch (EOFException expectedFailure) {
                         // A subsequent iteration must still read correctly after all work drains.

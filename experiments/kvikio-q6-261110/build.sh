@@ -73,9 +73,9 @@ readonly jar=$output/rapids-kvikio-q6.jar
 readonly spark=$legacy/software/spark-3.5.3-bin-hadoop3
 mkdir -p "$output/probe-classes"
 javac -cp "$jar:$spark/jars/*" -d "$output/probe-classes" "$scripts/KvikioRangeReadProbe.java"
-for variant in filechannel:4:1 kvikio:4:1 kvikio:4:4; do
-  IFS=: read -r backend lanes window <<< "$variant"
-  java -cp "$output/probe-classes:$jar:$spark/jars/*" \
+for variant in filechannel:4:1:1 kvikio:4:1:1 kvikio:4:4:1 kvikio:4:4:4; do
+  IFS=: read -r backend lanes window handles <<< "$variant"
+  RAPIDS_TEST_KVIKIO_FILE_HANDLES=$handles java -cp "$output/probe-classes:$jar:$spark/jars/*" \
     -Drapids.test.directHostRead=true -Drapids.test.rangeIoTiming=true \
     -Drapids.test.rangeReadConcurrency="$lanes" \
     -Drapids.test.kvikioHostRead="$([[ $backend == kvikio ]] && echo true || echo false)" \
@@ -83,12 +83,14 @@ for variant in filechannel:4:1 kvikio:4:1 kvikio:4:4; do
     -Drapids.test.kvikioThreads=32 -Drapids.test.kvikioTaskBytes=4194304 \
     -Drapids.test.kvikioRangeWindow="$window" \
     com.nvidia.spark.rapids.fileio.hadoop.KvikioRangeReadProbe \
-    2>&1 | tee "$output/probe-$backend-$window.log"
-  grep -q '^KVIKIO_RANGE_READ_PROBE_PASS' "$output/probe-$backend-$window.log"
+    2>&1 | tee "$output/probe-$backend-$window-$handles.log"
+  grep -q '^KVIKIO_RANGE_READ_PROBE_PASS' "$output/probe-$backend-$window-$handles.log"
 done
+grep -q 'KVIKIO_NATIVE_TIMING handles=4 ranges=4 .*completed=true' "$output/probe-kvikio-4-4.log"
+export RAPIDS_TEST_KVIKIO_FILE_HANDLES=4
 "$spark/bin/spark-submit" --master 'local[4]' --jars "$jar" \
   --conf spark.plugins=com.nvidia.spark.SQLPlugin \
-  --conf "spark.driver.extraJavaOptions=-Drapids.test.kvikioHostRead=true -Drapids.test.kvikioLibrary=$output/libkvikio_host_diagnostic.so" \
+  --conf "spark.driver.extraJavaOptions=-Drapids.test.kvikioHostRead=true -Drapids.test.kvikioRangeWindow=4 -Drapids.test.kvikioLibrary=$output/libkvikio_host_diagnostic.so" \
   --conf spark.sql.adaptive.enabled=false \
   --conf spark.rapids.sql.concurrentGpuTasks=2 \
   --conf spark.rapids.memory.gpu.allocFraction=0.1 \

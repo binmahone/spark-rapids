@@ -24,8 +24,8 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.BloomFilterMightContain
 import org.apache.spark.sql.catalyst.plans.logical.{BROADCAST, Join}
-import org.apache.spark.sql.execution.joins.BroadcastHashJoinExec
 import org.apache.spark.sql.execution.FilterExec
+import org.apache.spark.sql.execution.joins.BroadcastHashJoinExec
 
 /** CPU semantic and reachability probe; run through the experiment's saved build script. */
 object RequiredKeyBloomFilterProbe extends Logging {

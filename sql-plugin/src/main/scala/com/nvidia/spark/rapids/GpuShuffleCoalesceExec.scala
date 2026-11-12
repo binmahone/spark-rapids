@@ -356,7 +356,7 @@ class KudoTableOperator(kudo: Option[KudoSerializer], readOption: CoalesceReadOp
 
   override def getDataLen(column: KudoSerializedTableColumn): Long =
     column.spillableKudoTable.header
-    .getTotalDataLen
+    .getTotalDataLength
 
   override def getNumRows(column: KudoSerializedTableColumn): Int =
     column.spillableKudoTable.header
@@ -392,11 +392,11 @@ class KudoTableOperator(kudo: Option[KudoSerializer], readOption: CoalesceReadOp
 
 
 class KudoGpuTableOperator(dataTypes: Array[DataType])
-  extends SerializedTableOperator[KudoSerializedTableColumn, ColumnarBatch] {
+  extends SerializedTableOperator[KudoSerializedTableColumn, ColumnarBatch] with Logging {
 
   override def getDataLen(column: KudoSerializedTableColumn): Long =
     column.spillableKudoTable.header
-      .getTotalDataLen
+      .getTotalDataLength
 
   override def getNumRows(column: KudoSerializedTableColumn): Int =
     column.spillableKudoTable.header
@@ -411,8 +411,13 @@ class KudoGpuTableOperator(dataTypes: Array[DataType])
     } else {
       withResource(columns.safeMap(_.spillableKudoTable.makeKudoTable)) { kudoTables =>
         val dataBufSize = kudoTables.foldLeft(0L) { (acc, table) =>
-          acc + table.getHeader.getTotalDataLen + table.getHeader.getSerializedSize
+          acc + table.getHeader.getTotalDataLength + table.getHeader.getSerializedSize
         }
+        val extendedFormat = dataBufSize > Int.MaxValue || kudoTables.exists { table =>
+          table.getHeader.isExtendedFormat
+        }
+        logDebug(s"Kudo GPU read selected native merge: extended=$extendedFormat " +
+          s"inputBytes=$dataBufSize")
         val offsetsBufSize = 8L * (kudoTables.length + 1)
         val dataHostBuf = HostMemoryBuffer.allocate(dataBufSize)
         val hostBuffers = closeOnExcept(dataHostBuf) { _ =>
@@ -427,7 +432,7 @@ class KudoGpuTableOperator(dataTypes: Array[DataType])
             dataHost.copyFromHostBuffer(currentOffset, table.getBuffer, 0,
               table.getBuffer.getLength)
 
-            currentOffset += table.getHeader.getTotalDataLen
+            currentOffset += table.getHeader.getTotalDataLength
           }
           offsetsHost.setLong(kudoTables.length * 8L, currentOffset)
           val dataDevBuf = DeviceMemoryBuffer.allocate(dataHost.getLength)
@@ -440,7 +445,7 @@ class KudoGpuTableOperator(dataTypes: Array[DataType])
 
             val schema = GpuColumnVector.from(dataTypes)
             withResource(KudoGpuSerializer.assembleFromDeviceRaw(
-                schema, dataDev, offsetsDev)) { table =>
+                schema, dataDev, offsetsDev, extendedFormat)) { table =>
               GpuColumnVector.from(table, dataTypes)
             }
           }
@@ -952,4 +957,3 @@ class GpuShuffleCoalesceIterator(iter: Iterator[CoalescedHostResult],
     }
   }
 }
-

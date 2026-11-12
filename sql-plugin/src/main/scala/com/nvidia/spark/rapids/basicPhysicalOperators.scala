@@ -591,24 +591,29 @@ object PreProjectSplitIterator {
   }
 
   private def computeMetaSize(hasNull: Boolean, hasOffset: Boolean, rowsNum: Int,
-      amountOpt: Option[Int]): Long = {
+      amountOpt: Option[Int], offsetWidth: Int = 4): Long = {
     // Compute the meta size only when amountOpt is defined. This is designed for
     // the case when calculating the size of a child of a complex type expression.
     // e.g. GpuCreateArray. There may be multiple children in it, but meta size can
     // be added only once for all the children. The parent expression will control
     // which child will take this job.
     amountOpt.map { amount =>
-      computeMetaSize(hasNull, hasOffset, amount * rowsNum)
+      computeMetaSize(hasNull, hasOffset, amount * rowsNum.toLong, offsetWidth)
     }.getOrElse(0L)
   }
 
   private def computeMetaSize(hasNull: Boolean, hasOffset: Boolean, rowsNum: Int): Long = {
+    computeMetaSize(hasNull, hasOffset, rowsNum.toLong, 4)
+  }
+
+  private def computeMetaSize(hasNull: Boolean, hasOffset: Boolean, rowsNum: Long,
+      offsetWidth: Int): Long = {
     var metaSize = 0L
     if (hasNull) {
       metaSize += GpuBatchUtils.calculateValidityBufferSize(rowsNum)
     }
     if (hasOffset) {
-      metaSize += GpuBatchUtils.calculateOffsetBufferSize(rowsNum)
+      metaSize += (rowsNum + 1) * offsetWidth
     }
     metaSize
   }
@@ -628,7 +633,9 @@ object PreProjectSplitIterator {
       }
     }
     // meta size
-    colSize += computeMetaSize(nullable, hasOffset(colType), col.getRowCount.toInt, colAmount)
+    val offsetWidth = if (col.getType == DType.STRING) col.getOffsetsType.getSizeInBytes else 4
+    colSize += computeMetaSize(nullable, hasOffset(colType), col.getRowCount.toInt,
+      colAmount, offsetWidth)
 
     // 3) sum of children sizes
     // Leverage the Spark type to get the nullability info for children. Because
@@ -892,7 +899,7 @@ case class GpuProjectExec(
   override lazy val additionalMetrics: Map[String, GpuMetric] = Map(
     KEY_NUM_PRE_SPLIT -> createMetric(DEBUG_LEVEL, "num pre-splits"),
     OP_TIME_LEGACY -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_OP_TIME_LEGACY),
-    CPU_BRIDGE_PROCESSING_TIME -> createNanoTimingMetric(DEBUG_LEVEL, 
+    CPU_BRIDGE_PROCESSING_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
       DESCRIPTION_CPU_BRIDGE_PROCESSING_TIME),
     CPU_BRIDGE_WAIT_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_CPU_BRIDGE_WAIT_TIME))
 
@@ -901,7 +908,7 @@ case class GpuProjectExec(
     val numOutputBatches = gpuLongMetric(NUM_OUTPUT_BATCHES)
     val opTime = gpuLongMetric(OP_TIME_LEGACY)
     val numPreSplit = gpuLongMetric(KEY_NUM_PRE_SPLIT)
-    
+
     val boundProjectList = GpuBindReferences.bindGpuReferencesTiered(projectList, child.output,
       conf, allMetrics)
     val localEnablePreSplit = enablePreSplit
@@ -1335,9 +1342,9 @@ case class GpuFilterExec(
 
   override lazy val additionalMetrics: Map[String, GpuMetric] = Map(
     OP_TIME_LEGACY -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_OP_TIME_LEGACY),
-    CPU_BRIDGE_PROCESSING_TIME -> createNanoTimingMetric(DEBUG_LEVEL, 
+    CPU_BRIDGE_PROCESSING_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
       DESCRIPTION_CPU_BRIDGE_PROCESSING_TIME),
-    CPU_BRIDGE_WAIT_TIME -> createNanoTimingMetric(DEBUG_LEVEL, 
+    CPU_BRIDGE_WAIT_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
       DESCRIPTION_CPU_BRIDGE_WAIT_TIME))
 
   // Split out all the IsNotNulls from condition.

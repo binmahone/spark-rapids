@@ -186,9 +186,9 @@ public class SlicedGpuColumnVector extends ColumnVector {
       }
       ai.rapids.cudf.HostMemoryBuffer off = cv.getOffsets();
       if (off != null) {
-        total += (end - start + 1) * 4L;
-        int newStart = (int) cv.getStartListOffset(start);
-        int newEnd = (int) cv.getEndListOffset(end - 1);
+        total += (end - (long) start + 1) * cv.getOffsetsType().getSizeInBytes();
+        long newStart = cv.getStartListOffset(start);
+        long newEnd = cv.getEndListOffset(end - 1);
 
         ai.rapids.cudf.HostMemoryBuffer data = cv.getData();
         if ((data != null) && (newEnd > newStart)) {
@@ -201,7 +201,8 @@ public class SlicedGpuColumnVector extends ColumnVector {
         }
 
         for (int i = 0; i < cv.getNumChildren(); i++) {
-          total += getSizeOf(cv.getChildColumnView(i), newStart, newEnd);
+          total += getSizeOf(cv.getChildColumnView(i),
+              Math.toIntExact(newStart), Math.toIntExact(newEnd));
         }
       } else {
         ai.rapids.cudf.HostMemoryBuffer data = cv.getData();

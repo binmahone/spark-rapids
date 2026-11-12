@@ -16,7 +16,10 @@
 
 package com.nvidia.spark.rapids
 
+import java.util.Arrays
+
 import ai.rapids.cudf.DType
+import com.nvidia.spark.rapids.Arm.withResource
 import ai.rapids.cudf.HostColumnVector.{BasicType, ListType, StructType}
 import org.scalatest.funsuite.AnyFunSuite
 
@@ -88,4 +91,34 @@ class RapidsHostColumnBuilderSuite extends AnyFunSuite {
       b.close()
     }
   }
+  test("wide STRING offsets preserve append and snapshot rollback beyond Int32") {
+    val chunk = 1 << 20
+    val value = new Array[Byte](chunk)
+    Arrays.fill(value, 'x'.toByte)
+    withResource(new RapidsHostColumnBuilder(new BasicType(true, DType.STRING), 1)) { builder =>
+      (0 until 2047).foreach(_ => builder.appendUTF8String(value))
+      builder.appendUTF8String(value, 0, chunk - 1)
+      withResource(builder.build()) { host =>
+        assertResult(DType.INT32)(host.getOffsetsType)
+        assertResult(Int.MaxValue.toLong)(host.getEndListOffset(2047))
+      }
+      builder.appendUTF8String(value, 0, 1)
+      builder.appendNull()
+      val snapshot = builder.captureState()
+      builder.appendNull()
+      builder.appendUTF8String(value)
+      builder.restoreState(snapshot)
+      builder.append("ab")
+      withResource(builder.build()) { host =>
+        assertResult(DType.INT64)(host.getOffsetsType)
+        assertResult(2051L)(host.getRowCount)
+        assertResult(1L)(host.getNullCount)
+        assert(host.isNull(2049))
+        assert(!host.isNull(2050))
+        assertResult(1L << 31)(host.getStartListOffset(2050))
+        assertResult("ab")(host.getJavaString(2050))
+      }
+    }
+  }
+
 }

@@ -23,6 +23,8 @@ import com.nvidia.spark.rapids.GpuRequiredKeyBloomFilter
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.BloomFilterMightContain
+import org.apache.spark.sql.catalyst.plans.logical.{BROADCAST, Join}
+import org.apache.spark.sql.execution.joins.BroadcastHashJoinExec
 import org.apache.spark.sql.execution.FilterExec
 
 /** CPU semantic and reachability probe; run through the experiment's saved build script. */
@@ -104,6 +106,64 @@ object RequiredKeyBloomFilterProbe extends Logging {
         logWarning("PROBE_PASS " + name + " rows=" + actual.size + " filter=" + hasFilter)
       }
       logWarning("PROBE_ALL_PASS cases=" + cases.size)
+
+      spark.conf.set(prefix + "enabled", "false")
+      val streamFlag = "spark.rapids.sql.optimizer.streamVariableWidthJoinPayload.enabled"
+      val streamCases = Seq(
+        ("inner-payload", s"SELECT t.*, s.total FROM target t JOIN $grouped s ON t.k=s.k",
+          "right"),
+        ("reverse-payload", s"SELECT t.*, s.total FROM $grouped s JOIN target t ON t.k=s.k",
+          "left"),
+        ("residual-payload", s"SELECT t.*, s.total FROM target t JOIN $grouped s " +
+          "ON t.k=s.k AND t.z<s.total", "right"),
+        ("outer-untouched", s"SELECT t.*, s.total FROM target t LEFT JOIN $grouped s ON t.k=s.k",
+          "none"),
+        ("existing-hint", s"SELECT /*+ SHUFFLE_HASH(t,s) */ t.*, s.total " +
+          s"FROM target t JOIN $grouped s ON t.k=s.k", "none"),
+        ("no-aggregate-filter", s"SELECT t.*, s.amount FROM target t JOIN $filtered s ON t.k=s.k",
+          "none"),
+        ("key-only-probe", s"SELECT t.k, s.total FROM target t JOIN $grouped s ON t.k=s.k",
+          "none"),
+        ("no-equi-key", s"SELECT t.*, s.total FROM target t JOIN $grouped s ON t.z<s.total",
+          "none"),
+        ("filtered-probe", s"SELECT t.*, s.total FROM (SELECT * FROM target WHERE z=1) t " +
+          s"JOIN $grouped s ON t.k=s.k", "none"))
+      streamCases.foreach { case (name, sql, buildSide) =>
+        spark.conf.set(streamFlag, "false")
+        val referenceFrame = spark.sql(sql)
+        val reference = referenceFrame.collect().map(_.toString).sorted.toSeq
+        val oldStrategies = referenceFrame.queryExecution.optimizedPlan.collect {
+          case join: Join =>
+            (join.hint.leftHint.flatMap(_.strategy), join.hint.rightHint.flatMap(_.strategy))
+        }
+        spark.conf.set(streamFlag, "true")
+        val rewritten = spark.sql(sql)
+        val actual = rewritten.collect().map(_.toString).sorted.toSeq
+        assert(actual == reference, name + ": result or duplicate multiplicity changed")
+        val joins = rewritten.queryExecution.optimizedPlan.collect { case join: Join => join }
+        val hinted = joins.filter { join =>
+          join.hint.leftHint.flatMap(_.strategy).contains(BROADCAST) ||
+            join.hint.rightHint.flatMap(_.strategy).contains(BROADCAST)
+        }
+        if (buildSide == "none") {
+          val strategies = joins.map { join =>
+            (join.hint.leftHint.flatMap(_.strategy), join.hint.rightHint.flatMap(_.strategy))
+          }
+          assert(strategies == oldStrategies, name + ": ineligible hint changed")
+        } else {
+          assert(hinted.size == 1, name + ": eligible broadcast hint not inserted")
+          val hint = if (buildSide == "right") hinted.head.hint.rightHint
+            else hinted.head.hint.leftHint
+          assert(hint.flatMap(_.strategy).contains(BROADCAST), name + ": wrong build side")
+          val physical = rewritten.queryExecution.executedPlan.collect {
+            case join: BroadcastHashJoinExec => join.buildSide.toString
+          }
+          val expected = if (buildSide == "right") "BuildRight" else "BuildLeft"
+          assert(physical.contains(expected), name + ": hint did not reach physical planning")
+        }
+        logWarning("STREAM_PAYLOAD_PASS " + name + " build=" + buildSide)
+      }
+      logWarning("STREAM_PAYLOAD_ALL_PASS cases=" + streamCases.size)
     } finally {
       spark.stop()
       val paths = Files.walk(root)

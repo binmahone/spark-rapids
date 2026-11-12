@@ -158,5 +158,7 @@ class GpuRequiredKeyBloomExtension extends (SparkSessionExtensions => Unit) {
   override def apply(extensions: SparkSessionExtensions): Unit = {
     extensions.injectOptimizerRule(spark => GpuRequiredKeyBloomFilter(spark))
     extensions.injectPreCBORule(spark => GpuRequiredKeyBloomFilter(spark))
+    extensions.injectOptimizerRule(spark => GpuStreamVariableWidthJoinPayload(spark))
+    extensions.injectPreCBORule(spark => GpuStreamVariableWidthJoinPayload(spark))
   }
 }

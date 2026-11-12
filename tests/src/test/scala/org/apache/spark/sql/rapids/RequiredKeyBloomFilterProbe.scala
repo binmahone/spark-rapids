@@ -20,12 +20,13 @@ import java.nio.file.Files
 
 import com.nvidia.spark.rapids.GpuRequiredKeyBloomFilter
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.BloomFilterMightContain
 import org.apache.spark.sql.execution.FilterExec
 
 /** CPU semantic and reachability probe; run through the experiment's saved build script. */
-object RequiredKeyBloomFilterProbe {
+object RequiredKeyBloomFilterProbe extends Logging {
   def main(args: Array[String]): Unit = {
     val spark = SparkSession.builder().master("local[2]")
       .appName("required-key-bloom-cpu-probe")
@@ -35,7 +36,7 @@ object RequiredKeyBloomFilterProbe {
       .config("spark.sql.optimizer.runtime.bloomFilter.enabled", "false")
       .config("spark.sql.extensions", "com.nvidia.spark.rapids.GpuRequiredKeyBloomExtension")
       .getOrCreate()
-    spark.sparkContext.setLogLevel("ERROR")
+    spark.sparkContext.setLogLevel("WARN")
     val prefix = "spark.rapids.sql.optimizer.requiredKeyBloomFilter."
     val root = Files.createTempDirectory("required-key-bloom-")
     try {
@@ -100,9 +101,9 @@ object RequiredKeyBloomFilterProbe {
               name + ": the filter did not reduce the six-row target: " + pruned)
           }
         }
-        println("PROBE_PASS " + name + " rows=" + actual.size + " filter=" + hasFilter)
+        logWarning("PROBE_PASS " + name + " rows=" + actual.size + " filter=" + hasFilter)
       }
-      println("PROBE_ALL_PASS cases=" + cases.size)
+      logWarning("PROBE_ALL_PASS cases=" + cases.size)
     } finally {
       spark.stop()
       val paths = Files.walk(root)

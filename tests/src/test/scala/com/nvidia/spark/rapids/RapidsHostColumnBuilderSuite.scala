@@ -19,8 +19,8 @@ package com.nvidia.spark.rapids
 import java.util.Arrays
 
 import ai.rapids.cudf.DType
-import com.nvidia.spark.rapids.Arm.withResource
 import ai.rapids.cudf.HostColumnVector.{BasicType, ListType, StructType}
+import com.nvidia.spark.rapids.Arm.withResource
 import org.scalatest.funsuite.AnyFunSuite
 
 class RapidsHostColumnBuilderSuite extends AnyFunSuite {

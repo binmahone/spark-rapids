@@ -22,8 +22,9 @@
  */
 package org.apache.spark.sql.rapids.execution
 
+import ai.rapids.cudf.DType
 import com.nvidia.spark.rapids.{ConcatAndConsumeAll, GpuCoalesceIterator, GpuColumnVector, GpuMetric, NoopMetric, RapidsConf, RequireSingleBatch}
-import com.nvidia.spark.rapids.Arm.withResource
+import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.CoalesceReadOption
 import com.nvidia.spark.rapids.GpuShuffleCoalesceUtils
 
@@ -41,15 +42,21 @@ object GpuShuffleBroadcastHelper extends Logging {
   import com.nvidia.spark.rapids.GpuMetric._
 
   private def verifyBuildSize(batch: ColumnarBatch, maxBuildSize: Long): ColumnarBatch = {
-    val actualSize = GpuColumnVector.getTotalDeviceMemoryUsed(batch)
-    logInfo(s"[NATIVE-BCAST] runtimeBuildSizeBytes=$actualSize maxSize=$maxBuildSize")
-    if (actualSize > maxBuildSize) {
-      batch.close()
-      throw new IllegalStateException(
-        s"Native shuffle-broadcast build size ${Utils.bytesToString(actualSize)} exceeds " +
-          s"spark.rapids.shuffle.broadcast.maxSize=${Utils.bytesToString(maxBuildSize)}")
+    closeOnExcept(batch) { _ =>
+      val actualSize = GpuColumnVector.getTotalDeviceMemoryUsed(batch)
+      val wideStringColumns = (0 until batch.numCols()).filter { index =>
+        val column = batch.column(index).asInstanceOf[GpuColumnVector].getBase
+        column.getType == DType.STRING && column.getOffsetsType == DType.INT64
+      }
+      logInfo(s"[NATIVE-BCAST] runtimeBuildSizeBytes=$actualSize maxSize=$maxBuildSize " +
+        s"rows=${batch.numRows()} wideStringColumns=${wideStringColumns.mkString(",")}")
+      if (actualSize > maxBuildSize) {
+        throw new IllegalStateException(
+          s"Native shuffle-broadcast build size ${Utils.bytesToString(actualSize)} exceeds " +
+            s"spark.rapids.shuffle.broadcast.maxSize=${Utils.bytesToString(maxBuildSize)}")
+      }
+      batch
     }
-    batch
   }
 
   private def shuffleDataIterator(shuffleData: RDD[ColumnarBatch]): Iterator[ColumnarBatch] = {

@@ -31,7 +31,7 @@ import org.apache.spark.shuffle.BaseShuffleHandle
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.rapids.execution.GpuShuffleExchangeExecBase.METRIC_DATA_SIZE
 import org.apache.spark.sql.vectorized.ColumnarBatch
-import org.apache.spark.storage.{BlockManager, ShuffleBlockId}
+import org.apache.spark.storage.{BlockManager, BlockManagerId, ShuffleBlockId}
 
 class LargeStringCachingWriterSuite extends RmmSparkRetrySuiteBase with MockitoSugar {
   private def compressedBatch(rows: Int): ColumnarBatch = {
@@ -62,7 +62,9 @@ class LargeStringCachingWriterSuite extends RmmSparkRetrySuiteBase with MockitoS
     val handle = new GpuShuffleHandle[Int, ColumnarBatch](
       new BaseShuffleHandle(shuffleId, dependency), dependency)
     catalog.registerShuffle(shuffleId)
-    val writer = new RapidsCachingWriter[Int, ColumnarBatch](mock[BlockManager],
+    val blockManager = mock[BlockManager]
+    when(blockManager.shuffleServerId).thenReturn(BlockManagerId("executor", "localhost", 12345))
+    val writer = new RapidsCachingWriter[Int, ColumnarBatch](blockManager,
       handle, 0L, new ShuffleWriteMetrics, catalog, None,
       Map(METRIC_DATA_SIZE -> new SQLMetric("size")))
     try {
@@ -78,8 +80,10 @@ class LargeStringCachingWriterSuite extends RmmSparkRetrySuiteBase with MockitoS
       assert(writer.stop(true).isDefined)
       val tableId = catalog.blockIdToMetas(ShuffleBlockId(shuffleId, 0L, 0))
         .head.bufferMeta().id()
-      withResource(catalog.getShuffleBufferHandle(tableId).spillable.materialize()) { stored =>
-        assert(copyBytes(stored).sameElements(expected))
+      withResource(catalog.getShuffleBufferHandle(tableId)) { handle =>
+        withResource(handle.spillable.materialize()) { stored =>
+          assert(copyBytes(stored).sameElements(expected))
+        }
       }
     } finally {
       catalog.unregisterShuffle(shuffleId)

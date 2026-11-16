@@ -131,6 +131,13 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
   def setRowGroupsRead(count: Int): Unit = _rowGroupsRead = count
   def getRowGroupsRead: Int = _rowGroupsRead
 
+  /**
+   * Add what the runner counted to the scan's metrics. Called on the task thread, since pool
+   * threads reading the task's other files would race on the same metrics.
+   */
+  def addRunnerMetrics(metrics: Map[String, GpuMetric]): Unit =
+    metrics.get(ROW_GROUPS_READ).foreach(_ += _rowGroupsRead)
+
   def getBufferTime: Long = _bufferTime
   def getFilterTime: Long = _filterTime
   def getScheduleTime: Long = _scheduleTime
@@ -710,7 +717,7 @@ abstract class MultiFileCloudPartitionReaderBase(
       }
     }
     taskRet.data.setScheduleTime(taskRet.metrics.scheduleTimeMs)
-    metrics.get(ROW_GROUPS_READ).foreach(_ += taskRet.data.getRowGroupsRead)
+    taskRet.data.addRunnerMetrics(metrics)
     taskRet.data
   }
 

@@ -79,6 +79,16 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
   private val footerParseTime =
     context.execMetrics.getOrElse(HYBRID_SCAN_FOOTER_PARSE_TIME, NoopMetric)
 
+  /** A pool thread's result, with what the pool thread counted for the task thread to add. */
+  private trait HybridResult extends HostMemoryBuffersWithMetaDataBase {
+    var runnerCounts: Map[String, Long] = Map.empty
+
+    override def addRunnerMetrics(metrics: Map[String, GpuMetric]): Unit = {
+      super.addRunnerMetrics(metrics)
+      runnerCounts.foreach { case (name, count) => metrics.get(name).foreach(_ += count) }
+    }
+  }
+
   /**
    * A file's fetched column chunks and its footer, handed from the pool thread to the task thread,
    * which re-parses the footer since the pool's reader cannot cross threads. Both are spillable so
@@ -94,7 +104,7 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
       chunkSizes: Array[Long],
       override val memBuffersAndSizes: Array[SingleHMBAndMeta],
       override val bytesRead: Long)
-    extends HostMemoryBuffersWithMetaDataBase {
+    extends HybridResult {
     // SpillableHostBuffer.close is idempotent, so this stays idempotent like the base close.
     override def close(): Unit = {
       footer.close()
@@ -106,7 +116,7 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
   private case class EmptyHybridFileResult(
       override val partitionedFile: PartitionedFile,
       override val bytesRead: Long)
-    extends HostMemoryBuffersWithMetaDataBase {
+    extends HybridResult {
     override val memBuffersAndSizes: Array[SingleHMBAndMeta] = Array(SingleHMBAndMeta.empty())
   }
 
@@ -138,9 +148,11 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
     case _ => throw new RuntimeException("Wrong HostMemoryBuffersWithMetaData")
   }
 
-  private def hybridSplit(file: PartitionedFile): HybridScanSplit = {
+  private def hybridSplit(
+      file: PartitionedFile,
+      metrics: Map[String, GpuMetric]): HybridScanSplit = {
     val filePath = new Path(new URI(file.filePath.toString()))
-    HybridScanSplit(new HybridScanFileByteSource(fileIO, filePath, context.execMetrics),
+    HybridScanSplit(new HybridScanFileByteSource(fileIO, filePath, metrics),
       file.start, file.length)
   }
 
@@ -190,12 +202,16 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
       val footer = readFooter(file, conf)
       val footerTime = System.nanoTime() - filterStartTime
       val bufferStartTime = System.nanoTime()
+      // Counted locally and added on the task thread, since the pool threads reading the task's
+      // other files would race on the scan's metrics.
+      val runnerMetrics: Map[String, GpuMetric] =
+        (context.execMetrics.keySet + FILTER_TIME).map(_ -> new LocalGpuMetric).toMap
       // The footer parse and row group selection are filter work although they run inside the
       // fetch, so the base reader splits the task's wait the way it does for parquet-mr.
-      val selectTime = new LocalGpuMetric
-      val result = withResource(footer) { _ =>
+      val selectTime = runnerMetrics(FILTER_TIME)
+      val result: HybridResult = withResource(footer) { _ =>
         // A closed reader discards this result, so neither fetch for it nor hand it buffers.
-        val planned = if (isDone) None else planAndFetchForPool(footer, selectTime)
+        val planned = if (isDone) None else planAndFetchForPool(footer, runnerMetrics)
         val bytesRead = fileSystemBytesRead() - startingBytesRead
         planned match {
           case None => EmptyHybridFileResult(file, bytesRead)
@@ -211,6 +227,11 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
       }
       result.setExecutionTime(footerTime + selectTime.value,
         System.nanoTime() - bufferStartTime - selectTime.value)
+      // The base reader times filter and buffer from the task's wait instead.
+      result.runnerCounts = runnerMetrics.collect {
+        case (name, metric) if name != FILTER_TIME && name != BUFFER_TIME && metric.value != 0 =>
+          name -> metric.value
+      }
       result
     }
 
@@ -218,20 +239,21 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
      * Prune the split's row groups on statistics with the pushed filter and fetch the surviving
      * column chunks. Returns them with the surviving row count, taken while the reader is open,
      * or None when nothing survived. The pushed filter and the dictionary compare may still drop
-     * rows at decode, so the count is an upper bound. The footer parse and row group selection
-     * are timed into `selectTime`.
+     * rows at decode, so the count is an upper bound. Everything is counted into `metrics`, the
+     * footer parse and row group selection both as `FILTER_TIME`.
      */
     private def planAndFetchForPool(
         footer: HostMemoryBuffer,
-        selectTime: GpuMetric): Option[(FetchedColumnChunks, Long)] = {
-      val filePipeline = new HybridScanPipeline(
-        context.copy(execMetrics = pipelineMetrics + (FILTER_TIME -> selectTime)))
-      val parsed = selectTime.ns {
-        HybridScanPipeline.openReader(footer, parquetOptions, footerParseTime)
+        metrics: Map[String, GpuMetric]): Option[(FetchedColumnChunks, Long)] = {
+      val filePipeline = new HybridScanPipeline(context.copy(execMetrics = metrics))
+      val parsed = metrics(FILTER_TIME).ns {
+        HybridScanPipeline.openReader(footer, parquetOptions,
+          metrics.getOrElse(HYBRID_SCAN_FOOTER_PARSE_TIME, NoopMetric))
       }
       withResource(parsed) { reader =>
         withResource(context.scanFilters.ast.map(HybridScanPipeline.compileFilter)) { ast =>
-          filePipeline.planAndFetch(hybridSplit(file), reader, ast, allowDictionaryPruning = false)
+          filePipeline.planAndFetch(hybridSplit(file, metrics), reader, ast,
+            allowDictionaryPruning = false)
             .map { fetched =>
               closeOnExcept(fetched)(f => (f, reader.totalRowsInRowGroups(f.rowGroups)))
             }

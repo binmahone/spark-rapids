@@ -752,8 +752,10 @@ def test_hybrid_scan_ignore_corrupt_files_keeps_readable_file(spark_tmp_path, re
         conf=copy_and_update(reader_confs, {'spark.sql.files.ignoreCorruptFiles': 'true'}))
 
 
-@pytest.mark.skipif(is_databricks_runtime(), reason="Databricks handles missing files differently")
-@pytest.mark.parametrize('ignore_missing', [True, False], ids=['ignored', 'raised'])
+@pytest.mark.parametrize('ignore_missing', [
+    pytest.param(True, id='ignored', marks=pytest.mark.skipif(
+        is_databricks_runtime(), reason="Databricks handles missing files differently")),
+    pytest.param(False, id='raised')])
 @pytest.mark.parametrize('reader_mode', ['PERFILE', 'MULTITHREADED'])
 def test_hybrid_scan_missing_file(spark_tmp_path, ignore_missing, reader_mode):
     """A file deleted after planning is skipped when ignoreMissingFiles is set, else it fails.

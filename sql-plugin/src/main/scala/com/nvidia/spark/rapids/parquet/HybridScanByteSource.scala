@@ -16,20 +16,25 @@
 
 package com.nvidia.spark.rapids.parquet
 
+import java.util.concurrent.atomic.AtomicBoolean
+
 import scala.collection.mutable.ArrayBuffer
 
-import ai.rapids.cudf.{ByteRange, DeviceMemoryBuffer, HostMemoryBuffer}
+import ai.rapids.cudf.{ByteRange, Cuda, DeviceMemoryBuffer, HostMemoryBuffer}
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.GpuMetric._
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
 import com.nvidia.spark.rapids.filecache.FileCache
+import com.nvidia.spark.rapids.jni.NativeFileSource
 import com.nvidia.spark.rapids.jni.fileio.{RapidsFileIO, RapidsInputFile}
 import com.nvidia.spark.rapids.jni.fileio.RapidsInputFile.CopyRange
 import com.nvidia.spark.rapids.parquet.HybridScanPipeline.HostBufferLayout
 import com.nvidia.spark.rapids.parquet.ParquetPartitionReader.LocalCopy
 import org.apache.hadoop.fs.Path
+
+import org.apache.spark.internal.Logging
 
 /**
  * Where a hybrid scan read's bytes come from.
@@ -223,5 +228,111 @@ private[parquet] class RapidsFileIORangeReader(execMetrics: Map[String, GpuMetri
       buffer: HostMemoryBuffer,
       ranges: Seq[CopyRange]): Unit = {
     GpuParquetScan.readRangesToHostMemory(inputFile, buffer, ranges, execMetrics)
+  }
+}
+
+/**
+ * A local file read through libcudf's datasource, which reads it with KvikIO. Host reads go
+ * straight into the host buffer, split across KvikIO's thread pool, rather than through a Java
+ * copy buffer. With `gdsEnabled`, a read cuFile can do directly goes to device memory instead;
+ * cuFile may still stage it through host memory if it falls back to its own compatibility mode.
+ *
+ * The file is opened through libcudf the first time a read asks.
+ */
+private[parquet] class NativeFileRangeReader(
+    filePath: Path,
+    execMetrics: Map[String, GpuMetric],
+    gdsEnabled: Boolean) extends HybridScanRangeReader with Logging {
+
+  private var nativeFile: NativeFileSource = _
+  private var openedForGds = false
+
+  private def file: NativeFileSource = {
+    if (nativeFile == null) {
+      nativeFile = NativeFileSource.open(filePath.toUri.getPath)
+      // KvikIO stages any read below its GDS threshold, so ask about one past it to learn how the
+      // file itself was opened.
+      openedForGds = gdsEnabled && nativeFile.isDeviceReadDirect(Long.MaxValue)
+      if (gdsEnabled && !openedForGds) {
+        execMetrics.getOrElse(HYBRID_SCAN_GDS_FALLBACK_FILES, NoopMetric) += 1
+        NativeFileRangeReader.logFallback(filePath,
+          "KvikIO did not open it for GPUDirect Storage and does not report why. Check that " +
+            "cuFile is installed and usable on this executor, that the filesystem supports " +
+            "GPUDirect Storage, and cuFile's log (cufile.log).")
+      }
+    }
+    nativeFile
+  }
+
+  override def readToHost(
+      inputFile: RapidsInputFile,
+      buffer: HostMemoryBuffer,
+      ranges: Seq[CopyRange]): Unit = {
+    execMetrics.getOrElse(READ_FS_TIME, NoopMetric).ns {
+      file.readToHost(ranges.map(_.getInputOffset).toArray, ranges.map(_.getLength).toArray,
+        buffer, ranges.map(_.getOutputOffset).toArray)
+    }
+  }
+
+  override def isDeviceReadDirect(ranges: Array[ByteRange]): Boolean = gdsEnabled && {
+    // KvikIO applies its threshold to each read and stages the smaller ones through host memory
+    // itself, so the fetch goes to the device if its largest aligned read would go direct.
+    val size = HybridScanPipeline.deviceBufferLayout(ranges, fileSize).reads
+      .foldLeft(0L)((largest, read) => math.max(largest, read.getLength))
+    val direct = file.isDeviceReadDirect(size)
+    if (!direct && openedForGds) {
+      logDebug(s"Hybrid scan reads $filePath through host memory: its largest read, $size " +
+        "bytes, is below KvikIO's GPUDirect Storage threshold (KVIKIO_GDS_THRESHOLD)")
+    }
+    direct
+  }
+
+  override def readToDevice(buffer: DeviceMemoryBuffer, ranges: Seq[CopyRange]): Unit = {
+    execMetrics.getOrElse(READ_FS_TIME, NoopMetric).ns {
+      file.readToDevice(ranges.map(_.getInputOffset).toArray, ranges.map(_.getLength).toArray,
+        buffer, ranges.map(_.getOutputOffset).toArray, Cuda.DEFAULT_STREAM)
+    }
+  }
+
+  override def fileSize: Long = file.size()
+
+  override def close(): Unit = {
+    if (nativeFile != null) {
+      nativeFile.close()
+      nativeFile = null
+    }
+  }
+}
+
+private[parquet] object NativeFileRangeReader extends Logging {
+  private val loggedFallback = new AtomicBoolean(false)
+
+  /**
+   * Whether `filePath` names a local file. libcudf opens the file by path outside Hadoop, so any
+   * other scheme, or a file: path with a host, would open the wrong file. A path with no scheme is
+   * not known to be local: Hadoop resolves it against fs.defaultFS. A local mount of a network
+   * filesystem passes, and KvikIO or cuFile reads it through host memory if GPUDirect Storage
+   * can't be used there.
+   */
+  def canRead(filePath: Path): Boolean = {
+    val uri = filePath.toUri
+    "file".equalsIgnoreCase(uri.getScheme) &&
+      (uri.getAuthority == null || uri.getAuthority.isEmpty)
+  }
+
+  /**
+   * Log why a file is read without GPUDirect Storage when it is enabled: as a warning for the
+   * first such file in the executor, which usually means every file falls back for the same
+   * reason, and at debug level after that.
+   */
+  def logFallback(filePath: Path, reason: String): Unit = {
+    val message = s"GPUDirect Storage is enabled but hybrid scan reads $filePath through host " +
+      s"memory: $reason"
+    if (loggedFallback.compareAndSet(false, true)) {
+      logWarning(s"$message Later files that fall back are logged at debug level and counted " +
+        s"in the ${GpuMetric.HYBRID_SCAN_GDS_FALLBACK_FILES} metric.")
+    } else {
+      logDebug(message)
+    }
   }
 }

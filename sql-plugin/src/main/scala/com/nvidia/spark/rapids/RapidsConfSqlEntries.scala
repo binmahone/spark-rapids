@@ -569,6 +569,42 @@ private[rapids] trait RapidsConfSqlEntries extends RapidsConfResourceEntries {
       .checkValue(v => v > 0 && v <= 1, "The keep threshold must be in the range (0, 1].")
       .createWithDefault(0.9)
 
+  val READER_GPU_DIRECT_STORAGE_MODE =
+    conf("spark.rapids.sql.reader.gpuDirectStorage.mode")
+      .doc("How readers of local files use GPUDirect Storage. OFF reads through host memory. " +
+          "ALWAYS reads straight to device memory where GPUDirect Storage can open the file, " +
+          "waiting for the GPU semaphore first, since the read writes to the device. " +
+          "WHEN_SEMAPHORE_FREE does the same when the task holds the semaphore or can take it " +
+          "without waiting, and otherwise reads through host memory while it waits. Files " +
+          "GPUDirect Storage cannot open are read through host memory in either mode. cuFile " +
+          "may still stage reads through host memory if it falls back to its own compatibility " +
+          "mode, unreported, unless the executors set CUFILE_ALLOW_COMPAT_MODE=false (e.g. with " +
+          "spark.executorEnv.CUFILE_ALLOW_COMPAT_MODE=false). For details of how cuFile did " +
+          "the reads, set CUFILE_STATS_LEVEL=3 on the executors and see cuFile's gds_stats " +
+          "tool. Only the Parquet hybrid scan " +
+          s"reader (${PARQUET_HYBRID_SCAN_ENABLED.key}) supports it so far. Whether it is OFF " +
+          "is read once per executor at startup, in place of the KVIKIO_COMPAT_MODE " +
+          "environment variable, so turning it on later reads through host memory; the choice " +
+          "between ALWAYS and WHEN_SEMAPHORE_FREE can change per session.")
+      .internal()
+      .stringConf
+      .transform(_.toUpperCase(java.util.Locale.ROOT))
+      .checkValues(Set("OFF", "ALWAYS", "WHEN_SEMAPHORE_FREE"))
+      .createWithDefault("OFF")
+
+  val READER_KVIKIO_NUM_THREADS =
+    conf("spark.rapids.sql.reader.kvikio.numThreads")
+      .doc("The number of threads in each executor's KvikIO thread pool, which the Parquet " +
+          s"hybrid scan reader (${PARQUET_HYBRID_SCAN_ENABLED.key}) splits each read of a " +
+          "local file across, with or without GPUDirect Storage. Set once per executor at " +
+          "startup, in place of the KVIKIO_NTHREADS environment " +
+          "variable, which is ignored when the hybrid scan reader is enabled.")
+      .startupOnly()
+      .internal()
+      .integerConf
+      .checkValue(v => v > 0, "KvikIO needs at least 1 thread.")
+      .createWithDefault(4)
+
   val PARQUET_HYBRID_SCAN_MAX_H2D_PACK_SIZE =
     conf("spark.rapids.sql.format.parquet.hybridScan.maxH2DPackSize")
       .doc("Most bytes of column chunks a hybrid scan read packs into one device allocation when " +

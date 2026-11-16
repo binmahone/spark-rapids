@@ -58,7 +58,7 @@ trait GpuBatchScanExecMetrics extends GpuExec {
   lazy val fileCacheMetrics: Map[String, GpuMetric] = createFileCacheMetrics()
 
   private lazy val parquetRowGroupMetrics: Map[String, GpuMetric] = scan match {
-    case _: GpuParquetScan => createParquetRowGroupMetrics()
+    case _: GpuParquetScan => createParquetRowGroupMetrics() ++ createHybridScanGdsMetrics()
     case _ => Map.empty
   }
 

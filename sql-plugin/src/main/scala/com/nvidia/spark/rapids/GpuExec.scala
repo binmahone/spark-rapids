@@ -213,6 +213,22 @@ trait GpuExec extends SparkPlan with Logging {
     }
   }
 
+  protected def createHybridScanGdsMetrics(): Map[String, GpuMetric] = {
+    if (RapidsConf.PARQUET_HYBRID_SCAN_ENABLED.get(conf) &&
+        RapidsConf.READER_GPU_DIRECT_STORAGE_MODE.get(conf) !=
+          RapidsConf.GpuDirectStorageMode.OFF.toString) {
+      Map(
+        HYBRID_SCAN_DEVICE_BYTES_READ -> createSizeMetric(MODERATE_LEVEL,
+          DESCRIPTION_HYBRID_SCAN_DEVICE_BYTES_READ),
+        HYBRID_SCAN_GDS_FALLBACK_FILES -> createMetric(MODERATE_LEVEL,
+          DESCRIPTION_HYBRID_SCAN_GDS_FALLBACK_FILES),
+        HYBRID_SCAN_GPU_BUSY_HOST_BYTES_READ -> createSizeMetric(MODERATE_LEVEL,
+          DESCRIPTION_HYBRID_SCAN_GPU_BUSY_HOST_BYTES_READ))
+    } else {
+      Map.empty
+    }
+  }
+
   override def supportsColumnar = true
 
   protected val outputRowsLevel: MetricsLevel = DEBUG_LEVEL

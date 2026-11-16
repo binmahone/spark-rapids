@@ -514,6 +514,23 @@ def test_hybrid_scan_legacy_old_date_filter_throws(spark_tmp_path, reader_confs)
         'SparkUpgradeException')
 
 
+@pytest.mark.parametrize('where', [
+    'sorted_int < 500',
+    'filter_int = 7',
+    "filter_str = 'key_500'",
+], ids=['stats', 'dict', 'none_survive_dict'])
+@pytest.mark.parametrize('gds_mode', ['OFF', 'ALWAYS', 'WHEN_SEMAPHORE_FREE'])
+def test_hybrid_scan_gds_mode(spark_tmp_path, where, gds_mode):
+    """With GPUDirect Storage off, a local file is read to host memory through KvikIO. With it on,
+    a file is read to the device where KvikIO can, and through host memory where it cannot, the
+    path is not local, or the GPU is busy. The answer is the same either way."""
+    data_path = spark_tmp_path + '/HYBRID_SCAN_DATA'
+    with_cpu_session(lambda spark: write_test_data(spark, data_path))
+    assert_gpu_and_cpu_are_equal_collect(
+        lambda spark: spark.read.parquet(data_path).filter(where),
+        conf=hybrid_conf(**{'spark.rapids.sql.reader.gpuDirectStorage.mode': gds_mode}))
+
+
 @pytest.mark.parametrize('reader_mode', ['PERFILE', 'MULTITHREADED'])
 def test_hybrid_scan_file_split_across_tasks(spark_tmp_path, reader_mode):
     """Each task owns part of the file, so every row group must be read by exactly one of them."""

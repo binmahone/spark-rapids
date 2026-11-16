@@ -131,13 +131,14 @@ case class GpuParquetScan(
       logInfo("Using the original per file parquet reader")
       GpuParquetPartitionReaderFactory(sparkSession.sessionState.conf, broadcastedConf,
         dataSchema, readDataSchema, readPartitionSchema, pushedFilters, rapidsConf, metrics,
-        options.asScala.toMap)
+        options.asScala.toMap, hybridScanAllowed = true)
     } else {
       val poolConfBuilder = ThreadPoolConfBuilder(rapidsConf)
       GpuParquetMultiFilePartitionReaderFactory(sparkSession.sessionState.conf, broadcastedConf,
         dataSchema, readDataSchema, readPartitionSchema, pushedFilters, rapidsConf,
         poolConfBuilder,
-        metrics, queryUsesInputFile)
+        metrics, queryUsesInputFile,
+        hybridScanAllowed = HybridScanPipeline.multiFileReaderTypeAllowsHybrid(rapidsConf))
     }
   }
 
@@ -1291,7 +1292,8 @@ abstract class AbstractGpuParquetMultiFilePartitionReaderFactory(
     @transient rapidsConf: RapidsConf,
     poolConfBuilder: ThreadPoolConfBuilder,
     metrics: Map[String, GpuMetric],
-    queryUsesInputFile: Boolean)
+    queryUsesInputFile: Boolean,
+    hybridScanAllowed: Boolean = false)
   extends MultiFilePartitionReaderFactoryBase(sqlConf, broadcastedConf, rapidsConf) {
 
   // we make sure we mark this as a transient lazy val, so we only materialize it
@@ -1337,6 +1339,12 @@ abstract class AbstractGpuParquetMultiFilePartitionReaderFactory(
   protected val compressCfg = CpuCompressionConfig.forParquet(rapidsConf)
   protected val skipReadEstimate = rapidsConf.skipReadEstimate(useChunkedReader)
 
+  // Set only for an eligible scan; scopes hybrid to the MULTITHREADED cloud reader path.
+  protected val hybridScanConfig: Option[HybridScanConfig] = HybridScanPipeline.configFor(
+    rapidsConf, sqlConf, broadcastedConf.value.value, hybridScanAllowed, readDataSchema, filters,
+    useChunkedReader, compressCfg, readUseFieldId)
+  private val hybridScanFailOnFallback = rapidsConf.testParquetHybridScanFailOnFallback
+
   // We can't use the coalescing files reader when InputFileName, InputFileBlockStart,
   // or InputFileBlockLength because we are combining all the files into a single buffer
   // and we don't know which file is associated with each row.
@@ -1371,7 +1379,7 @@ abstract class AbstractGpuParquetMultiFilePartitionReaderFactory(
       queryUsesInputFile: Boolean,
       keepReadsInOrder: Boolean,
       combineConf: CombineConf
-  ): AbstractMultiFileCloudParquetPartitionReader
+  ): MultiFileCloudPartitionReaderBase
 
   /**
    * Build the PartitionReader for cloud reading
@@ -1511,6 +1519,12 @@ abstract class AbstractGpuParquetMultiFilePartitionReaderFactory(
   override def buildBaseColumnarReaderForCoalescing(
       files: Array[PartitionedFile],
       conf: Configuration): PartitionReader[ColumnarBatch] = {
+    // Only AUTO reaches here with a hybrid config, as an explicit COALESCING clears it.
+    hybridScanConfig.foreach { _ =>
+      HybridScanPipeline.reportFallback(hybridScanFailOnFallback,
+        "the hybrid scan does not support the COALESCING reader, which the AUTO reader type " +
+          "chose because the files are not in the cloud")
+    }
     val poolConf = poolConfBuilder.build()
     val clippedBlocks = ArrayBuffer[ParquetSingleDataBlockMeta]()
 
@@ -1561,10 +1575,11 @@ case class GpuParquetMultiFilePartitionReaderFactory(
     @transient rapidsConf: RapidsConf,
     poolConfBuilder: ThreadPoolConfBuilder,
     metrics: Map[String, GpuMetric],
-    queryUsesInputFile: Boolean)
+    queryUsesInputFile: Boolean,
+    hybridScanAllowed: Boolean = false)
   extends AbstractGpuParquetMultiFilePartitionReaderFactory(sqlConf, broadcastedConf,
     dataSchema, readDataSchema, partitionSchema, filters, rapidsConf, poolConfBuilder,
-    metrics, queryUsesInputFile) {
+    metrics, queryUsesInputFile, hybridScanAllowed) {
 
   override protected def createBaseMultiFileCloudReader(
       fileIO: RapidsFileIO,
@@ -1592,8 +1607,28 @@ case class GpuParquetMultiFilePartitionReaderFactory(
       queryUsesInputFile: Boolean,
       keepReadsInOrder: Boolean,
       combineConf: CombineConf
-  ): AbstractMultiFileCloudParquetPartitionReader = {
-    new MultiFileCloudParquetPartitionReader(
+  ): MultiFileCloudPartitionReaderBase = hybridScanConfig match {
+    // None for Delta's factories, which do not opt in to the hybrid scan.
+    case Some(config) =>
+      // The footer read needs the filter handler only the factory has.
+      val readFooter = (file: PartitionedFile, fileConf: Configuration) => {
+        val filePath = new Path(new URI(file.filePath.toString()))
+        NvtxRegistry.HYBRID_SCAN_READ_FOOTER {
+          filterHandler.readThriftFooter(fileIO, filePath, fileConf)
+        }
+      }
+      new HybridScanMultithreadedParquetPartitionReader(fileIO, conf, files,
+        HybridScanContext(readDataSchema, config.filters, config.filterKeepThreshold, execMetrics),
+        readFooter,
+        maxReadBatchSizeRows = maxReadBatchSizeRows,
+        maxReadBatchSizeBytes = maxReadBatchSizeBytes,
+        maxGpuColumnSizeBytes = maxGpuColumnSizeBytes,
+        partitionSchema = partitionSchema,
+        poolConf = poolConf,
+        maxNumFileProcessed = maxNumFileProcessed,
+        ignoreMissingFiles = ignoreMissingFiles,
+        keepReadsInOrder = keepReadsInOrder)
+    case None => new MultiFileCloudParquetPartitionReader(
       fileIO,
       conf,
       files,
@@ -1685,31 +1720,16 @@ case class GpuParquetPartitionReaderFactory(
     filters: Array[Filter],
     @transient rapidsConf: RapidsConf,
     metrics: Map[String, GpuMetric],
-    @transient params: Map[String, String])
+    @transient params: Map[String, String],
+    hybridScanAllowed: Boolean = false)
   extends GpuParquetPartitionReaderFactoryBase(
     sqlConf, broadcastedConf, dataSchema, readDataSchema, partitionSchema,
     rapidsConf, metrics, params) with Logging {
 
   // Only set for an eligible read.
-  private val hybridScanConfig = if (rapidsConf.isParquetHybridScanEnabled) {
-    val config = HybridScanConfig(rapidsConf,
-      new HybridScanFilters(readDataSchema, isCaseSensitive,
-        if (sqlConf.parquetFilterPushDown) filters else Array.empty))
-
-    val eligible = HybridScanPipeline.isEligible(
-      rapidsConf.isParquetHybridScanEnabled, rapidsConf.testParquetHybridScanFailOnFallback,
-      readDataSchema, config.filters,
-      useChunkedReader, compressCfg.decompressSnappyCpu || compressCfg.decompressZstdCpu,
-      readUseFieldId && ParquetSchemaClipShims.hasFieldIds(readDataSchema),
-      sqlConf.ignoreCorruptFiles,
-      GpuParquetFileFilterHandler.isDecryptionConfigured(broadcastedConf.value.value),
-      DateTimeRebaseMode.fromName(SparkShimImpl.parquetRebaseRead(sqlConf)),
-      DateTimeRebaseMode.fromName(SparkShimImpl.int96ParquetRebaseRead(sqlConf)))
-      
-    if (eligible) Some(config) else None
-  } else {
-    None
-  }
+  private val hybridScanConfig = HybridScanPipeline.configFor(
+    rapidsConf, sqlConf, broadcastedConf.value.value, hybridScanAllowed, readDataSchema, filters,
+    useChunkedReader, compressCfg, readUseFieldId)
 
   override protected def buildBaseColumnarParquetReader(
       file: PartitionedFile): PartitionReader[ColumnarBatch] = {

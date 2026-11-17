@@ -520,15 +520,34 @@ def test_hybrid_scan_legacy_old_date_filter_throws(spark_tmp_path, reader_confs)
     "filter_str = 'key_500'",
 ], ids=['stats', 'dict', 'none_survive_dict'])
 @pytest.mark.parametrize('gds_mode', ['OFF', 'ALWAYS', 'WHEN_SEMAPHORE_FREE'])
-def test_hybrid_scan_gds_mode(spark_tmp_path, where, gds_mode):
+@pytest.mark.parametrize('reader_mode', ['PERFILE', 'MULTITHREADED'])
+def test_hybrid_scan_gds_mode(spark_tmp_path, where, gds_mode, reader_mode):
     """With GPUDirect Storage off, a local file is read to host memory through KvikIO. With it on,
     a file is read to the device where KvikIO can, and through host memory where it cannot, the
     path is not local, or the GPU is busy. The answer is the same either way."""
     data_path = spark_tmp_path + '/HYBRID_SCAN_DATA'
+    if urlparse(data_path).scheme not in ('', 'file'):
+        pytest.skip('Native deferred reads require local files')
+    if not urlparse(data_path).scheme:
+        data_path = 'file:' + data_path
     with_cpu_session(lambda spark: write_test_data(spark, data_path))
-    assert_gpu_and_cpu_are_equal_collect(
+    def check(cpu_plan, gpu_plan):
+        scans = [node for node in collect_plan_nodes(gpu_plan)
+                 if node.getClass().getSimpleName() in
+                 ('GpuFileSourceScanExec', 'GpuBatchScanExec')]
+        assert scans
+        deferred = sum(plan_metric(scan, 'hybridScanDeferredFiles') for scan in scans)
+        if reader_mode == 'MULTITHREADED' and gds_mode != 'OFF':
+            assert deferred > 0, 'the deferred task-thread read did not execute'
+        else:
+            assert deferred == 0
+
+    assert_cpu_and_gpu_are_equal_collect_with_capture(
         lambda spark: spark.read.parquet(data_path).filter(where),
-        conf=hybrid_conf(**{'spark.rapids.sql.reader.gpuDirectStorage.mode': gds_mode}))
+        conf=hybrid_conf(**_pruning_metrics_conf, **{
+            'spark.rapids.sql.format.parquet.reader.type': reader_mode,
+            'spark.rapids.sql.reader.gpuDirectStorage.mode': gds_mode}),
+        gpu_plan_assertion=check)
 
 
 @pytest.mark.parametrize('reader_mode', ['PERFILE', 'MULTITHREADED'])

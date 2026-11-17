@@ -222,6 +222,8 @@ trait GpuExec extends SparkPlan with Logging {
           DESCRIPTION_HYBRID_SCAN_DEVICE_BYTES_READ),
         HYBRID_SCAN_GDS_FALLBACK_FILES -> createMetric(MODERATE_LEVEL,
           DESCRIPTION_HYBRID_SCAN_GDS_FALLBACK_FILES),
+        HYBRID_SCAN_DEFERRED_FILES -> createMetric(MODERATE_LEVEL,
+          "hybrid scan files planned and fetched on the task thread"),
         HYBRID_SCAN_GPU_BUSY_HOST_BYTES_READ -> createSizeMetric(MODERATE_LEVEL,
           DESCRIPTION_HYBRID_SCAN_GPU_BUSY_HOST_BYTES_READ))
     } else {

@@ -151,6 +151,7 @@ object GpuMetric extends Logging {
   val HYBRID_SCAN_BYTES_READ = "hybridScanBytesRead"
   val HYBRID_SCAN_DEVICE_BYTES_READ = "hybridScanDeviceBytesRead"
   val HYBRID_SCAN_GDS_FALLBACK_FILES = "hybridScanGdsFallbackFiles"
+  val HYBRID_SCAN_DEFERRED_FILES = "hybridScanDeferredFiles"
   val HYBRID_SCAN_GPU_BUSY_HOST_BYTES_READ = "hybridScanGpuBusyHostBytesRead"
   val DELETION_VECTOR_SCATTER_TIME = "deletionVectorScatterTime"
   val DELETION_VECTOR_SIZE = "deletionVectorSize"

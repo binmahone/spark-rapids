@@ -45,6 +45,9 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
  * filter and fetches the surviving column chunks into host memory. The task thread then prunes
  * those with the filter's dictionaries, which needs the GPU a pool thread may not touch, and
  * decodes what survives into one batch per file.
+ * When GPUDirect Storage is enabled for a local native source, the pool fetches only the footer.
+ * The task thread selects row groups, reads their payload and decodes under the pipeline's GPU
+ * semaphore policy, retaining the source until the read and decode finish.
  *
  * A standalone reader rather than a branch of the parquet-mr cloud reader, because Delta and
  * Iceberg customize that reader's decode and a hybrid branch inside it would bypass them.
@@ -123,6 +126,21 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
     override val memBuffersAndSizes: Array[SingleHMBAndMeta] = Array(SingleHMBAndMeta.empty())
   }
 
+  /** A spillable footer whose payload planning and read belong to the GPU task thread. */
+  private case class DeferredHybridFileResult(
+      override val partitionedFile: PartitionedFile,
+      footer: SpillableHostBuffer,
+      numRows: Long,
+      override val bytesRead: Long) extends HybridResult {
+    override val memBuffersAndSizes: Array[SingleHMBAndMeta] =
+      Array(SingleHMBAndMeta.empty(numRows))
+
+    override def close(): Unit = {
+      footer.close()
+      super.close()
+    }
+  }
+
   override final def getFileFormatShortName: String = "Parquet"
 
   override def getBatchRunner(
@@ -135,10 +153,14 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
 
   override def readBatches(fileBufsAndMeta: HostMemoryBuffersWithMetaDataBase):
       Iterator[ColumnarBatch] = fileBufsAndMeta match {
-    case result: HybridFileResult =>
+    case result: HybridResult =>
       // The whole file decodes eagerly into one batch, so its host buffers are closed here.
       currentFileHostBuffers = None
-      val table = withResource(result)(decodeResult)
+      val table = withResource(result) {
+        case fetched: HybridFileResult => decodeResult(fetched)
+        case deferred: DeferredHybridFileResult => decodeDeferredResult(deferred)
+        case _ => throw new IllegalStateException("An empty hybrid result cannot be decoded")
+      }
       val colTypes = context.readDataSchema.fields.map(_.dataType)
       val batchIter: Iterator[ColumnarBatch] = table match {
         case Some(t) => Iterator.single(withResource(t)(GpuColumnVector.from(_, colTypes)))
@@ -156,7 +178,8 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
       metrics: Map[String, GpuMetric]): HybridScanSplit = {
     val filePath = new Path(new URI(file.filePath.toString()))
     val rangeReader = if (NativeFileRangeReader.canRead(filePath)) {
-      new NativeFileRangeReader(filePath, metrics, gdsEnabled = false)
+      new NativeFileRangeReader(filePath, metrics,
+        gdsEnabled = context.gdsMode != RapidsConf.GpuDirectStorageMode.OFF)
     } else {
       new RapidsFileIORangeReader(metrics)
     }
@@ -219,9 +242,31 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
       val selectTime = runnerMetrics(FILTER_TIME)
       val result: HybridResult = withResource(footer) { _ =>
         // A closed reader discards this result, so neither fetch for it nor hand it buffers.
-        val planned = if (isDone) None else planAndFetchForPool(footer, runnerMetrics)
+        val filePath = new Path(new URI(file.filePath.toString()))
+        val deferPayload = context.gdsMode != RapidsConf.GpuDirectStorageMode.OFF &&
+          NativeFileRangeReader.canRead(filePath)
+        val planned = if (isDone || deferPayload) None
+          else planAndFetchForPool(footer, runnerMetrics)
         val bytesRead = fileSystemBytesRead() - startingBytesRead
-        planned match {
+        if (deferPayload && !isDone) {
+          // Only parse CPU metadata here. Dictionary pruning, device allocation and GPU
+          // semaphore acquisition belong to the task thread, including a host fallback.
+          val numRows = selectTime.ns {
+            withResource(HybridScanPipeline.openReader(footer, parquetOptions,
+                runnerMetrics.getOrElse(HYBRID_SCAN_FOOTER_PARSE_TIME, NoopMetric))) { reader =>
+              reader.totalRowsInRowGroups(reader.allRowGroups())
+            }
+          }
+          if (numRows == 0 || isDone) {
+            EmptyHybridFileResult(file, bytesRead)
+          } else {
+            footer.incRefCount()
+            closeOnExcept(SpillableHostBuffer(footer, footer.getLength,
+                SpillPriorities.ACTIVE_BATCHING_PRIORITY)) { spillFooter =>
+              DeferredHybridFileResult(file, spillFooter, numRows, bytesRead)
+            }
+          }
+        } else planned match {
           case None => EmptyHybridFileResult(file, bytesRead)
           case Some((fetched, numRows)) =>
             withResource(fetched) { _ =>
@@ -296,6 +341,32 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
             SingleHMBAndMeta(Array(spillBuffer), buffer.getLength, numRows, Seq.empty)
           HybridFileResult(file, spillFooter, fetched.rowGroups, chunkOffsets, chunkSizes,
             Array(bufferAndMeta), bytesRead)
+        }
+      }
+    }
+  }
+
+  /** Keep the native source open through dictionary pruning, payload read and decode. */
+  private def decodeDeferredResult(result: DeferredHybridFileResult): Option[Table] = {
+    context.execMetrics.getOrElse(GpuMetric.HYBRID_SCAN_DEFERRED_FILES, NoopMetric) += 1
+    val taskPipeline = new HybridScanPipeline(context)
+    val footer = bufferTime.ns {
+      withRetryNoSplit[HostMemoryBuffer] { result.footer.getDataHostBuffer() }
+    }
+    withResource(footer) { _ =>
+      withResource(context.scanFilters.ast.map(HybridScanPipeline.compileFilter)) { ast =>
+        withResource(HybridScanPipeline.openReader(footer, parquetOptions, footerParseTime)) {
+          reader =>
+            val split = hybridSplit(result.partitionedFile, context.execMetrics)
+            withResource(split.source) { _ =>
+              val table = taskPipeline.planAndFetch(split, reader, ast,
+                allowDictionaryPruning = true)
+                .flatMap(taskPipeline.materializeFetched(reader, ast, _))
+              if (table.isEmpty) {
+                GpuSemaphore.releaseIfNecessary(TaskContext.get())
+              }
+              table
+            }
         }
       }
     }

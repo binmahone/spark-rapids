@@ -155,7 +155,12 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
       file: PartitionedFile,
       metrics: Map[String, GpuMetric]): HybridScanSplit = {
     val filePath = new Path(new URI(file.filePath.toString()))
-    HybridScanSplit(new HybridScanFileByteSource(fileIO, filePath, metrics),
+    val rangeReader = if (NativeFileRangeReader.canRead(filePath)) {
+      new NativeFileRangeReader(filePath, metrics, gdsEnabled = false)
+    } else {
+      new RapidsFileIORangeReader(metrics)
+    }
+    HybridScanSplit(new HybridScanFileByteSource(fileIO, filePath, metrics, rangeReader),
       file.start, file.length)
   }
 

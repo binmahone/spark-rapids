@@ -94,7 +94,7 @@ private[parquet] class HybridScanFileByteSource(
     fileIO: RapidsFileIO,
     filePath: Path,
     execMetrics: Map[String, GpuMetric],
-    rangeReader: HybridScanRangeReader) extends HybridScanByteSource {
+    val rangeReader: HybridScanRangeReader) extends HybridScanByteSource {
 
   def this(fileIO: RapidsFileIO, filePath: Path, execMetrics: Map[String, GpuMetric]) =
     this(fileIO, filePath, execMetrics, new RapidsFileIORangeReader(execMetrics))
@@ -195,6 +195,27 @@ private[parquet] class HybridScanFileByteSource(
   }
 
   override def close(): Unit = rangeReader.close()
+}
+
+private[parquet] object HybridScanFileByteSource {
+  /** A source for `filePath`, read natively if it is a local file and through `fileIO` if not. */
+  def forFile(
+      fileIO: RapidsFileIO,
+      filePath: Path,
+      execMetrics: Map[String, GpuMetric],
+      gdsEnabled: Boolean): HybridScanFileByteSource = {
+    if (NativeFileRangeReader.canRead(filePath)) {
+      new HybridScanFileByteSource(fileIO, filePath, execMetrics,
+        new NativeFileRangeReader(filePath, execMetrics, gdsEnabled))
+    } else {
+      if (gdsEnabled) {
+        execMetrics.getOrElse(HYBRID_SCAN_GDS_FALLBACK_FILES, NoopMetric) += 1
+        NativeFileRangeReader.logFallback(filePath,
+          "only local file: paths, without a host, are read with GPUDirect Storage.")
+      }
+      new HybridScanFileByteSource(fileIO, filePath, execMetrics)
+    }
+  }
 }
 
 /** How a [[HybridScanFileByteSource]] reads the ranges of its file that it does not have. */

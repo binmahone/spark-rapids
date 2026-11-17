@@ -124,6 +124,8 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
    * Only where the source can. In ALWAYS mode the caller then waits for the semaphore. In
    * WHEN_SEMAPHORE_FREE mode only if the task holds the semaphore or can take it without waiting,
    * which takes it, so a task the GPU is busy for reads through host memory while it waits.
+   * KvikIO reads into host memory with POSIX even on a file opened for cuFile, so a host read
+   * never uses GPUDirect Storage or needs the semaphore.
    */
   private def useDeviceRead(source: HybridScanByteSource, ranges: Array[ByteRange]): Boolean = {
     if (!source.isDeviceReadDirect(ranges)) {

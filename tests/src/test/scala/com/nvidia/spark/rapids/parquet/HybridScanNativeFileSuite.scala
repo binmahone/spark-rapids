@@ -62,10 +62,11 @@ class HybridScanNativeFileSuite extends RmmSparkRetrySuiteBase {
       new NativeFileRangeReader(path, metrics, gdsEnabled))
 
   // Out of file order, adjacent ranges to coalesce, a gap, a block crossing, an empty range and a
-  // range ending at the end of the file.
+  // range ending at the end of the file. None starts at 0, which a Parquet file's magic occupies
+  // and GpuParquetScan.coalesceReads does not handle.
   private val ranges = Array(
     new ByteRange(9000L, 500L),
-    new ByteRange(0L, 100L),
+    new ByteRange(4L, 96L),
     new ByteRange(100L, 50L),
     new ByteRange(4000L, 200L),
     new ByteRange(300L, 0L),
@@ -102,8 +103,14 @@ class HybridScanNativeFileSuite extends RmmSparkRetrySuiteBase {
     assert(!NativeFileRangeReader.canRead(new Path("s3a://bucket/data/t.parquet")))
   }
 
-  test("a temp file's path is one the native reader takes") {
-    withLocalFile()(path => assert(NativeFileRangeReader.canRead(path)))
+  test("a temp file is read natively") {
+    withLocalFile() { path =>
+      assert(NativeFileRangeReader.canRead(path))
+      val fileIO = new HadoopFileIO(new Configuration())
+      withResource(HybridScanFileByteSource.forFile(fileIO, path, Map.empty, gdsEnabled = false)) {
+        source => assert(source.rangeReader.isInstanceOf[NativeFileRangeReader])
+      }
+    }
   }
 
   test("KvikIO reads each range to host memory") {

@@ -1775,17 +1775,8 @@ case class GpuParquetPartitionReaderFactory(
       _ += (System.nanoTime() - startTime)
     }
     closeOnExcept(footer) { _ =>
-      val byteSource = if (NativeFileRangeReader.canRead(filePath)) {
-        new HybridScanFileByteSource(fileIO, filePath, metrics,
-          new NativeFileRangeReader(filePath, metrics, config.gdsEnabled))
-      } else {
-        if (config.gdsEnabled) {
-          metrics.getOrElse(HYBRID_SCAN_GDS_FALLBACK_FILES, NoopMetric) += 1
-          NativeFileRangeReader.logFallback(filePath,
-            "only local file: paths, without a host, are read with GPUDirect Storage.")
-        }
-        new HybridScanFileByteSource(fileIO, filePath, metrics)
-      }
+      val byteSource =
+        HybridScanFileByteSource.forFile(fileIO, filePath, metrics, config.gdsEnabled)
       val options = HybridScanPipeline.parquetOptions(readDataSchema.fieldNames)
       new HybridScanPerFileParquetPartitionReader(
         HybridScanSplit(byteSource, file.start, file.length), footer, options,

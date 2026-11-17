@@ -35,6 +35,7 @@ import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
 import com.nvidia.spark.rapids.filecache.{FileCache, FileCacheLocalityManager, FileCacheLocalityMsg}
 import com.nvidia.spark.rapids.io.async.TrafficController
 import com.nvidia.spark.rapids.jni.{GpuTimeZoneDB, Hash, JSONUtils, RmmSpark, TaskPriority}
+import com.nvidia.spark.rapids.parquet.HybridScanPipeline
 import com.nvidia.spark.rapids.python.PythonWorkerSemaphore
 import com.nvidia.spark.rapids.shims.ShuffleManagerShimUtils
 import org.apache.commons.lang3.exception.ExceptionUtils
@@ -536,6 +537,16 @@ class RapidsDriverPlugin extends DriverPlugin with Logging {
     val conf = new RapidsConf(sparkConf)
     RapidsPluginUtils.detectMultipleJars(conf)
     RapidsPluginUtils.logPluginMode(conf)
+    if (conf.isParquetHybridScanEnabled && conf.isReaderGdsEnabled && !sparkConf.getOption(
+        "spark.executorEnv.CUFILE_ALLOW_COMPAT_MODE").exists(_.equalsIgnoreCase("false"))) {
+      logWarning(s"${RapidsConf.READER_GPU_DIRECT_STORAGE_MODE.key} is ${conf.readerGdsMode} but " +
+        "spark.executorEnv.CUFILE_ALLOW_COMPAT_MODE is not false. Files that GPUDirect Storage " +
+        "cannot read will still be read correctly, but may be slower. cuFile reads them through " +
+        "host memory without reporting it, so the reader treats those reads as direct. It then " +
+        "holds the GPU semaphore for them instead of reading them off it. Ignore this if the " +
+        "executors get CUFILE_ALLOW_COMPAT_MODE=false another way, or cufile.json sets " +
+        "allow_compat_mode to false.")
+    }
     GpuCoreDumpHandler.driverInit(sc, conf)
     ProfilerOnDriver.init(sc, conf)
 
@@ -856,6 +867,7 @@ class RapidsExecutorPlugin extends ExecutorPlugin with Logging {
         () => GpuTimeZoneDB.shutdown(),
         () => GpuSemaphore.shutdown(),
         () => PythonWorkerSemaphore.shutdown(),
+        () => HybridScanPipeline.shutdown(),
         // Closed before the device teardown, so no reclaim starts during it, and the one in
         // flight stops at its next free, which close() waits for.
         () => Option(ucxReclaimEndpoint).foreach(_.close()),

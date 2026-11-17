@@ -105,6 +105,8 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
   private var _bufferTime: Long = 0L
   // Time spent on waiting for (virtual) resource
   private var _scheduleTime: Long = 0L
+  // Parquet row groups the filter kept, added to the metric on the task thread
+  private var _rowGroupsRead: Int = 0
 
   /**
    * When it is present, it indicates the partition values stored as an array of
@@ -125,6 +127,16 @@ trait HostMemoryBuffersWithMetaDataBase extends AutoCloseable {
   }
 
   def setScheduleTime(time: Long): Unit = _scheduleTime = time
+
+  def setRowGroupsRead(count: Int): Unit = _rowGroupsRead = count
+  def getRowGroupsRead: Int = _rowGroupsRead
+
+  /**
+   * Add what the runner counted to the scan's metrics. Called on the task thread, since pool
+   * threads reading the task's other files would race on the same metrics.
+   */
+  def addRunnerMetrics(metrics: Map[String, GpuMetric]): Unit =
+    metrics.get(ROW_GROUPS_READ).foreach(_ += _rowGroupsRead)
 
   def getBufferTime: Long = _bufferTime
   def getFilterTime: Long = _filterTime
@@ -688,7 +700,9 @@ abstract class MultiFileCloudPartitionReaderBase(
   }
 
   // Unwrap RunnerResult to facilitate the combination of file buffers.
-  private def convertAsyncResult(taskRet: RunnerResult): BufferInfo = {
+  // `countRowGroups` is false for a result that is only freed, never decoded.
+  private def convertAsyncResult(taskRet: RunnerResult,
+      countRowGroups: Boolean = true): BufferInfo = {
     taskRet.releaseHook.foreach { callback =>
       taskRet.data match {
         // If the task result is empty, call the release callback ASAP.
@@ -700,6 +714,9 @@ abstract class MultiFileCloudPartitionReaderBase(
       }
     }
     taskRet.data.setScheduleTime(taskRet.metrics.scheduleTimeMs)
+    if (countRowGroups) {
+      taskRet.data.addRunnerMetrics(metrics)
+    }
     taskRet.data
   }
 
@@ -981,12 +998,12 @@ abstract class MultiFileCloudPartitionReaderBase(
           task match {
             case t if t.isCancelled => // Do nothing if already cancelled
             case t if t.isDone => // Close all produced hmbs
-              needToClose += convertAsyncResult(t.get())
+              needToClose += convertAsyncResult(t.get(), countRowGroups = false)
             case t =>
               // Let running reads observe isDone without interrupting file system operations.
               // If completion wins the cancellation race, we still own the result.
               if (!t.cancel(false) && !t.isCancelled) {
-                needToClose += convertAsyncResult(t.get())
+                needToClose += convertAsyncResult(t.get(), countRowGroups = false)
               }
           }
         } catch {

@@ -23,6 +23,7 @@ import scala.util.control.NonFatal
 
 import ai.rapids.cudf._
 import com.nvidia.spark.rapids.jni.DeviceAttr
+import com.nvidia.spark.rapids.jni.NativeFileSource
 import com.nvidia.spark.rapids.jni.RmmSpark
 import com.nvidia.spark.rapids.spill.SpillFramework
 
@@ -733,6 +734,9 @@ object GpuDeviceManager extends Logging {
           val conf = rapidsConf.getOrElse(new RapidsConf(sparkConf))
           initializePinnedPoolAndOffHeapLimits(gpu, conf, sparkConf)
           initializeRmmGpuPool(gpu, conf)
+          if (conf.isParquetHybridScanEnabled) {
+            initializeKvikio(conf)
+          }
           // we want to initialize this last because we want to take advantage
           // of pinned memory if it is configured
           initializeSpillAndMemoryEvents(conf)
@@ -740,6 +744,50 @@ object GpuDeviceManager extends Logging {
           singletonMemoryInitialized = Initialized
         }
       }
+    }
+  }
+
+  /**
+   * Set KvikIO's compatibility mode and thread count, which libcudf takes only once per process,
+   * so this must run before the first libcudf file read.
+   */
+  private def initializeKvikio(conf: RapidsConf): Unit = {
+    if (conf.isReaderGdsEnabled) {
+      val cufileCompat = sys.env.get("CUFILE_ALLOW_COMPAT_MODE")
+      val detected = if (cufileCompat.exists(_.equalsIgnoreCase("false"))) {
+        "files cuFile cannot read directly are read and reported as host reads"
+      } else {
+        "cuFile may read files it cannot read directly through host memory, reported as " +
+          "direct, unless cufile.json sets allow_compat_mode to false"
+      }
+      logInfo("GPUDirect Storage enabled with KvikIO compatibility mode AUTO and " +
+        s"CUFILE_ALLOW_COMPAT_MODE=${cufileCompat.getOrElse("<unset>")}: $detected")
+      checkKvikioTaskSize()
+    }
+    logInfo(s"KvikIO reads with ${conf.readerKvikioNumThreads} threads")
+    NativeFileSource.setUpKvikio(
+      if (conf.isReaderGdsEnabled) {
+        NativeFileSource.CompatMode.AUTO
+      } else {
+        NativeFileSource.CompatMode.ON
+      },
+      conf.readerKvikioNumThreads)
+  }
+
+  /**
+   * KvikIO splits a read into tasks of KVIKIO_TASK_SIZE bytes from its start, so the hybrid scan's
+   * aligned device reads stay aligned past the first task only if the task size is a whole number
+   * of cuFile's 4 KiB blocks. The default, 4 MiB, is.
+   */
+  private def checkKvikioTaskSize(): Unit = {
+    // KvikIO reads the leading integer and ignores the rest, and rejects a value without one.
+    val leadingInteger = """\s*([+-]?\d+).*""".r
+    sys.env.get("KVIKIO_TASK_SIZE").foreach {
+      case leadingInteger(digits) if BigInt(digits) % 4096 != 0 =>
+        throw new IllegalArgumentException(s"KVIKIO_TASK_SIZE=$digits is not a multiple of " +
+          "4096, so GPUDirect Storage reads would not stay aligned to cuFile's 4 KiB blocks. " +
+          "Unset it or set it to a multiple of 4096.")
+      case _ =>
     }
   }
 

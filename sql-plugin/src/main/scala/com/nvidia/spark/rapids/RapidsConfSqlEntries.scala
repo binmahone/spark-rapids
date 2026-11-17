@@ -544,11 +544,12 @@ private[rapids] trait RapidsConfSqlEntries extends RapidsConfResourceEntries {
     conf("spark.rapids.sql.format.parquet.hybridScan.enabled")
       .doc("Internal temporary configuration to let Parquet reads use the libcudf hybrid scan " +
           "reader while it is under development. It does not have the checks needed to be " +
-          "correct on every file and must not be used in production. When true, the reader " +
-          "bypasses parquet-mr: it parses only the footer, prunes row groups with the hybrid " +
-          "scan reader, and reads only the column chunk byte ranges the read needs. It applies " +
-          "only to non-chunked reads of Spark's Parquet source, not Delta, with the PERFILE or " +
-          "MULTITHREADED reader type, or AUTO when it picks MULTITHREADED for cloud files; any " +
+          "correct on every file and must not be used in production. When " +
+          "true, the reader bypasses parquet-mr: it parses only the footer, prunes row groups " +
+          "with the hybrid scan reader, and reads only the column chunk byte ranges the read " +
+          "needs. It applies only to non-chunked reads of a schema it handles from Spark's " +
+          "Parquet source, not Delta, with the PERFILE or MULTITHREADED reader type, or AUTO " +
+          "when it picks MULTITHREADED for cloud files; any " +
           "other read falls back to the parquet-mr path.")
       .internal()
       .booleanConf
@@ -568,6 +569,67 @@ private[rapids] trait RapidsConfSqlEntries extends RapidsConfResourceEntries {
       .doubleConf
       .checkValue(v => v > 0 && v <= 1, "The keep threshold must be in the range (0, 1].")
       .createWithDefault(0.9)
+
+  val READER_GPU_DIRECT_STORAGE_MODE =
+    conf("spark.rapids.sql.reader.gpuDirectStorage.mode")
+      .doc("How readers of local files use GPUDirect Storage. OFF reads through host memory. " +
+          "ALWAYS reads straight to device memory where GPUDirect Storage can open the file, " +
+          "waiting for the GPU semaphore first, since the read writes to the device. " +
+          "WHEN_SEMAPHORE_FREE does the same when the task holds the semaphore or can take it " +
+          "without waiting, and otherwise reads through host memory while it waits. Files " +
+          "GPUDirect Storage cannot open are read through host memory in either mode. cuFile " +
+          "may still stage reads through host memory if it falls back to its own compatibility " +
+          "mode, unreported, unless the executors set CUFILE_ALLOW_COMPAT_MODE=false (e.g. with " +
+          "spark.executorEnv.CUFILE_ALLOW_COMPAT_MODE=false). For details of how cuFile did " +
+          "the reads, set CUFILE_STATS_LEVEL=3 on the executors and see cuFile's gds_stats " +
+          "tool. Only the Parquet hybrid scan " +
+          s"reader (${PARQUET_HYBRID_SCAN_ENABLED.key}) supports it so far. Whether it is OFF " +
+          "is read once per executor at startup, in place of the KVIKIO_COMPAT_MODE " +
+          "environment variable, so turning it on later reads through host memory; the choice " +
+          "between ALWAYS and WHEN_SEMAPHORE_FREE can change per session.")
+      .internal()
+      .stringConf
+      .transform(_.toUpperCase(java.util.Locale.ROOT))
+      .checkValues(Set("OFF", "ALWAYS", "WHEN_SEMAPHORE_FREE"))
+      .createWithDefault("OFF")
+
+  val READER_KVIKIO_NUM_THREADS =
+    conf("spark.rapids.sql.reader.kvikio.numThreads")
+      .doc("The number of threads in each executor's KvikIO thread pool, which the Parquet " +
+          s"hybrid scan reader (${PARQUET_HYBRID_SCAN_ENABLED.key}) splits each read of a " +
+          "local file across, with or without GPUDirect Storage. Set once per executor at " +
+          "startup, in place of the KVIKIO_NTHREADS environment " +
+          "variable, which is ignored when the hybrid scan reader is enabled.")
+      .startupOnly()
+      .internal()
+      .integerConf
+      .checkValue(v => v > 0, "KvikIO needs at least 1 thread.")
+      .createWithDefault(4)
+
+  val PARQUET_HYBRID_SCAN_MAX_H2D_PACK_SIZE =
+    conf("spark.rapids.sql.format.parquet.hybridScan.maxH2DPackSize")
+      .doc("Most bytes of column chunks a hybrid scan read packs into one device allocation when " +
+          "copying them to the device. Packing many chunks into one allocation saves allocations " +
+          "and copies, but past some size it saves nothing more while needing an ever larger " +
+          "contiguous block of free device memory; a chunk larger than this gets an allocation " +
+          "of its own. If an allocation fails, the copy is retried with half this size, down to " +
+          "spark.rapids.sql.format.parquet.hybridScan.minH2DPackSize. " +
+          s"Only used when ${PARQUET_HYBRID_SCAN_ENABLED.key} is true.")
+      .internal()
+      .bytesConf(ByteUnit.BYTE)
+      .checkValue(v => v > 0, "The maximum H2D pack size must be positive")
+      .createWithDefault(32L * 1024 * 1024)
+
+  val PARQUET_HYBRID_SCAN_MIN_H2D_PACK_SIZE =
+    conf("spark.rapids.sql.format.parquet.hybridScan.minH2DPackSize")
+      .doc("Smallest pack size a hybrid scan read's host-to-device copy is retried with after " +
+          s"failing to allocate; see ${PARQUET_HYBRID_SCAN_MAX_H2D_PACK_SIZE.key}, which it must " +
+          "not exceed. Halving it further fails the read instead. " +
+          s"Only used when ${PARQUET_HYBRID_SCAN_ENABLED.key} is true.")
+      .internal()
+      .bytesConf(ByteUnit.BYTE)
+      .checkValue(v => v > 0, "The minimum H2D pack size must be positive")
+      .createWithDefault(1024 * 1024)
 
   val PARQUET_DECOMPRESS_CPU =
     conf("spark.rapids.sql.format.parquet.decompressCpu")

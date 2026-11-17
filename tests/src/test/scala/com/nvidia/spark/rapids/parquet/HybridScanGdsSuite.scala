@@ -17,8 +17,8 @@
 package com.nvidia.spark.rapids.parquet
 
 import ai.rapids.cudf.ByteRange
-import com.nvidia.spark.rapids.GpuMetric
 import com.nvidia.spark.rapids.Arm.withResource
+import com.nvidia.spark.rapids.GpuMetric
 import com.nvidia.spark.rapids.jni.NativeFileSource
 import org.scalatest.{BeforeAndAfterAll, Canceled, Outcome}
 

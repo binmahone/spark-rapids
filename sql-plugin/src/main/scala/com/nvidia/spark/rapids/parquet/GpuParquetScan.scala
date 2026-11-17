@@ -378,7 +378,7 @@ object GpuParquetScan {
     }
 
     ranges.foreach { c =>
-      if (c.getInputOffset == currentRangeEnd) {
+      if (currentRange != null && c.getInputOffset == currentRangeEnd) {
         currentRangeEnd += c.getLength
       } else {
         addCurrentRange()

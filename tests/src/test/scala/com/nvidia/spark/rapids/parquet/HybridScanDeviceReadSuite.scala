@@ -43,7 +43,9 @@ class HybridScanDeviceReadSuite extends SparkQueryCompareTestSuite {
   private val fileIO = new HadoopFileIO(new Configuration())
 
   private def newMetrics(): Map[String, GpuMetric] = Map[String, GpuMetric](
-    GpuMetric.HYBRID_SCAN_DEVICE_BYTES_READ -> new LocalGpuMetric).withDefault(_ => NoopMetric)
+    GpuMetric.HYBRID_SCAN_DEVICE_BYTES_READ -> new LocalGpuMetric,
+    GpuMetric.HYBRID_SCAN_NATIVE_HOST_BYTES_READ -> new LocalGpuMetric)
+    .withDefault(_ => NoopMetric)
 
   /** A native reader that reports every read as `direct` or not, and counts its reads. */
   private class CountingReader(path: Path, metrics: Map[String, GpuMetric], direct: Boolean)
@@ -243,12 +245,18 @@ class HybridScanDeviceReadSuite extends SparkQueryCompareTestSuite {
             batch.foreach(TestUtils.compareBatches(hostBatch.get, _))
           }
         }
+        val deviceBytes = metrics(GpuMetric.HYBRID_SCAN_DEVICE_BYTES_READ).value
+        val nativeHostBytes = metrics(GpuMetric.HYBRID_SCAN_NATIVE_HOST_BYTES_READ).value
         if (direct && mode.gdsMode != GpuDirectStorageMode.OFF) {
           assert(rangeReader.deviceReads == filterCase.deviceReads)
           assert(rangeReader.hostReads == 0)
+          assert(deviceBytes > 0)
+          assert(nativeHostBytes == 0)
         } else {
           assert(rangeReader.deviceReads == 0)
           assert(rangeReader.hostReads > 0)
+          assert(deviceBytes == 0)
+          assert(nativeHostBytes > 0)
         }
       }
     }

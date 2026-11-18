@@ -1630,11 +1630,11 @@ case class GpuParquetMultiFilePartitionReaderFactory(
           filterHandler.readThriftFooter(fileIO, filePath, fileConf)
         }
       }
-      // Not GDS: the pool threads plan and fetch, and must not take the GPU semaphore.
+      // GDS payload reads are deferred to the task thread under the GPU semaphore policy.
       new HybridScanMultithreadedParquetPartitionReader(fileIO, conf, files,
         HybridScanContext(readDataSchema, config.filters, config.filterKeepThreshold,
           config.maxH2DPackSize, config.minH2DPackSize, execMetrics,
-          RapidsConf.GpuDirectStorageMode.OFF),
+          config.gdsMode),
         readFooter,
         maxReadBatchSizeRows = maxReadBatchSizeRows,
         maxReadBatchSizeBytes = maxReadBatchSizeBytes,

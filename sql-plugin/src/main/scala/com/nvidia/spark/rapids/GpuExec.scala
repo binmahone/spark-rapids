@@ -190,10 +190,10 @@ trait GpuExec extends SparkPlan with Logging {
   }
 
   protected def createParquetRowGroupMetrics(): Map[String, GpuMetric] = {
-    val rowGroupsRead = Map(
-      ROW_GROUPS_READ -> createMetric(MODERATE_LEVEL, DESCRIPTION_ROW_GROUPS_READ))
+    val rowGroupsFetched = Map(
+      ROW_GROUPS_FETCHED -> createMetric(MODERATE_LEVEL, DESCRIPTION_ROW_GROUPS_FETCHED))
     if (RapidsConf.PARQUET_HYBRID_SCAN_ENABLED.get(conf)) {
-      rowGroupsRead ++ Map(
+      rowGroupsFetched ++ Map(
         HYBRID_SCAN_SPLITS -> createMetric(MODERATE_LEVEL, DESCRIPTION_HYBRID_SCAN_SPLITS),
         ROW_GROUPS_IN_INPUT -> createMetric(DEBUG_LEVEL, DESCRIPTION_ROW_GROUPS_IN_INPUT),
         ROW_GROUPS_PRUNED_BY_STATS -> createMetric(DEBUG_LEVEL,
@@ -206,12 +206,12 @@ trait GpuExec extends SparkPlan with Logging {
         // threshold of 1 the pushed filter runs during decode and is timed there.
         HYBRID_SCAN_OUTPUT_FILTER_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
           DESCRIPTION_HYBRID_SCAN_OUTPUT_FILTER_TIME),
-        HYBRID_SCAN_BYTES_READ -> createSizeMetric(MODERATE_LEVEL,
-          DESCRIPTION_HYBRID_SCAN_BYTES_READ),
+        HYBRID_SCAN_BYTES_REQUESTED -> createSizeMetric(MODERATE_LEVEL,
+          DESCRIPTION_HYBRID_SCAN_BYTES_REQUESTED),
         HYBRID_SCAN_NATIVE_HOST_BYTES_READ -> createSizeMetric(MODERATE_LEVEL,
           DESCRIPTION_HYBRID_SCAN_NATIVE_HOST_BYTES_READ))
     } else {
-      rowGroupsRead
+      rowGroupsFetched
     }
   }
 

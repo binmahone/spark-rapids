@@ -74,16 +74,11 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
 
   private val parquetOptions =
     HybridScanPipeline.parquetOptions(context.readDataSchema.fieldNames)
-  // The base reader already splits the task's wait for each file into filter and buffer time, so
-  // the pipeline's pool-thread timings of the same work would count it twice.
-  private val pipelineMetrics = context.execMetrics -- Seq(FILTER_TIME, BUFFER_TIME)
-  private val pipeline = new HybridScanPipeline(context.copy(execMetrics = pipelineMetrics))
+  private val pipeline = new HybridScanPipeline(context)
   private val filterTime = context.execMetrics.getOrElse(FILTER_TIME, NoopMetric)
   private val bufferTime = context.execMetrics.getOrElse(BUFFER_TIME, NoopMetric)
-  private val footerParseTime =
-    context.execMetrics.getOrElse(HYBRID_SCAN_FOOTER_PARSE_TIME, NoopMetric)
 
-  /** A pool thread's result, with what the pool thread counted for the task thread to add. */
+  /** A pool thread's result, with its partial metric counts for the task thread to add. */
   private trait HybridResult extends HostMemoryBuffersWithMetaDataBase {
     var runnerCounts: Map[String, Long] = Map.empty
 
@@ -408,8 +403,10 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
       context.scanFilters.ast.map(HybridScanPipeline.compileFilter)
     }
     withResource(ast) { _ =>
+      // A second parse of this footer, added to the pool thread's parse time.
       val parsed = closeOnExcept(fetched)(_ => HybridScanPipeline.openReader(footer,
-        parquetOptions, footerParseTime))
+        parquetOptions,
+        context.execMetrics.getOrElse(HYBRID_SCAN_FOOTER_PARSE_TIME, NoopMetric)))
       withResource(parsed) { reader =>
         // After the wait the base reader times, so this is filter time it never counted.
         val pruned = filterTime.ns {

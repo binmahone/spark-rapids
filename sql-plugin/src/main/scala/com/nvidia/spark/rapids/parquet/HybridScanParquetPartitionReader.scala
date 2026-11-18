@@ -172,18 +172,20 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
       }
       None
     } else {
+      // A MULTITHREADED pool thread can't take the GPU semaphore that dictionary pruning needs, so
+      // it fetches before the task prunes and this can count more row groups than PERFILE does.
+      addToMetric(ROW_GROUPS_FETCHED, rowGroups.length)
       setDecodeFilter(reader, ast)
       val ranges = NvtxRegistry.HYBRID_SCAN_GET_BYTE_RANGES {
         reader.allColumnChunksByteRanges(rowGroups)
       }
+      addToMetric(HYBRID_SCAN_BYTES_REQUESTED, totalBytes(ranges))
       // Checked before any release, so a device read keeps the GPU semaphore the dictionary
       // compare took rather than releasing it and waiting for it again.
       if (useDeviceRead(split.source, ranges)) {
         Some(new FetchedColumnChunks(rowGroups, Array.empty,
           deviceFetch = Some(DeviceFetch(split.source, ranges))))
       } else {
-        addToMetric(ROW_GROUPS_READ, rowGroups.length)
-        addToMetric(HYBRID_SCAN_BYTES_READ, totalBytes(ranges))
         if (releaseSemaphoreBeforeHostFetch) {
           // Leaving the GPU for a while: reading the column chunks the pruning selected is the
           // longest IO of the read.
@@ -235,7 +237,7 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
       SelectedRowGroups(inSplit, releaseSemaphoreBeforeHostFetch = false)
     } else {
       // Runs on the GPU without the semaphore, as it exists to bound large allocations. This
-      // only allocates a few bytes per row group and frees them before returning. 
+      // only allocates a few bytes per row group and frees them before returning.
       // The retry covers an OOM when other tasks have filled the GPU.
       val afterStats = NvtxRegistry.HYBRID_SCAN_FILTER_STATS {
         withRetryNoSplit[Array[Int]] {
@@ -255,7 +257,7 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
       } else {
         NvtxRegistry.HYBRID_SCAN_FILTER_DICT {
           filterRowGroupsWithDictionaries(reader, afterStats, { dictRanges =>
-            addToMetric(HYBRID_SCAN_BYTES_READ, totalBytes(dictRanges))
+            addToMetric(HYBRID_SCAN_BYTES_REQUESTED, totalBytes(dictRanges))
             compareDictionaryPagesFromFile(split.source, reader, afterStats, dictRanges)
           })
         }
@@ -394,7 +396,7 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
       dictRanges: Array[ByteRange]): SelectedRowGroups = fetched.deviceFetch match {
     // Chunks not read yet: read just the dictionary pages from the file.
     case Some(deviceFetch) =>
-      addToMetric(HYBRID_SCAN_BYTES_READ, totalBytes(dictRanges))
+      addToMetric(HYBRID_SCAN_BYTES_REQUESTED, totalBytes(dictRanges))
       compareDictionaryPagesFromFile(deviceFetch.source, reader, fetched.rowGroups, dictRanges)
     // Chunks already in host memory: each dictionary page is the start of its chunk.
     case None =>
@@ -552,8 +554,9 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
       reader: HybridScanReader,
       fetched: FetchedColumnChunks): Table = {
     GpuSemaphore.acquireIfNecessary(TaskContext.get())
-    NvtxIdWithMetrics(NvtxRegistry.HYBRID_SCAN_MATERIALIZE, metric(GPU_DECODE_TIME)) {
-      withStagedOnDevice(fetched.hostChunks) { chunks =>
+    // Timed inside the staging, so the decode time leaves out the copies and retry waits.
+    withStagedOnDevice(fetched.hostChunks) { chunks =>
+      NvtxIdWithMetrics(NvtxRegistry.HYBRID_SCAN_MATERIALIZE, metric(GPU_DECODE_TIME)) {
         reader.materializeAllColumns(fetched.rowGroups, chunks)
       }
     }
@@ -567,9 +570,6 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
       reader: HybridScanReader,
       rowGroups: Array[Int],
       deviceFetch: DeviceFetch): Table = {
-    // Counted here rather than when planned: a MULTITHREADED task may prune the plan first.
-    addToMetric(ROW_GROUPS_READ, rowGroups.length)
-    addToMetric(HYBRID_SCAN_BYTES_READ, totalBytes(deviceFetch.ranges))
     GpuSemaphore.acquireIfNecessary(TaskContext.get())
     // The device chunks do not outlive an attempt, so a retry reads them from the file again.
     withRetryNoSplit[Table] {

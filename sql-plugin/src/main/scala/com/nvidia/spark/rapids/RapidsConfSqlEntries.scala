@@ -576,13 +576,18 @@ private[rapids] trait RapidsConfSqlEntries extends RapidsConfResourceEntries {
           "waiting for the GPU semaphore first, since the read writes to the device. " +
           "WHEN_SEMAPHORE_FREE does the same when the task holds the semaphore or can take it " +
           "without waiting, and otherwise reads through host memory while it waits. Files " +
-          "GPUDirect Storage cannot open are read through host memory in either mode. cuFile " +
-          "may still stage reads through host memory if it falls back to its own compatibility " +
-          "mode, unreported, unless the executors set CUFILE_ALLOW_COMPAT_MODE=false (e.g. with " +
+          "GPUDirect Storage cannot open are read through host memory in either mode. Reads " +
+          "straight to device memory skip the file cache (spark.rapids.filecache.enabled), " +
+          "neither reading from it nor adding to it; reads through host memory use it as " +
+          "usual. cuFile may still stage reads through host memory if it falls back to its own " +
+          "compatibility mode, unreported, unless the executors set " +
+          "CUFILE_ALLOW_COMPAT_MODE=false (e.g. with " +
           "spark.executorEnv.CUFILE_ALLOW_COMPAT_MODE=false). For details of how cuFile did " +
           "the reads, set CUFILE_STATS_LEVEL=3 on the executors and see cuFile's gds_stats " +
           "tool. Only the Parquet hybrid scan " +
-          s"reader (${PARQUET_HYBRID_SCAN_ENABLED.key}) supports it so far. Whether it is OFF " +
+          s"reader (${PARQUET_HYBRID_SCAN_ENABLED.key}) supports it so far, and with the " +
+          "MULTITHREADED reader type only in ALWAYS mode: WHEN_SEMAPHORE_FREE reads through " +
+          "host memory there. Whether it is OFF " +
           "is read once per executor at startup, in place of the KVIKIO_COMPAT_MODE " +
           "environment variable, so turning it on later reads through host memory; the choice " +
           "between ALWAYS and WHEN_SEMAPHORE_FREE can change per session.")

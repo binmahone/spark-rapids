@@ -172,18 +172,18 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
       }
       None
     } else {
-      addToMetric(ROW_GROUPS_READ, rowGroups.length)
       setDecodeFilter(reader, ast)
       val ranges = NvtxRegistry.HYBRID_SCAN_GET_BYTE_RANGES {
         reader.allColumnChunksByteRanges(rowGroups)
       }
-      addToMetric(HYBRID_SCAN_BYTES_READ, totalBytes(ranges))
       // Checked before any release, so a device read keeps the GPU semaphore the dictionary
       // compare took rather than releasing it and waiting for it again.
       if (useDeviceRead(split.source, ranges)) {
         Some(new FetchedColumnChunks(rowGroups, Array.empty,
           deviceFetch = Some(DeviceFetch(split.source, ranges))))
       } else {
+        addToMetric(ROW_GROUPS_READ, rowGroups.length)
+        addToMetric(HYBRID_SCAN_BYTES_READ, totalBytes(ranges))
         if (releaseSemaphoreBeforeHostFetch) {
           // Leaving the GPU for a while: reading the column chunks the pruning selected is the
           // longest IO of the read.
@@ -320,8 +320,8 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
 
   /**
    * `compareDictPages` gets the dictionary pages for the ranges the reader asks for and compares
-   * them: read from the file by a single-threaded read, sliced from the fetched chunks by a
-   * `MULTITHREADED` task.
+   * them: sliced from the fetched chunks when a `MULTITHREADED` pool thread read those to host
+   * memory, and read from the file otherwise.
    */
   private def filterRowGroupsWithDictionaries(
       reader: HybridScanReader,
@@ -347,9 +347,11 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
   /**
    * Prune already-fetched chunks to the row groups the filter's dictionaries cannot rule out,
    * slicing the dictionary pages out of the chunks rather than reading them again. The pruned row
-   * groups' IO is already spent, but their device copy and decode are saved. Takes `fetched` and
-   * returns what to decode: `fetched` itself when nothing is pruned, the surviving chunks when
-   * some are, or None when no row group survives.
+   * groups' IO is already spent, but their device copy and decode are saved. Chunks left unread
+   * for the device have no pages to slice, so their dictionary pages are read from the file and
+   * the pruned row groups are never read. Takes `fetched` and returns what to decode: `fetched`
+   * itself when nothing is pruned, the surviving chunks when some are, or None when no row group
+   * survives.
    */
   def pruneFetchedWithDictionaries(
       reader: HybridScanReader,
@@ -357,29 +359,69 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
       fetched: FetchedColumnChunks): Option[FetchedColumnChunks] = {
     if (ast.isEmpty ||
         !scanFilters.pushed.exists(FilterToAstConverter.canPruneWithDictionary)) {
+      // No filter, or none a dictionary can decide: decode everything that was fetched.
       Some(fetched)
     } else {
-      val survivors = closeOnExcept(fetched) { f =>
-        ast.foreach(reader.setFilter)
-        NvtxRegistry.HYBRID_SCAN_FILTER_DICT {
-          filterRowGroupsWithDictionaries(reader, f.rowGroups, { dictRanges =>
-            val kept = withResource(
-                sliceDictPagesFromChunks(reader, f.rowGroups, f.hostChunks, dictRanges)) { pages =>
-              compareDictionaryPages(reader, f.rowGroups, pages)
-            }
-            // Kept after the compare: the chunks are already fetched, so the decode comes next.
-            SelectedRowGroups(kept, releaseSemaphoreBeforeHostFetch = false)
-          }).rowGroups
-        }
-      }
+      val survivors = closeOnExcept(fetched)(dictionarySurvivors(reader, ast, _))
+      // Nothing pruned: hand back `fetched` unchanged.
       if (survivors.length == fetched.rowGroups.length) {
         Some(fetched)
       } else {
-        withResource(fetched) { f =>
-          if (survivors.isEmpty) None else Some(selectSurvivingChunks(f, survivors))
-        }
+        // Some pruned: `fetched` is replaced, so it is closed here.
+        withResource(fetched)(keepSurvivors(reader, ast, _, survivors))
       }
     }
+  }
+
+  /** The row groups of `fetched` whose dictionaries do not rule out the filter. */
+  private def dictionarySurvivors(
+      reader: HybridScanReader,
+      ast: Option[CompiledExpression],
+      fetched: FetchedColumnChunks): Array[Int] = {
+    // The dictionary filter, replaced by the decode filter before any chunks are decoded.
+    ast.foreach(reader.setFilter)
+    NvtxRegistry.HYBRID_SCAN_FILTER_DICT {
+      // Called only when some row group has dictionary pages to compare.
+      filterRowGroupsWithDictionaries(reader, fetched.rowGroups,
+        compareFetchedDictionaryPages(reader, fetched, _)).rowGroups
+    }
+  }
+
+  /** Compare the dictionary pages at `dictRanges`, taken from wherever `fetched` has them. */
+  private def compareFetchedDictionaryPages(
+      reader: HybridScanReader,
+      fetched: FetchedColumnChunks,
+      dictRanges: Array[ByteRange]): SelectedRowGroups = fetched.deviceFetch match {
+    // Chunks not read yet: read just the dictionary pages from the file.
+    case Some(deviceFetch) =>
+      addToMetric(HYBRID_SCAN_BYTES_READ, totalBytes(dictRanges))
+      compareDictionaryPagesFromFile(deviceFetch.source, reader, fetched.rowGroups, dictRanges)
+    // Chunks already in host memory: each dictionary page is the start of its chunk.
+    case None =>
+      val kept = withResource(sliceDictPagesFromChunks(reader, fetched.rowGroups,
+          fetched.hostChunks, dictRanges)) { pages =>
+        compareDictionaryPages(reader, fetched.rowGroups, pages)
+      }
+      // Kept after the compare: the chunks are already fetched, so the decode is next.
+      SelectedRowGroups(kept, releaseSemaphoreBeforeHostFetch = false)
+  }
+
+  /** What is left of `fetched` to decode once pruned to `survivors`; `fetched` stays open. */
+  private def keepSurvivors(
+      reader: HybridScanReader,
+      ast: Option[CompiledExpression],
+      fetched: FetchedColumnChunks,
+      survivors: Array[Int]): Option[FetchedColumnChunks] = fetched.deviceFetch match {
+    // Every row group pruned: nothing to decode.
+    case _ if survivors.isEmpty => None
+    // Still unread: plan device reads of only the survivors' chunks.
+    case Some(deviceFetch) =>
+      // Smaller once pruned, so KvikIO may stage some reads through host memory itself.
+      setDecodeFilter(reader, ast)
+      Some(new FetchedColumnChunks(survivors, Array.empty, deviceFetch = Some(
+        DeviceFetch(deviceFetch.source, reader.allColumnChunksByteRanges(survivors)))))
+    // Already in host memory: keep only the survivors' chunk buffers.
+    case None => Some(selectSurvivingChunks(fetched, survivors))
   }
 
   /**
@@ -525,6 +567,9 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
       reader: HybridScanReader,
       rowGroups: Array[Int],
       deviceFetch: DeviceFetch): Table = {
+    // Counted here rather than when planned: a MULTITHREADED task may prune the plan first.
+    addToMetric(ROW_GROUPS_READ, rowGroups.length)
+    addToMetric(HYBRID_SCAN_BYTES_READ, totalBytes(deviceFetch.ranges))
     GpuSemaphore.acquireIfNecessary(TaskContext.get())
     // The device chunks do not outlive an attempt, so a retry reads them from the file again.
     withRetryNoSplit[Table] {

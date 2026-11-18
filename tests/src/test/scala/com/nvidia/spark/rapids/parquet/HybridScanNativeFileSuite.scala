@@ -26,7 +26,7 @@ import ai.rapids.cudf.{ByteRange, HostMemoryBuffer}
 import com.nvidia.spark.rapids.{GpuMetric, LocalGpuMetric, RmmSparkRetrySuiteBase}
 import com.nvidia.spark.rapids.Arm.withResource
 import com.nvidia.spark.rapids.fileio.hadoop.HadoopFileIO
-import com.nvidia.spark.rapids.jni.RmmSpark
+import com.nvidia.spark.rapids.jni.{NativeFileSource, RmmSpark}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 
@@ -154,8 +154,8 @@ class HybridScanNativeFileSuite extends RmmSparkRetrySuiteBase {
     try {
       val metrics = newMetrics()
       val fileIO = new HadoopFileIO(new Configuration())
-      val source =
-        HybridScanMultithreadedParquetPartitionReader.createFileSource(fileIO, path, metrics)
+      val source = HybridScanMultithreadedParquetPartitionReader.createFileSource(fileIO, path,
+        metrics, gdsEnabled = false)
       withResource(source) { _ =>
         assert(source.rangeReader.isInstanceOf[NativeFileRangeReader])
         assert(!source.isDeviceReadDirect(ranges))
@@ -211,6 +211,25 @@ class HybridScanNativeFileSuite extends RmmSparkRetrySuiteBase {
       val expectedBytes = HybridScanPipeline.deviceBufferLayout(ranges, FILE_SIZE).reads
         .map(_.getLength).sum
       assert(metrics(GpuMetric.HYBRID_SCAN_DEVICE_BYTES_READ).value == expectedBytes)
+    }
+  }
+
+  test("a file KvikIO does not open for GPUDirect Storage is counted once and read on the host") {
+    withLocalFile() { path =>
+      val openedForGds = withResource(NativeFileSource.open(path.toUri.getPath)) {
+        _.isDeviceReadDirect(Long.MaxValue)
+      }
+      assume(!openedForGds, "KvikIO opens files for GPUDirect Storage here")
+      val metrics = newMetrics()
+      withResource(nativeSource(path, metrics, gdsEnabled = true)) { source =>
+        assert(!source.isDeviceReadDirect(ranges))
+        assert(!source.isDeviceReadDirect(ranges))
+        withResource(source.fetch(ranges)) { buffers =>
+          ranges.zip(buffers).foreach { case (range, buffer) => assertHoldsRange(buffer, range) }
+        }
+      }
+      assert(metrics(GpuMetric.HYBRID_SCAN_GDS_FALLBACK_FILES).value == 1)
+      assert(metrics(GpuMetric.HYBRID_SCAN_DEVICE_BYTES_READ).value == 0)
     }
   }
 

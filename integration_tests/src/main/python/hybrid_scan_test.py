@@ -604,12 +604,11 @@ def test_hybrid_scan_multithreaded_all_files_pruned(spark_tmp_path):
         conf=hybrid_mt_conf())
 
 
-@pytest.mark.parametrize('gds_mode', ['OFF', 'ALWAYS', 'WHEN_SEMAPHORE_FREE'])
+@pytest.mark.parametrize('gds_mode', ['OFF', 'WHEN_SEMAPHORE_FREE'])
 def test_hybrid_scan_multithreaded_reads_to_host(spark_tmp_path, gds_mode):
-    """MULTITHREADED fetches on pool threads, which can't take the GPU semaphore a device read
-    needs, so whatever the GPUDirect Storage mode every file is read to host memory: nothing is
-    read to the device and no file counts as a GPUDirect Storage fallback. A local file's chunks
-    are all read with KvikIO, and any other file's with none."""
+    """MULTITHREADED reads to the device only in ALWAYS mode, so in these modes every file is read
+    to host memory: nothing is read to the device and no file counts as a GPUDirect Storage
+    fallback. A local file's chunks are all read with KvikIO, and any other file's with none."""
     def check(cpu_plan, gpu_plan):
         scan = [node for node in collect_plan_nodes(gpu_plan)
                 if node.getClass().getSimpleName() == 'GpuFileSourceScanExec'][0]
@@ -639,6 +638,30 @@ def test_hybrid_scan_multithreaded_reads_to_host(spark_tmp_path, gds_mode):
         lambda spark: spark.read.parquet(data_path).filter('filter_int = 7'),
         conf=hybrid_mt_conf(**_pruning_metrics_conf,
                             **{'spark.rapids.sql.reader.gpuDirectStorage.mode': gds_mode}),
+        gpu_plan_assertion=check)
+
+
+@pytest.mark.parametrize('where', [
+    'sorted_int < 500',
+    'filter_int = 7',
+    "filter_str = 'key_500'",
+], ids=['stats', 'dict', 'none_survive_dict'])
+def test_hybrid_scan_multithreaded_gds_always(spark_tmp_path, where):
+    """In ALWAYS mode the task thread reads a file's chunks to the device where KvikIO can, after
+    pruning with dictionary pages read from the file, and a pool thread reads the rest to host
+    memory. Which way these small files go depends on the machine and KvikIO's GPUDirect Storage
+    threshold, but the answer is the same either way."""
+    def check(cpu_plan, gpu_plan):
+        scan = [node for node in collect_plan_nodes(gpu_plan)
+                if node.getClass().getSimpleName() == 'GpuFileSourceScanExec'][0]
+        assert plan_metric(scan, 'hybridScanSplits') > 0, 'the hybrid reader did not run'
+
+    data_path = spark_tmp_path + '/HYBRID_SCAN_DATA'
+    with_cpu_session(lambda spark: write_test_data(spark, data_path, files=4))
+    assert_cpu_and_gpu_are_equal_collect_with_capture(
+        lambda spark: spark.read.parquet(data_path).filter(where),
+        conf=hybrid_mt_conf(**_pruning_metrics_conf,
+                            **{'spark.rapids.sql.reader.gpuDirectStorage.mode': 'ALWAYS'}),
         gpu_plan_assertion=check)
 
 

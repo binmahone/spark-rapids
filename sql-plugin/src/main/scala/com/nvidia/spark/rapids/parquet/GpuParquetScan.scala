@@ -1630,11 +1630,15 @@ case class GpuParquetMultiFilePartitionReaderFactory(
           filterHandler.readThriftFooter(fileIO, filePath, fileConf)
         }
       }
-      // Not GDS: the pool threads plan and fetch, and must not take the GPU semaphore.
+      // WHEN_SEMAPHORE_FREE is not supported yet, so it reads through host memory.
+      val gdsMode = if (config.gdsMode == RapidsConf.GpuDirectStorageMode.ALWAYS) {
+        RapidsConf.GpuDirectStorageMode.ALWAYS
+      } else {
+        RapidsConf.GpuDirectStorageMode.OFF
+      }
       new HybridScanMultithreadedParquetPartitionReader(fileIO, conf, files,
         HybridScanContext(readDataSchema, config.filters, config.filterKeepThreshold,
-          config.maxH2DPackSize, config.minH2DPackSize, execMetrics,
-          RapidsConf.GpuDirectStorageMode.OFF),
+          config.maxH2DPackSize, config.minH2DPackSize, execMetrics, gdsMode),
         readFooter,
         maxReadBatchSizeRows = maxReadBatchSizeRows,
         maxReadBatchSizeBytes = maxReadBatchSizeBytes,

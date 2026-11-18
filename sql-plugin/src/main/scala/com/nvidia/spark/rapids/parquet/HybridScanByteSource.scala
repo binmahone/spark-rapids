@@ -96,9 +96,6 @@ private[parquet] class HybridScanFileByteSource(
     execMetrics: Map[String, GpuMetric],
     val rangeReader: HybridScanRangeReader) extends HybridScanByteSource {
 
-  def this(fileIO: RapidsFileIO, filePath: Path, execMetrics: Map[String, GpuMetric]) =
-    this(fileIO, filePath, execMetrics, new RapidsFileIORangeReader(execMetrics))
-
   override def fetchToHostBuffer(
       ranges: Array[ByteRange],
       layout: HostBufferLayout): HostMemoryBuffer = {
@@ -197,23 +194,27 @@ private[parquet] class HybridScanFileByteSource(
   override def close(): Unit = rangeReader.close()
 }
 
-private[parquet] object HybridScanFileByteSource {
-  /** A source for `filePath`, read natively if it is a local file and through `fileIO` if not. */
-  def forFile(
-      fileIO: RapidsFileIO,
+private[parquet] object HybridScanFileByteSource extends Logging {
+  /** The range reader for `filePath`: native if it is a local file, Hadoop if not. */
+  def createRangeReader(
       filePath: Path,
       execMetrics: Map[String, GpuMetric],
-      gdsEnabled: Boolean): HybridScanFileByteSource = {
+      gdsEnabled: Boolean): HybridScanRangeReader = {
     if (NativeFileRangeReader.canRead(filePath)) {
-      new HybridScanFileByteSource(fileIO, filePath, execMetrics,
-        new NativeFileRangeReader(filePath, execMetrics, gdsEnabled))
+      // Local file: KvikIO reads to host, and to device with GPUDirect Storage if gdsEnabled.
+      logDebug(s"Hybrid scan reads $filePath with KvikIO (GPUDirect Storage enabled: " +
+        s"$gdsEnabled)")
+      new NativeFileRangeReader(filePath, execMetrics, gdsEnabled)
     } else {
+      // GPUDirect Storage was requested but can't read this file, so count it as a fallback.
       if (gdsEnabled) {
         execMetrics.getOrElse(HYBRID_SCAN_GDS_FALLBACK_FILES, NoopMetric) += 1
         NativeFileRangeReader.logFallback(filePath,
           "only local file: paths, without a host, are read with GPUDirect Storage.")
       }
-      new HybridScanFileByteSource(fileIO, filePath, execMetrics)
+      // Any other filesystem: Hadoop reads to host; device reads stage through host memory.
+      logDebug(s"Hybrid scan reads $filePath through Hadoop")
+      new RapidsFileIORangeReader(execMetrics)
     }
   }
 }
@@ -293,6 +294,8 @@ private[parquet] class NativeFileRangeReader(
       file.readToHost(ranges.map(_.getInputOffset).toArray, ranges.map(_.getLength).toArray,
         buffer, ranges.map(_.getOutputOffset).toArray)
     }
+    execMetrics.getOrElse(HYBRID_SCAN_NATIVE_HOST_BYTES_READ, NoopMetric) +=
+      ranges.map(_.getLength).sum
   }
 
   override def isDeviceReadDirect(ranges: Array[ByteRange]): Boolean = gdsEnabled && {

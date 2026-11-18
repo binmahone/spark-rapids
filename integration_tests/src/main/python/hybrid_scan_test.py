@@ -26,7 +26,8 @@ from urllib.parse import urlparse
 
 from asserts import assert_cpu_and_gpu_are_equal_collect_with_capture, \
     assert_gpu_and_cpu_are_equal_collect, assert_gpu_and_cpu_error, \
-    assert_gpu_and_cpu_row_counts_equal, assert_spark_exception, collect_plan_nodes, plan_metric
+    assert_gpu_and_cpu_row_counts_equal, assert_metric_unset_or_zero, assert_spark_exception, \
+    collect_plan_nodes, plan_metric
 from conftest import is_databricks_runtime, is_not_utc
 from data_gen import *
 from marks import allow_non_gpu, inject_oom
@@ -601,6 +602,44 @@ def test_hybrid_scan_multithreaded_all_files_pruned(spark_tmp_path):
     assert_gpu_and_cpu_are_equal_collect(
         lambda spark: spark.read.parquet(data_path).filter('sorted_int < 0'),
         conf=hybrid_mt_conf())
+
+
+@pytest.mark.parametrize('gds_mode', ['OFF', 'ALWAYS', 'WHEN_SEMAPHORE_FREE'])
+def test_hybrid_scan_multithreaded_reads_to_host(spark_tmp_path, gds_mode):
+    """MULTITHREADED fetches on pool threads, which can't take the GPU semaphore a device read
+    needs, so whatever the GPUDirect Storage mode every file is read to host memory: nothing is
+    read to the device and no file counts as a GPUDirect Storage fallback. A local file's chunks
+    are all read with KvikIO, and any other file's with none."""
+    def check(cpu_plan, gpu_plan):
+        scan = [node for node in collect_plan_nodes(gpu_plan)
+                if node.getClass().getSimpleName() == 'GpuFileSourceScanExec'][0]
+        assert plan_metric(scan, 'hybridScanSplits') > 0, 'the hybrid reader did not run'
+        bytes_read = plan_metric(scan, 'hybridScanBytesRead')
+        assert bytes_read > 0, 'no column chunks were read'
+        # No dictionary page is fetched separately here, so for a local file the two count the
+        # same ranges.
+        native_bytes = plan_metric(scan, 'hybridScanNativeHostBytesRead')
+        if is_local:
+            assert native_bytes == bytes_read, \
+                'read {} bytes, {} of them with KvikIO'.format(bytes_read, native_bytes)
+        else:
+            assert native_bytes in (-1, 0), 'read {} bytes of a remote file with KvikIO'.format(
+                native_bytes)
+        for name in ['hybridScanDeviceBytesRead', 'hybridScanGdsFallbackFiles']:
+            if gds_mode == 'OFF':
+                assert plan_metric(scan, name) is None, '{} is registered with GDS off'.format(name)
+            else:
+                assert_metric_unset_or_zero(scan, name)
+
+    data_path = spark_tmp_path + '/HYBRID_SCAN_DATA'
+    with_cpu_session(lambda spark: write_test_data(spark, data_path, files=4))
+    is_local = with_cpu_session(lambda spark: all(
+        urlparse(f).scheme == 'file' for f in spark.read.parquet(data_path).inputFiles()))
+    assert_cpu_and_gpu_are_equal_collect_with_capture(
+        lambda spark: spark.read.parquet(data_path).filter('filter_int = 7'),
+        conf=hybrid_mt_conf(**_pruning_metrics_conf,
+                            **{'spark.rapids.sql.reader.gpuDirectStorage.mode': gds_mode}),
+        gpu_plan_assertion=check)
 
 
 @allow_non_gpu('CollectLimitExec')

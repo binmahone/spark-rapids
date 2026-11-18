@@ -17,11 +17,16 @@
 package com.nvidia.spark.rapids.parquet
 
 import java.nio.file.Files
+import java.util.concurrent.Executors
+
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.duration.Duration
 
 import ai.rapids.cudf.{ByteRange, HostMemoryBuffer}
 import com.nvidia.spark.rapids.{GpuMetric, LocalGpuMetric, RmmSparkRetrySuiteBase}
 import com.nvidia.spark.rapids.Arm.withResource
 import com.nvidia.spark.rapids.fileio.hadoop.HadoopFileIO
+import com.nvidia.spark.rapids.jni.RmmSpark
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 
@@ -52,6 +57,7 @@ class HybridScanNativeFileSuite extends RmmSparkRetrySuiteBase {
 
   protected def newMetrics(): Map[String, GpuMetric] = Map(
     GpuMetric.HYBRID_SCAN_DEVICE_BYTES_READ -> new LocalGpuMetric,
+    GpuMetric.HYBRID_SCAN_NATIVE_HOST_BYTES_READ -> new LocalGpuMetric,
     GpuMetric.HYBRID_SCAN_GDS_FALLBACK_FILES -> new LocalGpuMetric)
 
   protected def nativeSource(
@@ -71,6 +77,7 @@ class HybridScanNativeFileSuite extends RmmSparkRetrySuiteBase {
     new ByteRange(4000L, 200L),
     new ByteRange(300L, 0L),
     new ByteRange(FILE_SIZE - 300L, 300L))
+  private val rangesSize = ranges.map(_.size()).sum
 
   protected def assertHoldsRange(buffer: HostMemoryBuffer, range: ByteRange): Unit = {
     assert(buffer.getLength == range.size())
@@ -106,9 +113,9 @@ class HybridScanNativeFileSuite extends RmmSparkRetrySuiteBase {
   test("a temp file is read natively") {
     withLocalFile() { path =>
       assert(NativeFileRangeReader.canRead(path))
-      val fileIO = new HadoopFileIO(new Configuration())
-      withResource(HybridScanFileByteSource.forFile(fileIO, path, Map.empty, gdsEnabled = false)) {
-        source => assert(source.rangeReader.isInstanceOf[NativeFileRangeReader])
+      withResource(HybridScanFileByteSource.createRangeReader(path, Map.empty,
+          gdsEnabled = false)) { reader =>
+        assert(reader.isInstanceOf[NativeFileRangeReader])
       }
     }
   }
@@ -122,16 +129,55 @@ class HybridScanNativeFileSuite extends RmmSparkRetrySuiteBase {
           ranges.zip(buffers).foreach { case (range, buffer) => assertHoldsRange(buffer, range) }
         }
       }
+      assert(metrics(GpuMetric.HYBRID_SCAN_NATIVE_HOST_BYTES_READ).value == rangesSize)
       assert(metrics(GpuMetric.HYBRID_SCAN_GDS_FALLBACK_FILES).value == 0)
       assert(metrics(GpuMetric.HYBRID_SCAN_DEVICE_BYTES_READ).value == 0)
+    }
+  }
+
+  // The MULTITHREADED reader's pool threads each open a source this way, so KvikIO serves
+  // several files at once.
+  test("pool threads read local files natively, to host memory, at the same time") {
+    withLocalFile() { path =>
+      val pool = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(4))
+      try {
+        val reads = Seq.fill(8)(Future(readOnPoolThread(path))(pool))
+        reads.foreach(Await.result(_, Duration.Inf))
+      } finally {
+        pool.shutdown()
+      }
+    }
+  }
+
+  private def readOnPoolThread(path: Path): Unit = {
+    RmmSpark.poolThreadWorkingOnTask(1)
+    try {
+      val metrics = newMetrics()
+      val fileIO = new HadoopFileIO(new Configuration())
+      val source =
+        HybridScanMultithreadedParquetPartitionReader.createFileSource(fileIO, path, metrics)
+      withResource(source) { _ =>
+        assert(source.rangeReader.isInstanceOf[NativeFileRangeReader])
+        assert(!source.isDeviceReadDirect(ranges))
+        withResource(source.fetch(ranges)) { buffers =>
+          ranges.zip(buffers).foreach { case (range, buffer) => assertHoldsRange(buffer, range) }
+        }
+      }
+      assert(metrics(GpuMetric.HYBRID_SCAN_NATIVE_HOST_BYTES_READ).value == rangesSize)
+      assert(metrics(GpuMetric.HYBRID_SCAN_GDS_FALLBACK_FILES).value == 0)
+      assert(metrics(GpuMetric.HYBRID_SCAN_DEVICE_BYTES_READ).value == 0)
+    } finally {
+      RmmSpark.poolThreadFinishedForTask(1)
     }
   }
 
   test("KvikIO and RapidsFileIO read the same bytes to host memory") {
     withLocalFile() { path =>
       val fileIO = new HadoopFileIO(new Configuration())
+      val hadoopMetrics = newMetrics()
       withResource(nativeSource(path, Map.empty, gdsEnabled = false)) { native =>
-        withResource(new HybridScanFileByteSource(fileIO, path, Map.empty)) { hadoop =>
+        withResource(new HybridScanFileByteSource(fileIO, path, hadoopMetrics,
+            new RapidsFileIORangeReader(hadoopMetrics))) { hadoop =>
           withResource(native.fetch(ranges)) { nativeBuffers =>
             withResource(hadoop.fetch(ranges)) { hadoopBuffers =>
               nativeBuffers.zip(hadoopBuffers).zip(ranges).foreach { case ((n, h), range) =>
@@ -144,6 +190,7 @@ class HybridScanNativeFileSuite extends RmmSparkRetrySuiteBase {
           }
         }
       }
+      assert(hadoopMetrics(GpuMetric.HYBRID_SCAN_NATIVE_HOST_BYTES_READ).value == 0)
     }
   }
 

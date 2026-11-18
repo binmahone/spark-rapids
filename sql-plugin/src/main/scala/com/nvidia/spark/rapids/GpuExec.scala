@@ -207,7 +207,9 @@ trait GpuExec extends SparkPlan with Logging {
         HYBRID_SCAN_OUTPUT_FILTER_TIME -> createNanoTimingMetric(DEBUG_LEVEL,
           DESCRIPTION_HYBRID_SCAN_OUTPUT_FILTER_TIME),
         HYBRID_SCAN_BYTES_READ -> createSizeMetric(MODERATE_LEVEL,
-          DESCRIPTION_HYBRID_SCAN_BYTES_READ))
+          DESCRIPTION_HYBRID_SCAN_BYTES_READ),
+        HYBRID_SCAN_NATIVE_HOST_BYTES_READ -> createSizeMetric(MODERATE_LEVEL,
+          DESCRIPTION_HYBRID_SCAN_NATIVE_HOST_BYTES_READ))
     } else {
       rowGroupsRead
     }

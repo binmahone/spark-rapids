@@ -22,7 +22,7 @@ import java.net.URI
 import ai.rapids.cudf.{HostMemoryBuffer, Table}
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
-import com.nvidia.spark.rapids.GpuMetric.{BUFFER_TIME, FILTER_TIME, HYBRID_SCAN_FOOTER_PARSE_TIME}
+import com.nvidia.spark.rapids.GpuMetric.{BUFFER_TIME, FILTER_TIME, HYBRID_SCAN_FOOTER_PARSE_TIME, HYBRID_SCAN_NATIVE_HOST_BYTES_READ}
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.RmmRapidsRetryIterator.withRetryNoSplit
 import com.nvidia.spark.rapids.io.async.{AsyncMetrics, AsyncRunner, DecayReleaseResult, MemoryBoundedAsyncRunner}
@@ -155,8 +155,9 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
       file: PartitionedFile,
       metrics: Map[String, GpuMetric]): HybridScanSplit = {
     val filePath = new Path(new URI(file.filePath.toString()))
-    HybridScanSplit(new HybridScanFileByteSource(fileIO, filePath, metrics),
-      file.start, file.length)
+    val source =
+      HybridScanMultithreadedParquetPartitionReader.createFileSource(fileIO, filePath, metrics)
+    HybridScanSplit(source, file.start, file.length)
   }
 
   private class ReadBatchRunner(
@@ -215,7 +216,9 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
       val result: HybridResult = withResource(footer) { _ =>
         // A closed reader discards this result, so neither fetch for it nor hand it buffers.
         val planned = if (isDone) None else planAndFetchForPool(footer, runnerMetrics)
-        val bytesRead = fileSystemBytesRead() - startingBytesRead
+        // KvikIO reads bypass Hadoop's filesystem statistics.
+        val bytesRead = fileSystemBytesRead() - startingBytesRead +
+          runnerMetrics.get(HYBRID_SCAN_NATIVE_HOST_BYTES_READ).map(_.value).getOrElse(0L)
         planned match {
           case None => EmptyHybridFileResult(file, bytesRead)
           case Some((fetched, numRows)) =>
@@ -351,5 +354,17 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
         table
       }
     }
+  }
+}
+
+private[parquet] object HybridScanMultithreadedParquetPartitionReader {
+  /** The source a pool thread reads a file's column chunks from. */
+  def createFileSource(
+      fileIO: RapidsFileIO,
+      filePath: Path,
+      metrics: Map[String, GpuMetric]): HybridScanFileByteSource = {
+    // Host reads only: a device read needs the GPU semaphore, which a pool thread can't take.
+    new HybridScanFileByteSource(fileIO, filePath, metrics,
+      HybridScanFileByteSource.createRangeReader(filePath, metrics, gdsEnabled = false))
   }
 }

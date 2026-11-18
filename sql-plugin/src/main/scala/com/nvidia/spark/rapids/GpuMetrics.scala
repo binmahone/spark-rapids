@@ -150,6 +150,7 @@ object GpuMetric extends Logging {
   val HYBRID_SCAN_OUTPUT_FILTER_TIME = "hybridScanOutputFilterTime"
   val HYBRID_SCAN_BYTES_READ = "hybridScanBytesRead"
   val HYBRID_SCAN_DEVICE_BYTES_READ = "hybridScanDeviceBytesRead"
+  val HYBRID_SCAN_NATIVE_HOST_BYTES_READ = "hybridScanNativeHostBytesRead"
   val HYBRID_SCAN_GDS_FALLBACK_FILES = "hybridScanGdsFallbackFiles"
   val HYBRID_SCAN_GPU_BUSY_HOST_BYTES_READ = "hybridScanGpuBusyHostBytesRead"
   val DELETION_VECTOR_SCATTER_TIME = "deletionVectorScatterTime"
@@ -228,6 +229,7 @@ object GpuMetric extends Logging {
   val DESCRIPTION_HYBRID_SCAN_BYTES_READ = "hybrid scan bytes read, counting a dictionary " +
     "page fetched for pruning again with its column chunk"
   val DESCRIPTION_HYBRID_SCAN_DEVICE_BYTES_READ = "hybrid scan bytes read to device with GDS"
+  val DESCRIPTION_HYBRID_SCAN_NATIVE_HOST_BYTES_READ = "hybrid scan bytes read to host with KvikIO"
   val DESCRIPTION_HYBRID_SCAN_GDS_FALLBACK_FILES = "hybrid scan files read without GDS"
   val DESCRIPTION_HYBRID_SCAN_GPU_BUSY_HOST_BYTES_READ =
     "hybrid scan bytes read to host instead of with GDS while the GPU was busy"

@@ -121,30 +121,25 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
   private def metric(name: String): GpuMetric = execMetrics.getOrElse(name, NoopMetric)
 
   /**
-   * Whether to read `ranges` from `source` straight to the device rather than through host memory.
-   * Only where the source can. In ALWAYS mode the caller then waits for the semaphore. In
-   * WHEN_SEMAPHORE_FREE mode only if the task holds the semaphore or can take it without waiting,
-   * which takes it, so a task the GPU is busy for reads through host memory while it waits.
+   * Whether to read `ranges` from `source` straight to the device rather than through host
+   * memory, which only a source that can read them direct does. ALWAYS then waits for the GPU
+   * semaphore in the materialize phase. WHEN_SEMAPHORE_FREE takes the semaphore here if that needs
+   * no wait; if the GPU is busy it reads through host memory instead, and counts the bytes.
    * KvikIO reads into host memory with POSIX even on a file opened for cuFile, so a host read
    * never uses GPUDirect Storage or needs the semaphore.
    */
-  private def useDeviceRead(source: HybridScanByteSource, ranges: Array[ByteRange]): Boolean = {
-    if (!source.isDeviceReadDirect(ranges)) {
-      false
-    } else {
-      gdsMode match {
-        case RapidsConf.GpuDirectStorageMode.ALWAYS => true
-        case RapidsConf.GpuDirectStorageMode.WHEN_SEMAPHORE_FREE =>
-          GpuSemaphore.tryAcquire(TaskContext.get()) match {
-            case SemaphoreAcquired => true
-            case AcquireFailed(_) =>
-              addToMetric(HYBRID_SCAN_GPU_BUSY_HOST_BYTES_READ, totalBytes(ranges))
-              false
-          }
-        case _ => false
-      }
+  private def useDeviceRead(source: HybridScanByteSource, ranges: Array[ByteRange]): Boolean =
+    gdsMode match {
+      case RapidsConf.GpuDirectStorageMode.OFF => false
+      case _ if !source.isDeviceReadDirect(ranges) => false
+      case RapidsConf.GpuDirectStorageMode.ALWAYS => true
+      case RapidsConf.GpuDirectStorageMode.WHEN_SEMAPHORE_FREE =>
+        val acquired = GpuSemaphore.tryAcquire(TaskContext.get()) == SemaphoreAcquired
+        if (!acquired) {
+          addToMetric(HYBRID_SCAN_GPU_BUSY_HOST_BYTES_READ, totalBytes(ranges))
+        }
+        acquired
     }
-  }
 
   /**
    * The plan phase: prune the split's row groups with the pushed filter, and if anything survives

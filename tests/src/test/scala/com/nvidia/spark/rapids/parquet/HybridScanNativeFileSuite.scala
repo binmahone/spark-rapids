@@ -194,6 +194,14 @@ class HybridScanNativeFileSuite extends RmmSparkRetrySuiteBase {
     }
   }
 
+  test("a local file KvikIO cannot open fails the fetch and counts no bytes") {
+    val metrics = newMetrics()
+    withResource(nativeSource(missingFile, metrics, gdsEnabled = false)) { source =>
+      intercept[RuntimeException](source.fetch(ranges))
+    }
+    assert(metrics(GpuMetric.HYBRID_SCAN_NATIVE_HOST_BYTES_READ).value == 0)
+  }
+
   test("with GDS off no fetch goes to the device, and the file is not opened to decide") {
     withResource(nativeSource(missingFile, Map.empty, gdsEnabled = false)) { source =>
       assert(!source.isDeviceReadDirect(ranges))

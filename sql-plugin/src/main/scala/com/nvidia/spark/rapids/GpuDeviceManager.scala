@@ -768,14 +768,14 @@ object GpuDeviceManager extends Logging {
         s"CUFILE_ALLOW_COMPAT_MODE=${cufileCompat.getOrElse("<unset>")}: $detected")
       checkKvikioTaskSize()
     }
-    logInfo(s"KvikIO reads with ${conf.readerKvikioNumThreads} threads")
-    NativeFileSource.setUpKvikio(
-      if (conf.isReaderGdsEnabled) {
-        NativeFileSource.CompatMode.AUTO
-      } else {
-        NativeFileSource.CompatMode.ON
-      },
-      conf.readerKvikioNumThreads)
+    val compatMode = if (conf.isReaderGdsEnabled) {
+      NativeFileSource.CompatMode.AUTO
+    } else {
+      NativeFileSource.CompatMode.ON
+    }
+    logInfo(s"KvikIO reads with compatibility mode $compatMode and " +
+      s"${conf.readerKvikioNumThreads} threads")
+    NativeFileSource.setUpKvikio(compatMode, conf.readerKvikioNumThreads)
   }
 
   /**

@@ -16,6 +16,7 @@
 
 package com.nvidia.spark.rapids.parquet
 
+import java.io.{File, FileNotFoundException}
 import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.collection.mutable.ArrayBuffer
@@ -34,6 +35,7 @@ import com.nvidia.spark.rapids.parquet.HybridScanPipeline.HostBufferLayout
 import com.nvidia.spark.rapids.parquet.ParquetPartitionReader.LocalCopy
 import org.apache.hadoop.fs.{FileSystem, Path, RawLocalFileSystem}
 
+import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.internal.Logging
 
 /**
@@ -258,7 +260,7 @@ private[parquet] class NativeFileRangeReader(
 
   private def file: NativeFileSource = {
     if (nativeFile == null) {
-      nativeFile = NativeFileSource.open(filePath.toUri.getPath)
+      nativeFile = NativeFileRangeReader.open(filePath)
       // KvikIO stages any read below its GDS threshold, so ask about one past it to learn how the
       // file itself was opened.
       openedForGds = gdsEnabled && nativeFile.isDeviceReadDirect(Long.MaxValue)
@@ -328,6 +330,27 @@ private[parquet] object NativeFileRangeReader extends Logging {
 
   def countFileSystemBytesRead(bytesRead: Long): Unit =
     localFileSystemStatistics.incrementBytesRead(bytesRead)
+
+  /**
+   * Open `filePath` through libcudf. A missing file fails as FileNotFoundException, as it does
+   * through Hadoop, so ignoreMissingFiles can skip it; libcudf gives it no type of its own.
+   */
+  def open(filePath: Path): NativeFileSource = {
+    // Startup skips the setup if a session enables hybrid scan later, so do it at the first open.
+    if (!GpuDeviceManager.isKvikioInitialized) {
+      GpuDeviceManager.initializeKvikio(
+        new RapidsConf(Option(SparkEnv.get).map(_.conf).getOrElse(new SparkConf())))
+    }
+    val localPath = filePath.toUri.getPath
+    try {
+      NativeFileSource.open(localPath)
+    } catch {
+      case e: RuntimeException if !new File(localPath).exists() =>
+        val missing = new FileNotFoundException(s"File $filePath does not exist")
+        missing.initCause(e)
+        throw missing
+    }
+  }
 
   /**
    * Whether `filePath` names a local file. libcudf opens the file by path outside Hadoop, so any

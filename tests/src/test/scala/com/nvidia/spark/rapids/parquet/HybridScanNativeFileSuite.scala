@@ -16,6 +16,7 @@
 
 package com.nvidia.spark.rapids.parquet
 
+import java.io.FileNotFoundException
 import java.nio.file.Files
 import java.util.concurrent.Executors
 
@@ -32,7 +33,7 @@ import org.apache.hadoop.fs.Path
 
 /**
  * The hybrid scan's reads of local files through KvikIO, to host and to device memory, in
- * whatever mode KvikIO is in in this JVM: through POSIX unless KVIKIO_COMPAT_MODE says otherwise.
+ * whatever mode KvikIO is in in this JVM: through POSIX, as the first native open sets it up.
  * [[HybridScanGdsSuite]] runs the same tests with KvikIO reading through cuFile where it can.
  */
 class HybridScanNativeFileSuite extends RmmSparkRetrySuiteBase {
@@ -194,10 +195,10 @@ class HybridScanNativeFileSuite extends RmmSparkRetrySuiteBase {
     }
   }
 
-  test("a local file KvikIO cannot open fails the fetch and counts no bytes") {
+  test("a missing local file fails the fetch as not found and counts no bytes") {
     val metrics = newMetrics()
     withResource(nativeSource(missingFile, metrics, gdsEnabled = false)) { source =>
-      intercept[RuntimeException](source.fetch(ranges))
+      intercept[FileNotFoundException](source.fetch(ranges))
     }
     assert(metrics(GpuMetric.HYBRID_SCAN_NATIVE_HOST_BYTES_READ).value == 0)
   }

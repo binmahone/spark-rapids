@@ -751,11 +751,27 @@ object GpuDeviceManager extends Logging {
     }
   }
 
+  @volatile private var kvikioInitialized = false
+
   /**
    * Set KvikIO's compatibility mode and thread count, which libcudf takes only once per process,
-   * so this must run before the first libcudf file read.
+   * so this must run before the first libcudf file read: at startup if hybrid scan is enabled,
+   * else before the first native read of a session that enables it.
    */
-  private def initializeKvikio(conf: RapidsConf): Unit = {
+  private[rapids] def isKvikioInitialized: Boolean = kvikioInitialized
+
+  private[rapids] def initializeKvikio(conf: RapidsConf): Unit = {
+    if (!kvikioInitialized) {
+      synchronized {
+        if (!kvikioInitialized) {
+          setUpKvikio(conf)
+          kvikioInitialized = true
+        }
+      }
+    }
+  }
+
+  private def setUpKvikio(conf: RapidsConf): Unit = {
     if (conf.isReaderGdsEnabled) {
       val cufileCompat = sys.env.get("CUFILE_ALLOW_COMPAT_MODE")
       val detected = if (cufileCompat.exists(_.equalsIgnoreCase("false"))) {

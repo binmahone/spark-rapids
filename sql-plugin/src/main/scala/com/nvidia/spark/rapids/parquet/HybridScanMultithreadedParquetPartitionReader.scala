@@ -375,7 +375,7 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
    */
   private def decodeDeviceResult(result: HybridDeviceFileResult): Option[Table] = {
     val footer = bufferTime.ns {
-      withRetryNoSplit {
+      withRetryNoSplit[HostMemoryBuffer] {
         result.footer.getDataHostBuffer()
       }
     }

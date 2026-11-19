@@ -573,7 +573,7 @@ def test_hybrid_scan_legacy_old_date_filter_throws(spark_tmp_path, reader_confs)
     'filter_int = 7',
     "filter_str = 'key_500'",
 ], ids=['stats', 'dict', 'none_survive_dict'])
-@pytest.mark.parametrize('gds_mode', ['OFF', 'ALWAYS', 'WHEN_SEMAPHORE_FREE'])
+@pytest.mark.parametrize('gds_mode', ['OFF', 'WAIT_IF_GPU_BUSY', 'HOST_IF_GPU_BUSY'])
 def test_hybrid_scan_gds_mode(spark_tmp_path, where, gds_mode):
     """With GPUDirect Storage off, a local file is read to host memory through KvikIO. With it on,
     a file is read to the device where KvikIO can, and through host memory where it cannot, the
@@ -652,11 +652,12 @@ def test_hybrid_scan_multithreaded_all_files_pruned(spark_tmp_path):
         conf=hybrid_mt_conf())
 
 
-@pytest.mark.parametrize('gds_mode', ['OFF', 'WHEN_SEMAPHORE_FREE'])
+@pytest.mark.parametrize('gds_mode', ['OFF', 'HOST_IF_GPU_BUSY'])
 def test_hybrid_scan_multithreaded_reads_to_host(spark_tmp_path, gds_mode):
-    """MULTITHREADED reads to the device only in ALWAYS mode, so in these modes every file is read
-    to host memory: nothing is read to the device and no file counts as a GPUDirect Storage
-    fallback. A local file's chunks are all read with KvikIO, and any other file's with none."""
+    """MULTITHREADED reads to the device only in WAIT_IF_GPU_BUSY mode, so in these modes every
+    file is read to host memory: nothing is read to the device and no file counts as a GPUDirect
+    Storage fallback. A local file's chunks are all read with KvikIO, and any other file's with
+    none."""
     def check(cpu_plan, gpu_plan):
         scan = [node for node in collect_plan_nodes(gpu_plan)
                 if node.getClass().getSimpleName() == 'GpuFileSourceScanExec'][0]
@@ -694,11 +695,11 @@ def test_hybrid_scan_multithreaded_reads_to_host(spark_tmp_path, gds_mode):
     'filter_int = 7',
     "filter_str = 'key_500'",
 ], ids=['stats', 'dict', 'none_survive_dict'])
-def test_hybrid_scan_multithreaded_gds_always(spark_tmp_path, where):
-    """In ALWAYS mode the task thread reads a file's chunks to the device where KvikIO can, after
-    pruning with dictionary pages read from the file, and a pool thread reads the rest to host
-    memory. Which way these small files go depends on the machine and KvikIO's GPUDirect Storage
-    threshold, but the answer is the same either way."""
+def test_hybrid_scan_multithreaded_gds_wait_if_gpu_busy(spark_tmp_path, where):
+    """In WAIT_IF_GPU_BUSY mode the task thread reads a file's chunks to the device where KvikIO
+    can, after pruning with dictionary pages read from the file, and a pool thread reads the rest
+    to host memory. Which way these small files go depends on the machine and KvikIO's GPUDirect
+    Storage threshold, but the answer is the same either way."""
     def check(cpu_plan, gpu_plan):
         scan = [node for node in collect_plan_nodes(gpu_plan)
                 if node.getClass().getSimpleName() == 'GpuFileSourceScanExec'][0]
@@ -709,7 +710,8 @@ def test_hybrid_scan_multithreaded_gds_always(spark_tmp_path, where):
     assert_cpu_and_gpu_are_equal_collect_with_capture(
         lambda spark: spark.read.parquet(data_path).filter(where),
         conf=hybrid_mt_conf(**_pruning_metrics_conf,
-                            **{'spark.rapids.sql.reader.gpuDirectStorage.mode': 'ALWAYS'}),
+                            **{'spark.rapids.sql.reader.gpuDirectStorage.mode':
+                               'WAIT_IF_GPU_BUSY'}),
         gpu_plan_assertion=check)
 
 

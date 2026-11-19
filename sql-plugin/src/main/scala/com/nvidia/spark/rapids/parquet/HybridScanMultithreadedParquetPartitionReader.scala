@@ -46,9 +46,10 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
  * those with the filter's dictionaries, which needs the GPU a pool thread may not touch, and
  * decodes what survives into one batch per file.
  *
- * With GPUDirect Storage in ALWAYS mode, a pool thread fetches nothing for a file whose column
- * chunks can be read straight to the device: the task thread prunes with the dictionary pages,
- * read from the file, and reads the surviving chunks to the device under the GPU semaphore.
+ * With GPUDirect Storage in WAIT_IF_GPU_BUSY mode, a pool thread fetches nothing for a file
+ * whose column chunks can be read straight to the device: the task thread prunes with the
+ * dictionary pages, read from the file, and reads the surviving chunks to the device under the GPU
+ * semaphore.
  *
  * A standalone reader rather than a branch of the parquet-mr cloud reader, because Delta and
  * Iceberg customize that reader's decode and a hybrid branch inside it would bypass them.
@@ -181,7 +182,7 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
       metrics: Map[String, GpuMetric]): HybridScanSplit = {
     val filePath = new Path(new URI(file.filePath.toString()))
     val source = HybridScanMultithreadedParquetPartitionReader.createFileSource(fileIO, filePath,
-      metrics, context.gdsMode == RapidsConf.GpuDirectStorageMode.ALWAYS)
+      metrics, context.gdsMode == RapidsConf.GpuDirectStorageMode.WAIT_IF_GPU_BUSY)
     HybridScanSplit(source, file.start, file.length)
   }
 

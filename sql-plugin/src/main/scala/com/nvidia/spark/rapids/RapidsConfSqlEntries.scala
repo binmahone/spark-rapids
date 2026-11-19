@@ -572,9 +572,9 @@ private[rapids] trait RapidsConfSqlEntries extends RapidsConfResourceEntries {
   val READER_GPU_DIRECT_STORAGE_MODE =
     conf("spark.rapids.sql.reader.gpuDirectStorage.mode")
       .doc("How readers of local files use GPUDirect Storage. OFF reads through host memory. " +
-          "ALWAYS reads straight to device memory where GPUDirect Storage can open the file, " +
-          "waiting for the GPU semaphore first, since the read writes to the device. " +
-          "WHEN_SEMAPHORE_FREE does the same when the task holds the semaphore or can take it " +
+          "WAIT_IF_GPU_BUSY reads straight to device memory where GPUDirect Storage can open " +
+          "the file, waiting for the GPU semaphore first, since the read writes to the device. " +
+          "HOST_IF_GPU_BUSY does the same when the task holds the semaphore or can take it " +
           "without waiting, and otherwise reads through host memory while it waits. Files " +
           "GPUDirect Storage cannot open are read through host memory in either mode. Reads " +
           "straight to device memory skip the file cache (spark.rapids.filecache.enabled), " +
@@ -586,15 +586,16 @@ private[rapids] trait RapidsConfSqlEntries extends RapidsConfResourceEntries {
           "the reads, set CUFILE_STATS_LEVEL=3 on the executors and see cuFile's gds_stats " +
           "tool. Only the Parquet hybrid scan " +
           s"reader (${PARQUET_HYBRID_SCAN_ENABLED.key}) supports it so far, and with the " +
-          "MULTITHREADED reader type only in ALWAYS mode: WHEN_SEMAPHORE_FREE reads through " +
+          "MULTITHREADED reader type only in WAIT_IF_GPU_BUSY mode: HOST_IF_GPU_BUSY " +
+          "reads through " +
           "host memory there. Whether it is OFF " +
           "is read once per executor at startup, in place of the KVIKIO_COMPAT_MODE " +
           "environment variable, so turning it on later reads through host memory; the choice " +
-          "between ALWAYS and WHEN_SEMAPHORE_FREE can change per session.")
+          "between WAIT_IF_GPU_BUSY and HOST_IF_GPU_BUSY can change per session.")
       .internal()
       .stringConf
       .transform(_.toUpperCase(java.util.Locale.ROOT))
-      .checkValues(Set("OFF", "ALWAYS", "WHEN_SEMAPHORE_FREE"))
+      .checkValues(Set("OFF", "WAIT_IF_GPU_BUSY", "HOST_IF_GPU_BUSY"))
       .createWithDefault("OFF")
 
   val READER_KVIKIO_NUM_THREADS =

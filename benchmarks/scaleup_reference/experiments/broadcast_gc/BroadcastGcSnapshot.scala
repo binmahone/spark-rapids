@@ -21,12 +21,16 @@ object BroadcastGcSnapshot {
     val env = SparkEnv.get
     val values = env.broadcastManager.cachedValues
     val identities = values.synchronized {
-      values.entrySet().asScala.iterator.collect {
-        case entry if entry.getKey.isInstanceOf[BroadcastBlockId] &&
-            entry.getValue.isInstanceOf[SerializeConcatHostBuffersDeserializeBatch] =>
-          val id = entry.getKey.asInstanceOf[BroadcastBlockId]
-          val value = entry.getValue.asInstanceOf[SerializeConcatHostBuffersDeserializeBatch]
-          (id.broadcastId, System.identityHashCode(value), value.dataSize)
+      values.entrySet().asScala.iterator.flatMap { entry =>
+        entry.getKey match {
+          case id: BroadcastBlockId =>
+            entry.getValue match {
+              case value: SerializeConcatHostBuffersDeserializeBatch =>
+                Some((id.broadcastId, System.identityHashCode(value), value.dataSize))
+              case _ => None
+            }
+          case _ => None
+        }
       }.toList
     }
     val rows = identities.map { case (id, identity, bytes) =>

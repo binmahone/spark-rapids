@@ -171,8 +171,14 @@ def _start(run, config, master_host, master_port, master_ui_port, tag):
                           SPARK_LOCAL_DIRS=str(worker / 'local'),
                           SPARK_WORKER_OPTS=('-Dspark.worker.resource.gpu.amount=1 '
                               '-Dspark.worker.resource.gpu.discoveryScript=' + str(discover)))
+        placement = config.get('deployment_experiment', {}).get('placement', 'cpu-memory')
+        if placement not in ('cpu-memory', 'cpu-only', 'unbound'):
+            raise ValueError('Unknown experimental placement: ' + placement)
         binding = '--membind=' if config['platform'] == 'nvl72' else '--preferred='
-        command = ['numactl', '--cpunodebind=' + str(numa), binding + str(numa), spark_class,
+        prefix = ['numactl', '--cpunodebind=' + str(numa)] if placement != 'unbound' else []
+        if placement == 'cpu-memory':
+            prefix.append(binding + str(numa))
+        command = prefix + [spark_class,
                    'org.apache.spark.deploy.worker.Worker', '--host', master_host if
                    config['platform'] == 'aws48x' else node, '--port', '0', '--webui-port', '0',
                    '--cores', '32' if config['platform'] == 'nvl72' else '24',

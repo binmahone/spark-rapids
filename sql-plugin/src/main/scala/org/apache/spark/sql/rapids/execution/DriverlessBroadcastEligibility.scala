@@ -24,6 +24,7 @@ import com.nvidia.spark.rapids.{GpuBuildLeft, GpuBuildRight, RapidsConf}
 import com.nvidia.spark.rapids.shims.BroadcastExchangeShims
 
 import org.apache.spark.{SparkEnv, SparkException}
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.execution.{ExecSubqueryExpression, SparkPlan}
 import org.apache.spark.sql.execution.adaptive.{BroadcastQueryStageExec, QueryStageExec}
@@ -32,8 +33,15 @@ import org.apache.spark.sql.rapids.GpuShuffleEnv
 import org.apache.spark.sql.rapids.shims.SparkSessionUtils
 
 /** Shared planning checks; each planning phase analyzes its current consumer graph. */
-private[execution] object DriverlessBroadcastEligibility {
+private[execution] object DriverlessBroadcastEligibility extends Logging {
   private val estimatedBuildBytes = TreeNodeTag[BigInt]("driverlessEstimatedBuildBytes")
+
+  // Diagnostic admission experiments retain all other planning and runtime checks.
+  private def diagnosticAllowSubqueries: Boolean =
+    JBoolean.getBoolean("rapids.diagnostic.driverless.allowSubqueries")
+
+  private def diagnosticIgnoreBuildEstimate: Boolean =
+    JBoolean.getBoolean("rapids.diagnostic.driverless.ignoreBuildEstimate")
 
   def preserveBuildEstimate(cpu: BroadcastExchangeExec, gpu: GpuBroadcastExchangeExec): Unit = {
     // GPU conversion and canonicalization need not retain the child's logical link.
@@ -56,14 +64,21 @@ private[execution] object DriverlessBroadcastEligibility {
     ).flatten
   }
 
-  private[execution] def joinRejections(join: GpuBroadcastHashJoinExec): Seq[String] = Seq(
-    // The custom RDD does not execute the base join's empty/all-null NAAJ handling.
-    if (join.isNullAwareAntiJoin) Some("null-aware anti join") else None,
-    if (join.isSkewJoin) Some("skew-optimized broadcast join") else None,
-    if (join.exists(_.expressions.exists(_.exists(_.isInstanceOf[ExecSubqueryExpression])))) {
-      Some("join contains a subquery")
-    } else None
-  ).flatten
+  private[execution] def joinRejections(join: GpuBroadcastHashJoinExec): Seq[String] = {
+    val hasSubquery =
+      join.exists(_.expressions.exists(_.exists(_.isInstanceOf[ExecSubqueryExpression])))
+    if (hasSubquery && diagnosticAllowSubqueries) {
+      logWarning(s"[DIAGNOSTIC_DRIVERLESS] join=${join.id} bypass=subquery")
+    }
+    Seq(
+      // The custom RDD does not execute the base join's empty/all-null NAAJ handling.
+      if (join.isNullAwareAntiJoin) Some("null-aware anti join") else None,
+      if (join.isSkewJoin) Some("skew-optimized broadcast join") else None,
+      if (hasSubquery && !diagnosticAllowSubqueries) {
+        Some("join contains a subquery")
+      } else None
+    ).flatten
+  }
 
   /** Broadcast consumers other than eligible GPU joins require a real payload, not a token. */
   private[execution] def sharedBuilds(plan: SparkPlan): Seq[SparkPlan] = {
@@ -125,10 +140,15 @@ private[execution] object DriverlessBroadcastEligibility {
                 "the broadcast threshold before using standard broadcast.")
             }
             planRejection.orElse {
-              if (!join.conf.adaptiveExecutionEnabled &&
-                  build.getTagValue(estimatedBuildBytes)
-                    .orElse(build.child.logicalLink.map(_.stats.sizeInBytes)).exists(_ >=
-                    BroadcastExchangeShims.getMaxBroadcastTableBytes(join.conf))) {
+              val estimate = build.getTagValue(estimatedBuildBytes)
+                .orElse(build.child.logicalLink.map(_.stats.sizeInBytes))
+              val exceedsLimit = !join.conf.adaptiveExecutionEnabled && estimate.exists(_ >=
+                BroadcastExchangeShims.getMaxBroadcastTableBytes(join.conf))
+              if (exceedsLimit && diagnosticIgnoreBuildEstimate) {
+                logWarning(s"[DIAGNOSTIC_DRIVERLESS] join=${join.id} " +
+                  s"bypass=estimated-build-limit estimate=$estimate")
+              }
+              if (exceedsLimit && !diagnosticIgnoreBuildEstimate) {
                 Some("estimated build exceeds the standard broadcast byte limit")
               } else None
             }

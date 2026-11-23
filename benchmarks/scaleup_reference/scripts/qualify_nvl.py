@@ -31,6 +31,8 @@ def qualify(config, local):
             pass
     base = '/usr/local/cuda-13.0'
     env = dict(os.environ, LD_LIBRARY_PATH=base + '/targets/sbsa-linux/lib:' + os.environ.get('LD_LIBRARY_PATH', ''))
+    if config.get('deployment_experiment', {}).get('bundle_cufile', False):
+        env['LD_LIBRARY_PATH'] = str(local / 'cufile-runtime') + ':' + env['LD_LIBRARY_PATH']
     check = subprocess.check_output([base + '/gds/tools/gdscheck', '-p'], env=env,
                                      text=True, stderr=subprocess.STDOUT)
     (local / 'gdscheck.txt').write_text(check)
@@ -67,6 +69,10 @@ def qualify(config, local):
             if result.returncode or f'NATIVE_READER_BYTES_VALIDATED mode={mode}' not in text:
                 raise ValueError('Native-reader qualification failed: ' + str(logs))
             if mode == 'gds':
+                if config.get('deployment_experiment', {}).get('bundle_cufile', False):
+                    mappings = (logs / 'process-maps.txt').read_text()
+                    if '/cufile-runtime/libcufile' not in mappings:
+                        raise ValueError('Qualification did not load the bundled cuFile library')
                 cufile_logs = '\n'.join(p.read_text(errors='replace') for p in logs.glob('*.log'))
                 for marker in ('GPFS KERNEL RDMA SUPPORT',
                                'best rdma device selected using round-robin policy for gpu:',

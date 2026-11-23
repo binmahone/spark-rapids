@@ -225,8 +225,8 @@ def evidence(case, queries):
                 if environment.get(key) != value:
                     raise AssertionError('Executor environment differs: ' + key)
             if case['arm'] == 'bundled-cufile':
-                libraries = [line.split()[-1] for line in record['maps'].splitlines()
-                             if '/libcufile.so' in line or '/libcufile_rdma.so' in line]
+                libraries = {line.split()[-1] for line in record['maps'].splitlines()
+                             if '/libcufile.so' in line or '/libcufile_rdma.so' in line}
                 if len(libraries) != 2 or any('/cufile-runtime/' not in name for name in libraries):
                     raise AssertionError('Application did not load the bundled cuFile libraries')
     result = {'label': case['label'], 'arm': case['arm'], 'samples': data['samples'],

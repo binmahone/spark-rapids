@@ -120,7 +120,9 @@ def analyze(root):
                     for (arm, query), values in groups.items()],
         'plan_variant_counts': {query + '-' + kind: len(values) for (query, kind), values in plans.items()},
         'reference_score_eligible': False,
-        'limits': ['Focused queries only; no full-suite score or extrapolated full-suite speedup.',
+        'limits': [('All reference queries measured; totals are SQL times, not application wall time.'
+                    if plan.get('stage') == 'qualification' else
+                   'Focused queries only; no full-suite score or extrapolated full-suite speedup.'),
                    ('One application per arm, all reference queries twice.' if plan.get('stage') == 'qualification'
                     else 'Two application repetitions per arm; order is forward then reverse.'),
                    'Interface byte counters include storage and control traffic; they do not identify GPU payload transport.']}

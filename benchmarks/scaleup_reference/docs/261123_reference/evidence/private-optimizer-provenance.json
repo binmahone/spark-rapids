@@ -1,0 +1,12 @@
+{
+  "upstream_repository": "https://gitlab-master.nvidia.com/nvspark/cudf-spark-private",
+  "default_branch": "main",
+  "pinned_commit": "61e9e96803771371dec116593f0c4eced9ac44d8",
+  "pinned_commit_url": "https://gitlab-master.nvidia.com/nvspark/cudf-spark-private/-/commit/61e9e96803771371dec116593f0c4eced9ac44d8",
+  "pinned_title": "Merge branch 'selective-dimension-broadcast-16092' into 'main'",
+  "tested_clone_repository": "https://gitlab-master.nvidia.com/mahonem/cudf-spark-private.git",
+  "local_modifications_to_private_source": false,
+  "merge_base_with_upstream_main": "61e9e96803771371dec116593f0c4eced9ac44d8",
+  "verified_at_utc": "2026-11-23T05:30:04.571158+00:00",
+  "verification_scope": "Repository commit availability and ancestry only; no build or runtime test of latest main"
+}

@@ -31,6 +31,10 @@
     "bytes": 4701,
     "sha256": "52fd3b253aaa72ab44cf505d7144b70c818d92a8ee7485903dd7417993d3367d"
   },
+  "private-optimizer-provenance.json": {
+    "bytes": 801,
+    "sha256": "8e35fd0830451851b4a2d56907bf24387c9a3132e12b9554a41c55644b56c91e"
+  },
   "qualification-summary.json": {
     "bytes": 4117,
     "sha256": "cb11844d019be4b864e49092aec76d244776dbc73c1176580788e88b3877c050"

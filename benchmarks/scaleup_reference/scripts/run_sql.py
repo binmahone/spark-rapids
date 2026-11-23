@@ -87,12 +87,31 @@ def main():
             if time.monotonic() >= deadline:
                 raise RuntimeError('Expected GPU executors did not register')
             time.sleep(1)
+        verify_cuda_uuid = config.get('deployment_experiment', {}).get('verify_cuda_uuid', False)
         def probe(iterator):
             from pyspark import BarrierTaskContext
             import socket
             context = BarrierTaskContext.get()
+            physical_uuid = os.environ.get('CUDA_VISIBLE_DEVICES')
+            if verify_cuda_uuid:
+                import ctypes
+                import uuid
+                cuda = ctypes.CDLL('libcuda.so.1')
+                cuda.cuInit.argtypes = [ctypes.c_uint]
+                cuda.cuDeviceGet.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
+                cuda.cuDeviceGetUuid.argtypes = [ctypes.c_void_p, ctypes.c_int]
+                selected = ctypes.c_int()
+                native_uuid = (ctypes.c_ubyte * 16)()
+                ordinal = int(context.resources()['gpu'].addresses[0])
+                for function, parameters in ((cuda.cuInit, (0,)),
+                        (cuda.cuDeviceGet, (ctypes.byref(selected), ordinal)),
+                        (cuda.cuDeviceGetUuid, (ctypes.byref(native_uuid), selected))):
+                    status = function(*parameters)
+                    if status != 0:
+                        raise RuntimeError('CUDA UUID discovery failed: ' + str(status))
+                physical_uuid = 'GPU-' + str(uuid.UUID(bytes=bytes(native_uuid)))
             yield {'host': socket.gethostname(), 'gpu': context.resources()['gpu'].addresses,
-                   'uuid': os.environ.get('CUDA_VISIBLE_DEVICES')}
+                   'uuid': physical_uuid, 'visible': os.environ.get('CUDA_VISIBLE_DEVICES')}
         assignments = sc.parallelize(range(executors * slots), executors * slots).barrier().mapPartitions(probe).collect()
         counts = Counter(row['uuid'] for row in assignments)
         if len(counts) != executors or set(counts.values()) != {slots}:

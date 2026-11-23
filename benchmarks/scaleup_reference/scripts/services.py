@@ -154,6 +154,7 @@ def _start(run, config, master_host, master_port, master_ui_port, tag):
                 raise RuntimeError('AWS does not expose all 56 directed P2P pairs')
             (local / f'p2p-{mode}.txt').write_text(matrix)
     write(local / 'gpu-inventory.json', inventory)
+    entries = []
     for line in inventory:
         index, uuid, pci = [part.strip() for part in line.split(',')]
         index = int(index)
@@ -162,14 +163,27 @@ def _start(run, config, master_host, master_port, master_ui_port, tag):
         numa = int(numa_path.read_text())
         if numa < 0:
             raise RuntimeError('GPU NUMA placement is unavailable')
+        entries.append((index, uuid, numa))
+    layout = config.get('deployment_experiment', {}).get('worker_layout', 'gpu')
+    if layout == 'gpu':
+        groups = [[entry] for entry in entries]
+    elif layout == 'numa' and config['platform'] == 'nvl72':
+        groups = [[entry for entry in entries if entry[2] == numa]
+                  for numa in sorted({entry[2] for entry in entries})]
+    else:
+        raise ValueError('Unsupported experimental worker layout: ' + layout)
+    for group in groups:
+        index, unused_uuid, numa = group[0]
+        addresses = json.dumps({'name': 'gpu', 'addresses': list(map(str, range(len(group))))})
         worker = local / f'worker-{index}'
         worker.mkdir()
         discover = worker / 'discover-gpu.sh'
-        discover.write_text('#!/bin/sh\nprintf \'%s\\n\' \'{"name":"gpu","addresses":["0"]}\'\n')
+        discover.write_text('#!/bin/sh\nprintf \'%s\\n\' \'' + addresses + '\'\n')
         discover.chmod(0o755)
-        worker_env = dict(env, CUDA_VISIBLE_DEVICES=uuid, SPARK_WORKER_DIR=str(worker / 'work'),
+        worker_env = dict(env, CUDA_VISIBLE_DEVICES=','.join(entry[1] for entry in group),
+                          SPARK_WORKER_DIR=str(worker / 'work'),
                           SPARK_LOCAL_DIRS=str(worker / 'local'),
-                          SPARK_WORKER_OPTS=('-Dspark.worker.resource.gpu.amount=1 '
+                          SPARK_WORKER_OPTS=('-Dspark.worker.resource.gpu.amount=' + str(len(group)) + ' '
                               '-Dspark.worker.resource.gpu.discoveryScript=' + str(discover)))
         placement = config.get('deployment_experiment', {}).get('placement', 'cpu-memory')
         if placement not in ('cpu-memory', 'cpu-only', 'unbound'):
@@ -181,8 +195,8 @@ def _start(run, config, master_host, master_port, master_ui_port, tag):
         command = prefix + [spark_class,
                    'org.apache.spark.deploy.worker.Worker', '--host', master_host if
                    config['platform'] == 'aws48x' else node, '--port', '0', '--webui-port', '0',
-                   '--cores', '32' if config['platform'] == 'nvl72' else '24',
-                   '--memory', '350g' if config['platform'] == 'nvl72' else '200g',
+                   '--cores', str(32 * len(group)) if config['platform'] == 'nvl72' else '24',
+                   '--memory', str(350 * len(group)) + 'g' if config['platform'] == 'nvl72' else '200g',
                    'spark://' + master_host + ':' + str(master_port)]
         records.append(spawn(command, worker / 'worker.log', worker_env))
         write(state, records)

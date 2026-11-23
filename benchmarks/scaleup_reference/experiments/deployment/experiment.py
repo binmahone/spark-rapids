@@ -32,7 +32,9 @@ sys.path.insert(0, str(SUITE / 'scripts'))
 from common import expand, read, sha, write
 
 ENGINE_PIN = 'faa47fe51f998ae97385e2b218be4a261006bfa6'
-ARMS = ('baseline', 'cpu-only', 'unbound', 'auto-tls', 'auto-net')
+STAGES = {'placement': ('baseline', 'cpu-only', 'unbound', 'auto-tls', 'auto-net'),
+          'workers': ('baseline', 'per-numa')}
+ARMS = tuple(dict.fromkeys(arm for arms in STAGES.values() for arm in arms))
 CLEAR_ENV = ('JAVA_TOOL_OPTIONS', 'JDK_JAVA_OPTIONS', '_JAVA_OPTIONS',
              'SPARK_SUBMIT_OPTS', 'UCX_TLS', 'UCX_NET_DEVICES')
 
@@ -41,14 +43,15 @@ def git(*args):
     return subprocess.check_output(['git', '-C', str(REPO), *args], text=True).strip()
 
 
-def variant(base, arm):
+def variant(base, arm, stage='placement'):
     if arm not in ARMS:
         raise ValueError(arm)
     current = json.loads(json.dumps(base))
     placement = arm if arm in ('cpu-only', 'unbound') else 'cpu-memory'
     current['deployment_experiment'] = {'arm': arm, 'placement': placement,
         'diagnostic_only': True, 'engine_source_revision': ENGINE_PIN,
-        'reference_score_eligible': False}
+        'reference_score_eligible': False, 'verify_cuda_uuid': stage == 'workers',
+        'worker_layout': 'numa' if arm == 'per-numa' else 'gpu'}
     if arm in ('auto-tls', 'auto-net'):
         key = 'UCX_TLS' if arm == 'auto-tls' else 'UCX_NET_DEVICES'
         del current['spark_conf']['spark.executorEnv.' + key]
@@ -76,12 +79,12 @@ def prepare(args):
     root = args.run.resolve()
     root.mkdir(parents=True, exist_ok=False)
     write(root / 'config.json', {'deployment': base['deployment']})
-    order = list(ARMS) + list(reversed(ARMS))
+    order = list(STAGES[args.stage]) + list(reversed(STAGES[args.stage]))
     cases = []
     for index, arm in enumerate(order, 1):
         label = f'{index:02d}-{arm}'
         run = root / 'runs' / (root.name + '-' + label)
-        current = variant(base, arm)
+        current = variant(base, arm, args.stage)
         write(run / 'config.json', current)
         write(run / 'profiles.json', expand(current, current['queries']))
         write(run / 'owner.json', {'uid': os.getuid(), 'user': getpass.getuser(),
@@ -90,7 +93,7 @@ def prepare(args):
     files = [SUITE / 'benchmark.py', *[p for name in ('scripts', 'configs', 'inputs')
              for p in (SUITE / name).rglob('*') if p.is_file() and '__pycache__' not in p.parts],
              *[p for p in HERE.rglob('*') if p.is_file() and '__pycache__' not in p.parts]]
-    plan = {'cases': cases, 'nodes': base['deployment']['nodes'], 'queries': base['queries'],
+    plan = {'cases': cases, 'stage': args.stage, 'nodes': base['deployment']['nodes'], 'queries': base['queries'],
         'engine_source_revision': ENGINE_PIN, 'runtime_revision': git('rev-parse', 'HEAD'),
         'runtime_input_sha256': {str(p): sha(p) for p in files},
         'thread_id': os.environ.get('CODEX_THREAD_ID'), 'reference_score_eligible': False,
@@ -288,6 +291,7 @@ def main():
     parser.add_argument('--reference-checkout', type=Path)
     parser.add_argument('--deployment', type=Path)
     parser.add_argument('--queries', default='9,3,6')
+    parser.add_argument('--stage', choices=tuple(STAGES), default='placement')
     parser.add_argument('--submit', action='store_true')
     args = parser.parse_args()
     prepare(args) if args.action == 'prepare' else node(args)

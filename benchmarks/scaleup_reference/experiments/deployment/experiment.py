@@ -114,6 +114,8 @@ def prepare(args):
             '--output=' + str(root / 'slurm-%j.log')]
         if d.get('node_list'):
             command.append('--nodelist=' + d['node_list'])
+        if args.dependency:
+            command.append('--dependency=afterok:' + str(args.dependency))
         command.append(str(SUITE / 'scripts/run_nvl.slurm'))
         env = dict(os.environ, SCALEUP_RUN=str(root), SCALEUP_SUITE=str(HERE))
         response = subprocess.check_output(command, env=env, text=True).strip()
@@ -293,6 +295,7 @@ def main():
     parser.add_argument('--queries', default='9,3,6')
     parser.add_argument('--stage', choices=tuple(STAGES), default='placement')
     parser.add_argument('--submit', action='store_true')
+    parser.add_argument('--dependency', type=int, help='Require successful completion of this Slurm job')
     args = parser.parse_args()
     prepare(args) if args.action == 'prepare' else node(args)
 

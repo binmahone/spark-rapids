@@ -1630,9 +1630,9 @@ case class GpuParquetMultiFilePartitionReaderFactory(
           filterHandler.readThriftFooter(fileIO, filePath, fileConf)
         }
       }
-      // HOST_IF_GPU_BUSY is not supported yet, so it reads through host memory.
-      val gdsMode = if (config.gdsMode == RapidsConf.GpuDirectStorageMode.WAIT_IF_GPU_BUSY) {
-        RapidsConf.GpuDirectStorageMode.WAIT_IF_GPU_BUSY
+      // AUTO is not supported yet, so it reads through host memory.
+      val gdsMode = if (config.gdsMode == RapidsConf.GpuDirectStorageMode.ON) {
+        RapidsConf.GpuDirectStorageMode.ON
       } else {
         RapidsConf.GpuDirectStorageMode.OFF
       }

@@ -210,12 +210,12 @@ class HybridScanDeviceReadSuite extends SparkQueryCompareTestSuite {
     }
   }
 
-  // With no task holding the semaphore, HOST_IF_GPU_BUSY reads the same as WAIT_IF_GPU_BUSY.
+  // Without a TaskContext the semaphore is always free, so AUTO reads the same as ON.
   private val readModes = Seq(
     ReadMode(multithreaded = false, GpuDirectStorageMode.OFF),
-    ReadMode(multithreaded = false, GpuDirectStorageMode.WAIT_IF_GPU_BUSY),
+    ReadMode(multithreaded = false, GpuDirectStorageMode.ON),
     ReadMode(multithreaded = true, GpuDirectStorageMode.OFF),
-    ReadMode(multithreaded = true, GpuDirectStorageMode.WAIT_IF_GPU_BUSY))
+    ReadMode(multithreaded = true, GpuDirectStorageMode.ON))
 
   /**
    * A pushed filter and the device reads it takes when the file goes to the device: one for the

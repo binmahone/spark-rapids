@@ -121,6 +121,21 @@ class HybridScanNativeFileSuite extends RmmSparkRetrySuiteBase {
     }
   }
 
+  test("a local file with a Hadoop checksum file is read through Hadoop") {
+    withLocalFile() { path =>
+      val crc = NativeFileRangeReader.checksumFile(path.toUri.getPath).toPath
+      Files.write(crc, Array[Byte](0))
+      try {
+        withResource(HybridScanFileByteSource.createRangeReader(path, Map.empty,
+            gdsEnabled = false)) { reader =>
+          assert(reader.isInstanceOf[RapidsFileIORangeReader])
+        }
+      } finally {
+        Files.delete(crc)
+      }
+    }
+  }
+
   test("KvikIO reads each range to host memory") {
     withLocalFile() { path =>
       val metrics = newMetrics()

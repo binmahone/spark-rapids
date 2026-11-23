@@ -19,10 +19,11 @@ parquet-mr path and still returns the right answer, so `hybrid_conf` makes a fal
 query instead; a test that is meant to fall back uses `fallback_conf`.
 """
 
+import os
 import pytest
 
 from datetime import date, datetime, timezone
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from asserts import assert_cpu_and_gpu_are_equal_collect_with_capture, \
     assert_gpu_and_cpu_are_equal_collect, assert_gpu_and_cpu_error, \
@@ -278,9 +279,34 @@ def test_hybrid_scan_reader_runs(spark_tmp_path, reader_mode):
         gpu_plan_assertion=check)
 
 
+def _local_paths(spark, data_path):
+    """The local paths of the Parquet files under `data_path`, or None if any is not local."""
+    files = [urlparse(f) for f in spark.read.parquet(data_path).inputFiles()]
+    if not all(f.scheme == 'file' for f in files):
+        return None
+    return sorted(unquote(f.path) for f in files)
+
+
+def _checksum_file(local_path):
+    """The `.crc` sidecar Hadoop's local filesystem writes beside each file."""
+    head, tail = os.path.split(local_path)
+    return os.path.join(head, '.' + tail + '.crc')
+
+
+def _remove_checksum_files(data_path):
+    """Remove the `.crc` sidecars of the local files under `data_path`, since a file with one is
+    read through Hadoop rather than KvikIO. Returns the local paths, or None if any is not local."""
+    local_paths = with_cpu_session(lambda spark: _local_paths(spark, data_path))
+    for path in local_paths or []:
+        if os.path.exists(_checksum_file(path)):
+            os.remove(_checksum_file(path))
+    return local_paths
+
+
 @_metric_reader_modes
 def test_hybrid_scan_native_host_reads(spark_tmp_path, reader_mode):
-    """A local file's bytes are all read with KvikIO, and any other file's with none."""
+    """A local file's bytes are all read with KvikIO, and any other file's with none. The local
+    files' checksum sidecars are removed, since a file with one is read through Hadoop."""
     def check(cpu_plan, gpu_plan):
         scan = [node for node in collect_plan_nodes(gpu_plan)
                 if node.getClass().getSimpleName() == 'GpuFileSourceScanExec'][0]
@@ -296,12 +322,30 @@ def test_hybrid_scan_native_host_reads(spark_tmp_path, reader_mode):
 
     data_path = spark_tmp_path + '/HYBRID_SCAN_DATA'
     with_cpu_session(lambda spark: write_test_data(spark, data_path, files=4))
-    is_local = with_cpu_session(lambda spark: all(
-        urlparse(f).scheme == 'file' for f in spark.read.parquet(data_path).inputFiles()))
+    is_local = _remove_checksum_files(data_path) is not None
     assert_cpu_and_gpu_are_equal_collect_with_capture(
         lambda spark: spark.read.parquet(data_path).filter('filter_int = 7'),
         conf=_metrics_conf(reader_mode),
         gpu_plan_assertion=check)
+
+
+@_metric_reader_modes
+def test_hybrid_scan_local_checksum(spark_tmp_path, reader_mode):
+    """A local file changed after Spark wrote it fails the read on its checksum, as it does
+    through Hadoop, rather than returning the changed data."""
+    data_path = spark_tmp_path + '/HYBRID_SCAN_DATA'
+    with_cpu_session(lambda spark: write_test_data(spark, data_path, files=2))
+    local_paths = with_cpu_session(lambda spark: _local_paths(spark, data_path))
+    if local_paths is None or not os.path.exists(_checksum_file(local_paths[0])):
+        pytest.skip('only a checksummed local filesystem writes checksum sidecars')
+    # Flip a byte of the first column chunk, which starts after the 4-byte magic.
+    with open(local_paths[0], 'r+b') as f:
+        f.seek(4)
+        changed = bytes([f.read(1)[0] ^ 0xFF])
+        f.seek(4)
+        f.write(changed)
+    assert_gpu_and_cpu_error(lambda spark: spark.read.parquet(data_path).collect(),
+                             _metrics_conf(reader_mode), 'ChecksumException')
 
 
 @_metric_reader_modes
@@ -573,13 +617,14 @@ def test_hybrid_scan_legacy_old_date_filter_throws(spark_tmp_path, reader_confs)
     'filter_int = 7',
     "filter_str = 'key_500'",
 ], ids=['stats', 'dict', 'none_survive_dict'])
-@pytest.mark.parametrize('gds_mode', ['OFF', 'WAIT_IF_GPU_BUSY', 'HOST_IF_GPU_BUSY'])
+@pytest.mark.parametrize('gds_mode', ['OFF', 'ON', 'AUTO'])
 def test_hybrid_scan_gds_mode(spark_tmp_path, where, gds_mode):
     """With GPUDirect Storage off, a local file is read to host memory through KvikIO. With it on,
     a file is read to the device where KvikIO can, and through host memory where it cannot, the
     path is not local, or the GPU is busy. The answer is the same either way."""
     data_path = spark_tmp_path + '/HYBRID_SCAN_DATA'
     with_cpu_session(lambda spark: write_test_data(spark, data_path))
+    _remove_checksum_files(data_path)
     assert_gpu_and_cpu_are_equal_collect(
         lambda spark: spark.read.parquet(data_path).filter(where),
         conf=hybrid_conf(**{'spark.rapids.sql.reader.gpuDirectStorage.mode': gds_mode}))
@@ -652,9 +697,9 @@ def test_hybrid_scan_multithreaded_all_files_pruned(spark_tmp_path):
         conf=hybrid_mt_conf())
 
 
-@pytest.mark.parametrize('gds_mode', ['OFF', 'HOST_IF_GPU_BUSY'])
+@pytest.mark.parametrize('gds_mode', ['OFF', 'AUTO'])
 def test_hybrid_scan_multithreaded_reads_to_host(spark_tmp_path, gds_mode):
-    """MULTITHREADED reads to the device only in WAIT_IF_GPU_BUSY mode, so in these modes every
+    """MULTITHREADED reads to the device only in ON mode, so in these modes every
     file is read to host memory: nothing is read to the device and no file counts as a GPUDirect
     Storage fallback. A local file's chunks are all read with KvikIO, and any other file's with
     none."""
@@ -681,8 +726,7 @@ def test_hybrid_scan_multithreaded_reads_to_host(spark_tmp_path, gds_mode):
 
     data_path = spark_tmp_path + '/HYBRID_SCAN_DATA'
     with_cpu_session(lambda spark: write_test_data(spark, data_path, files=4))
-    is_local = with_cpu_session(lambda spark: all(
-        urlparse(f).scheme == 'file' for f in spark.read.parquet(data_path).inputFiles()))
+    is_local = _remove_checksum_files(data_path) is not None
     assert_cpu_and_gpu_are_equal_collect_with_capture(
         lambda spark: spark.read.parquet(data_path).filter('filter_int = 7'),
         conf=hybrid_mt_conf(**_pruning_metrics_conf,
@@ -695,8 +739,8 @@ def test_hybrid_scan_multithreaded_reads_to_host(spark_tmp_path, gds_mode):
     'filter_int = 7',
     "filter_str = 'key_500'",
 ], ids=['stats', 'dict', 'none_survive_dict'])
-def test_hybrid_scan_multithreaded_gds_wait_if_gpu_busy(spark_tmp_path, where):
-    """In WAIT_IF_GPU_BUSY mode the task thread reads a file's chunks to the device where KvikIO
+def test_hybrid_scan_multithreaded_gds_on(spark_tmp_path, where):
+    """In ON mode the task thread reads a file's chunks to the device where KvikIO
     can, after pruning with dictionary pages read from the file, and a pool thread reads the rest
     to host memory. Which way these small files go depends on the machine and KvikIO's GPUDirect
     Storage threshold, but the answer is the same either way."""
@@ -707,11 +751,11 @@ def test_hybrid_scan_multithreaded_gds_wait_if_gpu_busy(spark_tmp_path, where):
 
     data_path = spark_tmp_path + '/HYBRID_SCAN_DATA'
     with_cpu_session(lambda spark: write_test_data(spark, data_path, files=4))
+    _remove_checksum_files(data_path)
     assert_cpu_and_gpu_are_equal_collect_with_capture(
         lambda spark: spark.read.parquet(data_path).filter(where),
         conf=hybrid_mt_conf(**_pruning_metrics_conf,
-                            **{'spark.rapids.sql.reader.gpuDirectStorage.mode':
-                               'WAIT_IF_GPU_BUSY'}),
+                            **{'spark.rapids.sql.reader.gpuDirectStorage.mode': 'ON'}),
         gpu_plan_assertion=check)
 
 

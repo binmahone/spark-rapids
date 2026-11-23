@@ -572,10 +572,9 @@ private[rapids] trait RapidsConfSqlEntries extends RapidsConfResourceEntries {
   val READER_GPU_DIRECT_STORAGE_MODE =
     conf("spark.rapids.sql.reader.gpuDirectStorage.mode")
       .doc("How readers of local files use GPUDirect Storage. OFF reads through host memory. " +
-          "WAIT_IF_GPU_BUSY reads straight to device memory where GPUDirect Storage can open " +
-          "the file, waiting for the GPU semaphore first, since the read writes to the device. " +
-          "HOST_IF_GPU_BUSY does the same when the task holds the semaphore or can take it " +
-          "without waiting, and otherwise reads through host memory while it waits. Files " +
+          "ON reads straight to device memory where GPUDirect Storage can open the file. " +
+          "AUTO does the same when the task holds the GPU semaphore or can take it without " +
+          "waiting, and otherwise reads through host memory while it waits. Files " +
           "GPUDirect Storage cannot open are read through host memory in either mode. Reads " +
           "straight to device memory skip the file cache (spark.rapids.filecache.enabled), " +
           "neither reading from it nor adding to it; reads through host memory use it as " +
@@ -586,16 +585,17 @@ private[rapids] trait RapidsConfSqlEntries extends RapidsConfResourceEntries {
           "the reads, set CUFILE_STATS_LEVEL=3 on the executors and see cuFile's gds_stats " +
           "tool. Only the Parquet hybrid scan " +
           s"reader (${PARQUET_HYBRID_SCAN_ENABLED.key}) supports it so far, and with the " +
-          "MULTITHREADED reader type only in WAIT_IF_GPU_BUSY mode: HOST_IF_GPU_BUSY " +
-          "reads through " +
-          "host memory there. Whether it is OFF " +
-          "is read once per executor at startup, in place of the KVIKIO_COMPAT_MODE " +
-          "environment variable, so turning it on later reads through host memory; the choice " +
-          "between WAIT_IF_GPU_BUSY and HOST_IF_GPU_BUSY can change per session.")
+          "MULTITHREADED reader type only in ON mode: AUTO reads through host memory there. " +
+          "Only an explicit PERFILE or MULTITHREADED reader type reads to the device: the AUTO " +
+          "reader type picks MULTITHREADED for cloud files and COALESCING, which falls back to " +
+          "parquet-mr, for local ones. Whether it is OFF is read once per executor, when " +
+          "KvikIO is first set up (at startup if the hybrid scan is enabled then), in place of " +
+          "the KVIKIO_COMPAT_MODE environment variable, so turning it on after that reads " +
+          "through host memory; the choice between ON and AUTO can change per session.")
       .internal()
       .stringConf
       .transform(_.toUpperCase(java.util.Locale.ROOT))
-      .checkValues(Set("OFF", "WAIT_IF_GPU_BUSY", "HOST_IF_GPU_BUSY"))
+      .checkValues(Set("OFF", "ON", "AUTO"))
       .createWithDefault("OFF")
 
   val READER_KVIKIO_NUM_THREADS =
@@ -603,13 +603,13 @@ private[rapids] trait RapidsConfSqlEntries extends RapidsConfResourceEntries {
       .doc("The number of threads in each executor's KvikIO thread pool, which the Parquet " +
           s"hybrid scan reader (${PARQUET_HYBRID_SCAN_ENABLED.key}) splits each read of a " +
           "local file across, with or without GPUDirect Storage. Set once per executor at " +
-          "startup, in place of the KVIKIO_NTHREADS environment " +
-          "variable, which is ignored when the hybrid scan reader is enabled.")
+          "startup. If unset, KvikIO's own KVIKIO_NTHREADS or KVIKIO_NUM_THREADS environment " +
+          s"variable applies if set, else ${MULTITHREAD_READ_NUM_THREADS.key}.")
       .startupOnly()
       .internal()
       .integerConf
       .checkValue(v => v > 0, "KvikIO needs at least 1 thread.")
-      .createWithDefault(4)
+      .createOptional
 
   val PARQUET_HYBRID_SCAN_MAX_H2D_PACK_SIZE =
     conf("spark.rapids.sql.format.parquet.hybridScan.maxH2DPackSize")

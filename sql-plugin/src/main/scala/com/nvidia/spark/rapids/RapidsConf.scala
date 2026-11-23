@@ -50,7 +50,7 @@ object RapidsConf extends Logging with RapidsConfEntries {
   }
 
   object GpuDirectStorageMode extends Enumeration {
-    val OFF, WAIT_IF_GPU_BUSY, HOST_IF_GPU_BUSY = Value
+    val OFF, ON, AUTO = Value
   }
 
   private lazy val registeredConfs = new ListBuffer[ConfEntry[_]]()
@@ -761,7 +761,7 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val isReaderGdsEnabled: Boolean = readerGdsMode != GpuDirectStorageMode.OFF
 
-  lazy val readerKvikioNumThreads: Int = get(READER_KVIKIO_NUM_THREADS)
+  lazy val readerKvikioNumThreads: Option[Int] = get(READER_KVIKIO_NUM_THREADS).map(_.toInt)
 
   lazy val hybridScanMaxH2DPackSize: Long = get(PARQUET_HYBRID_SCAN_MAX_H2D_PACK_SIZE)
 

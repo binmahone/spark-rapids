@@ -13,10 +13,12 @@ import hashlib
 import json
 from pathlib import Path
 import shlex
+import re
 import subprocess
 import tarfile
 
 import botocore.session
+from botocore.config import Config
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--remote-run', required=True)
@@ -26,7 +28,8 @@ parser.add_argument('--ssh-config', required=True)
 args = parser.parse_args()
 bucket, prefix = args.s3_prefix[5:].split('/', 1)
 key = prefix.rstrip('/') + '/evidence.tar.gz'
-client = botocore.session.get_session().create_client('s3', region_name='us-east-1')
+client = botocore.session.get_session().create_client('s3', region_name='us-east-1',
+                                                     config=Config(signature_version='s3v4'))
 ticket = client.generate_presigned_url('put_object', Params={'Bucket': bucket, 'Key': key}, ExpiresIn=900)
 remote = '''
 import hashlib,json,sys,tarfile,urllib.request
@@ -57,7 +60,8 @@ command = ['ssh', '-C', '-F', args.ssh_config, '-o', 'KexAlgorithms=curve25519-s
 result = subprocess.run(command, input=json.dumps({'root': args.remote_run, 'url': ticket}),
                         capture_output=True, text=True, timeout=180)
 if result.returncode:
-    raise RuntimeError('Evidence upload failed; signed ticket omitted from error output')
+    detail = re.sub(r'https?://[^\s\"\'<>]+', '[redacted URL]', result.stderr[-1600:])
+    raise RuntimeError('Evidence upload failed: ' + detail)
 receipt = json.loads(result.stdout)
 args.output.mkdir(parents=True, exist_ok=False)
 archive = args.output / 'evidence.tar.gz'

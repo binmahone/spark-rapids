@@ -16,6 +16,7 @@ import shlex
 import subprocess
 
 import botocore.session
+from botocore.config import Config
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--build-directory', type=Path, required=True)
@@ -25,7 +26,8 @@ parser.add_argument('--ssh-config', required=True)
 args = parser.parse_args()
 assert args.s3_prefix.startswith('s3://')
 bucket, prefix = args.s3_prefix[5:].split('/', 1)
-client = botocore.session.get_session().create_client('s3', region_name='us-east-1')
+client = botocore.session.get_session().create_client('s3', region_name='us-east-1',
+                                                     config=Config(signature_version='s3v4'))
 identity = botocore.session.get_session().create_client('sts').get_caller_identity()
 assert identity['Account'] == '503960270539' and identity['Arn'].endswith(':user/mahone')
 items = []

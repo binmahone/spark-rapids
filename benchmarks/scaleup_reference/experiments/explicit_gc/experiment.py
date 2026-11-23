@@ -15,6 +15,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
 import signal
 import socket
 import subprocess
@@ -94,6 +95,7 @@ def prepare(args):
             'cleared_process_environment_keys': ['JAVA_TOOL_OPTIONS', 'JDK_JAVA_OPTIONS',
                                                  '_JAVA_OPTIONS', 'SPARK_SUBMIT_OPTS']}
     write(root / 'plan.json', plan)
+    (root / 'command.txt').write_text(shlex.join([sys.executable, *sys.argv]) + '\n')
     write(root / 'status.json', {'status': 'prepared'})
     if args.submit:
         deployment = config['deployment']

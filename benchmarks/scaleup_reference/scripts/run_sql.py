@@ -167,11 +167,20 @@ def main():
                 node_metrics = metrics(plan)
                 reader = {key: sum(n['metrics'].get(key, 0) for n in node_metrics) for key in (
                     'hybridScanSplits', 'hybridScanDeviceBytesRead', 'hybridScanNativeHostBytesRead',
-                    'hybridScanGdsFallbackFiles', 'hybridScanGpuBusyHostBytesRead')}
+                    'hybridScanGdsFallbackFiles', 'hybridScanGpuBusyHostBytesRead',
+                    'hybridScanBytesRequested')}
                 if not args.reference_only:
                     if reader['hybridScanSplits'] <= 0 or reader['hybridScanGdsFallbackFiles'] != 0:
                         raise AssertionError('Expected Hybrid reader path did not execute')
-                    if config['platform'] == 'nvl72' and reader['hybridScanDeviceBytesRead'] <= 0:
+                    expected_reader = config.get('paul_pr_test', {}).get('expected_reader')
+                    if expected_reader in ('hadoop-host', 'kvikio-host'):
+                        if reader['hybridScanDeviceBytesRead'] != 0:
+                            raise AssertionError('A host-reader control unexpectedly used GDS')
+                        if expected_reader == 'kvikio-host' and reader['hybridScanNativeHostBytesRead'] <= 0:
+                            raise AssertionError('PR native host reads did not execute')
+                        if expected_reader == 'hadoop-host' and reader['hybridScanNativeHostBytesRead'] != 0:
+                            raise AssertionError('Before-PR control unexpectedly used native host reads')
+                    elif config['platform'] == 'nvl72' and reader['hybridScanDeviceBytesRead'] <= 0:
                         raise AssertionError('Expected GDS device reads did not execute')
                     if config['platform'] == 'aws48x' and (reader['hybridScanDeviceBytesRead'] != 0 or
                                                         reader['hybridScanNativeHostBytesRead'] <= 0):

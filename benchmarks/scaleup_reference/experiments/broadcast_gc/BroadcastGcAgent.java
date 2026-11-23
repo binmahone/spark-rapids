@@ -48,7 +48,11 @@ public final class BroadcastGcAgent {
 
   private BroadcastGcAgent() {}
 
-  public static void premain(String directory, Instrumentation instrumentation) throws Exception {
+  public static synchronized void premain(String directory, Instrumentation instrumentation) throws Exception {
+    if (output != null) {
+      mark("duplicate_agent_skipped", "");
+      return;
+    }
     File folder = new File(directory);
     if (!folder.isDirectory() && !folder.mkdirs()) {
       throw new IllegalStateException("Cannot create lifecycle log directory");
@@ -106,7 +110,8 @@ public final class BroadcastGcAgent {
           }
           byte[] changed = writer.toByteArray();
           mark("class_transformed", "input_sha256=" + sha(bytes) +
-              ";output_sha256=" + sha(changed));
+              ";output_sha256=" + sha(changed) + ";loader=" +
+              loader.getClass().getName() + "@" + System.identityHashCode(loader));
           transformed = true;
           return changed;
         } catch (Throwable error) {

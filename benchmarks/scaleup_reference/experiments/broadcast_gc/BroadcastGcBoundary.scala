@@ -10,6 +10,7 @@
 package org.apache.spark.sql.rapids
 
 import java.lang.management.ManagementFactory
+import java.net.InetAddress
 import java.util.{List => JList}
 
 import scala.collection.JavaConverters._
@@ -69,6 +70,7 @@ object BroadcastGcBoundary {
   def finish(sc: SparkContext, phase: String, executors: Int,
       slots: Int, manual: Boolean): JList[String] = {
     drain(sc)
+    BroadcastGcAgent.checkHealthy()
     require(sc.getConf.getBoolean(IndependentQueryBoundary.EnabledKey, false) == manual,
       "Ordinary cleanup flag differs from the requested diagnostic branch")
     val manager = ShuffleCleanupManager.get
@@ -116,7 +118,10 @@ object BroadcastGcBoundary {
       val objects = if (observe) BroadcastGcSnapshot.records() else "[]"
       BroadcastGcAgent.checkHealthy()
       val finalized = BroadcastGcAgent.finalizedIds().asScala.mkString("[", ",", "]")
+      val pid = ManagementFactory.getRuntimeMXBean.getName.split("@")(0)
+      val host = InetAddress.getLocalHost.getHostName
       val result = s"""{"executor":"${SparkEnv.get.executorId}","time_ms":${System.currentTimeMillis()},""" +
+        s""""jvm_pid":$pid,"hostname":"$host",""" +
         s""""phase":"$phase","action":"$action","rmm_bytes":${Rmm.getTotalBytesAllocated},""" +
         s""""host_allocated_bytes":$hostAllocated,"old_gc_count":$oldCollections,""" +
         s""""gc_cycle_completed":${BroadcastGcAgent.gcCompleted()},"objects":$objects,""" +

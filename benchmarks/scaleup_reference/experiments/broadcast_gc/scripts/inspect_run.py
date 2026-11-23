@@ -14,6 +14,26 @@ import re
 import sys
 
 root = Path(sys.argv[1])
+if len(sys.argv) > 2 and sys.argv[2] == '--classes-only':
+    for case in sorted((root / 'runs').iterdir()):
+        files = list(case.glob('gc/*/agent/*.jsonl'))
+        if not files:
+            continue
+        distribution = {}
+        first = []
+        for path in files:
+            rows = [json.loads(line) for line in path.read_text().splitlines()]
+            transformed = [r['detail'] for r in rows if r['event'] == 'class_transformed']
+            distribution[len(transformed)] = distribution.get(len(transformed), 0) + 1
+            if not first:
+                first = transformed
+        print(json.dumps({'case': case.name, 'jvms': len(files),
+                          'transform_distribution': distribution, 'example': first}))
+        path = case / 'applications/suite/mechanism.json'
+        if path.exists():
+            result = json.loads(path.read_text())
+            print(json.dumps({k: v for k, v in result.items() if k not in ['targets', 'phases']}))
+    sys.exit(0)
 
 
 def read(path):

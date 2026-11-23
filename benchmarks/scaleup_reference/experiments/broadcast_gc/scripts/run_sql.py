@@ -15,7 +15,6 @@
 """Run Q9/Q3 with ordinary-broadcast cleanup controls and separate GC diagnostics."""
 import argparse
 from collections import Counter
-import gc
 import json
 import math
 import os
@@ -27,6 +26,7 @@ import time
 
 from pyspark.sql import SparkSession
 
+from gateway_barrier import release_proxies
 sys.path.insert(0, os.environ['SCALEUP_REFERENCE_SUITE'] + '/scripts')
 from catalog_statistics import register_tables
 from common import SUITE, TABLES, read, sha, write
@@ -279,7 +279,7 @@ def main():
                 if not args.reference_only:
                     before = time.perf_counter()
                     # Drop unreachable Python/Py4J proxy cycles equally in every comparison arm.
-                    sample['python_proxy_cycles_collected'] = gc.collect()
+                    sample['python_proxy_cycles_collected'] = release_proxies(sc)
                     receipts = [json.loads(str(row)) for row in boundary.finish(
                         sc._jsc.sc(), token, executors, slots, experiment['manual_ordinary_cleanup'])]
                     sample['cleanup_seconds'] = time.perf_counter() - before

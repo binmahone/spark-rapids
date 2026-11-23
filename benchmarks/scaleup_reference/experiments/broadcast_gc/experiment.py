@@ -23,6 +23,7 @@ import socket
 import subprocess
 import sys
 from types import SimpleNamespace
+from zipfile import ZipFile
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / 'explicit_gc'))
@@ -165,8 +166,17 @@ def evidence(case):
     assert len(logs) == 33, len(logs)
     agent_files = list(run.glob('gc/*/agent/*.jsonl'))
     assert len(agent_files) == 33, len(agent_files)
-    events = [json.loads(line) for p in agent_files for line in p.read_text().splitlines()]
-    assert sum(e['event'] == 'class_transformed' for e in events) == 33
+    with ZipFile(read(run / 'config.json')['engine']) as archive:
+        original_class_sha = hashlib.sha256(archive.read(
+            'org/apache/spark/sql/rapids/execution/SerializeConcatHostBuffersDeserializeBatch.class')).hexdigest()
+    events = []
+    for path in agent_files:
+        current = [json.loads(line) for line in path.read_text().splitlines()]
+        transformed = [e for e in current if e['event'] == 'class_transformed']
+        assert transformed, path
+        assert all(e['detail'].startswith('input_sha256=' + original_class_sha + ';')
+                   for e in transformed), 'A previously transformed class was instrumented again'
+        events.extend(current)
     retirement = sum(e['event'] == 'retireAfterIndependentQuery_enter' for e in events)
     requests = sum(e['event'] == 'gc_requested' for e in events)
     mechanism_path = run / 'applications/suite/mechanism.json'

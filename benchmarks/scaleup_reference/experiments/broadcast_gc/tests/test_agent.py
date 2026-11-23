@@ -31,14 +31,14 @@ classpath = ':'.join(map(str, [classes.resolve(), args.jar.resolve(), *args.spar
 subprocess.run([str(args.java_home / 'bin/javac'), '--release', '8', '-cp', classpath,
                 '-d', str(classes), *map(str, HERE.rglob('*.java'))], check=True)
 records = []
-for enabled in [False, True]:
-    label = 'on' if enabled else 'off'
+for enabled, copies in [(False, 1), (True, 1), (False, 3), (True, 3)]:
+    label = ('on' if enabled else 'off') + '-agents' + str(copies)
     folder = (args.output / label).resolve()
     command = [str(args.java_home / 'bin/java'), '-Xms128m', '-Xmx128m', '-XX:+UseG1GC',
                '-XX:-DisableExplicitGC', '-XX:' + ('+' if enabled else '-') + 'ExplicitGCInvokesConcurrent',
                '-Xlog:gc*:file=' + str(args.output.resolve() / 'jvm-gc/gc-%p.log') +
                ':utctime,uptimemillis,level,tags:filecount=0',
-               '-javaagent:' + str(args.jar.resolve()) + '=' + str(folder),
+               *['-javaagent:' + str(args.jar.resolve()) + '=' + str(folder)] * copies,
                '-cp', classpath, 'AgentProbe']
     result = subprocess.run(command, capture_output=True, text=True, timeout=20)
     (args.output / (label + '.console.log')).write_text(result.stdout + result.stderr)
@@ -46,13 +46,14 @@ for enabled in [False, True]:
     events = [json.loads(line) for p in folder.glob('*.jsonl') for line in p.read_text().splitlines()]
     names = [e['event'] for e in events]
     assert names.count('class_transformed') == 1
+    assert names.count('duplicate_agent_skipped') == copies - 1
     assert names.count('<init>_return') == 1
     assert names.count('closeInternal_throw') == 1
     assert names.count('finalize_return') == 1
     assert names.count('closeInternal_return') == 2
     assert names.count('retireAfterIndependentQuery_enter') == 1
     assert names.count('retireAfterIndependentQuery_return') == 1
-    records.append({'enabled': enabled, 'status': 'passed', 'events': names})
+    records.append({'enabled': enabled, 'agent_copies': copies, 'status': 'passed', 'events': names})
 build = json.loads((args.jar.parent / 'build-receipt.json').read_text())
 real_classes = args.output / 'real-classes'
 real_classes.mkdir()

@@ -4,6 +4,8 @@
 
 两边的数据规模、数值类型、存储和读取方式不同。下面的总时间分别对应这两套实验，不能直接相除得到硬件加速比。这是工程参考配置，不是官方 TPC 成绩。
 
+复用范围是下面列出的两套既有环境。统一入口已经移除了对旧 session 脚本和手工修改 JAR 的依赖；查询特例、统计加载和清理边界都明确写在配置及文档中。迁移到其他环境时，仍需调整部署路径和基础设施设置。
+
 ## 从哪里开始
 
 代码入口：[benchmarks/scaleup_reference](https://github.com/binmahone/spark-rapids/tree/faa47fe51f998ae97385e2b218be4a261006bfa6/benchmarks/scaleup_reference)，固定提交 `faa47fe51f998ae97385e2b218be4a261006bfa6`。目录内也有英文 [README](https://github.com/binmahone/spark-rapids/blob/faa47fe51f998ae97385e2b218be4a261006bfa6/benchmarks/scaleup_reference/README.md)。
@@ -222,6 +224,12 @@ Spark 必须是原版 3.5.3，其 `jars/` 中没有预装 RAPIDS、cuDF、Gluten
 
 AWS 用对应的 amd64 Java 路径，scratch 使用本地 NVMe。NVL 还需要明确的 `container_image`、`container_mounts`，以及可选 `container_setup`。部署文件选择机器位置、Slurm/container 和节点；工作负载参数位于参考配置 JSON。
 
+仍保留的环境绑定需要显式核对：
+
+- 可选 AWS 建机脚本默认使用本次环境的 AMI、subnet 和 IAM instance profile，可通过参数覆盖；资源的 `Owner` 标签固定为 `mahonem`，其他使用者创建资源前应修改这个标签。
+- NVL 原生读取预检使用 `/usr/local/cuda-13.0`；application 默认优先加载 CUDA 13.1 运行库，NVL 再加入 CUDA 13.0 库目录。换 SDK 布局时需要同时检查预检和 application 的库路径。
+- AWS 提交入口固定使用 master 端口 `17744` 和 UI 端口 `18190`。同一主机同时运行多套实验时需要先分配不同端口。
+
 ### AWS
 
 本次 AMI 已将本地 NVMe 挂载在 `/opt/dlami/nvme`；数据脚本要求这个路径确实是独立挂载点。其他 AMI 需要先由机器使用者准备足够空间的本地存储，脚本不会自动格式化磁盘。
@@ -256,7 +264,7 @@ sbatch --partition=nvidia-part --nodes=1 --ntasks=1 --cpus-per-task=16 --mem=32G
 
 NVL controller 只检查产物和提交配置；数据、Java 和原生库路径在计算节点/container 内检查，controller 无须具有计算节点的 `/scratch` 挂载。
 
-本次实测 deployment、展开配置、命令、节点和 application ID 位于本页证据证据文件。里面的个人目录是本次验证的实际部署位置；复现时替换为自己能访问、所有运行节点均可见的路径。
+本次实测 deployment、展开配置、命令、节点和 application ID 位于本页链接的证据文件。里面的个人目录是本次验证的实际部署位置；复现时替换为自己能访问、所有运行节点均可见的路径。
 
 ## 提交、查看和停止
 

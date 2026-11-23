@@ -1,0 +1,724 @@
+{
+  "experiment": "NVL72 Q9 then Q3 ordinary-broadcast cleanup and ExplicitGCInvokesConcurrent",
+  "date_beijing": "2026-11-23",
+  "queries_in_one_application": [
+    9,
+    3
+  ],
+  "reference_score_eligible": false,
+  "scope": "Instrumented diagnostic. Normal UCX and driverless cleanup preserved in every arm. Natural arms contain no deliberate JVM GC requests.",
+  "engine_source_revision": "faa47fe51f998ae97385e2b218be4a261006bfa6",
+  "engine_sha256": "f99002a23ffc885d8593039d3c6ccb8359c288a730cf2cf65db10d71c5952ded",
+  "diagnostic_tools_source_revision": "608cedbbbc",
+  "diagnostic_tools_sha256": "0457e361c8fa718f2e446549f8e95e1b1cd85a406b7805088ce8825f38fd5a50",
+  "baseline_prerequisites": "https://nvidia.atlassian.net/wiki/pages/viewpage.action?pageId=4172120563",
+  "entrypoint": "benchmarks/scaleup_reference/experiments/broadcast_gc/scripts/submit_nvl.sh",
+  "runs": [
+    {
+      "stage": "mechanism",
+      "job_id": 25465,
+      "runtime_source_revision": "8bc93cc29e13e4693612f66bff6e86415bb55893",
+      "archive": {
+        "sha256": "90bda1593cad4b7be97c5d042fc6779a0b89236bb8fad8f42554dd9160bb82ee",
+        "bytes": 8813721,
+        "files": 382,
+        "status": "completed",
+        "s3_uri": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261123/01a20622-0ca8-74d0-9805-6bc842a9fdb3/diagnostics/broadcast-gc/results/mechanism-25465/evidence.tar.gz",
+        "remote_run": "/home/mahonem/wild_spark_rapids/261123_scaleup_reference_gc/.build/broadcast-gc-mechanism-261123-0720"
+      },
+      "resource_audit": {
+        "job_id": 25465,
+        "job_active": false,
+        "accounting": "25465|COMPLETED|0:0|372",
+        "case_service_audits": [
+          {
+            "case": "broadcast-gc-mechanism-261123-0720-01-mechanism-off",
+            "service_ownership_receipts": 9,
+            "missing_stop_receipts": [],
+            "remaining_recorded_processes": []
+          },
+          {
+            "case": "broadcast-gc-mechanism-261123-0720-02-mechanism-on",
+            "service_ownership_receipts": 9,
+            "missing_stop_receipts": [],
+            "remaining_recorded_processes": []
+          }
+        ]
+      },
+      "cases": [
+        {
+          "label": "mechanism-off",
+          "scenario": "mechanism",
+          "enabled": false,
+          "manual_ordinary_cleanup": false,
+          "validated_samples": 2,
+          "verified_application_jvms": 33,
+          "lifecycle_traced_jvms": 33,
+          "retirement_calls": 0,
+          "deliberate_gc_requests": 33,
+          "system_gc_events": 33,
+          "full_system_gc_events": 33,
+          "sum_jvm_pause_ms": 7573.037,
+          "max_jvm_pause_ms": 137.654,
+          "pair_wall_seconds": 45.128981510177255,
+          "sql_seconds": {
+            "9": 30.950942828087136,
+            "3": 10.239551597973332
+          },
+          "reference_score_eligible": false,
+          "mechanism": {
+            "status": "observed",
+            "driver_stage": {
+              "host_blocks_remaining": 0,
+              "gc_cycle_seconds": 0.14157827803865075,
+              "through_block_observation_seconds": 1.2740513228345662
+            },
+            "unfinalized_target_objects": 0,
+            "seconds": 1.5093204649165273,
+            "phases": [
+              {
+                "phase": "driver-blocks-0",
+                "time_ms": 1795418452537
+              },
+              {
+                "phase": "driver-blocks-1",
+                "time_ms": 1795418453594
+              },
+              {
+                "phase": "executor-gc",
+                "time_ms": 1795418453725
+              },
+              {
+                "phase": "executor-gc-wait-0",
+                "time_ms": 1795418453778
+              },
+              {
+                "phase": "executor-finalized-0",
+                "time_ms": 1795418453829
+              }
+            ],
+            "scope": "Deliberate Driver then Executor System.gc requests, outside timed SQL",
+            "target_objects_by_executor": {
+              "4": 1,
+              "22": 1,
+              "24": 1,
+              "13": 1,
+              "14": 1,
+              "11": 1,
+              "18": 1,
+              "27": 1,
+              "1": 1,
+              "10": 1,
+              "17": 1,
+              "3": 1,
+              "8": 1,
+              "9": 1,
+              "20": 1,
+              "15": 1,
+              "16": 1,
+              "19": 1,
+              "28": 1,
+              "21": 1,
+              "23": 1,
+              "5": 1,
+              "25": 1,
+              "7": 1,
+              "6": 1,
+              "29": 1,
+              "26": 1,
+              "12": 1,
+              "30": 1,
+              "0": 1,
+              "31": 1,
+              "2": 1
+            }
+          },
+          "after_q9": {
+            "ordinary_objects": 32,
+            "ordinary_objects_before_action": 32,
+            "host_blocks": 32,
+            "rmm_before_action_bytes": 87773167616,
+            "rmm_bytes": 87773167616,
+            "host_allocated_bytes": 8589934592
+          },
+          "after_q3": {
+            "ordinary_objects": 0,
+            "rmm_bytes": 4294967296,
+            "host_allocated_bytes": 8589934592
+          },
+          "deliberate_gc_call_windows": {
+            "count": 33,
+            "max_single_jvm_pause_ms": 137.654,
+            "sum_jvm_pauses_ms": 1450.563,
+            "scope": "GC pause end events within each instrumented System.gc entry/return; excludes startup and SQL; sum across JVMs is not wall time"
+          },
+          "after_driver_gc": {
+            "ordinary_objects": 32,
+            "host_blocks": 0,
+            "rmm_bytes": 87773167616,
+            "host_allocated_bytes": 8589934592
+          },
+          "after_executor_gc": {
+            "ordinary_objects": 0,
+            "rmm_bytes": 4294967296,
+            "host_allocated_bytes": 8589934592,
+            "unfinalized_target_objects": 0
+          }
+        },
+        {
+          "label": "mechanism-on",
+          "scenario": "mechanism",
+          "enabled": true,
+          "manual_ordinary_cleanup": false,
+          "validated_samples": 2,
+          "verified_application_jvms": 33,
+          "lifecycle_traced_jvms": 33,
+          "retirement_calls": 0,
+          "deliberate_gc_requests": 33,
+          "system_gc_events": 33,
+          "full_system_gc_events": 0,
+          "sum_jvm_pause_ms": 6610.308,
+          "max_jvm_pause_ms": 23.129,
+          "pair_wall_seconds": 80.9614315610379,
+          "sql_seconds": {
+            "9": 30.798652968835086,
+            "3": 10.75836296309717
+          },
+          "reference_score_eligible": false,
+          "mechanism": {
+            "status": "observed",
+            "driver_stage": {
+              "host_blocks_remaining": 32,
+              "gc_cycle_seconds": 0.07332297717221081,
+              "through_block_observation_seconds": 21.03931613918394
+            },
+            "unfinalized_target_objects": 32,
+            "seconds": 36.908976337173954,
+            "phases": [
+              {
+                "phase": "driver-blocks-0",
+                "time_ms": 1795418616848
+              },
+              {
+                "phase": "driver-blocks-1",
+                "time_ms": 1795418617898
+              },
+              {
+                "phase": "driver-blocks-2",
+                "time_ms": 1795418618946
+              },
+              {
+                "phase": "driver-blocks-3",
+                "time_ms": 1795418619993
+              },
+              {
+                "phase": "driver-blocks-4",
+                "time_ms": 1795418621038
+              },
+              {
+                "phase": "driver-blocks-5",
+                "time_ms": 1795418622083
+              },
+              {
+                "phase": "driver-blocks-6",
+                "time_ms": 1795418623128
+              },
+              {
+                "phase": "driver-blocks-7",
+                "time_ms": 1795418624172
+              },
+              {
+                "phase": "driver-blocks-8",
+                "time_ms": 1795418625215
+              },
+              {
+                "phase": "driver-blocks-9",
+                "time_ms": 1795418626260
+              },
+              {
+                "phase": "driver-blocks-10",
+                "time_ms": 1795418627305
+              },
+              {
+                "phase": "driver-blocks-11",
+                "time_ms": 1795418628350
+              },
+              {
+                "phase": "driver-blocks-12",
+                "time_ms": 1795418629396
+              },
+              {
+                "phase": "driver-blocks-13",
+                "time_ms": 1795418630441
+              },
+              {
+                "phase": "driver-blocks-14",
+                "time_ms": 1795418631488
+              },
+              {
+                "phase": "driver-blocks-15",
+                "time_ms": 1795418632535
+              },
+              {
+                "phase": "driver-blocks-16",
+                "time_ms": 1795418633581
+              },
+              {
+                "phase": "driver-blocks-17",
+                "time_ms": 1795418634624
+              },
+              {
+                "phase": "driver-blocks-18",
+                "time_ms": 1795418635666
+              },
+              {
+                "phase": "driver-blocks-19",
+                "time_ms": 1795418636708
+              },
+              {
+                "phase": "driver-blocks-20",
+                "time_ms": 1795418637750
+              },
+              {
+                "phase": "executor-gc",
+                "time_ms": 1795418637838
+              },
+              {
+                "phase": "executor-gc-wait-0",
+                "time_ms": 1795418637885
+              },
+              {
+                "phase": "executor-finalized-0",
+                "time_ms": 1795418637929
+              },
+              {
+                "phase": "executor-finalized-1",
+                "time_ms": 1795418638976
+              },
+              {
+                "phase": "executor-finalized-2",
+                "time_ms": 1795418640020
+              },
+              {
+                "phase": "executor-finalized-3",
+                "time_ms": 1795418641068
+              },
+              {
+                "phase": "executor-finalized-4",
+                "time_ms": 1795418642129
+              },
+              {
+                "phase": "executor-finalized-5",
+                "time_ms": 1795418643179
+              },
+              {
+                "phase": "executor-finalized-6",
+                "time_ms": 1795418644224
+              },
+              {
+                "phase": "executor-finalized-7",
+                "time_ms": 1795418645268
+              },
+              {
+                "phase": "executor-finalized-8",
+                "time_ms": 1795418646312
+              },
+              {
+                "phase": "executor-finalized-9",
+                "time_ms": 1795418647354
+              },
+              {
+                "phase": "executor-finalized-10",
+                "time_ms": 1795418648398
+              },
+              {
+                "phase": "executor-finalized-11",
+                "time_ms": 1795418649442
+              },
+              {
+                "phase": "executor-finalized-12",
+                "time_ms": 1795418650486
+              },
+              {
+                "phase": "executor-finalized-13",
+                "time_ms": 1795418651531
+              },
+              {
+                "phase": "executor-finalized-14",
+                "time_ms": 1795418652575
+              },
+              {
+                "phase": "executor-finalized-15",
+                "time_ms": 1795418653619
+              }
+            ],
+            "scope": "Deliberate Driver then Executor System.gc requests, outside timed SQL",
+            "target_objects_by_executor": {
+              "20": 1,
+              "17": 1,
+              "13": 1,
+              "0": 1,
+              "25": 1,
+              "6": 1,
+              "16": 1,
+              "3": 1,
+              "7": 1,
+              "14": 1,
+              "30": 1,
+              "15": 1,
+              "9": 1,
+              "8": 1,
+              "31": 1,
+              "5": 1,
+              "1": 1,
+              "18": 1,
+              "28": 1,
+              "24": 1,
+              "22": 1,
+              "2": 1,
+              "26": 1,
+              "10": 1,
+              "19": 1,
+              "4": 1,
+              "11": 1,
+              "12": 1,
+              "27": 1,
+              "21": 1,
+              "23": 1,
+              "29": 1
+            }
+          },
+          "after_q9": {
+            "ordinary_objects": 32,
+            "ordinary_objects_before_action": 32,
+            "host_blocks": 32,
+            "rmm_before_action_bytes": 87773167616,
+            "rmm_bytes": 87773167616,
+            "host_allocated_bytes": 8589934592
+          },
+          "after_q3": {
+            "ordinary_objects": 32,
+            "rmm_bytes": 87773167616,
+            "host_allocated_bytes": 8589934592
+          },
+          "deliberate_gc_call_windows": {
+            "count": 33,
+            "max_single_jvm_pause_ms": 18.656,
+            "sum_jvm_pauses_ms": 645.514,
+            "scope": "GC pause end events within each instrumented System.gc entry/return; excludes startup and SQL; sum across JVMs is not wall time"
+          },
+          "after_driver_gc": {
+            "ordinary_objects": 32,
+            "host_blocks": 32,
+            "rmm_bytes": 87773167616,
+            "host_allocated_bytes": 8589934592
+          },
+          "after_executor_gc": {
+            "ordinary_objects": 32,
+            "rmm_bytes": 87773167616,
+            "host_allocated_bytes": 8589934592,
+            "unfinalized_target_objects": 32
+          }
+        }
+      ]
+    },
+    {
+      "stage": "natural",
+      "job_id": 25466,
+      "runtime_source_revision": "542c953efa0c0e1e87629fa76da638256724faef",
+      "archive": {
+        "sha256": "664377db1437617e35e3f6ad7f69174282a3d6166e27adc755ebe5645caf693b",
+        "bytes": 24446107,
+        "files": 992,
+        "status": "completed",
+        "s3_uri": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261123/01a20622-0ca8-74d0-9805-6bc842a9fdb3/diagnostics/broadcast-gc/results/natural-25466/evidence.tar.gz",
+        "remote_run": "/home/mahonem/wild_spark_rapids/261123_scaleup_reference_gc/.build/broadcast-gc-natural-261123-0735"
+      },
+      "resource_audit": {
+        "job_id": 25466,
+        "job_active": false,
+        "accounting": "25466|COMPLETED|0:0|988",
+        "case_service_audits": [
+          {
+            "case": "broadcast-gc-natural-261123-0735-01-natural-off-1",
+            "service_ownership_receipts": 9,
+            "missing_stop_receipts": [],
+            "remaining_recorded_processes": []
+          },
+          {
+            "case": "broadcast-gc-natural-261123-0735-02-natural-on-1",
+            "service_ownership_receipts": 9,
+            "missing_stop_receipts": [],
+            "remaining_recorded_processes": []
+          },
+          {
+            "case": "broadcast-gc-natural-261123-0735-03-manual-off-1",
+            "service_ownership_receipts": 9,
+            "missing_stop_receipts": [],
+            "remaining_recorded_processes": []
+          },
+          {
+            "case": "broadcast-gc-natural-261123-0735-04-manual-off-2",
+            "service_ownership_receipts": 9,
+            "missing_stop_receipts": [],
+            "remaining_recorded_processes": []
+          },
+          {
+            "case": "broadcast-gc-natural-261123-0735-05-natural-on-2",
+            "service_ownership_receipts": 9,
+            "missing_stop_receipts": [],
+            "remaining_recorded_processes": []
+          },
+          {
+            "case": "broadcast-gc-natural-261123-0735-06-natural-off-2",
+            "service_ownership_receipts": 9,
+            "missing_stop_receipts": [],
+            "remaining_recorded_processes": []
+          }
+        ]
+      },
+      "cases": [
+        {
+          "label": "natural-off-1",
+          "scenario": "natural",
+          "enabled": false,
+          "manual_ordinary_cleanup": false,
+          "validated_samples": 2,
+          "verified_application_jvms": 33,
+          "lifecycle_traced_jvms": 33,
+          "retirement_calls": 0,
+          "deliberate_gc_requests": 0,
+          "system_gc_events": 0,
+          "full_system_gc_events": 0,
+          "sum_jvm_pause_ms": 5580.513,
+          "max_jvm_pause_ms": 28.432,
+          "pair_wall_seconds": 44.076653025113046,
+          "sql_seconds": {
+            "9": 31.170733331004158,
+            "3": 10.562081187963486
+          },
+          "reference_score_eligible": false,
+          "after_q9": {
+            "ordinary_objects": 32,
+            "ordinary_objects_before_action": 32,
+            "host_blocks": 32,
+            "rmm_before_action_bytes": 87773167616,
+            "rmm_bytes": 87773167616,
+            "host_allocated_bytes": 8589934592
+          },
+          "after_q3": {
+            "ordinary_objects": 32,
+            "rmm_bytes": 87773167616,
+            "host_allocated_bytes": 8589934592
+          },
+          "deliberate_gc_call_windows": {
+            "count": 0,
+            "max_single_jvm_pause_ms": null,
+            "sum_jvm_pauses_ms": 0,
+            "scope": "GC pause end events within each instrumented System.gc entry/return; excludes startup and SQL; sum across JVMs is not wall time"
+          }
+        },
+        {
+          "label": "natural-on-1",
+          "scenario": "natural",
+          "enabled": true,
+          "manual_ordinary_cleanup": false,
+          "validated_samples": 2,
+          "verified_application_jvms": 33,
+          "lifecycle_traced_jvms": 33,
+          "retirement_calls": 0,
+          "deliberate_gc_requests": 0,
+          "system_gc_events": 0,
+          "full_system_gc_events": 0,
+          "sum_jvm_pause_ms": 5687.944,
+          "max_jvm_pause_ms": 37.077,
+          "pair_wall_seconds": 44.74344353401102,
+          "sql_seconds": {
+            "9": 30.623628887115046,
+            "3": 11.621691829990596
+          },
+          "reference_score_eligible": false,
+          "after_q9": {
+            "ordinary_objects": 32,
+            "ordinary_objects_before_action": 32,
+            "host_blocks": 32,
+            "rmm_before_action_bytes": 87773167616,
+            "rmm_bytes": 87773167616,
+            "host_allocated_bytes": 8589934592
+          },
+          "after_q3": {
+            "ordinary_objects": 32,
+            "rmm_bytes": 87773167616,
+            "host_allocated_bytes": 8589934592
+          },
+          "deliberate_gc_call_windows": {
+            "count": 0,
+            "max_single_jvm_pause_ms": null,
+            "sum_jvm_pauses_ms": 0,
+            "scope": "GC pause end events within each instrumented System.gc entry/return; excludes startup and SQL; sum across JVMs is not wall time"
+          }
+        },
+        {
+          "label": "manual-off-1",
+          "scenario": "natural",
+          "enabled": false,
+          "manual_ordinary_cleanup": true,
+          "validated_samples": 2,
+          "verified_application_jvms": 33,
+          "lifecycle_traced_jvms": 33,
+          "retirement_calls": 32,
+          "deliberate_gc_requests": 0,
+          "system_gc_events": 0,
+          "full_system_gc_events": 0,
+          "sum_jvm_pause_ms": 5931.43,
+          "max_jvm_pause_ms": 156.114,
+          "pair_wall_seconds": 44.100023281993344,
+          "sql_seconds": {
+            "9": 31.01849181787111,
+            "3": 10.195614238036796
+          },
+          "reference_score_eligible": false,
+          "after_q9": {
+            "ordinary_objects": 0,
+            "ordinary_objects_before_action": 32,
+            "host_blocks": 0,
+            "rmm_before_action_bytes": 87773167616,
+            "rmm_bytes": 4294967296,
+            "host_allocated_bytes": 8589934592
+          },
+          "after_q3": {
+            "ordinary_objects": 0,
+            "rmm_bytes": 4294967296,
+            "host_allocated_bytes": 8589934592
+          },
+          "deliberate_gc_call_windows": {
+            "count": 0,
+            "max_single_jvm_pause_ms": null,
+            "sum_jvm_pauses_ms": 0,
+            "scope": "GC pause end events within each instrumented System.gc entry/return; excludes startup and SQL; sum across JVMs is not wall time"
+          }
+        },
+        {
+          "label": "manual-off-2",
+          "scenario": "natural",
+          "enabled": false,
+          "manual_ordinary_cleanup": true,
+          "validated_samples": 2,
+          "verified_application_jvms": 33,
+          "lifecycle_traced_jvms": 33,
+          "retirement_calls": 32,
+          "deliberate_gc_requests": 0,
+          "system_gc_events": 0,
+          "full_system_gc_events": 0,
+          "sum_jvm_pause_ms": 5842.769,
+          "max_jvm_pause_ms": 76.704,
+          "pair_wall_seconds": 43.715795191936195,
+          "sql_seconds": {
+            "9": 30.59644752694294,
+            "3": 10.278157989960164
+          },
+          "reference_score_eligible": false,
+          "after_q9": {
+            "ordinary_objects": 0,
+            "ordinary_objects_before_action": 32,
+            "host_blocks": 0,
+            "rmm_before_action_bytes": 87773167616,
+            "rmm_bytes": 4294967296,
+            "host_allocated_bytes": 8589934592
+          },
+          "after_q3": {
+            "ordinary_objects": 0,
+            "rmm_bytes": 4294967296,
+            "host_allocated_bytes": 8589934592
+          },
+          "deliberate_gc_call_windows": {
+            "count": 0,
+            "max_single_jvm_pause_ms": null,
+            "sum_jvm_pauses_ms": 0,
+            "scope": "GC pause end events within each instrumented System.gc entry/return; excludes startup and SQL; sum across JVMs is not wall time"
+          }
+        },
+        {
+          "label": "natural-on-2",
+          "scenario": "natural",
+          "enabled": true,
+          "manual_ordinary_cleanup": false,
+          "validated_samples": 2,
+          "verified_application_jvms": 33,
+          "lifecycle_traced_jvms": 33,
+          "retirement_calls": 0,
+          "deliberate_gc_requests": 0,
+          "system_gc_events": 0,
+          "full_system_gc_events": 0,
+          "sum_jvm_pause_ms": 5720.982,
+          "max_jvm_pause_ms": 24.771,
+          "pair_wall_seconds": 44.341033512027934,
+          "sql_seconds": {
+            "9": 31.17018589307554,
+            "3": 10.588288652012125
+          },
+          "reference_score_eligible": false,
+          "after_q9": {
+            "ordinary_objects": 32,
+            "ordinary_objects_before_action": 32,
+            "host_blocks": 32,
+            "rmm_before_action_bytes": 87773167616,
+            "rmm_bytes": 87773167616,
+            "host_allocated_bytes": 8589934592
+          },
+          "after_q3": {
+            "ordinary_objects": 32,
+            "rmm_bytes": 87773167616,
+            "host_allocated_bytes": 8589934592
+          },
+          "deliberate_gc_call_windows": {
+            "count": 0,
+            "max_single_jvm_pause_ms": null,
+            "sum_jvm_pauses_ms": 0,
+            "scope": "GC pause end events within each instrumented System.gc entry/return; excludes startup and SQL; sum across JVMs is not wall time"
+          }
+        },
+        {
+          "label": "natural-off-2",
+          "scenario": "natural",
+          "enabled": false,
+          "manual_ordinary_cleanup": false,
+          "validated_samples": 2,
+          "verified_application_jvms": 33,
+          "lifecycle_traced_jvms": 33,
+          "retirement_calls": 0,
+          "deliberate_gc_requests": 0,
+          "system_gc_events": 0,
+          "full_system_gc_events": 0,
+          "sum_jvm_pause_ms": 5782.0470000000005,
+          "max_jvm_pause_ms": 21.22,
+          "pair_wall_seconds": 44.9714993070811,
+          "sql_seconds": {
+            "9": 30.9693252670113,
+            "3": 11.471587326843292
+          },
+          "reference_score_eligible": false,
+          "after_q9": {
+            "ordinary_objects": 32,
+            "ordinary_objects_before_action": 32,
+            "host_blocks": 32,
+            "rmm_before_action_bytes": 87773167616,
+            "rmm_bytes": 87773167616,
+            "host_allocated_bytes": 8589934592
+          },
+          "after_q3": {
+            "ordinary_objects": 32,
+            "rmm_bytes": 87773167616,
+            "host_allocated_bytes": 8589934592
+          },
+          "deliberate_gc_call_windows": {
+            "count": 0,
+            "max_single_jvm_pause_ms": null,
+            "sum_jvm_pauses_ms": 0,
+            "scope": "GC pause end events within each instrumented System.gc entry/return; excludes startup and SQL; sum across JVMs is not wall time"
+          }
+        }
+      ]
+    }
+  ]
+}

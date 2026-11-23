@@ -19,10 +19,11 @@ from pathlib import Path
 import re
 import socket
 import signal
+import shutil
 import subprocess
 import time
 
-from common import read, write
+from common import read, sha, write
 from cohort import run_cohort
 import services
 from preflight import validate_runtime
@@ -62,6 +63,23 @@ def main():
             logs.mkdir(exist_ok=True)
             cufile['logging']['dir'] = str(logs)
             write(local / 'cufile.json', cufile)
+            if config.get('deployment_experiment', {}).get('bundle_cufile', False):
+                source_lib = Path('/usr/local/cuda-13.0/targets/sbsa-linux/lib')
+                destination = local / 'cufile-runtime'
+                destination.mkdir()
+                records = {}
+                for pattern in ('libcufile.so*', 'libcufile_rdma.so*'):
+                    paths = sorted(source_lib.glob(pattern))
+                    if not paths:
+                        raise RuntimeError('Missing cuFile runtime dependency: ' + pattern)
+                    for path in paths:
+                        target = destination / path.name
+                        shutil.copyfile(path, target)
+                        original_hash, copied_hash = sha(path), sha(target)
+                        if original_hash != copied_hash:
+                            raise AssertionError('Copied cuFile library differs')
+                        records[path.name] = {'source': str(path), 'sha256': copied_hash}
+                write(run / 'nodes' / (node + '.cufile-runtime.json'), records)
             from qualify_nvl import qualify
             qualification = qualify(config, local)
             write(run / 'nodes' / (node + '.native-reader.json'), qualification)

@@ -33,7 +33,8 @@ from common import expand, read, sha, write
 
 ENGINE_PIN = 'faa47fe51f998ae97385e2b218be4a261006bfa6'
 STAGES = {'placement': ('baseline', 'cpu-only', 'unbound', 'auto-tls', 'auto-net'),
-          'workers': ('baseline', 'per-numa')}
+          'workers': ('baseline', 'per-numa'),
+          'qualification': ('baseline', 'cpu-only', 'unbound', 'auto-tls', 'bundled-cufile')}
 ARMS = tuple(dict.fromkeys(arm for arms in STAGES.values() for arm in arms))
 CLEAR_ENV = ('JAVA_TOOL_OPTIONS', 'JDK_JAVA_OPTIONS', '_JAVA_OPTIONS',
              'SPARK_SUBMIT_OPTS', 'UCX_TLS', 'UCX_NET_DEVICES')
@@ -51,7 +52,8 @@ def variant(base, arm, stage='placement'):
     current['deployment_experiment'] = {'arm': arm, 'placement': placement,
         'diagnostic_only': True, 'engine_source_revision': ENGINE_PIN,
         'reference_score_eligible': False, 'verify_cuda_uuid': stage == 'workers',
-        'worker_layout': 'numa' if arm == 'per-numa' else 'gpu'}
+        'worker_layout': 'numa' if arm == 'per-numa' else 'gpu',
+        'bundle_cufile': arm == 'bundled-cufile'}
     if arm in ('auto-tls', 'auto-net'):
         key = 'UCX_TLS' if arm == 'auto-tls' else 'UCX_NET_DEVICES'
         del current['spark_conf']['spark.executorEnv.' + key]
@@ -68,18 +70,23 @@ def prepare(args):
         raise ValueError('Commit the experiment before preparing a run')
     artifacts = frozen / '.build/artifacts/arm64'
     base, _ = benchmark.prepare(SimpleNamespace(platform='nvl72',
-        deployment=str(args.deployment.resolve()), queries=args.queries,
+        deployment=str(args.deployment.resolve()),
+        queries=args.queries or (None if args.stage == 'qualification' else '9,3,6'),
         no_validate=False, iterations=2, diagnostics=False,
         engine=str(next(artifacts.glob('cudf-spark_*.jar'))),
         tools=str(artifacts / 'benchmark-tools.jar')))
     benchmark.validate_target(base)
+    if args.stage == 'qualification' and base['queries'] != read(SUITE / 'configs/nvl72.json')['queries']:
+        raise ValueError('Full qualification requires the reference query set and order')
     for component in ('driver', 'executor'):
         if 'spark.' + component + '.defaultJavaOptions' in base['spark_conf']:
             raise ValueError('Unexpected diagnostic JVM options')
     root = args.run.resolve()
     root.mkdir(parents=True, exist_ok=False)
     write(root / 'config.json', {'deployment': base['deployment']})
-    order = list(STAGES[args.stage]) + list(reversed(STAGES[args.stage]))
+    order = list(STAGES[args.stage])
+    if args.stage != 'qualification':
+        order += list(reversed(STAGES[args.stage]))
     cases = []
     for index, arm in enumerate(order, 1):
         label = f'{index:02d}-{arm}'
@@ -99,7 +106,7 @@ def prepare(args):
         'thread_id': os.environ.get('CODEX_THREAD_ID'), 'reference_score_eligible': False,
         'engine_sha256': base['engine_sha256'], 'tools_sha256': base['tools_sha256'],
         'created_utc': datetime.now(timezone.utc).isoformat(),
-        'primary_metric': 'Second execution SQL time for each query, with paired repetitions',
+        'primary_metric': 'Second execution SQL time per query; retain best-of-two and cleanup-inclusive totals',
         'comparison': 'Each arm against baseline; cpu-only versus unbound isolates CPU binding',
         'clear_environment': list(CLEAR_ENV)}
     write(root / 'plan.json', plan)
@@ -201,11 +208,13 @@ def evidence(case, queries):
     for receipt in run.glob('applications/suite/*.cleanup.json'):
         if len(read(receipt)) != 32:
             raise AssertionError('Missing executor cleanup acknowledgement')
+    suite_id = read(run / 'applications/suite/result.json')['application_id']
     runtime_nodes = list((run / 'runtime').iterdir())
     if len(runtime_nodes) != 8:
         raise AssertionError('Missing runtime evidence nodes')
     for node in runtime_nodes:
         records = [read(p) for p in node.glob('*.json') if p.stem.isdigit()]
+        records = [r for r in records if '--app-id ' + suite_id + ' ' in r['argv']]
         if len(records) != 4:
             raise AssertionError('Missing executor placement evidence: ' + str(node))
         for record in records:
@@ -215,8 +224,16 @@ def evidence(case, queries):
             for key, value in expected.items():
                 if environment.get(key) != value:
                     raise AssertionError('Executor environment differs: ' + key)
+            if case['arm'] == 'bundled-cufile':
+                libraries = [line.split()[-1] for line in record['maps'].splitlines()
+                             if '/libcufile.so' in line or '/libcufile_rdma.so' in line]
+                if len(libraries) != 2 or any('/cufile-runtime/' not in name for name in libraries):
+                    raise AssertionError('Application did not load the bundled cuFile libraries')
     result = {'label': case['label'], 'arm': case['arm'], 'samples': data['samples'],
         'second_sql': {str(s['query']): s['sql_seconds'] for s in data['samples'] if s['iteration'] == 2},
+        'best_sql_sum_seconds': data['best_sql_sum_seconds'],
+        'selected_sql_plus_cleanup_sum_seconds': data['selected_sql_plus_cleanup_sum_seconds'],
+        'second_sql_sum_seconds': sum(s['sql_seconds'] for s in data['samples'] if s['iteration'] == 2),
         'reference_score_eligible': False}
     write(run / 'case-evidence.json', result)
     return result
@@ -301,7 +318,7 @@ def main():
     parser.add_argument('--run', type=Path, required=True)
     parser.add_argument('--reference-checkout', type=Path)
     parser.add_argument('--deployment', type=Path)
-    parser.add_argument('--queries', default='9,3,6')
+    parser.add_argument('--queries')
     parser.add_argument('--stage', choices=tuple(STAGES), default='placement')
     parser.add_argument('--submit', action='store_true')
     parser.add_argument('--dependency', type=int, help='Require successful completion of this Slurm job')

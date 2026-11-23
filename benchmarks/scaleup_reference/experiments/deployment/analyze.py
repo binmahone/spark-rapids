@@ -50,7 +50,9 @@ def analyze(root):
         if config['engine_sha256'] != plan['engine_sha256'] or config['tools_sha256'] != plan['tools_sha256']:
             raise AssertionError('Artifact identity changed')
         data = read(run / 'case-evidence.json')
+        suite_id = read(run / 'applications/suite/result.json')['application_id']
         records = [read(p) for p in (run / 'runtime').glob('*/*.json') if p.stem.isdigit()]
+        records = [r for r in records if '--app-id ' + suite_id + ' ' in r['argv']]
         if len(records) != 32:
             raise AssertionError('Expected 32 observed executor processes')
         affinity_counts, policies, heap_policies, libraries = Counter(), Counter(), Counter(), set()
@@ -78,7 +80,7 @@ def analyze(root):
         for archive_path in (run / 'runtime').glob('*/executor-logs.tar.gz'):
             with tarfile.open(archive_path) as archive:
                 for member in archive.getmembers():
-                    if member.name.endswith('/stderr'):
+                    if member.name.endswith('/stderr') and '/' + suite_id + '/' in member.name:
                         text = archive.extractfile(member).read().decode(errors='replace')
                         devices = set(re.findall(r'Initializing RMM ASYNC pool size = .*? on gpuId (\d+)', text))
                         if len(devices) != 1:
@@ -92,6 +94,9 @@ def analyze(root):
             'observed_anonymous_memory_policies': dict(policies),
             'observed_process_heap_policies': dict(heap_policies),
             'rmm_initialized_logical_devices': dict(initialized_devices),
+            'best_sql_sum_seconds': sum(min(s['sql_seconds'] for s in data['samples'] if str(s['query']) == q)
+                                       for q in set(str(s['query']) for s in data['samples'])),
+            'second_sql_sum_seconds': sum(s['sql_seconds'] for s in second),
             'mapped_native_libraries': sorted(libraries),
             'queries': {str(s['query']): {'first_sql_seconds': next(x['sql_seconds'] for x in data['samples']
                        if x['query'] == s['query'] and x['iteration'] == 1),
@@ -116,7 +121,8 @@ def analyze(root):
         'plan_variant_counts': {query + '-' + kind: len(values) for (query, kind), values in plans.items()},
         'reference_score_eligible': False,
         'limits': ['Focused queries only; no full-suite score or extrapolated full-suite speedup.',
-                   'Two application repetitions per arm; order is forward then reverse.',
+                   ('One application per arm, all reference queries twice.' if plan.get('stage') == 'qualification'
+                    else 'Two application repetitions per arm; order is forward then reverse.'),
                    'Interface byte counters include storage and control traffic; they do not identify GPU payload transport.']}
 
 

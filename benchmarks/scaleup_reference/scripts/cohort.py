@@ -57,7 +57,10 @@ def run_cohort(run):
             target = 'sbsa-linux' if config['architecture'] == 'arm64' else 'x86_64-linux'
             native += ':' + cuda + '/lib64:' + cuda + '/targets/' + target + '/lib'
             if config['platform'] == 'nvl72':
-                native += ':/usr/local/cuda-13.0/lib64:/usr/local/cuda-13.0/targets/sbsa-linux/lib'
+                if config.get('deployment_experiment', {}).get('bundle_cufile', False):
+                    native += ':' + str(scratch / 'cufile-runtime')
+                else:
+                    native += ':/usr/local/cuda-13.0/lib64:/usr/local/cuda-13.0/targets/sbsa-linux/lib'
             native += ':/usr/local/nvidia/lib:/usr/local/nvidia/lib64'
             classpath = config['engine'] + ':' + config['tools']
             profile.update({'spark.master': f'spark://{master_host}:{port}',

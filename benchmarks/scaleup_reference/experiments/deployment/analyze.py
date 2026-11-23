@@ -34,6 +34,7 @@ def normalized_plan(path):
     text = re.sub(r'#\d+[L]?', '#ID', text)
     text = re.sub(r'\[plan_id=\d+\]', '[plan_id=ID]', text)
     text = re.sub(r'executionId=\d+', 'executionId=ID', text)
+    text = re.sub(r'(?<=[\w$])@[0-9a-fA-F]+\b', '@INSTANCE', text)
     return hashlib.sha256(text.encode()).hexdigest()
 
 

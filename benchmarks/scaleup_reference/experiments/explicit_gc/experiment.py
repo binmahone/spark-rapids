@@ -11,6 +11,7 @@
 import argparse
 from datetime import datetime, timezone
 import getpass
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -94,6 +95,10 @@ def prepare(args):
             'scope': 'Driver and executors only; identical GC logging in both cases; no injected SQL GC calls',
             'cleared_process_environment_keys': ['JAVA_TOOL_OPTIONS', 'JDK_JAVA_OPTIONS',
                                                  '_JAVA_OPTIONS', 'SPARK_SUBMIT_OPTS']}
+    inputs = [suite / 'benchmark.py', *[p for folder in ['scripts', 'configs', 'inputs']
+              for p in (suite / folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts]]
+    plan['runtime_input_sha256'] = {str(p.relative_to(source)): hashlib.sha256(p.read_bytes()).hexdigest()
+                                    for p in inputs}
     write(root / 'plan.json', plan)
     (root / 'command.txt').write_text(shlex.join([sys.executable, *sys.argv]) + '\n')
     write(root / 'status.json', {'status': 'prepared'})
@@ -191,7 +196,6 @@ def node(args):
     plan = read(root / 'plan.json')
     source = Path(plan['source_checkout'])
     suite = source / 'benchmarks/scaleup_reference'
-    assert git(source, 'rev-parse', 'HEAD') == PIN and not git(source, 'status', '--porcelain')
     hostname = socket.gethostname()
     head = hostname == os.environ['SCALEUP_HEAD']
     active = None
@@ -204,6 +208,8 @@ def node(args):
     signal.signal(signal.SIGTERM, interrupted)
     signal.signal(signal.SIGINT, interrupted)
     try:
+        for name, digest in plan['runtime_input_sha256'].items():
+            assert hashlib.sha256((source / name).read_bytes()).hexdigest() == digest, name
         for index, case in enumerate(plan['cases']):
             if index >= 2:
                 deadline = time.monotonic() + 600

@@ -1,0 +1,54 @@
+{
+  "architecture": "amd64",
+  "files": {
+    "cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar": {
+      "bytes": 444789468,
+      "sha256": "02058b8a21475075ea77ede99487b89e36424ee6518856685ca5dcaf2c98cb9e"
+    },
+    "benchmark-tools.jar": {
+      "bytes": 11550,
+      "sha256": "ba687e884685d6a2438910b161562e9d8dc35cd583e27339f8fc76243cd1eb9f"
+    }
+  },
+  "components": {
+    "rapids4spark-version-info.properties": {
+      "version": "26.12.0-SNAPSHOT",
+      "cudf_version": "26.12.0-20261122.042214-52",
+      "scala_library_version": "2.12.21",
+      "java_bytecode_target": "8",
+      "user": "vscode",
+      "revision": "faa47fe51f998ae97385e2b218be4a261006bfa6",
+      "branch": "benchmark/261123-scaleup-reference",
+      "date": "2026-11-23T04:07:50Z",
+      "url": "https://github.com/binmahone/spark-rapids.git"
+    },
+    "cudf-spark-jni-version-info.properties": {
+      "version": "26.12.0-SNAPSHOT",
+      "user": "root",
+      "revision": "bf63ec567eabc0bcac5366f6afba0b0bba40f30a",
+      "branch": "HEAD",
+      "date": "2026-11-22T03:37:30Z",
+      "url": "https://github.com/NVIDIA/cudf-spark-jni.git",
+      "gpu_architectures": "100;120;75;80;86;89;90"
+    },
+    "cudf-java-version-info.properties": {
+      "version": "26.12.0-SNAPSHOT",
+      "user": "root",
+      "revision": "3c92c2094dae1931ef7c2c19ee932cc26822a000",
+      "branch": "HEAD",
+      "date": "2026-11-22T03:37:26Z",
+      "url": "https://github.com/NVIDIA/cudf.git",
+      "gpu_architectures": "100;120;75;80;86;90"
+    },
+    "cudf-spark-private-version-info.properties": {
+      "version": "26.12.0-SNAPSHOT",
+      "user": "vscode",
+      "revision": "61e9e96803771371dec116593f0c4eced9ac44d8",
+      "branch": "HEAD",
+      "date": "2026-11-23T03:17:01Z",
+      "url": "https://gitlab-master.nvidia.com/mahonem/cudf-spark-private.git"
+    }
+  },
+  "source_revision": "faa47fe51f998ae97385e2b218be4a261006bfa6",
+  "source_dirty": false
+}

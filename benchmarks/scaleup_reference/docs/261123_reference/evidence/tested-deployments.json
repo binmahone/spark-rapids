@@ -1,0 +1,18 @@
+{
+  "nvl72": {
+    "spark_home": "/home/prestouser/mahonem/wild_spark_rapids/software/spark-3.5.3-bin-hadoop3",
+    "java_home": "/usr/lib/jvm/java-17-openjdk-arm64",
+    "ucx_home": "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native",
+    "scratch_root": "/var/tmp/scaleup-reference",
+    "container_image": "nvcr.io#nvidia/cuda:13.1.0-base-ubuntu24.04",
+    "container_setup": "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/scripts/prepare_nvl_container.sh",
+    "container_mounts": "/home/mahonem:/home/mahonem,/home/prestouser:/home/prestouser,/scratch:/scratch,/raid:/raid,/dev/infiniband:/dev/infiniband,/run/udev:/run/udev:ro,/usr/local/cuda-13.0:/usr/local/cuda-13.0:ro,/etc/cufile.json:/etc/cufile.json:ro,/dev/nvidia-fs0:/dev/nvidia-fs0,/dev/nvidia-fs1:/dev/nvidia-fs1,/dev/nvidia-fs2:/dev/nvidia-fs2,/dev/nvidia-fs3:/dev/nvidia-fs3,/dev/nvidia-fs4:/dev/nvidia-fs4,/dev/nvidia-fs5:/dev/nvidia-fs5,/dev/nvidia-fs6:/dev/nvidia-fs6,/dev/nvidia-fs7:/dev/nvidia-fs7,/dev/nvidia-fs8:/dev/nvidia-fs8,/dev/nvidia-fs9:/dev/nvidia-fs9,/dev/nvidia-fs10:/dev/nvidia-fs10,/dev/nvidia-fs11:/dev/nvidia-fs11,/dev/nvidia-fs12:/dev/nvidia-fs12,/dev/nvidia-fs13:/dev/nvidia-fs13,/dev/nvidia-fs14:/dev/nvidia-fs14,/dev/nvidia-fs15:/dev/nvidia-fs15",
+    "node_list": "presto-gb200-gcn-[02,04,06,08-10,12-13]"
+  },
+  "aws48x": {
+    "spark_home": "/home/ubuntu/scaleup-reference-261123/spark353-venv/lib/python3.10/site-packages/pyspark",
+    "java_home": "/usr/lib/jvm/java-17-openjdk-amd64",
+    "ucx_home": "/home/ubuntu/scaleup-reference-261123/benchmarks/scaleup_reference/dependencies/ucx-amd64",
+    "scratch_root": "/opt/dlami/nvme/scaleup-reference"
+  }
+}

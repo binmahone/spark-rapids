@@ -1,0 +1,54 @@
+[
+  {
+    "architecture": "arm64",
+    "prefix": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261123/01a20622-0ca8-74d0-9805-6bc842a9fdb3/faa47fe51f99/arm64/a1958779b5d4/",
+    "source_revision": "faa47fe51f998ae97385e2b218be4a261006bfa6",
+    "manifest_sha256": "a1958779b5d4bc27c9d86936d46f4dcd0b3b481aa2c5cab12aa44cf944842e7a",
+    "files": [
+      {
+        "name": "benchmark-tools.jar",
+        "uri": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261123/01a20622-0ca8-74d0-9805-6bc842a9fdb3/faa47fe51f99/arm64/a1958779b5d4/benchmark-tools.jar",
+        "bytes": 11550,
+        "sha256": "4ee01fa57115eeb6e59b52eb27ef26c3a5994dd57947f1bc72be38828c52fa90"
+      },
+      {
+        "name": "cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13-arm64.jar",
+        "uri": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261123/01a20622-0ca8-74d0-9805-6bc842a9fdb3/faa47fe51f99/arm64/a1958779b5d4/cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13-arm64.jar",
+        "bytes": 433730437,
+        "sha256": "f99002a23ffc885d8593039d3c6ccb8359c288a730cf2cf65db10d71c5952ded"
+      },
+      {
+        "name": "manifest.json",
+        "uri": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261123/01a20622-0ca8-74d0-9805-6bc842a9fdb3/faa47fe51f99/arm64/a1958779b5d4/manifest.json",
+        "bytes": 1944,
+        "sha256": "a1958779b5d4bc27c9d86936d46f4dcd0b3b481aa2c5cab12aa44cf944842e7a"
+      }
+    ]
+  },
+  {
+    "architecture": "amd64",
+    "prefix": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261123/01a20622-0ca8-74d0-9805-6bc842a9fdb3/faa47fe51f99/amd64/a312330ebaf5/",
+    "source_revision": "faa47fe51f998ae97385e2b218be4a261006bfa6",
+    "manifest_sha256": "a312330ebaf5d8fda4f34e7f1ccdc29ed19cd8446089c7598fa3d7f2a46f9826",
+    "files": [
+      {
+        "name": "benchmark-tools.jar",
+        "uri": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261123/01a20622-0ca8-74d0-9805-6bc842a9fdb3/faa47fe51f99/amd64/a312330ebaf5/benchmark-tools.jar",
+        "bytes": 11550,
+        "sha256": "ba687e884685d6a2438910b161562e9d8dc35cd583e27339f8fc76243cd1eb9f"
+      },
+      {
+        "name": "cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar",
+        "uri": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261123/01a20622-0ca8-74d0-9805-6bc842a9fdb3/faa47fe51f99/amd64/a312330ebaf5/cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar",
+        "bytes": 444789468,
+        "sha256": "02058b8a21475075ea77ede99487b89e36424ee6518856685ca5dcaf2c98cb9e"
+      },
+      {
+        "name": "manifest.json",
+        "uri": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261123/01a20622-0ca8-74d0-9805-6bc842a9fdb3/faa47fe51f99/amd64/a312330ebaf5/manifest.json",
+        "bytes": 1934,
+        "sha256": "a312330ebaf5d8fda4f34e7f1ccdc29ed19cd8446089c7598fa3d7f2a46f9826"
+      }
+    ]
+  }
+]

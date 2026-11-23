@@ -1,0 +1,46 @@
+{
+  "amd64-manifest.json": {
+    "bytes": 1934,
+    "sha256": "a312330ebaf5d8fda4f34e7f1ccdc29ed19cd8446089c7598fa3d7f2a46f9826"
+  },
+  "arm64-manifest.json": {
+    "bytes": 1944,
+    "sha256": "a1958779b5d4bc27c9d86936d46f4dcd0b3b481aa2c5cab12aa44cf944842e7a"
+  },
+  "artifact-locations.json": {
+    "bytes": 2923,
+    "sha256": "1adbf9f15f9ba2c28296c8b20340f8a43db9f0830015db8af882efbcac7b9761"
+  },
+  "aws-host-prerequisites.json": {
+    "bytes": 2470,
+    "sha256": "fdfe226ecdfe09b29959195084f057f5d41368afd4cfbac628476fda0bcc2e9f"
+  },
+  "aws48x-evidence.tar.gz": {
+    "bytes": 295709,
+    "sha256": "f316c38971f3172c766ea8a170e8c76e44b5261e68b84bbb00f970821a936907"
+  },
+  "build-and-log-validation.json": {
+    "bytes": 1421,
+    "sha256": "de27174c74742df76a035a7a12b1c55bd26cd90cc5d3277a7b04f2ee4312f1e2"
+  },
+  "nvl72-evidence.tar.gz": {
+    "bytes": 149877,
+    "sha256": "72e796680c0b5074a004332186be36d6f8f1f98cdb454821706fbd1543932802"
+  },
+  "per-query-results.csv": {
+    "bytes": 4701,
+    "sha256": "52fd3b253aaa72ab44cf505d7144b70c818d92a8ee7485903dd7417993d3367d"
+  },
+  "qualification-summary.json": {
+    "bytes": 4117,
+    "sha256": "cb11844d019be4b864e49092aec76d244776dbc73c1176580788e88b3877c050"
+  },
+  "tested-deployments.json": {
+    "bytes": 1761,
+    "sha256": "8f1758900139aa8457182ddb27185405d3a69b8e48a8a3c6a677e2dbf9fdac89"
+  },
+  "verification-logs.tar.gz": {
+    "bytes": 15172,
+    "sha256": "456c40e608a16cd2bec000348e8b10dff55d66de47512a9d1392efc1ee8eeab0"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "source_revision": "faa47fe51f998ae97385e2b218be4a261006bfa6",
+  "supported_spark_version": "3.5.3",
+  "tests": {
+    "private_optimizer": {
+      "passed": 427,
+      "failed": 0,
+      "canceled": 5,
+      "ignored": 1,
+      "note": "Canceled cases require Spark 4/4.1; not the supported 3.5.3 runtime"
+    },
+    "cpu_lifecycle_per_architecture": {
+      "passed": 38,
+      "failed": 0
+    },
+    "python_contract": {
+      "passed": 10
+    },
+    "gpu_retirement_aws": {
+      "passed": 1,
+      "scope": "Real broadcast GPU allocation release, idempotence and rejection of reuse"
+    },
+    "ucx_interval_tree_per_native_build": {
+      "passed": 27
+    },
+    "shim_static_coverage": {
+      "buildvers": [
+        "353"
+      ],
+      "status": "PASS",
+      "scope": "Static requirement coverage only; supported 3.5.3 also compiled and ran"
+    }
+  },
+  "slurm": {
+    "full_suite": {
+      "job_id": "25453",
+      "state": "COMPLETED",
+      "exit_code": "0:0"
+    },
+    "native_ucx_build": {
+      "job_id": "25449",
+      "state": "COMPLETED",
+      "exit_code": "0:0"
+    }
+  },
+  "formal_driver_log_audit": {
+    "nvl72": {
+      "logs": 2,
+      "error_lines": 0,
+      "task_failures": 0,
+      "reclaim_failures": 0,
+      "native_fatal": 0
+    },
+    "aws48x": {
+      "logs": 22,
+      "error_lines": 0,
+      "task_failures": 0,
+      "reclaim_failures": 0,
+      "native_fatal": 0
+    }
+  }
+}

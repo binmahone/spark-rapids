@@ -1,0 +1,154 @@
+{
+  "source_revision": "faa47fe51f998ae97385e2b218be4a261006bfa6",
+  "platforms": {
+    "nvl72": {
+      "validated_samples": 44,
+      "unique_gpus_per_application": 32,
+      "cleanup_acknowledgements": 1408,
+      "retired_ordinary_objects": 836,
+      "retired_ordinary_gpu_bytes_cumulative": 328079827200,
+      "rmm_increase_receipts": 0,
+      "stopped_service_groups": 8,
+      "application_ids": [
+        {
+          "name": "q11-reference",
+          "id": "app-20261123042724-0000",
+          "reference_only": true
+        },
+        {
+          "name": "suite",
+          "id": "app-20261123042758-0001",
+          "reference_only": false
+        }
+      ],
+      "best_sql_sum_seconds": 154.6646235252265,
+      "selected_sql_plus_cleanup_sum_seconds": 171.8475049478002,
+      "second_pass_sql_sum_seconds": 156.72624547989108,
+      "native_reader_qualification_records": 64
+    },
+    "aws48x": {
+      "validated_samples": 44,
+      "unique_gpus_per_application": 8,
+      "cleanup_acknowledgements": 352,
+      "retired_ordinary_objects": 244,
+      "retired_ordinary_gpu_bytes_cumulative": 55501864192,
+      "rmm_increase_receipts": 0,
+      "stopped_service_groups": 22,
+      "application_ids": [
+        {
+          "name": "q03",
+          "id": "app-20261123041919-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q01",
+          "id": "app-20261123042039-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q02",
+          "id": "app-20261123042137-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q04",
+          "id": "app-20261123042216-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q05",
+          "id": "app-20261123042310-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q06",
+          "id": "app-20261123042439-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q09",
+          "id": "app-20261123042520-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q07",
+          "id": "app-20261123042719-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q08",
+          "id": "app-20261123042836-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q10",
+          "id": "app-20261123043012-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q11",
+          "id": "app-20261123043133-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q12",
+          "id": "app-20261123043223-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q13",
+          "id": "app-20261123043336-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q14",
+          "id": "app-20261123043441-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q15",
+          "id": "app-20261123043544-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q16",
+          "id": "app-20261123043707-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q17",
+          "id": "app-20261123043802-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q18",
+          "id": "app-20261123043902-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q19",
+          "id": "app-20261123044148-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q20",
+          "id": "app-20261123044242-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q21",
+          "id": "app-20261123044353-0000",
+          "reference_only": false
+        },
+        {
+          "name": "q22",
+          "id": "app-20261123044529-0000",
+          "reference_only": false
+        }
+      ],
+      "best_sql_sum_seconds": 447.0412049830011,
+      "selected_sql_plus_cleanup_sum_seconds": 467.8396056360002,
+      "second_pass_sql_sum_seconds": 447.0412049830011
+    }
+  }
+}

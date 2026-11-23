@@ -47,6 +47,10 @@ def spawn(command, log, env):
 def group_members(record):
     """Find this service's process group, including children whose leader has exited."""
     members = []
+    try:
+        leader_matches = start_time(record['pid']) == record['start_time']
+    except (FileNotFoundError, ProcessLookupError):
+        leader_matches = False
     for entry in Path('/proc').iterdir():
         if not entry.name.isdigit():
             continue
@@ -56,9 +60,17 @@ def group_members(record):
                 continue
             if entry.stat().st_uid != record['owner_uid']:
                 raise RuntimeError('Service process group has another owner')
-            marker = ('SCALEUP_SERVICE_TOKEN=' + record['token']).encode()
-            if marker not in (entry / 'environ').read_bytes().split(b'\0'):
-                raise RuntimeError('Service process group ownership marker differs')
+            if not leader_matches:
+                marker = ('SCALEUP_SERVICE_TOKEN=' + record['token']).encode()
+                try:
+                    environment = (entry / 'environ').read_bytes().split(b'\0')
+                except PermissionError:
+                    current = (entry / 'stat').read_text().split(') ', 1)[1].split()
+                    if current[0] in ('Z', 'X'):
+                        continue
+                    raise
+                if marker not in environment:
+                    raise RuntimeError('Service process group ownership marker differs')
             members.append(int(entry.name))
         except (FileNotFoundError, ProcessLookupError):
             pass

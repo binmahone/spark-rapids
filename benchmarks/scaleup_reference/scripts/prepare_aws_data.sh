@@ -16,9 +16,18 @@
 set -euo pipefail
 readonly target=/opt/dlami/nvme/daily-trend-hardened/dataset
 test "$(findmnt -n -T /opt/dlami/nvme -o TARGET)" = /opt/dlami/nvme
-mkdir -p "$target"
-aws s3 sync s3://haozhu-nf-us-east-2/TPC-H-sf10k-decimal/ "$target/" \
-  --region us-east-2 --only-show-errors
-for table in customer lineitem nation orders part partsupp region supplier; do
-  test -d "$target/$table"
-done
+readonly suite=$(cd "$(dirname "$0")/.." && pwd)
+if [[ -d "$target" ]]; then
+  python3 "$suite/scripts/dataset.py" --dataset "$target"
+  exit 0
+fi
+readonly staging="${target}.scaleup-download"
+mkdir -p "$(dirname "$target")"
+exec 9>"${staging}.lock"
+flock -n 9
+mkdir -p "$staging"
+aws s3 sync s3://haozhu-nf-us-east-2/TPC-H-sf10k-decimal/ "$staging/" \
+  --region us-east-2 --only-show-errors --delete
+python3 "$suite/scripts/dataset.py" --dataset "$staging"
+test ! -e "$target"
+mv -T "$staging" "$target"

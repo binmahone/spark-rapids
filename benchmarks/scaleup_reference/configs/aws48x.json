@@ -138,5 +138,9 @@
     "gpus_per_node": 8,
     "slurm_partition": null,
     "container_image": null
+  },
+  "dataset_contract": {
+    "parquet_files": 1538,
+    "parquet_bytes": 3712454195832
   }
 }

@@ -64,23 +64,18 @@ def prepare(args):
 
 
 def validate_target(config):
-    deployment = config['deployment']
-    for key in ('spark_home', 'java_home', 'ucx_home'):
-        if not deployment[key] or not Path(deployment[key]).is_dir():
-            raise ValueError('Provide an existing deployment.' + key)
-    for table in TABLES:
-        if not (Path(config['dataset']) / table).is_dir():
-            raise ValueError('Dataset table is unavailable: ' + table)
-    for path in (Path(deployment['spark_home']) / 'bin/spark-submit',
-                 Path(deployment['java_home']) / 'bin/java',
-                 Path(deployment['ucx_home']) / 'lib/libucs.so'):
-        if not path.exists():
-            raise ValueError('Runtime dependency is unavailable: ' + str(path))
-    for path in (Path(deployment['spark_home']) / 'jars').glob('*.jar'):
-        if any(name in path.name.lower() for name in ('rapids', 'cudf', 'gluten', 'flux')):
-            raise ValueError('Unexpected engine dependency in the Spark installation: ' + str(path))
-    if shutil.which('numactl') is None:
-        raise ValueError('numactl is required')
+    if config['platform'] == 'nvl72':
+        deployment = config['deployment']
+        for key in ('spark_home', 'java_home', 'ucx_home', 'scratch_root'):
+            if not Path(deployment[key]).is_absolute():
+                raise ValueError('Provide an absolute deployment.' + key)
+        if not deployment.get('container_mounts'):
+            raise ValueError('The NVL deployment file must list container_mounts explicitly')
+        if not deployment.get('container_image'):
+            raise ValueError('The NVL deployment file must name container_image')
+    else:
+        from preflight import validate_runtime
+        validate_runtime(config)
 
 
 def main():
@@ -139,7 +134,10 @@ def main():
         return
     validate_target(config)
     if args.action == 'validate':
-        print('Target paths, artifact hashes and configuration passed preflight; no GPU query ran.')
+        if config['platform'] == 'nvl72':
+            print('Artifacts and submission configuration passed. Runtime paths are checked on allocated nodes; no GPU query ran.')
+        else:
+            print('Target paths, artifact hashes and configuration passed preflight; no GPU query ran.')
         return
     label = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-' + uuid.uuid4().hex[:8]
     run = Path(args.run).resolve() if args.run else SUITE / 'runs' / label

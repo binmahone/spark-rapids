@@ -25,6 +25,7 @@ import time
 from common import read, write
 from cohort import run_cohort
 import services
+from preflight import validate_runtime
 
 
 def main():
@@ -40,6 +41,7 @@ def main():
     deployment = config['deployment']
     local = Path(deployment['scratch_root']) / run.name
     local.mkdir(parents=True, exist_ok=True)
+    validate_runtime(config)
     head = os.environ['SCALEUP_HEAD']
     node = socket.gethostname()
     write(run / 'nodes' / (node + '.json'), {'hostname': node, 'uid': os.getuid(),

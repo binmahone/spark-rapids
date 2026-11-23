@@ -16,15 +16,18 @@
 from copy import deepcopy
 from pathlib import Path
 import os
+import importlib.util
 import subprocess
 import tempfile
 import time
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from common import expand, load_config, read, write
 import services
+from dataset import verify as verify_dataset
 from q3_tie_gate import validate as validate_q3
 from validate_q18_topn import validate_topn
 from validate_nvl_result import validate_result, InsufficientValidationEvidence
@@ -68,6 +71,52 @@ class ContractTests(unittest.TestCase):
         result['typed_all_rows'][0][0]['value'] = '4'
         with self.assertRaises(AssertionError):
             validate_result(2, result, [reference])
+
+    def test_nvl_controller_defers_container_paths_to_allocated_nodes(self):
+        path = Path(__file__).resolve().parents[1] / 'benchmark.py'
+        spec = importlib.util.spec_from_file_location('reference_entry', path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        config = load_config('nvl72')
+        config['deployment'].update(spark_home='/container/spark', java_home='/container/java',
+                                     ucx_home='/container/ucx', container_mounts='/scratch:/scratch')
+        module.validate_target(config)
+        config['deployment']['java_home'] = ''
+        with self.assertRaisesRegex(ValueError, 'absolute deployment.java_home'):
+            module.validate_target(config)
+
+    def test_dataset_rejects_interrupted_download_files(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            table = root / 'region'
+            table.mkdir()
+            data = b'PAR1dataPAR1'
+            (table / 'region.1.parquet').write_bytes(data)
+            expected = {'parquet_files': 1, 'parquet_bytes': len(data)}
+            self.assertEqual(verify_dataset(root, expected, ('region',))['files'], 1)
+            leftover = table / 'region.1.parquet.C1c1f400'
+            leftover.write_bytes(b'unfinished')
+            with self.assertRaisesRegex(ValueError, 'unexpected table files'):
+                verify_dataset(root, expected, ('region',))
+            leftover.unlink()
+            (table / 'region.1.parquet').write_bytes(b'PAR1dataFAIL')
+            with self.assertRaisesRegex(ValueError, 'Parquet magic'):
+                verify_dataset(root, expected, ('region',))
+
+    def test_stop_uses_the_live_leader_receipt_without_reading_process_environments(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            process, receipt = services.launch([sys.executable, '-c', 'import time;time.sleep(120)'],
+                                                directory / 'output.log', os.environ)
+            state = directory / 'services.json'
+            write(state, [receipt])
+            try:
+                with patch.object(Path, 'read_bytes', side_effect=PermissionError('exiting process')):
+                    services.stop(state)
+                process.wait(timeout=10)
+            finally:
+                services.stop(state)
+                process.wait(timeout=10)
 
     def test_stop_reaps_children_after_the_recorded_leader_exits(self):
         with tempfile.TemporaryDirectory() as temp:

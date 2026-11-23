@@ -67,7 +67,10 @@ replacement data or claim equivalence with another dataset at the same scale.
 All eight tables must be readable on the runtime hosts. For an empty owned AWS
 instance, `scripts/prepare_aws_data.sh` downloads the existing source from
 `s3://haozhu-nf-us-east-2/TPC-H-sf10k-decimal/`; it requires an authorized AWS role
-and enough local NVMe space. The source dataset contains 1,538 Parquet files,
+and enough local NVMe space. Downloads use a staging directory and publish the
+complete directory only after verification. Existing data is verified without
+being overwritten. Preflight rejects visible download leftovers in table directories
+and checks file counts, sizes and Parquet magic. The source dataset contains 1,538 Parquet files,
 3,712,454,195,832 bytes. Existing file layout and lineitem order-key clustering are
 prerequisites of these fixed experiments; arbitrary regenerated data is outside
 this reference. Runtime records retain table schemas and file counts.
@@ -105,6 +108,9 @@ toolchain, autoconf, automake, libtool, libnuma development files and CUDA heade
 The included patch targets 1.22.0; the lock file identifies its upstream equivalent
 and SHA-256. The build runs the interval-tree tests. No separate `libucs` overlay is used.
 The runtime explicitly selects this installation's libraries and module directory.
+Use a complete CUDA SDK path explicitly when building UCX, such as
+`/usr/local/cuda-13.0` on the retained AWS AMI. Installing CUDA 13.1 runtime
+packages can point `/usr/local/cuda` at a directory without development headers.
 
 On NVL, the deployment also names `container_image`, `container_mounts`, and
 optionally `container_setup`. Its mounts must expose the source/runtime directory,
@@ -131,6 +137,10 @@ python3 benchmarks/scaleup_reference/benchmark.py plan --platform nvl72 --deploy
 python3 benchmarks/scaleup_reference/benchmark.py validate --platform nvl72 --deployment deployment.json
 python3 benchmarks/scaleup_reference/benchmark.py submit --platform nvl72 --deployment deployment.json
 ```
+
+The NVL controller checks artifacts and submission configuration; dataset, Java,
+UCX and other container paths are checked on the allocated nodes. The controller
+does not need the compute nodes' `/scratch` mount or Java installation.
 
 For AWS replace `nvl72` with `aws48x`. Use `--engine /absolute/path/engine.jar` and
 `--tools /absolute/path/benchmark-tools.jar` when using a downloaded artifact

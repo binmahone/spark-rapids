@@ -247,6 +247,13 @@ def node(args):
                     shutil.copyfile(path, destination / path.name)
             if code:
                 raise RuntimeError('Reference node exited ' + str(code))
+            owned = [run / 'services/suite' / (hostname + '.json')]
+            if head:
+                owned.append(run / 'applications/suite/driver-service.json')
+            stopped = [read(str(path) + '.stopped.json') for path in owned]
+            assert all(r['remaining_recorded_processes'] == [] for r in stopped)
+            write(logs / 'cleanup-audit.json', {'stopped_service_groups': len(stopped),
+                                               'remaining_recorded_processes': []})
             shared.barrier(root, case['label'], hostname, plan['nodes'])
             if head:
                 current = evidence(case)

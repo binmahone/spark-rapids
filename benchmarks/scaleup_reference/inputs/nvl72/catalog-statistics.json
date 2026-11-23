@@ -1,0 +1,357 @@
+{
+  "dataset": "/scratch/prestouser/tpch-rs-float-no-delta/scale-30000",
+  "tables": {
+    "customer": {
+      "columns": {
+        "c_custkey": {
+          "distinct_count": 4500000000,
+          "minimum": "1",
+          "maximum": "4500000000",
+          "null_count": 0
+        },
+        "c_phone": {
+          "distinct_count": 1971725483,
+          "null_count": 0
+        },
+        "c_acctbal": {
+          "distinct_count": 1106028,
+          "minimum": "-999.99",
+          "maximum": "9999.99",
+          "null_count": 0
+        },
+        "c_mktsegment": {
+          "distinct_count": 5,
+          "null_count": 0
+        },
+        "c_address": {
+          "distinct_count": 237625340,
+          "null_count": 0
+        },
+        "c_nationkey": {
+          "distinct_count": 25,
+          "minimum": "0",
+          "maximum": "24",
+          "null_count": 0
+        },
+        "c_name": {
+          "distinct_count": 4417096316,
+          "null_count": 0
+        },
+        "c_comment": {
+          "distinct_count": 300814874,
+          "null_count": 0
+        }
+      },
+      "row_count": 4500000000
+    },
+    "lineitem": {
+      "columns": {
+        "l_returnflag": {
+          "distinct_count": 3,
+          "null_count": 0
+        },
+        "l_receiptdate": {
+          "distinct_count": 2531,
+          "minimum": "1992-01-03",
+          "maximum": "1998-12-31",
+          "null_count": 0
+        },
+        "l_tax": {
+          "distinct_count": 9,
+          "minimum": "0.0",
+          "maximum": "0.08",
+          "null_count": 0
+        },
+        "l_shipmode": {
+          "distinct_count": 7,
+          "null_count": 0
+        },
+        "l_suppkey": {
+          "distinct_count": 306660805,
+          "minimum": "1",
+          "maximum": "300000000",
+          "null_count": 0
+        },
+        "l_shipdate": {
+          "distinct_count": 2498,
+          "minimum": "1992-01-02",
+          "maximum": "1998-12-01",
+          "null_count": 0
+        },
+        "l_commitdate": {
+          "distinct_count": 2435,
+          "minimum": "1992-01-31",
+          "maximum": "1998-10-31",
+          "null_count": 0
+        },
+        "l_partkey": {
+          "distinct_count": 6054229764,
+          "minimum": "1",
+          "maximum": "6000000000",
+          "null_count": 0
+        },
+        "l_quantity": {
+          "distinct_count": 50,
+          "minimum": "1.0",
+          "maximum": "50.0",
+          "null_count": 0
+        },
+        "l_orderkey": {
+          "distinct_count": 46007131509,
+          "minimum": "1",
+          "maximum": "180000000000",
+          "null_count": 0
+        },
+        "l_linestatus": {
+          "distinct_count": 2,
+          "null_count": 0
+        },
+        "l_comment": {
+          "distinct_count": 153672433,
+          "null_count": 0
+        },
+        "l_extendedprice": {
+          "distinct_count": 3969594,
+          "minimum": "900.0",
+          "maximum": "104950.0",
+          "null_count": 0
+        },
+        "l_linenumber": {
+          "distinct_count": 7,
+          "minimum": "1",
+          "maximum": "7",
+          "null_count": 0
+        },
+        "l_discount": {
+          "distinct_count": 11,
+          "minimum": "0.0",
+          "maximum": "0.1",
+          "null_count": 0
+        },
+        "l_shipinstruct": {
+          "distinct_count": 4,
+          "null_count": 0
+        }
+      },
+      "row_count": 179999978268
+    },
+    "nation": {
+      "columns": {
+        "n_comment": {
+          "distinct_count": 25,
+          "null_count": 0
+        },
+        "n_nationkey": {
+          "distinct_count": 25,
+          "minimum": "0",
+          "maximum": "24",
+          "null_count": 0
+        },
+        "n_regionkey": {
+          "distinct_count": 5,
+          "minimum": "0",
+          "maximum": "4",
+          "null_count": 0
+        },
+        "n_name": {
+          "distinct_count": 25,
+          "null_count": 0
+        }
+      },
+      "row_count": 25
+    },
+    "orders": {
+      "columns": {
+        "o_clerk": {
+          "distinct_count": 30503843,
+          "null_count": 0
+        },
+        "o_orderstatus": {
+          "distinct_count": 3,
+          "null_count": 0
+        },
+        "o_orderdate": {
+          "distinct_count": 2382,
+          "minimum": "1992-01-01",
+          "maximum": "1998-08-02",
+          "null_count": 0
+        },
+        "o_shippriority": {
+          "distinct_count": 1,
+          "minimum": "0",
+          "maximum": "0",
+          "null_count": 0
+        },
+        "o_custkey": {
+          "distinct_count": 3001715912,
+          "minimum": "1",
+          "maximum": "4499999999",
+          "null_count": 0
+        },
+        "o_totalprice": {
+          "distinct_count": 48830309,
+          "minimum": "810.27",
+          "maximum": "630213.56",
+          "null_count": 0
+        },
+        "o_orderkey": {
+          "distinct_count": 45000000000,
+          "minimum": "1",
+          "maximum": "180000000000",
+          "null_count": 0
+        },
+        "o_comment": {
+          "distinct_count": 270910389,
+          "null_count": 0
+        },
+        "o_orderpriority": {
+          "distinct_count": 5,
+          "null_count": 0
+        }
+      },
+      "row_count": 45000000000
+    },
+    "part": {
+      "columns": {
+        "p_partkey": {
+          "distinct_count": 6000000000,
+          "minimum": "1",
+          "maximum": "6000000000",
+          "null_count": 0
+        },
+        "p_container": {
+          "distinct_count": 40,
+          "null_count": 0
+        },
+        "p_name": {
+          "distinct_count": 1038290468,
+          "null_count": 0
+        },
+        "p_comment": {
+          "distinct_count": 20836943,
+          "null_count": 0
+        },
+        "p_brand": {
+          "distinct_count": 25,
+          "null_count": 0
+        },
+        "p_retailprice": {
+          "distinct_count": 123107,
+          "minimum": "900.0",
+          "maximum": "2099.0",
+          "null_count": 0
+        },
+        "p_type": {
+          "distinct_count": 150,
+          "null_count": 0
+        },
+        "p_size": {
+          "distinct_count": 50,
+          "minimum": "1",
+          "maximum": "50",
+          "null_count": 0
+        },
+        "p_mfgr": {
+          "distinct_count": 5,
+          "null_count": 0
+        }
+      },
+      "row_count": 6000000000
+    },
+    "partsupp": {
+      "columns": {
+        "ps_suppkey": {
+          "distinct_count": 306660805,
+          "minimum": "1",
+          "maximum": "300000000",
+          "null_count": 0
+        },
+        "ps_availqty": {
+          "distinct_count": 10121,
+          "minimum": "1",
+          "maximum": "9999",
+          "null_count": 0
+        },
+        "ps_comment": {
+          "distinct_count": 329927549,
+          "null_count": 0
+        },
+        "ps_partkey": {
+          "distinct_count": 6054229764,
+          "minimum": "1",
+          "maximum": "6000000000",
+          "null_count": 0
+        },
+        "ps_supplycost": {
+          "distinct_count": 99719,
+          "minimum": "1.0",
+          "maximum": "1000.0",
+          "null_count": 0
+        }
+      },
+      "row_count": 24000000000
+    },
+    "region": {
+      "columns": {
+        "r_regionkey": {
+          "distinct_count": 5,
+          "minimum": "0",
+          "maximum": "4",
+          "null_count": 0
+        },
+        "r_comment": {
+          "distinct_count": 5,
+          "null_count": 0
+        },
+        "r_name": {
+          "distinct_count": 5,
+          "null_count": 0
+        }
+      },
+      "row_count": 5
+    },
+    "supplier": {
+      "columns": {
+        "s_comment": {
+          "distinct_count": 193197568,
+          "null_count": 0
+        },
+        "s_phone": {
+          "distinct_count": 291064485,
+          "null_count": 0
+        },
+        "s_nationkey": {
+          "distinct_count": 25,
+          "minimum": "0",
+          "maximum": "24",
+          "null_count": 0
+        },
+        "s_name": {
+          "distinct_count": 298489545,
+          "null_count": 0
+        },
+        "s_address": {
+          "distinct_count": 239251583,
+          "null_count": 0
+        },
+        "s_acctbal": {
+          "distinct_count": 1106028,
+          "minimum": "-999.99",
+          "maximum": "9999.99",
+          "null_count": 0
+        },
+        "s_suppkey": {
+          "distinct_count": 300000000,
+          "minimum": "1",
+          "maximum": "300000000",
+          "null_count": 0
+        }
+      },
+      "row_count": 300000000
+    }
+  },
+  "source_sha256": "ecc77cebd112f7070def1ab5633c48761cc086cb8d41530775d17f296cb91244",
+  "source": "Retained Presto ANALYZE statistics for this dataset, exported in the October 20 catalog-statistics benchmark",
+  "scope": "Row count, NDV, min/max and source-enforced non-null counts only; no PK/FK declarations or semantic constraints supplied to engine rules",
+  "fresh_analyze_performed": false
+}

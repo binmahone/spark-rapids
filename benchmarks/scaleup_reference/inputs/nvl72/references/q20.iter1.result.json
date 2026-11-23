@@ -1,0 +1,36 @@
+{
+  "sink": "jvm-driver-collect",
+  "rows": 5082200,
+  "first_rows": [
+    "[Supplier#000000013,HK71HQyWoqRWOX8GI FpgAifW,2PoH]",
+    "[Supplier#000000091,YV45D7TkfdQanOOZ7q9QxkyGUapU1oOWU6q3]",
+    "[Supplier#000000285,Br7e1nnt1yxrw6ImgpJ7YdhFDjuBf]",
+    "[Supplier#000000354,w8fOo5W,aS]",
+    "[Supplier#000000431,WoeV,NINojE6hJjauAdrl5fGcdxX5JUPLnrim]",
+    "[Supplier#000000657,nas2fhRwM97W8EEqYpBN]",
+    "[Supplier#000000729,pqck2ppy758TQpZCUAjPvlU55K3QjfL7Bi]",
+    "[Supplier#000000736,l6i2nMwVuovfKnuVgaSGK2rDy65DlAFLegiL7]",
+    "[Supplier#000000744,5NKuw5W4mFDMQBbUjUO4k kfokG8yvAe]",
+    "[Supplier#000000752,l cHMtEnodxj3FV]"
+  ],
+  "last_rows": [
+    "[Supplier#299999522,yBVyObhsbmV9wHmC98L01vhHu]",
+    "[Supplier#299999551,BWgUPoxhdFWTiP3viw]",
+    "[Supplier#299999554,UNVdwfi7bCVF2]",
+    "[Supplier#299999555,bCEP,mUIrrpQHMb6dSPD]",
+    "[Supplier#299999611,jhUoo10FCMPAC6Ad0T6IbKXsD6Z4i]",
+    "[Supplier#299999663,eIosJeg8swv8oWV]",
+    "[Supplier#299999701,uhXb04nb10bojeQBqL2,dKnTHqkFx7]",
+    "[Supplier#299999705,yQkOTFxO JzQ8n3WYzhML]",
+    "[Supplier#299999875,MZjZV G7M1ZSXn]",
+    "[Supplier#299999986,BaiiIMqrws3Mg08YnZN]"
+  ],
+  "full_result_requested": true,
+  "full_result_max_rows": 1000,
+  "full_result_persisted": false,
+  "ordered_sha256": "afb2d47489c4e78b5b1b7ccc04998073a4848a76c9bb7598378bc80ce04b95a1",
+  "multiset_sha256_sum": "e56643ca9fea7838160e3cf73976bdfb9e09eaf9c426d3bcde8daf721bcaa850",
+  "multiset_sha256_xor": "f05df64d64efa2942d1b7e08709abc5e35e6d966e94e11f3f5ebd97cf8c8bfa6",
+  "digest_seconds": 1.235415,
+  "full_result_omitted_reason": "row count 5082200 exceeds limit 1000"
+}

@@ -1,0 +1,20 @@
+{
+  "sink": "jvm-driver-collect",
+  "rows": 1,
+  "first_rows": [
+    "[9.540248320732857E9]"
+  ],
+  "last_rows": [
+    "[9.540248320732857E9]"
+  ],
+  "full_result_requested": true,
+  "full_result_max_rows": 1000,
+  "full_result_persisted": true,
+  "ordered_sha256": "00f0306279a97f415cdb22175c2f182d3a4507ed4b3dc396580be291dea392f3",
+  "multiset_sha256_sum": "00f0306279a97f415cdb22175c2f182d3a4507ed4b3dc396580be291dea392f3",
+  "multiset_sha256_xor": "00f0306279a97f415cdb22175c2f182d3a4507ed4b3dc396580be291dea392f3",
+  "digest_seconds": 0.002495,
+  "all_rows": [
+    "[9.540248320732857E9]"
+  ]
+}

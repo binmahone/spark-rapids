@@ -345,6 +345,16 @@ private[rapids] trait RapidsConfEntries extends RapidsConfSqlEntries {
     .booleanConf
     .createWithDefault(false)
 
+  val INDEPENDENT_QUERY_CLEANUP_ENABLED =
+    conf("spark.rapids.sql.benchmark.independentQueryCleanup.enabled")
+      .doc("Allows the reference benchmark to explicitly retire regular broadcasts between " +
+        "fresh synchronous SQL actions. Requires sequential uncached queries that share no " +
+        "DataFrame and use no iterator results. This is not a general SQL-end cleanup policy.")
+      .internal()
+      .startupOnly()
+      .booleanConf
+      .createWithDefault(false)
+
   val SHUFFLE_MAX_CLIENT_THREADS = conf("spark.rapids.shuffle.maxClientThreads")
     .doc("The maximum number of threads that the shuffle client should be allowed to start")
     .internal()

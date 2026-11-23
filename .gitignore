@@ -44,4 +44,7 @@ scalastyle.txt
 target/
 cufile.log
 cudf_log.txt
+.build/
+benchmarks/scaleup_reference/runs/
+benchmarks/scaleup_reference/dependencies/
 build/*.class

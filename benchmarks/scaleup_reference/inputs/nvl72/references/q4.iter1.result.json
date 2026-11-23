@@ -1,0 +1,32 @@
+{
+  "sink": "jvm-driver-collect",
+  "rows": 5,
+  "first_rows": [
+    "[1-URGENT,315573795]",
+    "[2-HIGH,315580150]",
+    "[3-MEDIUM,315568188]",
+    "[4-NOT SPECIFIED,315600508]",
+    "[5-LOW,315542123]"
+  ],
+  "last_rows": [
+    "[1-URGENT,315573795]",
+    "[2-HIGH,315580150]",
+    "[3-MEDIUM,315568188]",
+    "[4-NOT SPECIFIED,315600508]",
+    "[5-LOW,315542123]"
+  ],
+  "full_result_requested": true,
+  "full_result_max_rows": 1000,
+  "full_result_persisted": true,
+  "ordered_sha256": "75b42e1f300158c3942445dd1de9de926bda546398b8db0a8af5019405db7eed",
+  "multiset_sha256_sum": "067fee4b3f79241467788b9b72ca037fefde6d95c994a272ff0c30425f8cb01c",
+  "multiset_sha256_xor": "8a7cccf29e1e4400cd06f76213469bafe2fa5dbd9ba89005000e0f65ab88af9e",
+  "digest_seconds": 0.002203,
+  "all_rows": [
+    "[1-URGENT,315573795]",
+    "[2-HIGH,315580150]",
+    "[3-MEDIUM,315568188]",
+    "[4-NOT SPECIFIED,315600508]",
+    "[5-LOW,315542123]"
+  ]
+}

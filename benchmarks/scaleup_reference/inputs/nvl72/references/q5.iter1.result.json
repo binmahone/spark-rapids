@@ -1,0 +1,32 @@
+{
+  "sink": "jvm-driver-collect",
+  "rows": 5,
+  "first_rows": [
+    "[VIETNAM,1.5877401385126667E12]",
+    "[INDIA,1.587447061657475E12]",
+    "[INDONESIA,1.587018621135994E12]",
+    "[JAPAN,1.586715025784315E12]",
+    "[CHINA,1.586653879408303E12]"
+  ],
+  "last_rows": [
+    "[VIETNAM,1.5877401385126667E12]",
+    "[INDIA,1.587447061657475E12]",
+    "[INDONESIA,1.587018621135994E12]",
+    "[JAPAN,1.586715025784315E12]",
+    "[CHINA,1.586653879408303E12]"
+  ],
+  "full_result_requested": true,
+  "full_result_max_rows": 1000,
+  "full_result_persisted": true,
+  "ordered_sha256": "424620ff1645e75039f7ac32b110b99666bc5518b26d57215a8acd94ecba0002",
+  "multiset_sha256_sum": "8c4d6db81b6489f9b31653bf430edbf3783e90c1d9bc97b65b6b1c65d635b913",
+  "multiset_sha256_xor": "a06ef5a5a77b80a7070274af26fee417b40cd9c1f1b396025e8ddc27c69659f1",
+  "digest_seconds": 0.002634,
+  "all_rows": [
+    "[VIETNAM,1.5877401385126667E12]",
+    "[INDIA,1.587447061657475E12]",
+    "[INDONESIA,1.587018621135994E12]",
+    "[JAPAN,1.586715025784315E12]",
+    "[CHINA,1.586653879408303E12]"
+  ]
+}

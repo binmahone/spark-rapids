@@ -1,0 +1,23 @@
+{
+  "sink": "jvm-driver-collect",
+  "rows": 2,
+  "first_rows": [
+    "[MAIL,186945955,280454832]",
+    "[SHIP,186991065,280445842]"
+  ],
+  "last_rows": [
+    "[MAIL,186945955,280454832]",
+    "[SHIP,186991065,280445842]"
+  ],
+  "full_result_requested": true,
+  "full_result_max_rows": 1000,
+  "full_result_persisted": true,
+  "ordered_sha256": "c9d01b856e478e398b826649a87927b2de838cb8a81d2f5465195ce6842ae9e3",
+  "multiset_sha256_sum": "405b003382de8d00469dc6237babc02d9d0dafc9b7604d88de84b05b2ac07d78",
+  "multiset_sha256_xor": "3f98ffcb70de4cffb15d85db7b933f9258ed8fa924503274dc744f44903e7d76",
+  "digest_seconds": 0.002337,
+  "all_rows": [
+    "[MAIL,186945955,280454832]",
+    "[SHIP,186991065,280445842]"
+  ]
+}

@@ -10,9 +10,11 @@
 """Combine retained deployment controls and full qualification with explicit evidence boundaries."""
 import argparse
 from collections import Counter, defaultdict
+from datetime import datetime
 import json
 from pathlib import Path
 import re
+import tarfile
 
 from analyze import analyze, read
 
@@ -66,6 +68,49 @@ def cufile_audit(root, plan):
             'source_hashes_by_node': originals}
 
 
+def log_audit(root, cases):
+    output = []
+    def timestamp(line):
+        try:
+            return datetime.strptime(line[:17], '%y/%m/%d %H:%M:%S')
+        except ValueError:
+            return None
+    for case in cases:
+        run = root / 'runs' / Path(case['run']).name
+        if not (run / 'case-evidence.json').exists():
+            continue
+        stops, counts, deltas, unexpected = {}, Counter(), [], []
+        for path in (run / 'applications').glob('*/driver.log'):
+            app_id = read(path.with_name('result.json'))['application_id']
+            for line in path.read_text(errors='replace').splitlines():
+                if 'SparkContext is stopping with exitCode 0' in line:
+                    stops[app_id] = timestamp(line)
+                if ' ERROR ' in line:
+                    unexpected.append(line[:220])
+        for path in (run / 'runtime').glob('*/executor-logs.tar.gz'):
+            with tarfile.open(path) as archive:
+                for member in archive.getmembers():
+                    if not member.name.endswith('/stderr'):
+                        continue
+                    app_id = next((a for a in stops if '/' + a + '/' in member.name), None)
+                    for line in archive.extractfile(member).read().decode(errors='replace').splitlines():
+                        if ' ERROR ' not in line:
+                            continue
+                        if 'A CUDA BUFFER WAS LEAKED' in line:
+                            counts['cuda_buffer_leak_reports'] += 1
+                            if app_id and timestamp(line) and stops[app_id]:
+                                deltas.append((timestamp(line) - stops[app_id]).total_seconds())
+                        elif 'RECEIVED SIGNAL TERM' in line:
+                            counts['executor_termination_reports'] += 1
+                        else:
+                            unexpected.append(line[:220])
+        output.append({'label': case['label'], 'error_level_reports': dict(counts),
+            'leak_report_seconds_relative_to_driver_stop':
+                {'minimum': min(deltas), 'maximum': max(deltas)} if deltas else None,
+            'other_error_count': len(unexpected), 'first_other_errors': unexpected[:5]})
+    return output
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--placement', required=True, type=Path)
@@ -90,6 +135,7 @@ def main():
         data['job_id'] = read(root / 'submission.json')['job_id']
         data['controller_status'] = read(root / 'status.json')
         data['assignment_audit'] = assignment_audit(root, plan)
+        data['log_audit'] = log_audit(root, plan['cases'])
         if name == 'full' and data['status'] == 'completed':
             data['cufile_audit'] = cufile_audit(root, plan)
         for case in data['cases']:
@@ -123,6 +169,7 @@ def main():
         'scope': {'nodes': 8, 'gpus': 32, 'workload': 'TPC-H SF30000, retained native-double GPFS dataset',
                   'worker_comparison': 'Four GPU-specific workers versus two NUMA-specific workers per node; one GPU per executor.',
                   'library_comparison': 'Identical cuFile libraries in an independent directory; no cuFile version upgrade or complete-image qualification.',
+                  'shutdown_diagnostic': 'CUDA buffer leak reports occur around normal driver stop across configurations. Their owner/root cause is not established; they are retained separately from query failures.',
                   'timing': 'SQL planning through JVM collect; cleanup reported separately; excludes application startup and validation.'}}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(output, indent=2) + '\n')

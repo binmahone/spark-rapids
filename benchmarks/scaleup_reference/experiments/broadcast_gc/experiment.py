@@ -91,6 +91,7 @@ def prepare(args):
         current['experiment'] = {'name': 'ordinary-broadcast-gc', 'enabled': enabled,
                                  'manual_ordinary_cleanup': manual, 'scenario': scenario,
                                  'diagnostic_only': True, 'engine_unchanged': True,
+                                 'python_proxy_gc_in_all_arms': True,
                                  'synthetic_gc_in_sql': False}
         write(run / 'config.json', current)
         write(run / 'profiles.json', benchmark.expand(current, current['queries']))

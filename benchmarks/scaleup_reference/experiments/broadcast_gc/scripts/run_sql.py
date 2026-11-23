@@ -15,6 +15,7 @@
 """Run Q9/Q3 with ordinary-broadcast cleanup controls and separate GC diagnostics."""
 import argparse
 from collections import Counter
+import gc
 import json
 import math
 import os
@@ -277,6 +278,8 @@ def main():
                 rows = frame = execution = plan = None
                 if not args.reference_only:
                     before = time.perf_counter()
+                    # Drop unreachable Python/Py4J proxy cycles equally in every comparison arm.
+                    sample['python_proxy_cycles_collected'] = gc.collect()
                     receipts = [json.loads(str(row)) for row in boundary.finish(
                         sc._jsc.sc(), token, executors, slots, experiment['manual_ordinary_cleanup'])]
                     sample['cleanup_seconds'] = time.perf_counter() - before

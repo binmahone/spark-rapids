@@ -34,7 +34,7 @@ from common import expand, read, sha, write
 ENGINE_PIN = 'faa47fe51f998ae97385e2b218be4a261006bfa6'
 STAGES = {'placement': ('baseline', 'cpu-only', 'unbound', 'auto-tls', 'auto-net'),
           'workers': ('baseline', 'per-numa'),
-          'qualification': ('baseline', 'cpu-only', 'unbound', 'auto-tls', 'bundled-cufile')}
+          'qualification': ('baseline', 'cpu-only', 'bundled-cufile')}
 ARMS = tuple(dict.fromkeys(arm for arms in STAGES.values() for arm in arms))
 CLEAR_ENV = ('JAVA_TOOL_OPTIONS', 'JDK_JAVA_OPTIONS', '_JAVA_OPTIONS',
              'SPARK_SUBMIT_OPTS', 'UCX_TLS', 'UCX_NET_DEVICES')

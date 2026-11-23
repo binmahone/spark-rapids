@@ -237,6 +237,11 @@ def node(args):
         for name, digest in plan['runtime_input_sha256'].items():
             if sha(name) != digest:
                 raise ValueError('Source changed: ' + name)
+        live = subprocess.check_output(['nvidia-smi', '--query-compute-apps=pid,process_name',
+                                        '--format=csv,noheader'], text=True).strip()
+        write(root / 'preflight' / (hostname + '.json'), {'existing_compute_processes': live})
+        if live:
+            raise RuntimeError('Allocated GPUs have existing compute processes: ' + live)
         completed = []
         for case in plan['cases']:
             run = Path(case['run'])

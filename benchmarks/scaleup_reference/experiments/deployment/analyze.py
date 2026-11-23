@@ -76,6 +76,8 @@ def analyze(root):
         if bound != (case['arm'] not in ('cpu-only', 'unbound')):
             raise AssertionError((case['label'], 'Memory policy differs', policies))
         second = [s for s in data['samples'] if s['iteration'] == 2]
+        selected = [min((s for s in data['samples'] if s['query'] == query),
+                        key=lambda sample: sample['sql_seconds']) for query in plan['queries']]
         initialized_devices = Counter()
         for archive_path in (run / 'runtime').glob('*/executor-logs.tar.gz'):
             with tarfile.open(archive_path) as archive:
@@ -94,9 +96,10 @@ def analyze(root):
             'observed_anonymous_memory_policies': dict(policies),
             'observed_process_heap_policies': dict(heap_policies),
             'rmm_initialized_logical_devices': dict(initialized_devices),
-            'best_sql_sum_seconds': sum(min(s['sql_seconds'] for s in data['samples'] if str(s['query']) == q)
-                                       for q in set(str(s['query']) for s in data['samples'])),
+            'best_sql_sum_seconds': sum(s['sql_seconds'] for s in selected),
+            'selected_sql_plus_cleanup_sum_seconds': sum(s['sql_plus_cleanup_seconds'] for s in selected),
             'second_sql_sum_seconds': sum(s['sql_seconds'] for s in second),
+            'second_sql_plus_cleanup_sum_seconds': sum(s['sql_plus_cleanup_seconds'] for s in second),
             'mapped_native_libraries': sorted(libraries),
             'queries': {str(s['query']): {'first_sql_seconds': next(x['sql_seconds'] for x in data['samples']
                        if x['query'] == s['query'] and x['iteration'] == 1),

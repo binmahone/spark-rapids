@@ -53,26 +53,30 @@ def mechanism(sc, boundary, app, config, targets):
         records.append({'phase': label, 'time_ms': int(time.time() * 1000)})
         return rows
 
-    boundary.driverGc('driver-gc-after-q9')
-    deadline = time.monotonic() + 30
-    while not boundary.driverGcCompleted():
-        if time.monotonic() > deadline:
-            raise TimeoutError('Driver GC completion event was not observed')
-        time.sleep(.25)
-    driver_cycle_seconds = time.perf_counter() - started
-    deadline = time.monotonic() + 20
-    index = 0
-    while True:
-        rows = probe('driver-blocks-' + str(index), 'observe')
-        remaining = sum(o['host_block_present'] for r in rows for o in r['objects']
-                        if o['object_id'] in counts[r['executor']])
-        if remaining == 0 or time.monotonic() >= deadline:
-            break
-        index += 1
-        time.sleep(1)
-    driver_result = {'host_blocks_remaining': remaining,
-                     'gc_cycle_seconds': driver_cycle_seconds,
-                     'through_block_observation_seconds': time.perf_counter() - started}
+    rounds = config['experiment'].get('driver_gc_rounds', 1)
+    driver_stages = []
+    probe_index = 0
+    for round_index in range(rounds):
+        round_started = time.perf_counter()
+        boundary.driverGc('driver-gc-after-q9-round-' + str(round_index + 1))
+        deadline = time.monotonic() + 30
+        while not boundary.driverGcCompleted():
+            if time.monotonic() > deadline:
+                raise TimeoutError('Driver GC completion event was not observed')
+            time.sleep(.25)
+        driver_cycle_seconds = time.perf_counter() - round_started
+        deadline = time.monotonic() + 20
+        while True:
+            rows = probe('driver-blocks-' + str(probe_index), 'observe')
+            probe_index += 1
+            remaining = sum(o['host_block_present'] for r in rows for o in r['objects']
+                            if o['object_id'] in counts[r['executor']])
+            if remaining == 0 or time.monotonic() >= deadline:
+                break
+            time.sleep(1)
+        driver_stages.append({'round': round_index + 1, 'host_blocks_remaining': remaining,
+                              'gc_cycle_seconds': driver_cycle_seconds,
+                              'through_block_observation_seconds': time.perf_counter() - round_started})
     probe('executor-gc', 'gc')
     deadline = time.monotonic() + 30
     index = 0
@@ -94,7 +98,8 @@ def mechanism(sc, boundary, app, config, targets):
         index += 1
         time.sleep(1)
     write(app / 'mechanism.json', {'status': 'observed', 'targets': {k: sorted(v) for k, v in counts.items()},
-          'driver_stage': driver_result, 'unfinalized_target_objects': unfinalized,
+          'driver_stage': driver_stages[-1], 'driver_stages': driver_stages,
+          'driver_gc_rounds': rounds, 'unfinalized_target_objects': unfinalized,
           'seconds': time.perf_counter() - started, 'phases': records,
           'scope': 'Deliberate Driver then Executor System.gc requests, outside timed SQL'})
 

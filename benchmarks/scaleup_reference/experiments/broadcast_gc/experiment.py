@@ -75,6 +75,9 @@ def prepare(args):
         matrix = matrix[:2]
     elif args.stage == 'natural':
         matrix = matrix[2:]
+    if args.only_case:
+        matrix = [case for case in matrix if case[0] == args.only_case]
+        assert matrix, 'Requested case is absent from this stage'
     for index, (label, enabled, manual, scenario) in enumerate(matrix, 1):
         run = root / 'runs' / (root.name + '-' + f'{index:02d}-' + label)
         current = json.loads(json.dumps(base))
@@ -93,6 +96,7 @@ def prepare(args):
                                  'manual_ordinary_cleanup': manual, 'scenario': scenario,
                                  'diagnostic_only': True, 'engine_unchanged': True,
                                  'python_proxy_gc_in_all_arms': True,
+                                 'driver_gc_rounds': args.driver_gc_rounds,
                                  'synthetic_gc_in_sql': False}
         write(run / 'config.json', current)
         write(run / 'profiles.json', benchmark.expand(current, current['queries']))
@@ -182,7 +186,8 @@ def evidence(case):
     mechanism_path = run / 'applications/suite/mechanism.json'
     mechanism_result = read(mechanism_path) if mechanism_path.exists() else None
     assert (retirement > 0) == case['manual'], retirement
-    expected_requests = 33 if mechanism_result and mechanism_result['status'] == 'observed' else 0
+    expected_requests = (32 + mechanism_result.get('driver_gc_rounds', 1)
+                         if mechanism_result and mechanism_result['status'] == 'observed' else 0)
     assert requests == expected_requests, requests
     for receipt in run.glob('applications/*/*.cleanup.json'):
         assert len(read(receipt)) == 32
@@ -291,6 +296,8 @@ def main():
     parser.add_argument('--deployment', type=Path)
     parser.add_argument('--tools', type=Path)
     parser.add_argument('--stage', choices=['mechanism', 'natural', 'all'], default='mechanism')
+    parser.add_argument('--only-case')
+    parser.add_argument('--driver-gc-rounds', type=int, choices=[1, 2], default=1)
     parser.add_argument('--submit', action='store_true')
     args = parser.parse_args()
     if args.action == 'prepare':

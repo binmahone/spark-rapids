@@ -117,6 +117,7 @@ def main():
     parser.add_argument('--reverse', required=True, type=Path)
     parser.add_argument('--workers', required=True, type=Path)
     parser.add_argument('--full', type=Path)
+    parser.add_argument('--evidence', action='append', default=[], metavar='EXPERIMENT=LOCATION_JSON')
     parser.add_argument('--output', required=True, type=Path)
     args = parser.parse_args()
     experiments, focused = {}, defaultdict(lambda: defaultdict(list))
@@ -144,6 +145,12 @@ def main():
                 for query, value in case['queries'].items():
                     focused[case['arm']][query].append(value['second_sql_seconds'])
         experiments[name] = data
+    for item in args.evidence:
+        name, path = item.split('=', 1)
+        location = read(Path(path))
+        experiments[name]['retained_evidence'] = {
+            'uri': 's3://' + location['bucket'] + '/' + location['key'],
+            'sha256': location['sha256'], 'size_bytes': location['size_bytes']}
     failed_run = args.placement / 'runs' / next(
         Path(c['run']).name for c in read(args.placement / 'plan.json')['cases'] if c['arm'] == 'auto-net')
     failure = read(failed_run / 'applications/suite/result.json')

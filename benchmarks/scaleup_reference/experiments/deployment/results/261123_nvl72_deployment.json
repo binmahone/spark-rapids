@@ -1,0 +1,3186 @@
+{
+  "status": "complete",
+  "engine_sha256": "f99002a23ffc885d8593039d3c6ccb8359c288a730cf2cf65db10d71c5952ded",
+  "tools_sha256": "4ee01fa57115eeb6e59b52eb27ef26c3a5994dd57947f1bc72be38828c52fa90",
+  "validated_timed_samples": 204,
+  "experiments": {
+    "placement": {
+      "status": "partial",
+      "engine_source_revision": "faa47fe51f998ae97385e2b218be4a261006bfa6",
+      "runtime_revision": "be83fece43f486447d22f7b63dadaf779eca852b",
+      "engine_sha256": "f99002a23ffc885d8593039d3c6ccb8359c288a730cf2cf65db10d71c5952ded",
+      "tools_sha256": "4ee01fa57115eeb6e59b52eb27ef26c3a5994dd57947f1bc72be38828c52fa90",
+      "cases": [
+        {
+          "label": "01-baseline",
+          "arm": "baseline",
+          "executor_count": 32,
+          "available_cpus_per_executor": {
+            "72": 32
+          },
+          "observed_anonymous_memory_policies": {
+            "bind:0": 16,
+            "prefer": 32,
+            "bind:1": 16
+          },
+          "observed_process_heap_policies": {
+            "bind:0": 16,
+            "bind:1": 16
+          },
+          "rmm_initialized_logical_devices": {
+            "0": 32
+          },
+          "best_sql_sum_seconds": 36.63396034575999,
+          "selected_sql_plus_cleanup_sum_seconds": 40.10827537369914,
+          "second_sql_sum_seconds": 37.38028354384005,
+          "second_sql_plus_cleanup_sum_seconds": 40.85550759569742,
+          "mapped_native_libraries": [
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucp.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucs.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libuct.so.0.0.0",
+            "/usr/local/cuda-13.0/targets/sbsa-linux/lib/libcufile.so.1.15.1"
+          ],
+          "queries": {
+            "9": {
+              "first_sql_seconds": 31.5119140020106,
+              "second_sql_seconds": 25.115837384946644,
+              "second_sql_plus_cleanup_seconds": 26.645385381998494,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3073,
+                "hybridScanDeviceBytesRead": 2996350214144,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "3": {
+              "first_sql_seconds": 9.728112563956529,
+              "second_sql_seconds": 10.474435762036592,
+              "second_sql_plus_cleanup_seconds": 11.573513600975275,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2430,
+                "hybridScanDeviceBytesRead": 1737039425536,
+                "hybridScanNativeHostBytesRead": 371790,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "6": {
+              "first_sql_seconds": 1.9201270209159702,
+              "second_sql_seconds": 1.7900103968568146,
+              "second_sql_plus_cleanup_seconds": 2.6366086127236485,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1537262231552,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            }
+          }
+        },
+        {
+          "label": "02-cpu-only",
+          "arm": "cpu-only",
+          "executor_count": 32,
+          "available_cpus_per_executor": {
+            "72": 32
+          },
+          "observed_anonymous_memory_policies": {
+            "prefer": 32,
+            "default": 32
+          },
+          "observed_process_heap_policies": {
+            "default": 32
+          },
+          "rmm_initialized_logical_devices": {
+            "0": 32
+          },
+          "best_sql_sum_seconds": 36.88463907991536,
+          "selected_sql_plus_cleanup_sum_seconds": 39.97536861198023,
+          "second_sql_sum_seconds": 37.1646021658089,
+          "second_sql_plus_cleanup_sum_seconds": 40.356108251959085,
+          "mapped_native_libraries": [
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucp.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucs.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libuct.so.0.0.0",
+            "/usr/local/cuda-13.0/targets/sbsa-linux/lib/libcufile.so.1.15.1"
+          ],
+          "queries": {
+            "9": {
+              "first_sql_seconds": 30.919787449063733,
+              "second_sql_seconds": 25.26498805405572,
+              "second_sql_plus_cleanup_seconds": 26.511107142083347,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3073,
+                "hybridScanDeviceBytesRead": 2996350214144,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "3": {
+              "first_sql_seconds": 9.851923651061952,
+              "second_sql_seconds": 10.131886736955494,
+              "second_sql_plus_cleanup_seconds": 11.081673471955582,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2430,
+                "hybridScanDeviceBytesRead": 1737039425536,
+                "hybridScanNativeHostBytesRead": 371790,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "6": {
+              "first_sql_seconds": 1.9185459970030934,
+              "second_sql_seconds": 1.767727374797687,
+              "second_sql_plus_cleanup_seconds": 2.763327637920156,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1537262231552,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            }
+          }
+        },
+        {
+          "label": "03-unbound",
+          "arm": "unbound",
+          "executor_count": 32,
+          "available_cpus_per_executor": {
+            "144": 32
+          },
+          "observed_anonymous_memory_policies": {
+            "prefer": 32,
+            "default": 32
+          },
+          "observed_process_heap_policies": {
+            "default": 32
+          },
+          "rmm_initialized_logical_devices": {
+            "0": 32
+          },
+          "best_sql_sum_seconds": 38.69268812215887,
+          "selected_sql_plus_cleanup_sum_seconds": 42.50029002712108,
+          "second_sql_sum_seconds": 38.69268812215887,
+          "second_sql_plus_cleanup_sum_seconds": 42.50029002712108,
+          "mapped_native_libraries": [
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucp.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucs.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libuct.so.0.0.0",
+            "/usr/local/cuda-13.0/targets/sbsa-linux/lib/libcufile.so.1.15.1"
+          ],
+          "queries": {
+            "9": {
+              "first_sql_seconds": 32.57192232320085,
+              "second_sql_seconds": 26.050373184960335,
+              "second_sql_plus_cleanup_seconds": 27.671032333979383,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3073,
+                "hybridScanDeviceBytesRead": 2996350214144,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "3": {
+              "first_sql_seconds": 10.857892441796139,
+              "second_sql_seconds": 10.802248073043302,
+              "second_sql_plus_cleanup_seconds": 11.948485390050337,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2430,
+                "hybridScanDeviceBytesRead": 1737039425536,
+                "hybridScanNativeHostBytesRead": 371790,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "6": {
+              "first_sql_seconds": 2.0143619128502905,
+              "second_sql_seconds": 1.840066864155233,
+              "second_sql_plus_cleanup_seconds": 2.880772303091362,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1537262231552,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            }
+          }
+        },
+        {
+          "label": "04-auto-tls",
+          "arm": "auto-tls",
+          "executor_count": 32,
+          "available_cpus_per_executor": {
+            "72": 32
+          },
+          "observed_anonymous_memory_policies": {
+            "bind:0": 16,
+            "prefer": 32,
+            "bind:1": 16
+          },
+          "observed_process_heap_policies": {
+            "bind:0": 16,
+            "bind:1": 16
+          },
+          "rmm_initialized_logical_devices": {
+            "0": 32
+          },
+          "best_sql_sum_seconds": 36.97842790815048,
+          "selected_sql_plus_cleanup_sum_seconds": 40.35171831399202,
+          "second_sql_sum_seconds": 38.190904047107324,
+          "second_sql_plus_cleanup_sum_seconds": 41.613068458857015,
+          "mapped_native_libraries": [
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucp.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucs.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libuct.so.0.0.0",
+            "/usr/local/cuda-13.0/targets/sbsa-linux/lib/libcufile.so.1.15.1"
+          ],
+          "queries": {
+            "9": {
+              "first_sql_seconds": 31.123129532905295,
+              "second_sql_seconds": 25.195629230933264,
+              "second_sql_plus_cleanup_seconds": 26.775285342009738,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3073,
+                "hybridScanDeviceBytesRead": 2996350214144,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "3": {
+              "first_sql_seconds": 10.031570170074701,
+              "second_sql_seconds": 11.244046309031546,
+              "second_sql_plus_cleanup_seconds": 12.041548213921487,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2430,
+                "hybridScanDeviceBytesRead": 1737039425536,
+                "hybridScanNativeHostBytesRead": 371790,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "6": {
+              "first_sql_seconds": 1.8880961330141872,
+              "second_sql_seconds": 1.751228507142514,
+              "second_sql_plus_cleanup_seconds": 2.7962349029257894,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1537262231552,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            }
+          }
+        }
+      ],
+      "timings": [
+        {
+          "arm": "baseline",
+          "query": "9",
+          "second_sql_seconds": [
+            25.115837384946644
+          ],
+          "median_second_sql_seconds": 25.115837384946644
+        },
+        {
+          "arm": "baseline",
+          "query": "3",
+          "second_sql_seconds": [
+            10.474435762036592
+          ],
+          "median_second_sql_seconds": 10.474435762036592
+        },
+        {
+          "arm": "baseline",
+          "query": "6",
+          "second_sql_seconds": [
+            1.7900103968568146
+          ],
+          "median_second_sql_seconds": 1.7900103968568146
+        },
+        {
+          "arm": "cpu-only",
+          "query": "9",
+          "second_sql_seconds": [
+            25.26498805405572
+          ],
+          "median_second_sql_seconds": 25.26498805405572
+        },
+        {
+          "arm": "cpu-only",
+          "query": "3",
+          "second_sql_seconds": [
+            10.131886736955494
+          ],
+          "median_second_sql_seconds": 10.131886736955494
+        },
+        {
+          "arm": "cpu-only",
+          "query": "6",
+          "second_sql_seconds": [
+            1.767727374797687
+          ],
+          "median_second_sql_seconds": 1.767727374797687
+        },
+        {
+          "arm": "unbound",
+          "query": "9",
+          "second_sql_seconds": [
+            26.050373184960335
+          ],
+          "median_second_sql_seconds": 26.050373184960335
+        },
+        {
+          "arm": "unbound",
+          "query": "3",
+          "second_sql_seconds": [
+            10.802248073043302
+          ],
+          "median_second_sql_seconds": 10.802248073043302
+        },
+        {
+          "arm": "unbound",
+          "query": "6",
+          "second_sql_seconds": [
+            1.840066864155233
+          ],
+          "median_second_sql_seconds": 1.840066864155233
+        },
+        {
+          "arm": "auto-tls",
+          "query": "9",
+          "second_sql_seconds": [
+            25.195629230933264
+          ],
+          "median_second_sql_seconds": 25.195629230933264
+        },
+        {
+          "arm": "auto-tls",
+          "query": "3",
+          "second_sql_seconds": [
+            11.244046309031546
+          ],
+          "median_second_sql_seconds": 11.244046309031546
+        },
+        {
+          "arm": "auto-tls",
+          "query": "6",
+          "second_sql_seconds": [
+            1.751228507142514
+          ],
+          "median_second_sql_seconds": 1.751228507142514
+        }
+      ],
+      "plan_variant_counts": {
+        "9-logical": 1,
+        "9-executed": 1,
+        "3-logical": 1,
+        "3-executed": 1,
+        "6-logical": 1,
+        "6-executed": 1
+      },
+      "reference_score_eligible": false,
+      "limits": [
+        "Focused queries only; no full-suite score or extrapolated full-suite speedup.",
+        "Two application repetitions per arm; order is forward then reverse.",
+        "Interface byte counters include storage and control traffic; they do not identify GPU payload transport."
+      ],
+      "job_id": 25472,
+      "controller_status": {
+        "status": "failed",
+        "error": "RuntimeError('Node exited 1')"
+      },
+      "assignment_audit": [
+        {
+          "label": "01-baseline",
+          "physical_gpu_count": 32,
+          "workers_per_node": 4
+        },
+        {
+          "label": "02-cpu-only",
+          "physical_gpu_count": 32,
+          "workers_per_node": 4
+        },
+        {
+          "label": "03-unbound",
+          "physical_gpu_count": 32,
+          "workers_per_node": 4
+        },
+        {
+          "label": "04-auto-tls",
+          "physical_gpu_count": 32,
+          "workers_per_node": 4
+        }
+      ],
+      "log_audit": [
+        {
+          "label": "01-baseline",
+          "error_level_reports": {
+            "cuda_buffer_leak_reports": 64,
+            "executor_termination_reports": 32
+          },
+          "leak_report_seconds_relative_to_driver_stop": {
+            "minimum": 0.0,
+            "maximum": 0.0
+          },
+          "other_error_count": 0,
+          "first_other_errors": []
+        },
+        {
+          "label": "02-cpu-only",
+          "error_level_reports": {
+            "cuda_buffer_leak_reports": 63,
+            "executor_termination_reports": 28
+          },
+          "leak_report_seconds_relative_to_driver_stop": {
+            "minimum": 0.0,
+            "maximum": 0.0
+          },
+          "other_error_count": 0,
+          "first_other_errors": []
+        },
+        {
+          "label": "03-unbound",
+          "error_level_reports": {
+            "cuda_buffer_leak_reports": 64,
+            "executor_termination_reports": 31
+          },
+          "leak_report_seconds_relative_to_driver_stop": {
+            "minimum": 0.0,
+            "maximum": 0.0
+          },
+          "other_error_count": 0,
+          "first_other_errors": []
+        },
+        {
+          "label": "04-auto-tls",
+          "error_level_reports": {
+            "cuda_buffer_leak_reports": 64,
+            "executor_termination_reports": 32
+          },
+          "leak_report_seconds_relative_to_driver_stop": {
+            "minimum": 0.0,
+            "maximum": 0.0
+          },
+          "other_error_count": 0,
+          "first_other_errors": []
+        }
+      ],
+      "retained_evidence": {
+        "uri": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261123/01a20622-0ca8-74d0-9805-6bc842a9fdb3/deployment-ab-25472/evidence-1795424246.tar.gz",
+        "sha256": "6af48b74eb9cb09c771e32b95271561c6caeea06f8b3ad790c0d023c1372eab6",
+        "size_bytes": 29979562
+      }
+    },
+    "reverse": {
+      "status": "completed",
+      "engine_source_revision": "faa47fe51f998ae97385e2b218be4a261006bfa6",
+      "runtime_revision": "be83fece43f486447d22f7b63dadaf779eca852b",
+      "engine_sha256": "f99002a23ffc885d8593039d3c6ccb8359c288a730cf2cf65db10d71c5952ded",
+      "tools_sha256": "4ee01fa57115eeb6e59b52eb27ef26c3a5994dd57947f1bc72be38828c52fa90",
+      "cases": [
+        {
+          "label": "07-auto-tls",
+          "arm": "auto-tls",
+          "executor_count": 32,
+          "available_cpus_per_executor": {
+            "72": 32
+          },
+          "observed_anonymous_memory_policies": {
+            "prefer": 32,
+            "bind:1": 16,
+            "bind:0": 16
+          },
+          "observed_process_heap_policies": {
+            "bind:1": 16,
+            "bind:0": 16
+          },
+          "rmm_initialized_logical_devices": {
+            "0": 32
+          },
+          "best_sql_sum_seconds": 37.031882090028375,
+          "selected_sql_plus_cleanup_sum_seconds": 40.205666003981605,
+          "second_sql_sum_seconds": 37.25004506902769,
+          "second_sql_plus_cleanup_sum_seconds": 40.42849918710999,
+          "mapped_native_libraries": [
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucp.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucs.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libuct.so.0.0.0",
+            "/usr/local/cuda-13.0/targets/sbsa-linux/lib/libcufile.so.1.15.1"
+          ],
+          "queries": {
+            "9": {
+              "first_sql_seconds": 31.006100866943598,
+              "second_sql_seconds": 25.158964987145737,
+              "second_sql_plus_cleanup_seconds": 26.19349014130421,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3073,
+                "hybridScanDeviceBytesRead": 2996350214144,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "3": {
+              "first_sql_seconds": 10.098839595913887,
+              "second_sql_seconds": 10.317002574913204,
+              "second_sql_plus_cleanup_seconds": 11.415296057937667,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2430,
+                "hybridScanDeviceBytesRead": 1737039425536,
+                "hybridScanNativeHostBytesRead": 371790,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "6": {
+              "first_sql_seconds": 1.9208407399710268,
+              "second_sql_seconds": 1.7740775069687515,
+              "second_sql_plus_cleanup_seconds": 2.8197129878681153,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1537262231552,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            }
+          }
+        },
+        {
+          "label": "08-unbound",
+          "arm": "unbound",
+          "executor_count": 32,
+          "available_cpus_per_executor": {
+            "144": 32
+          },
+          "observed_anonymous_memory_policies": {
+            "prefer": 32,
+            "default": 32
+          },
+          "observed_process_heap_policies": {
+            "default": 32
+          },
+          "rmm_initialized_logical_devices": {
+            "0": 32
+          },
+          "best_sql_sum_seconds": 38.623874232172966,
+          "selected_sql_plus_cleanup_sum_seconds": 42.000566666945815,
+          "second_sql_sum_seconds": 38.623874232172966,
+          "second_sql_plus_cleanup_sum_seconds": 42.000566666945815,
+          "mapped_native_libraries": [
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucp.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucs.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libuct.so.0.0.0",
+            "/usr/local/cuda-13.0/targets/sbsa-linux/lib/libcufile.so.1.15.1"
+          ],
+          "queries": {
+            "9": {
+              "first_sql_seconds": 32.981488458113745,
+              "second_sql_seconds": 26.592373367166147,
+              "second_sql_plus_cleanup_seconds": 28.011301290243864,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3073,
+                "hybridScanDeviceBytesRead": 2996350214144,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "3": {
+              "first_sql_seconds": 10.710717718116939,
+              "second_sql_seconds": 10.149549147114158,
+              "second_sql_plus_cleanup_seconds": 11.110509882913902,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2430,
+                "hybridScanDeviceBytesRead": 1737039425536,
+                "hybridScanNativeHostBytesRead": 371790,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "6": {
+              "first_sql_seconds": 1.9776235378812999,
+              "second_sql_seconds": 1.8819517178926617,
+              "second_sql_plus_cleanup_seconds": 2.8787554937880486,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1537262231552,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            }
+          }
+        },
+        {
+          "label": "09-cpu-only",
+          "arm": "cpu-only",
+          "executor_count": 32,
+          "available_cpus_per_executor": {
+            "72": 32
+          },
+          "observed_anonymous_memory_policies": {
+            "prefer": 32,
+            "default": 32
+          },
+          "observed_process_heap_policies": {
+            "default": 32
+          },
+          "rmm_initialized_logical_devices": {
+            "0": 32
+          },
+          "best_sql_sum_seconds": 37.21369975619018,
+          "selected_sql_plus_cleanup_sum_seconds": 40.59765788610093,
+          "second_sql_sum_seconds": 37.21369975619018,
+          "second_sql_plus_cleanup_sum_seconds": 40.59765788610093,
+          "mapped_native_libraries": [
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucp.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucs.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libuct.so.0.0.0",
+            "/usr/local/cuda-13.0/targets/sbsa-linux/lib/libcufile.so.1.15.1"
+          ],
+          "queries": {
+            "9": {
+              "first_sql_seconds": 30.85120778903365,
+              "second_sql_seconds": 25.205574877094477,
+              "second_sql_plus_cleanup_seconds": 26.501267165178433,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3073,
+                "hybridScanDeviceBytesRead": 2996350214144,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "3": {
+              "first_sql_seconds": 10.776849785121158,
+              "second_sql_seconds": 10.247929824981838,
+              "second_sql_plus_cleanup_seconds": 11.394054209813476,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2430,
+                "hybridScanDeviceBytesRead": 1737039425536,
+                "hybridScanNativeHostBytesRead": 371790,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "6": {
+              "first_sql_seconds": 1.9066943188663572,
+              "second_sql_seconds": 1.760195054113865,
+              "second_sql_plus_cleanup_seconds": 2.7023365111090243,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1537262231552,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            }
+          }
+        },
+        {
+          "label": "10-baseline",
+          "arm": "baseline",
+          "executor_count": 32,
+          "available_cpus_per_executor": {
+            "72": 32
+          },
+          "observed_anonymous_memory_policies": {
+            "bind:0": 16,
+            "prefer": 32,
+            "bind:1": 16
+          },
+          "observed_process_heap_policies": {
+            "bind:0": 16,
+            "bind:1": 16
+          },
+          "rmm_initialized_logical_devices": {
+            "0": 32
+          },
+          "best_sql_sum_seconds": 36.777826389996335,
+          "selected_sql_plus_cleanup_sum_seconds": 39.97201745095663,
+          "second_sql_sum_seconds": 36.777826389996335,
+          "second_sql_plus_cleanup_sum_seconds": 39.97201745095663,
+          "mapped_native_libraries": [
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucp.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucs.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libuct.so.0.0.0",
+            "/usr/local/cuda-13.0/targets/sbsa-linux/lib/libcufile.so.1.15.1"
+          ],
+          "queries": {
+            "9": {
+              "first_sql_seconds": 31.36959727993235,
+              "second_sql_seconds": 25.033879366936162,
+              "second_sql_plus_cleanup_seconds": 26.06562241096981,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3073,
+                "hybridScanDeviceBytesRead": 2996350214144,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "3": {
+              "first_sql_seconds": 9.978880071081221,
+              "second_sql_seconds": 9.95737688918598,
+              "second_sql_plus_cleanup_seconds": 11.05279341316782,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2430,
+                "hybridScanDeviceBytesRead": 1737039425536,
+                "hybridScanNativeHostBytesRead": 371790,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "6": {
+              "first_sql_seconds": 1.903371024876833,
+              "second_sql_seconds": 1.7865701338741928,
+              "second_sql_plus_cleanup_seconds": 2.8536016268189996,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1537262231552,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            }
+          }
+        }
+      ],
+      "timings": [
+        {
+          "arm": "auto-tls",
+          "query": "9",
+          "second_sql_seconds": [
+            25.158964987145737
+          ],
+          "median_second_sql_seconds": 25.158964987145737
+        },
+        {
+          "arm": "auto-tls",
+          "query": "3",
+          "second_sql_seconds": [
+            10.317002574913204
+          ],
+          "median_second_sql_seconds": 10.317002574913204
+        },
+        {
+          "arm": "auto-tls",
+          "query": "6",
+          "second_sql_seconds": [
+            1.7740775069687515
+          ],
+          "median_second_sql_seconds": 1.7740775069687515
+        },
+        {
+          "arm": "unbound",
+          "query": "9",
+          "second_sql_seconds": [
+            26.592373367166147
+          ],
+          "median_second_sql_seconds": 26.592373367166147
+        },
+        {
+          "arm": "unbound",
+          "query": "3",
+          "second_sql_seconds": [
+            10.149549147114158
+          ],
+          "median_second_sql_seconds": 10.149549147114158
+        },
+        {
+          "arm": "unbound",
+          "query": "6",
+          "second_sql_seconds": [
+            1.8819517178926617
+          ],
+          "median_second_sql_seconds": 1.8819517178926617
+        },
+        {
+          "arm": "cpu-only",
+          "query": "9",
+          "second_sql_seconds": [
+            25.205574877094477
+          ],
+          "median_second_sql_seconds": 25.205574877094477
+        },
+        {
+          "arm": "cpu-only",
+          "query": "3",
+          "second_sql_seconds": [
+            10.247929824981838
+          ],
+          "median_second_sql_seconds": 10.247929824981838
+        },
+        {
+          "arm": "cpu-only",
+          "query": "6",
+          "second_sql_seconds": [
+            1.760195054113865
+          ],
+          "median_second_sql_seconds": 1.760195054113865
+        },
+        {
+          "arm": "baseline",
+          "query": "9",
+          "second_sql_seconds": [
+            25.033879366936162
+          ],
+          "median_second_sql_seconds": 25.033879366936162
+        },
+        {
+          "arm": "baseline",
+          "query": "3",
+          "second_sql_seconds": [
+            9.95737688918598
+          ],
+          "median_second_sql_seconds": 9.95737688918598
+        },
+        {
+          "arm": "baseline",
+          "query": "6",
+          "second_sql_seconds": [
+            1.7865701338741928
+          ],
+          "median_second_sql_seconds": 1.7865701338741928
+        }
+      ],
+      "plan_variant_counts": {
+        "9-logical": 1,
+        "9-executed": 1,
+        "3-logical": 1,
+        "3-executed": 1,
+        "6-logical": 1,
+        "6-executed": 1
+      },
+      "reference_score_eligible": false,
+      "limits": [
+        "Focused queries only; no full-suite score or extrapolated full-suite speedup.",
+        "Two application repetitions per arm; order is forward then reverse.",
+        "Interface byte counters include storage and control traffic; they do not identify GPU payload transport."
+      ],
+      "job_id": 25473,
+      "controller_status": {
+        "status": "completed"
+      },
+      "assignment_audit": [
+        {
+          "label": "07-auto-tls",
+          "physical_gpu_count": 32,
+          "workers_per_node": 4
+        },
+        {
+          "label": "08-unbound",
+          "physical_gpu_count": 32,
+          "workers_per_node": 4
+        },
+        {
+          "label": "09-cpu-only",
+          "physical_gpu_count": 32,
+          "workers_per_node": 4
+        },
+        {
+          "label": "10-baseline",
+          "physical_gpu_count": 32,
+          "workers_per_node": 4
+        }
+      ],
+      "log_audit": [
+        {
+          "label": "07-auto-tls",
+          "error_level_reports": {
+            "cuda_buffer_leak_reports": 64,
+            "executor_termination_reports": 32
+          },
+          "leak_report_seconds_relative_to_driver_stop": {
+            "minimum": 0.0,
+            "maximum": 0.0
+          },
+          "other_error_count": 0,
+          "first_other_errors": []
+        },
+        {
+          "label": "08-unbound",
+          "error_level_reports": {
+            "cuda_buffer_leak_reports": 64,
+            "executor_termination_reports": 32
+          },
+          "leak_report_seconds_relative_to_driver_stop": {
+            "minimum": 0.0,
+            "maximum": 0.0
+          },
+          "other_error_count": 0,
+          "first_other_errors": []
+        },
+        {
+          "label": "09-cpu-only",
+          "error_level_reports": {
+            "cuda_buffer_leak_reports": 64,
+            "executor_termination_reports": 32
+          },
+          "leak_report_seconds_relative_to_driver_stop": {
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "other_error_count": 0,
+          "first_other_errors": []
+        },
+        {
+          "label": "10-baseline",
+          "error_level_reports": {
+            "cuda_buffer_leak_reports": 64,
+            "executor_termination_reports": 32
+          },
+          "leak_report_seconds_relative_to_driver_stop": {
+            "minimum": 0.0,
+            "maximum": 0.0
+          },
+          "other_error_count": 0,
+          "first_other_errors": []
+        }
+      ],
+      "retained_evidence": {
+        "uri": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261123/01a20622-0ca8-74d0-9805-6bc842a9fdb3/deployment-reverse-25473/evidence-1795433266.tar.gz",
+        "sha256": "cb88d9b3844d74149f3234a427be7b416083ade42758d14d44216c8956fff809",
+        "size_bytes": 25373799
+      }
+    },
+    "workers": {
+      "status": "completed",
+      "engine_source_revision": "faa47fe51f998ae97385e2b218be4a261006bfa6",
+      "runtime_revision": "80af5b6d2d8b8019b9dd53da051154558351e744",
+      "engine_sha256": "f99002a23ffc885d8593039d3c6ccb8359c288a730cf2cf65db10d71c5952ded",
+      "tools_sha256": "4ee01fa57115eeb6e59b52eb27ef26c3a5994dd57947f1bc72be38828c52fa90",
+      "cases": [
+        {
+          "label": "01-baseline",
+          "arm": "baseline",
+          "executor_count": 32,
+          "available_cpus_per_executor": {
+            "72": 32
+          },
+          "observed_anonymous_memory_policies": {
+            "bind:0": 16,
+            "prefer": 32,
+            "bind:1": 16
+          },
+          "observed_process_heap_policies": {
+            "bind:0": 16,
+            "bind:1": 16
+          },
+          "rmm_initialized_logical_devices": {
+            "0": 32
+          },
+          "best_sql_sum_seconds": 37.04253018810414,
+          "selected_sql_plus_cleanup_sum_seconds": 40.5673227510415,
+          "second_sql_sum_seconds": 37.04253018810414,
+          "second_sql_plus_cleanup_sum_seconds": 40.5673227510415,
+          "mapped_native_libraries": [
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucp.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucs.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libuct.so.0.0.0",
+            "/usr/local/cuda-13.0/targets/sbsa-linux/lib/libcufile.so.1.15.1"
+          ],
+          "queries": {
+            "9": {
+              "first_sql_seconds": 30.410071891034022,
+              "second_sql_seconds": 25.30114329000935,
+              "second_sql_plus_cleanup_seconds": 26.734123238828033,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3073,
+                "hybridScanDeviceBytesRead": 2996350214144,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "3": {
+              "first_sql_seconds": 10.144267957890406,
+              "second_sql_seconds": 9.968843794194981,
+              "second_sql_plus_cleanup_seconds": 11.018402514280751,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2430,
+                "hybridScanDeviceBytesRead": 1737039425536,
+                "hybridScanNativeHostBytesRead": 371790,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "6": {
+              "first_sql_seconds": 1.9204824301414192,
+              "second_sql_seconds": 1.7725431038998067,
+              "second_sql_plus_cleanup_seconds": 2.814796997932717,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1537262231552,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            }
+          }
+        },
+        {
+          "label": "02-per-numa",
+          "arm": "per-numa",
+          "executor_count": 32,
+          "available_cpus_per_executor": {
+            "72": 32
+          },
+          "observed_anonymous_memory_policies": {
+            "bind:0": 16,
+            "prefer": 32,
+            "bind:1": 16
+          },
+          "observed_process_heap_policies": {
+            "bind:0": 16,
+            "bind:1": 16
+          },
+          "rmm_initialized_logical_devices": {
+            "1": 16,
+            "0": 16
+          },
+          "best_sql_sum_seconds": 36.67810101713985,
+          "selected_sql_plus_cleanup_sum_seconds": 40.41852247691713,
+          "second_sql_sum_seconds": 36.67810101713985,
+          "second_sql_plus_cleanup_sum_seconds": 40.41852247691713,
+          "mapped_native_libraries": [
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucp.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucs.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libuct.so.0.0.0",
+            "/usr/local/cuda-13.0/targets/sbsa-linux/lib/libcufile.so.1.15.1"
+          ],
+          "queries": {
+            "9": {
+              "first_sql_seconds": 31.748201373033226,
+              "second_sql_seconds": 25.03011985705234,
+              "second_sql_plus_cleanup_seconds": 26.626513164956123,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3073,
+                "hybridScanDeviceBytesRead": 2996350214144,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "3": {
+              "first_sql_seconds": 10.823521089041606,
+              "second_sql_seconds": 9.904640653170645,
+              "second_sql_plus_cleanup_seconds": 11.00160320312716,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2430,
+                "hybridScanDeviceBytesRead": 1737039425536,
+                "hybridScanNativeHostBytesRead": 371790,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "6": {
+              "first_sql_seconds": 1.863696081098169,
+              "second_sql_seconds": 1.7433405069168657,
+              "second_sql_plus_cleanup_seconds": 2.7904061088338494,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1537262231552,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            }
+          }
+        },
+        {
+          "label": "03-per-numa",
+          "arm": "per-numa",
+          "executor_count": 32,
+          "available_cpus_per_executor": {
+            "72": 32
+          },
+          "observed_anonymous_memory_policies": {
+            "bind:0": 16,
+            "prefer": 32,
+            "bind:1": 16
+          },
+          "observed_process_heap_policies": {
+            "bind:0": 16,
+            "bind:1": 16
+          },
+          "rmm_initialized_logical_devices": {
+            "0": 16,
+            "1": 16
+          },
+          "best_sql_sum_seconds": 37.20466046384536,
+          "selected_sql_plus_cleanup_sum_seconds": 40.824470448540524,
+          "second_sql_sum_seconds": 37.20466046384536,
+          "second_sql_plus_cleanup_sum_seconds": 40.824470448540524,
+          "mapped_native_libraries": [
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucp.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucs.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libuct.so.0.0.0",
+            "/usr/local/cuda-13.0/targets/sbsa-linux/lib/libcufile.so.1.15.1"
+          ],
+          "queries": {
+            "9": {
+              "first_sql_seconds": 31.739609356038272,
+              "second_sql_seconds": 25.14718142291531,
+              "second_sql_plus_cleanup_seconds": 26.720056384801865,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3073,
+                "hybridScanDeviceBytesRead": 2996350214144,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "3": {
+              "first_sql_seconds": 10.361958971014246,
+              "second_sql_seconds": 10.296420244965702,
+              "second_sql_plus_cleanup_seconds": 11.397369991755113,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2430,
+                "hybridScanDeviceBytesRead": 1737039425536,
+                "hybridScanNativeHostBytesRead": 371790,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "6": {
+              "first_sql_seconds": 1.909733192063868,
+              "second_sql_seconds": 1.7610587959643453,
+              "second_sql_plus_cleanup_seconds": 2.707044071983546,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1537262231552,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            }
+          }
+        },
+        {
+          "label": "04-baseline",
+          "arm": "baseline",
+          "executor_count": 32,
+          "available_cpus_per_executor": {
+            "72": 32
+          },
+          "observed_anonymous_memory_policies": {
+            "prefer": 32,
+            "bind:1": 16,
+            "bind:0": 16
+          },
+          "observed_process_heap_policies": {
+            "bind:1": 16,
+            "bind:0": 16
+          },
+          "rmm_initialized_logical_devices": {
+            "0": 32
+          },
+          "best_sql_sum_seconds": 36.65002029016614,
+          "selected_sql_plus_cleanup_sum_seconds": 39.84999810089357,
+          "second_sql_sum_seconds": 37.694684071000665,
+          "second_sql_plus_cleanup_sum_seconds": 40.891423258930445,
+          "mapped_native_libraries": [
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucp.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucs.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libuct.so.0.0.0",
+            "/usr/local/cuda-13.0/targets/sbsa-linux/lib/libcufile.so.1.15.1"
+          ],
+          "queries": {
+            "9": {
+              "first_sql_seconds": 31.181818112032488,
+              "second_sql_seconds": 24.960259098093957,
+              "second_sql_plus_cleanup_seconds": 26.168830702081323,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3073,
+                "hybridScanDeviceBytesRead": 2996350214144,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "3": {
+              "first_sql_seconds": 9.885845218086615,
+              "second_sql_seconds": 10.930508998921141,
+              "second_sql_plus_cleanup_seconds": 12.024436766980216,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2430,
+                "hybridScanDeviceBytesRead": 1737039425536,
+                "hybridScanNativeHostBytesRead": 371790,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "6": {
+              "first_sql_seconds": 1.8826174731366336,
+              "second_sql_seconds": 1.8039159739855677,
+              "second_sql_plus_cleanup_seconds": 2.698155789868906,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1537262231552,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            }
+          }
+        }
+      ],
+      "timings": [
+        {
+          "arm": "baseline",
+          "query": "9",
+          "second_sql_seconds": [
+            25.30114329000935,
+            24.960259098093957
+          ],
+          "median_second_sql_seconds": 25.130701194051653
+        },
+        {
+          "arm": "baseline",
+          "query": "3",
+          "second_sql_seconds": [
+            9.968843794194981,
+            10.930508998921141
+          ],
+          "median_second_sql_seconds": 10.449676396558061
+        },
+        {
+          "arm": "baseline",
+          "query": "6",
+          "second_sql_seconds": [
+            1.7725431038998067,
+            1.8039159739855677
+          ],
+          "median_second_sql_seconds": 1.7882295389426872
+        },
+        {
+          "arm": "per-numa",
+          "query": "9",
+          "second_sql_seconds": [
+            25.03011985705234,
+            25.14718142291531
+          ],
+          "median_second_sql_seconds": 25.088650639983825
+        },
+        {
+          "arm": "per-numa",
+          "query": "3",
+          "second_sql_seconds": [
+            9.904640653170645,
+            10.296420244965702
+          ],
+          "median_second_sql_seconds": 10.100530449068174
+        },
+        {
+          "arm": "per-numa",
+          "query": "6",
+          "second_sql_seconds": [
+            1.7433405069168657,
+            1.7610587959643453
+          ],
+          "median_second_sql_seconds": 1.7521996514406055
+        }
+      ],
+      "plan_variant_counts": {
+        "9-logical": 1,
+        "9-executed": 1,
+        "3-logical": 1,
+        "3-executed": 1,
+        "6-logical": 1,
+        "6-executed": 1
+      },
+      "reference_score_eligible": false,
+      "limits": [
+        "Focused queries only; no full-suite score or extrapolated full-suite speedup.",
+        "Two application repetitions per arm; order is forward then reverse.",
+        "Interface byte counters include storage and control traffic; they do not identify GPU payload transport."
+      ],
+      "job_id": 25474,
+      "controller_status": {
+        "status": "completed"
+      },
+      "assignment_audit": [
+        {
+          "label": "01-baseline",
+          "physical_gpu_count": 32,
+          "workers_per_node": 4
+        },
+        {
+          "label": "02-per-numa",
+          "physical_gpu_count": 32,
+          "workers_per_node": 2
+        },
+        {
+          "label": "03-per-numa",
+          "physical_gpu_count": 32,
+          "workers_per_node": 2
+        },
+        {
+          "label": "04-baseline",
+          "physical_gpu_count": 32,
+          "workers_per_node": 4
+        }
+      ],
+      "log_audit": [
+        {
+          "label": "01-baseline",
+          "error_level_reports": {
+            "executor_termination_reports": 32,
+            "cuda_buffer_leak_reports": 56
+          },
+          "leak_report_seconds_relative_to_driver_stop": {
+            "minimum": 0.0,
+            "maximum": 0.0
+          },
+          "other_error_count": 0,
+          "first_other_errors": []
+        },
+        {
+          "label": "02-per-numa",
+          "error_level_reports": {
+            "cuda_buffer_leak_reports": 64,
+            "executor_termination_reports": 32
+          },
+          "leak_report_seconds_relative_to_driver_stop": {
+            "minimum": 0.0,
+            "maximum": 0.0
+          },
+          "other_error_count": 0,
+          "first_other_errors": []
+        },
+        {
+          "label": "03-per-numa",
+          "error_level_reports": {
+            "cuda_buffer_leak_reports": 57,
+            "executor_termination_reports": 32
+          },
+          "leak_report_seconds_relative_to_driver_stop": {
+            "minimum": 0.0,
+            "maximum": 0.0
+          },
+          "other_error_count": 0,
+          "first_other_errors": []
+        },
+        {
+          "label": "04-baseline",
+          "error_level_reports": {
+            "cuda_buffer_leak_reports": 64,
+            "executor_termination_reports": 32
+          },
+          "leak_report_seconds_relative_to_driver_stop": {
+            "minimum": 0.0,
+            "maximum": 0.0
+          },
+          "other_error_count": 0,
+          "first_other_errors": []
+        }
+      ],
+      "retained_evidence": {
+        "uri": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261123/01a20622-0ca8-74d0-9805-6bc842a9fdb3/deployment-workers-25474/evidence-1795433278.tar.gz",
+        "sha256": "66762c795045b64c20d540e16217c03a8e42441de55e11df35984d1ed706d2f9",
+        "size_bytes": 25514106
+      }
+    },
+    "full": {
+      "status": "completed",
+      "engine_source_revision": "faa47fe51f998ae97385e2b218be4a261006bfa6",
+      "runtime_revision": "e0ef41c61d5ebdf8a5740baf275060f23289ccae",
+      "engine_sha256": "f99002a23ffc885d8593039d3c6ccb8359c288a730cf2cf65db10d71c5952ded",
+      "tools_sha256": "4ee01fa57115eeb6e59b52eb27ef26c3a5994dd57947f1bc72be38828c52fa90",
+      "cases": [
+        {
+          "label": "01-baseline",
+          "arm": "baseline",
+          "executor_count": 32,
+          "available_cpus_per_executor": {
+            "72": 32
+          },
+          "observed_anonymous_memory_policies": {
+            "prefer": 32,
+            "bind:1": 16,
+            "bind:0": 16
+          },
+          "observed_process_heap_policies": {
+            "bind:1": 16,
+            "bind:0": 16
+          },
+          "rmm_initialized_logical_devices": {
+            "0": 32
+          },
+          "best_sql_sum_seconds": 155.9587356587872,
+          "selected_sql_plus_cleanup_sum_seconds": 174.11633799341507,
+          "second_sql_sum_seconds": 156.44454104593024,
+          "second_sql_plus_cleanup_sum_seconds": 174.69148942944594,
+          "mapped_native_libraries": [
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucp.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucs.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libuct.so.0.0.0",
+            "/usr/local/cuda-13.0/targets/sbsa-linux/lib/libcufile.so.1.15.1"
+          ],
+          "queries": {
+            "9": {
+              "first_sql_seconds": 31.615494360914454,
+              "second_sql_seconds": 24.978227959945798,
+              "second_sql_plus_cleanup_seconds": 26.333761221030727,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3073,
+                "hybridScanDeviceBytesRead": 2996350214144,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "21": {
+              "first_sql_seconds": 8.505816963035613,
+              "second_sql_seconds": 7.912349652964622,
+              "second_sql_plus_cleanup_seconds": 8.911235385807231,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2413,
+                "hybridScanDeviceBytesRead": 1286828142592,
+                "hybridScanNativeHostBytesRead": 1060504,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "3": {
+              "first_sql_seconds": 10.043812306132168,
+              "second_sql_seconds": 9.972545374883339,
+              "second_sql_plus_cleanup_seconds": 11.069213019683957,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2430,
+                "hybridScanDeviceBytesRead": 1737039425536,
+                "hybridScanNativeHostBytesRead": 371790,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "18": {
+              "first_sql_seconds": 21.561650910880417,
+              "second_sql_seconds": 19.78067288803868,
+              "second_sql_plus_cleanup_seconds": 20.87756027886644,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 4230,
+                "hybridScanDeviceBytesRead": 951128940544,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "17": {
+              "first_sql_seconds": 4.058558260090649,
+              "second_sql_seconds": 4.175676953047514,
+              "second_sql_plus_cleanup_seconds": 5.223000524099916,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3780,
+                "hybridScanDeviceBytesRead": 2863194632192,
+                "hybridScanNativeHostBytesRead": 4865400,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "1": {
+              "first_sql_seconds": 3.730943661183119,
+              "second_sql_seconds": 3.6098572600167245,
+              "second_sql_plus_cleanup_seconds": 4.604604054009542,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1699694538752,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "2": {
+              "first_sql_seconds": 3.013224639929831,
+              "second_sql_seconds": 2.5105865120422095,
+              "second_sql_plus_cleanup_seconds": 3.3551799601409584,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1467,
+                "hybridScanDeviceBytesRead": 204436086784,
+                "hybridScanNativeHostBytesRead": 1322502,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "4": {
+              "first_sql_seconds": 6.719826568150893,
+              "second_sql_seconds": 6.358877955935895,
+              "second_sql_plus_cleanup_seconds": 7.4499553688801825,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2250,
+                "hybridScanDeviceBytesRead": 688972521472,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "5": {
+              "first_sql_seconds": 12.995361412875354,
+              "second_sql_seconds": 12.997963686008006,
+              "second_sql_plus_cleanup_seconds": 14.297070033149794,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2594,
+                "hybridScanDeviceBytesRead": 2134886289408,
+                "hybridScanNativeHostBytesRead": 480,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "6": {
+              "first_sql_seconds": 1.737591102020815,
+              "second_sql_seconds": 1.745716149918735,
+              "second_sql_plus_cleanup_seconds": 2.7398389459121972,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1537262231552,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "7": {
+              "first_sql_seconds": 6.990152464946732,
+              "second_sql_seconds": 6.76129651395604,
+              "second_sql_plus_cleanup_seconds": 7.8382981980685145,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2593,
+                "hybridScanDeviceBytesRead": 2339797430272,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "8": {
+              "first_sql_seconds": 4.99753385479562,
+              "second_sql_seconds": 4.791335928952321,
+              "second_sql_plus_cleanup_seconds": 5.736369369085878,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2775,
+                "hybridScanDeviceBytesRead": 2912030494720,
+                "hybridScanNativeHostBytesRead": 22687352,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "10": {
+              "first_sql_seconds": 8.327382488176227,
+              "second_sql_seconds": 8.166095265885815,
+              "second_sql_plus_cleanup_seconds": 9.209091866854578,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2431,
+                "hybridScanDeviceBytesRead": 1861788250112,
+                "hybridScanNativeHostBytesRead": 5245504,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "11": {
+              "first_sql_seconds": 7.497015521861613,
+              "second_sql_seconds": 7.668943666154519,
+              "second_sql_plus_cleanup_seconds": 7.720274555962533,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 643,
+                "hybridScanDeviceBytesRead": 127387246592,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "12": {
+              "first_sql_seconds": 3.7775675270240754,
+              "second_sql_seconds": 3.6521811950951815,
+              "second_sql_plus_cleanup_seconds": 3.9955330910161138,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2250,
+                "hybridScanDeviceBytesRead": 962151124992,
+                "hybridScanNativeHostBytesRead": 12182400,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "13": {
+              "first_sql_seconds": 4.674894235096872,
+              "second_sql_seconds": 4.594349327962846,
+              "second_sql_plus_cleanup_seconds": 4.9829178168438375,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2160,
+                "hybridScanDeviceBytesRead": 1100457484288,
+                "hybridScanNativeHostBytesRead": 14626294,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "14": {
+              "first_sql_seconds": 3.3440666389651597,
+              "second_sql_seconds": 3.019650178961456,
+              "second_sql_plus_cleanup_seconds": 4.01265624188818,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1980,
+                "hybridScanDeviceBytesRead": 2180088229888,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "15": {
+              "first_sql_seconds": 6.7457434250973165,
+              "second_sql_seconds": 6.492033869028091,
+              "second_sql_plus_cleanup_seconds": 7.084916736232117,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2124,
+                "hybridScanDeviceBytesRead": 2098597265408,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "16": {
+              "first_sql_seconds": 2.49910352518782,
+              "second_sql_seconds": 2.40305732190609,
+              "second_sql_plus_cleanup_seconds": 2.8978452519513667,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 822,
+                "hybridScanDeviceBytesRead": 44013703168,
+                "hybridScanNativeHostBytesRead": 3255840,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "19": {
+              "first_sql_seconds": 5.582972454838455,
+              "second_sql_seconds": 5.530428862199187,
+              "second_sql_plus_cleanup_seconds": 5.988212766125798,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1980,
+                "hybridScanDeviceBytesRead": 2164004937728,
+                "hybridScanNativeHostBytesRead": 30583800,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "20": {
+              "first_sql_seconds": 6.160150315146893,
+              "second_sql_seconds": 6.346181544009596,
+              "second_sql_plus_cleanup_seconds": 6.394935284042731,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2623,
+                "hybridScanDeviceBytesRead": 2006819319808,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "22": {
+              "first_sql_seconds": 3.1925912478473037,
+              "second_sql_seconds": 2.9765129790175706,
+              "second_sql_plus_cleanup_seconds": 3.969019459793344,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 630,
+                "hybridScanDeviceBytesRead": 285768159232,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            }
+          }
+        },
+        {
+          "label": "02-cpu-only",
+          "arm": "cpu-only",
+          "executor_count": 32,
+          "available_cpus_per_executor": {
+            "72": 32
+          },
+          "observed_anonymous_memory_policies": {
+            "prefer": 32,
+            "default": 32
+          },
+          "observed_process_heap_policies": {
+            "default": 32
+          },
+          "rmm_initialized_logical_devices": {
+            "0": 32
+          },
+          "best_sql_sum_seconds": 155.0781701831147,
+          "selected_sql_plus_cleanup_sum_seconds": 175.62070777942427,
+          "second_sql_sum_seconds": 156.69867774820887,
+          "second_sql_plus_cleanup_sum_seconds": 177.23953540995717,
+          "mapped_native_libraries": [
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucp.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucs.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libuct.so.0.0.0",
+            "/usr/local/cuda-13.0/targets/sbsa-linux/lib/libcufile.so.1.15.1"
+          ],
+          "queries": {
+            "9": {
+              "first_sql_seconds": 31.63035544520244,
+              "second_sql_seconds": 25.126629357924685,
+              "second_sql_plus_cleanup_seconds": 26.488780734827742,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3073,
+                "hybridScanDeviceBytesRead": 2996350214144,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "21": {
+              "first_sql_seconds": 8.59410900506191,
+              "second_sql_seconds": 9.30246122693643,
+              "second_sql_plus_cleanup_seconds": 10.248948751017451,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2413,
+                "hybridScanDeviceBytesRead": 1286828142592,
+                "hybridScanNativeHostBytesRead": 1060504,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "3": {
+              "first_sql_seconds": 10.653092618100345,
+              "second_sql_seconds": 9.661602358100936,
+              "second_sql_plus_cleanup_seconds": 10.707171665970236,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2430,
+                "hybridScanDeviceBytesRead": 1737039425536,
+                "hybridScanNativeHostBytesRead": 371790,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "18": {
+              "first_sql_seconds": 21.340294231893495,
+              "second_sql_seconds": 20.33442856813781,
+              "second_sql_plus_cleanup_seconds": 21.382006611209363,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 4230,
+                "hybridScanDeviceBytesRead": 951128940544,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "17": {
+              "first_sql_seconds": 4.105878116097301,
+              "second_sql_seconds": 3.9694255541544408,
+              "second_sql_plus_cleanup_seconds": 5.014924431219697,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3780,
+                "hybridScanDeviceBytesRead": 2863194632192,
+                "hybridScanNativeHostBytesRead": 4865400,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "1": {
+              "first_sql_seconds": 3.7643247439991683,
+              "second_sql_seconds": 3.5923860440962017,
+              "second_sql_plus_cleanup_seconds": 4.6372825221624225,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1699694538752,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "2": {
+              "first_sql_seconds": 2.200298441108316,
+              "second_sql_seconds": 2.0887508129235357,
+              "second_sql_plus_cleanup_seconds": 2.932660555932671,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1467,
+                "hybridScanDeviceBytesRead": 204436086784,
+                "hybridScanNativeHostBytesRead": 1322502,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "4": {
+              "first_sql_seconds": 6.306473325006664,
+              "second_sql_seconds": 6.417590169934556,
+              "second_sql_plus_cleanup_seconds": 7.36250364780426,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2250,
+                "hybridScanDeviceBytesRead": 688972521472,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "5": {
+              "first_sql_seconds": 13.254445696948096,
+              "second_sql_seconds": 12.962428404018283,
+              "second_sql_plus_cleanup_seconds": 14.22473611193709,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2594,
+                "hybridScanDeviceBytesRead": 2134886289408,
+                "hybridScanNativeHostBytesRead": 480,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "6": {
+              "first_sql_seconds": 1.7250982329715043,
+              "second_sql_seconds": 1.7455802280455828,
+              "second_sql_plus_cleanup_seconds": 2.737282842164859,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1537262231552,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "7": {
+              "first_sql_seconds": 6.912750553805381,
+              "second_sql_seconds": 6.804690411081538,
+              "second_sql_plus_cleanup_seconds": 7.796935264952481,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2593,
+                "hybridScanDeviceBytesRead": 2339797430272,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "8": {
+              "first_sql_seconds": 4.978082266869023,
+              "second_sql_seconds": 4.864974450087175,
+              "second_sql_plus_cleanup_seconds": 5.7572940641548485,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2775,
+                "hybridScanDeviceBytesRead": 2912030494720,
+                "hybridScanNativeHostBytesRead": 22687352,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "10": {
+              "first_sql_seconds": 8.37593245622702,
+              "second_sql_seconds": 8.30481054703705,
+              "second_sql_plus_cleanup_seconds": 9.297281641047448,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2431,
+                "hybridScanDeviceBytesRead": 1861788250112,
+                "hybridScanNativeHostBytesRead": 5245504,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "11": {
+              "first_sql_seconds": 5.940940434811637,
+              "second_sql_seconds": 6.6430217230226845,
+              "second_sql_plus_cleanup_seconds": 6.691757064079866,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 643,
+                "hybridScanDeviceBytesRead": 127387246592,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "12": {
+              "first_sql_seconds": 3.7734498961362988,
+              "second_sql_seconds": 3.639536499977112,
+              "second_sql_plus_cleanup_seconds": 4.580115297110751,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2250,
+                "hybridScanDeviceBytesRead": 962151124992,
+                "hybridScanNativeHostBytesRead": 12182400,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "13": {
+              "first_sql_seconds": 4.681621239986271,
+              "second_sql_seconds": 4.612725951941684,
+              "second_sql_plus_cleanup_seconds": 5.604211575817317,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2160,
+                "hybridScanDeviceBytesRead": 1100457484288,
+                "hybridScanNativeHostBytesRead": 14626294,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "14": {
+              "first_sql_seconds": 3.2781418680679053,
+              "second_sql_seconds": 3.1246882369741797,
+              "second_sql_plus_cleanup_seconds": 4.065591705963016,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1980,
+                "hybridScanDeviceBytesRead": 2180088229888,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "15": {
+              "first_sql_seconds": 6.782385519007221,
+              "second_sql_seconds": 6.503791698021814,
+              "second_sql_plus_cleanup_seconds": 7.648724555037916,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2124,
+                "hybridScanDeviceBytesRead": 2098597265408,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "16": {
+              "first_sql_seconds": 2.5314009508583695,
+              "second_sql_seconds": 2.4127696179784834,
+              "second_sql_plus_cleanup_seconds": 3.4062207757961005,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 822,
+                "hybridScanDeviceBytesRead": 44013703168,
+                "hybridScanNativeHostBytesRead": 3255840,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "19": {
+              "first_sql_seconds": 5.635975706158206,
+              "second_sql_seconds": 5.577183319954202,
+              "second_sql_plus_cleanup_seconds": 6.659688433865085,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1980,
+                "hybridScanDeviceBytesRead": 2164004937728,
+                "hybridScanNativeHostBytesRead": 30583800,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "20": {
+              "first_sql_seconds": 6.2053883308544755,
+              "second_sql_seconds": 6.283863545861095,
+              "second_sql_plus_cleanup_seconds": 6.329388937912881,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2623,
+                "hybridScanDeviceBytesRead": 2006819319808,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "22": {
+              "first_sql_seconds": 2.9731920761987567,
+              "second_sql_seconds": 2.725339021999389,
+              "second_sql_plus_cleanup_seconds": 3.6660282199736685,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 630,
+                "hybridScanDeviceBytesRead": 285768159232,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            }
+          }
+        },
+        {
+          "label": "03-bundled-cufile",
+          "arm": "bundled-cufile",
+          "executor_count": 32,
+          "available_cpus_per_executor": {
+            "72": 32
+          },
+          "observed_anonymous_memory_policies": {
+            "prefer": 32,
+            "bind:1": 16,
+            "bind:0": 16
+          },
+          "observed_process_heap_policies": {
+            "bind:1": 16,
+            "bind:0": 16
+          },
+          "rmm_initialized_logical_devices": {
+            "0": 32
+          },
+          "best_sql_sum_seconds": 153.4376656585373,
+          "selected_sql_plus_cleanup_sum_seconds": 172.6671297349967,
+          "second_sql_sum_seconds": 154.95506117027253,
+          "second_sql_plus_cleanup_sum_seconds": 174.44040644564666,
+          "mapped_native_libraries": [
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucp.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libucs.so.0.0.0",
+            "/home/mahonem/wild_spark_rapids/261123_scaleup_reference/benchmarks/scaleup_reference/dependencies/ucx-arm64-native/lib/libuct.so.0.0.0",
+            "/var/tmp/scaleup-reference/full-ab-261123-e0ef41-03-bundled-cufile/cufile-runtime/libcufile.so.0"
+          ],
+          "queries": {
+            "9": {
+              "first_sql_seconds": 30.765653857029974,
+              "second_sql_seconds": 24.611171560827643,
+              "second_sql_plus_cleanup_seconds": 25.9400171788875,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3073,
+                "hybridScanDeviceBytesRead": 2996350214144,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "21": {
+              "first_sql_seconds": 8.471102966926992,
+              "second_sql_seconds": 7.869747324148193,
+              "second_sql_plus_cleanup_seconds": 8.864144339924678,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2413,
+                "hybridScanDeviceBytesRead": 1286828142592,
+                "hybridScanNativeHostBytesRead": 1060504,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "3": {
+              "first_sql_seconds": 10.147930359933525,
+              "second_sql_seconds": 9.713774184929207,
+              "second_sql_plus_cleanup_seconds": 10.859200287843123,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2430,
+                "hybridScanDeviceBytesRead": 1737039425536,
+                "hybridScanNativeHostBytesRead": 371790,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "18": {
+              "first_sql_seconds": 19.99864926794544,
+              "second_sql_seconds": 20.351912831887603,
+              "second_sql_plus_cleanup_seconds": 21.198867349885404,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 4230,
+                "hybridScanDeviceBytesRead": 951128940544,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "17": {
+              "first_sql_seconds": 4.187117923982441,
+              "second_sql_seconds": 4.03622842207551,
+              "second_sql_plus_cleanup_seconds": 4.977808600058779,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 3780,
+                "hybridScanDeviceBytesRead": 2863194632192,
+                "hybridScanNativeHostBytesRead": 4865400,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "1": {
+              "first_sql_seconds": 3.734995463863015,
+              "second_sql_seconds": 3.617469541961327,
+              "second_sql_plus_cleanup_seconds": 4.559105847030878,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1699694538752,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "2": {
+              "first_sql_seconds": 2.3781051069963723,
+              "second_sql_seconds": 2.5267836039420217,
+              "second_sql_plus_cleanup_seconds": 3.370108046801761,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1467,
+                "hybridScanDeviceBytesRead": 204436086784,
+                "hybridScanNativeHostBytesRead": 1322502,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "4": {
+              "first_sql_seconds": 6.379639710998163,
+              "second_sql_seconds": 6.306806060951203,
+              "second_sql_plus_cleanup_seconds": 7.098712254781276,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2250,
+                "hybridScanDeviceBytesRead": 688972521472,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "5": {
+              "first_sql_seconds": 13.028814879944548,
+              "second_sql_seconds": 12.797664121957496,
+              "second_sql_plus_cleanup_seconds": 13.97529419302009,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2594,
+                "hybridScanDeviceBytesRead": 2134886289408,
+                "hybridScanNativeHostBytesRead": 480,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "6": {
+              "first_sql_seconds": 1.7179810130037367,
+              "second_sql_seconds": 1.74216178804636,
+              "second_sql_plus_cleanup_seconds": 2.784601154970005,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1800,
+                "hybridScanDeviceBytesRead": 1537262231552,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "7": {
+              "first_sql_seconds": 6.861391936196014,
+              "second_sql_seconds": 6.72581480210647,
+              "second_sql_plus_cleanup_seconds": 7.845561062218621,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2593,
+                "hybridScanDeviceBytesRead": 2339797430272,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "8": {
+              "first_sql_seconds": 4.937548200134188,
+              "second_sql_seconds": 4.929063921095803,
+              "second_sql_plus_cleanup_seconds": 5.9227440760005265,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2775,
+                "hybridScanDeviceBytesRead": 2912030494720,
+                "hybridScanNativeHostBytesRead": 22687352,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "10": {
+              "first_sql_seconds": 8.423767325934023,
+              "second_sql_seconds": 8.297506214119494,
+              "second_sql_plus_cleanup_seconds": 8.989157892065123,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2431,
+                "hybridScanDeviceBytesRead": 1861788250112,
+                "hybridScanNativeHostBytesRead": 5245504,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "11": {
+              "first_sql_seconds": 5.731373690068722,
+              "second_sql_seconds": 6.276540599996224,
+              "second_sql_plus_cleanup_seconds": 6.3250605158973485,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 643,
+                "hybridScanDeviceBytesRead": 127387246592,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "12": {
+              "first_sql_seconds": 3.791358612012118,
+              "second_sql_seconds": 3.6516904740128666,
+              "second_sql_plus_cleanup_seconds": 4.74684693897143,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2250,
+                "hybridScanDeviceBytesRead": 962151124992,
+                "hybridScanNativeHostBytesRead": 12182400,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "13": {
+              "first_sql_seconds": 4.699728203937411,
+              "second_sql_seconds": 4.614242600044236,
+              "second_sql_plus_cleanup_seconds": 5.605285831028596,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2160,
+                "hybridScanDeviceBytesRead": 1100457484288,
+                "hybridScanNativeHostBytesRead": 14626294,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "14": {
+              "first_sql_seconds": 3.258994156960398,
+              "second_sql_seconds": 3.0652175310533494,
+              "second_sql_plus_cleanup_seconds": 4.057881626067683,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1980,
+                "hybridScanDeviceBytesRead": 2180088229888,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "15": {
+              "first_sql_seconds": 6.6713737200479954,
+              "second_sql_seconds": 6.4169724870007485,
+              "second_sql_plus_cleanup_seconds": 7.259886309038848,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2124,
+                "hybridScanDeviceBytesRead": 2098597265408,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "16": {
+              "first_sql_seconds": 2.4320520639885217,
+              "second_sql_seconds": 2.5653916660230607,
+              "second_sql_plus_cleanup_seconds": 3.412466155132279,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 822,
+                "hybridScanDeviceBytesRead": 44013703168,
+                "hybridScanNativeHostBytesRead": 3255840,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "19": {
+              "first_sql_seconds": 5.624770838068798,
+              "second_sql_seconds": 5.556951421080157,
+              "second_sql_plus_cleanup_seconds": 6.331798563012853,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 1980,
+                "hybridScanDeviceBytesRead": 2164004937728,
+                "hybridScanNativeHostBytesRead": 30583800,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "20": {
+              "first_sql_seconds": 6.061892003053799,
+              "second_sql_seconds": 6.312688664998859,
+              "second_sql_plus_cleanup_seconds": 6.35719120898284,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 2623,
+                "hybridScanDeviceBytesRead": 2006819319808,
+                "hybridScanNativeHostBytesRead": 304,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            },
+            "22": {
+              "first_sql_seconds": 2.9072918461170048,
+              "second_sql_seconds": 2.9692613480146974,
+              "second_sql_plus_cleanup_seconds": 3.9586670140270144,
+              "validation": "passed",
+              "reader_metrics": {
+                "hybridScanSplits": 630,
+                "hybridScanDeviceBytesRead": 285768159232,
+                "hybridScanNativeHostBytesRead": 0,
+                "hybridScanGdsFallbackFiles": 0,
+                "hybridScanGpuBusyHostBytesRead": 0
+              }
+            }
+          }
+        }
+      ],
+      "timings": [
+        {
+          "arm": "baseline",
+          "query": "9",
+          "second_sql_seconds": [
+            24.978227959945798
+          ],
+          "median_second_sql_seconds": 24.978227959945798
+        },
+        {
+          "arm": "baseline",
+          "query": "21",
+          "second_sql_seconds": [
+            7.912349652964622
+          ],
+          "median_second_sql_seconds": 7.912349652964622
+        },
+        {
+          "arm": "baseline",
+          "query": "3",
+          "second_sql_seconds": [
+            9.972545374883339
+          ],
+          "median_second_sql_seconds": 9.972545374883339
+        },
+        {
+          "arm": "baseline",
+          "query": "18",
+          "second_sql_seconds": [
+            19.78067288803868
+          ],
+          "median_second_sql_seconds": 19.78067288803868
+        },
+        {
+          "arm": "baseline",
+          "query": "17",
+          "second_sql_seconds": [
+            4.175676953047514
+          ],
+          "median_second_sql_seconds": 4.175676953047514
+        },
+        {
+          "arm": "baseline",
+          "query": "1",
+          "second_sql_seconds": [
+            3.6098572600167245
+          ],
+          "median_second_sql_seconds": 3.6098572600167245
+        },
+        {
+          "arm": "baseline",
+          "query": "2",
+          "second_sql_seconds": [
+            2.5105865120422095
+          ],
+          "median_second_sql_seconds": 2.5105865120422095
+        },
+        {
+          "arm": "baseline",
+          "query": "4",
+          "second_sql_seconds": [
+            6.358877955935895
+          ],
+          "median_second_sql_seconds": 6.358877955935895
+        },
+        {
+          "arm": "baseline",
+          "query": "5",
+          "second_sql_seconds": [
+            12.997963686008006
+          ],
+          "median_second_sql_seconds": 12.997963686008006
+        },
+        {
+          "arm": "baseline",
+          "query": "6",
+          "second_sql_seconds": [
+            1.745716149918735
+          ],
+          "median_second_sql_seconds": 1.745716149918735
+        },
+        {
+          "arm": "baseline",
+          "query": "7",
+          "second_sql_seconds": [
+            6.76129651395604
+          ],
+          "median_second_sql_seconds": 6.76129651395604
+        },
+        {
+          "arm": "baseline",
+          "query": "8",
+          "second_sql_seconds": [
+            4.791335928952321
+          ],
+          "median_second_sql_seconds": 4.791335928952321
+        },
+        {
+          "arm": "baseline",
+          "query": "10",
+          "second_sql_seconds": [
+            8.166095265885815
+          ],
+          "median_second_sql_seconds": 8.166095265885815
+        },
+        {
+          "arm": "baseline",
+          "query": "11",
+          "second_sql_seconds": [
+            7.668943666154519
+          ],
+          "median_second_sql_seconds": 7.668943666154519
+        },
+        {
+          "arm": "baseline",
+          "query": "12",
+          "second_sql_seconds": [
+            3.6521811950951815
+          ],
+          "median_second_sql_seconds": 3.6521811950951815
+        },
+        {
+          "arm": "baseline",
+          "query": "13",
+          "second_sql_seconds": [
+            4.594349327962846
+          ],
+          "median_second_sql_seconds": 4.594349327962846
+        },
+        {
+          "arm": "baseline",
+          "query": "14",
+          "second_sql_seconds": [
+            3.019650178961456
+          ],
+          "median_second_sql_seconds": 3.019650178961456
+        },
+        {
+          "arm": "baseline",
+          "query": "15",
+          "second_sql_seconds": [
+            6.492033869028091
+          ],
+          "median_second_sql_seconds": 6.492033869028091
+        },
+        {
+          "arm": "baseline",
+          "query": "16",
+          "second_sql_seconds": [
+            2.40305732190609
+          ],
+          "median_second_sql_seconds": 2.40305732190609
+        },
+        {
+          "arm": "baseline",
+          "query": "19",
+          "second_sql_seconds": [
+            5.530428862199187
+          ],
+          "median_second_sql_seconds": 5.530428862199187
+        },
+        {
+          "arm": "baseline",
+          "query": "20",
+          "second_sql_seconds": [
+            6.346181544009596
+          ],
+          "median_second_sql_seconds": 6.346181544009596
+        },
+        {
+          "arm": "baseline",
+          "query": "22",
+          "second_sql_seconds": [
+            2.9765129790175706
+          ],
+          "median_second_sql_seconds": 2.9765129790175706
+        },
+        {
+          "arm": "cpu-only",
+          "query": "9",
+          "second_sql_seconds": [
+            25.126629357924685
+          ],
+          "median_second_sql_seconds": 25.126629357924685
+        },
+        {
+          "arm": "cpu-only",
+          "query": "21",
+          "second_sql_seconds": [
+            9.30246122693643
+          ],
+          "median_second_sql_seconds": 9.30246122693643
+        },
+        {
+          "arm": "cpu-only",
+          "query": "3",
+          "second_sql_seconds": [
+            9.661602358100936
+          ],
+          "median_second_sql_seconds": 9.661602358100936
+        },
+        {
+          "arm": "cpu-only",
+          "query": "18",
+          "second_sql_seconds": [
+            20.33442856813781
+          ],
+          "median_second_sql_seconds": 20.33442856813781
+        },
+        {
+          "arm": "cpu-only",
+          "query": "17",
+          "second_sql_seconds": [
+            3.9694255541544408
+          ],
+          "median_second_sql_seconds": 3.9694255541544408
+        },
+        {
+          "arm": "cpu-only",
+          "query": "1",
+          "second_sql_seconds": [
+            3.5923860440962017
+          ],
+          "median_second_sql_seconds": 3.5923860440962017
+        },
+        {
+          "arm": "cpu-only",
+          "query": "2",
+          "second_sql_seconds": [
+            2.0887508129235357
+          ],
+          "median_second_sql_seconds": 2.0887508129235357
+        },
+        {
+          "arm": "cpu-only",
+          "query": "4",
+          "second_sql_seconds": [
+            6.417590169934556
+          ],
+          "median_second_sql_seconds": 6.417590169934556
+        },
+        {
+          "arm": "cpu-only",
+          "query": "5",
+          "second_sql_seconds": [
+            12.962428404018283
+          ],
+          "median_second_sql_seconds": 12.962428404018283
+        },
+        {
+          "arm": "cpu-only",
+          "query": "6",
+          "second_sql_seconds": [
+            1.7455802280455828
+          ],
+          "median_second_sql_seconds": 1.7455802280455828
+        },
+        {
+          "arm": "cpu-only",
+          "query": "7",
+          "second_sql_seconds": [
+            6.804690411081538
+          ],
+          "median_second_sql_seconds": 6.804690411081538
+        },
+        {
+          "arm": "cpu-only",
+          "query": "8",
+          "second_sql_seconds": [
+            4.864974450087175
+          ],
+          "median_second_sql_seconds": 4.864974450087175
+        },
+        {
+          "arm": "cpu-only",
+          "query": "10",
+          "second_sql_seconds": [
+            8.30481054703705
+          ],
+          "median_second_sql_seconds": 8.30481054703705
+        },
+        {
+          "arm": "cpu-only",
+          "query": "11",
+          "second_sql_seconds": [
+            6.6430217230226845
+          ],
+          "median_second_sql_seconds": 6.6430217230226845
+        },
+        {
+          "arm": "cpu-only",
+          "query": "12",
+          "second_sql_seconds": [
+            3.639536499977112
+          ],
+          "median_second_sql_seconds": 3.639536499977112
+        },
+        {
+          "arm": "cpu-only",
+          "query": "13",
+          "second_sql_seconds": [
+            4.612725951941684
+          ],
+          "median_second_sql_seconds": 4.612725951941684
+        },
+        {
+          "arm": "cpu-only",
+          "query": "14",
+          "second_sql_seconds": [
+            3.1246882369741797
+          ],
+          "median_second_sql_seconds": 3.1246882369741797
+        },
+        {
+          "arm": "cpu-only",
+          "query": "15",
+          "second_sql_seconds": [
+            6.503791698021814
+          ],
+          "median_second_sql_seconds": 6.503791698021814
+        },
+        {
+          "arm": "cpu-only",
+          "query": "16",
+          "second_sql_seconds": [
+            2.4127696179784834
+          ],
+          "median_second_sql_seconds": 2.4127696179784834
+        },
+        {
+          "arm": "cpu-only",
+          "query": "19",
+          "second_sql_seconds": [
+            5.577183319954202
+          ],
+          "median_second_sql_seconds": 5.577183319954202
+        },
+        {
+          "arm": "cpu-only",
+          "query": "20",
+          "second_sql_seconds": [
+            6.283863545861095
+          ],
+          "median_second_sql_seconds": 6.283863545861095
+        },
+        {
+          "arm": "cpu-only",
+          "query": "22",
+          "second_sql_seconds": [
+            2.725339021999389
+          ],
+          "median_second_sql_seconds": 2.725339021999389
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "9",
+          "second_sql_seconds": [
+            24.611171560827643
+          ],
+          "median_second_sql_seconds": 24.611171560827643
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "21",
+          "second_sql_seconds": [
+            7.869747324148193
+          ],
+          "median_second_sql_seconds": 7.869747324148193
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "3",
+          "second_sql_seconds": [
+            9.713774184929207
+          ],
+          "median_second_sql_seconds": 9.713774184929207
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "18",
+          "second_sql_seconds": [
+            20.351912831887603
+          ],
+          "median_second_sql_seconds": 20.351912831887603
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "17",
+          "second_sql_seconds": [
+            4.03622842207551
+          ],
+          "median_second_sql_seconds": 4.03622842207551
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "1",
+          "second_sql_seconds": [
+            3.617469541961327
+          ],
+          "median_second_sql_seconds": 3.617469541961327
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "2",
+          "second_sql_seconds": [
+            2.5267836039420217
+          ],
+          "median_second_sql_seconds": 2.5267836039420217
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "4",
+          "second_sql_seconds": [
+            6.306806060951203
+          ],
+          "median_second_sql_seconds": 6.306806060951203
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "5",
+          "second_sql_seconds": [
+            12.797664121957496
+          ],
+          "median_second_sql_seconds": 12.797664121957496
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "6",
+          "second_sql_seconds": [
+            1.74216178804636
+          ],
+          "median_second_sql_seconds": 1.74216178804636
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "7",
+          "second_sql_seconds": [
+            6.72581480210647
+          ],
+          "median_second_sql_seconds": 6.72581480210647
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "8",
+          "second_sql_seconds": [
+            4.929063921095803
+          ],
+          "median_second_sql_seconds": 4.929063921095803
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "10",
+          "second_sql_seconds": [
+            8.297506214119494
+          ],
+          "median_second_sql_seconds": 8.297506214119494
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "11",
+          "second_sql_seconds": [
+            6.276540599996224
+          ],
+          "median_second_sql_seconds": 6.276540599996224
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "12",
+          "second_sql_seconds": [
+            3.6516904740128666
+          ],
+          "median_second_sql_seconds": 3.6516904740128666
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "13",
+          "second_sql_seconds": [
+            4.614242600044236
+          ],
+          "median_second_sql_seconds": 4.614242600044236
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "14",
+          "second_sql_seconds": [
+            3.0652175310533494
+          ],
+          "median_second_sql_seconds": 3.0652175310533494
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "15",
+          "second_sql_seconds": [
+            6.4169724870007485
+          ],
+          "median_second_sql_seconds": 6.4169724870007485
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "16",
+          "second_sql_seconds": [
+            2.5653916660230607
+          ],
+          "median_second_sql_seconds": 2.5653916660230607
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "19",
+          "second_sql_seconds": [
+            5.556951421080157
+          ],
+          "median_second_sql_seconds": 5.556951421080157
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "20",
+          "second_sql_seconds": [
+            6.312688664998859
+          ],
+          "median_second_sql_seconds": 6.312688664998859
+        },
+        {
+          "arm": "bundled-cufile",
+          "query": "22",
+          "second_sql_seconds": [
+            2.9692613480146974
+          ],
+          "median_second_sql_seconds": 2.9692613480146974
+        }
+      ],
+      "plan_variant_counts": {
+        "9-logical": 1,
+        "9-executed": 1,
+        "21-logical": 1,
+        "21-executed": 1,
+        "3-logical": 1,
+        "3-executed": 1,
+        "18-logical": 1,
+        "18-executed": 1,
+        "17-logical": 1,
+        "17-executed": 1,
+        "1-logical": 1,
+        "1-executed": 1,
+        "2-logical": 1,
+        "2-executed": 1,
+        "4-logical": 1,
+        "4-executed": 1,
+        "5-logical": 1,
+        "5-executed": 1,
+        "6-logical": 1,
+        "6-executed": 1,
+        "7-logical": 1,
+        "7-executed": 1,
+        "8-logical": 1,
+        "8-executed": 1,
+        "10-logical": 1,
+        "10-executed": 1,
+        "11-logical": 1,
+        "11-executed": 1,
+        "12-logical": 1,
+        "12-executed": 1,
+        "13-logical": 1,
+        "13-executed": 1,
+        "14-logical": 1,
+        "14-executed": 1,
+        "15-logical": 1,
+        "15-executed": 1,
+        "16-logical": 1,
+        "16-executed": 1,
+        "19-logical": 1,
+        "19-executed": 1,
+        "20-logical": 1,
+        "20-executed": 1,
+        "22-logical": 1,
+        "22-executed": 1
+      },
+      "reference_score_eligible": false,
+      "limits": [
+        "All reference queries measured; totals are SQL times, not application wall time.",
+        "One application per arm, all reference queries twice.",
+        "Interface byte counters include storage and control traffic; they do not identify GPU payload transport."
+      ],
+      "job_id": 25480,
+      "controller_status": {
+        "status": "completed"
+      },
+      "assignment_audit": [
+        {
+          "label": "01-baseline",
+          "physical_gpu_count": 32,
+          "workers_per_node": 4
+        },
+        {
+          "label": "02-cpu-only",
+          "physical_gpu_count": 32,
+          "workers_per_node": 4
+        },
+        {
+          "label": "03-bundled-cufile",
+          "physical_gpu_count": 32,
+          "workers_per_node": 4
+        }
+      ],
+      "log_audit": [
+        {
+          "label": "01-baseline",
+          "error_level_reports": {
+            "cuda_buffer_leak_reports": 62,
+            "executor_termination_reports": 51
+          },
+          "leak_report_seconds_relative_to_driver_stop": {
+            "minimum": 0.0,
+            "maximum": 0.0
+          },
+          "other_error_count": 0,
+          "first_other_errors": []
+        },
+        {
+          "label": "02-cpu-only",
+          "error_level_reports": {
+            "cuda_buffer_leak_reports": 67,
+            "executor_termination_reports": 60
+          },
+          "leak_report_seconds_relative_to_driver_stop": {
+            "minimum": 0.0,
+            "maximum": 0.0
+          },
+          "other_error_count": 0,
+          "first_other_errors": []
+        },
+        {
+          "label": "03-bundled-cufile",
+          "error_level_reports": {
+            "cuda_buffer_leak_reports": 64,
+            "executor_termination_reports": 56
+          },
+          "leak_report_seconds_relative_to_driver_stop": {
+            "minimum": 0.0,
+            "maximum": 0.0
+          },
+          "other_error_count": 0,
+          "first_other_errors": []
+        }
+      ],
+      "cufile_audit": {
+        "baseline_and_copied_bytes_equal_on_all_nodes": true,
+        "source_hashes_by_node": {
+          "presto-gb200-gcn-13.cufile-source.json": {
+            "libcufile.so": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.0": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.1.15.1": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile_rdma.so": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1.15.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e"
+          },
+          "presto-gb200-gcn-08.cufile-source.json": {
+            "libcufile.so": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.0": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.1.15.1": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile_rdma.so": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1.15.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e"
+          },
+          "presto-gb200-gcn-06.cufile-source.json": {
+            "libcufile.so": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.0": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.1.15.1": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile_rdma.so": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1.15.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e"
+          },
+          "presto-gb200-gcn-09.cufile-source.json": {
+            "libcufile.so": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.0": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.1.15.1": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile_rdma.so": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1.15.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e"
+          },
+          "presto-gb200-gcn-04.cufile-source.json": {
+            "libcufile.so": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.0": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.1.15.1": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile_rdma.so": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1.15.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e"
+          },
+          "presto-gb200-gcn-12.cufile-source.json": {
+            "libcufile.so": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.0": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.1.15.1": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile_rdma.so": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1.15.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e"
+          },
+          "presto-gb200-gcn-10.cufile-source.json": {
+            "libcufile.so": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.0": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.1.15.1": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile_rdma.so": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1.15.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e"
+          },
+          "presto-gb200-gcn-02.cufile-source.json": {
+            "libcufile.so": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.0": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile.so.1.15.1": "0dc9520a096013cc4009564dcd7824923eb2850fc35dc5812efe3ec9fa4d0068",
+            "libcufile_rdma.so": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e",
+            "libcufile_rdma.so.1.15.1": "07443726609f391b0c9bbd7f12e0ab8f905b83939d9bd5a4510eed6bf196e09e"
+          }
+        }
+      },
+      "retained_evidence": {
+        "uri": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261123/01a20622-0ca8-74d0-9805-6bc842a9fdb3/deployment-full-verified/evidence-1795435094.tar.gz",
+        "sha256": "999a89309b5a4b30e737680768199c12b0f697fea0751dca2430508528d9edd2",
+        "size_bytes": 121785135
+      }
+    }
+  },
+  "focused_second_execution_seconds": {
+    "baseline": {
+      "9": [
+        25.115837384946644,
+        25.033879366936162
+      ],
+      "3": [
+        10.474435762036592,
+        9.95737688918598
+      ],
+      "6": [
+        1.7900103968568146,
+        1.7865701338741928
+      ]
+    },
+    "cpu-only": {
+      "9": [
+        25.26498805405572,
+        25.205574877094477
+      ],
+      "3": [
+        10.131886736955494,
+        10.247929824981838
+      ],
+      "6": [
+        1.767727374797687,
+        1.760195054113865
+      ]
+    },
+    "unbound": {
+      "9": [
+        26.050373184960335,
+        26.592373367166147
+      ],
+      "3": [
+        10.802248073043302,
+        10.149549147114158
+      ],
+      "6": [
+        1.840066864155233,
+        1.8819517178926617
+      ]
+    },
+    "auto-tls": {
+      "9": [
+        25.195629230933264,
+        25.158964987145737
+      ],
+      "3": [
+        11.244046309031546,
+        10.317002574913204
+      ],
+      "6": [
+        1.751228507142514,
+        1.7740775069687515
+      ]
+    }
+  },
+  "unqualified_configuration": {
+    "arm": "auto-net",
+    "job_id": 25472,
+    "attempted_query": 9,
+    "completed_samples": 0,
+    "observed_executor_environments": 32,
+    "observed_failure": "UCX handshake/transfer failures and RapidsShuffleFetchFailedException",
+    "root_cause": "Not established; an unrestricted device choice failed in this run."
+  },
+  "scope": {
+    "nodes": 8,
+    "gpus": 32,
+    "workload": "TPC-H SF30000, retained native-double GPFS dataset",
+    "worker_comparison": "Four GPU-specific workers versus two NUMA-specific workers per node; one GPU per executor.",
+    "library_comparison": "Identical cuFile libraries in an independent directory; no cuFile version upgrade or complete-image qualification.",
+    "shutdown_diagnostic": "CUDA buffer leak reports occur around normal driver stop across configurations. Their owner/root cause is not established; they are retained separately from query failures.",
+    "timing": "SQL planning through JVM collect; cleanup reported separately; excludes application startup and validation."
+  }
+}

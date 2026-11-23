@@ -41,6 +41,7 @@ def main():
     deployment = config['deployment']
     local = Path(deployment['scratch_root']) / run.name
     local.mkdir(parents=True, exist_ok=True)
+    (local / 'java-tmp').mkdir(exist_ok=True)
     validate_runtime(config)
     head = os.environ['SCALEUP_HEAD']
     node = socket.gethostname()
@@ -61,6 +62,9 @@ def main():
             logs.mkdir(exist_ok=True)
             cufile['logging']['dir'] = str(logs)
             write(local / 'cufile.json', cufile)
+            from qualify_nvl import qualify
+            qualification = qualify(config, local)
+            write(run / 'nodes' / (node + '.native-reader.json'), qualification)
             state = services.start(run, config, head, int(os.environ['SCALEUP_MASTER_PORT']),
                                    int(os.environ['SCALEUP_MASTER_UI_PORT']), 'suite')
             (run / 'nodes' / (node + '.ready')).touch()

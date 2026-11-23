@@ -63,8 +63,11 @@ def main():
             logs.mkdir(exist_ok=True)
             cufile['logging']['dir'] = str(logs)
             write(local / 'cufile.json', cufile)
+            source_lib = Path('/usr/local/cuda-13.0/targets/sbsa-linux/lib')
+            source_hashes = {path.name: sha(path) for pattern in ('libcufile.so*', 'libcufile_rdma.so*')
+                             for path in sorted(source_lib.glob(pattern))}
+            write(run / 'nodes' / (node + '.cufile-source.json'), source_hashes)
             if config.get('deployment_experiment', {}).get('bundle_cufile', False):
-                source_lib = Path('/usr/local/cuda-13.0/targets/sbsa-linux/lib')
                 destination = local / 'cufile-runtime'
                 destination.mkdir()
                 records = {}

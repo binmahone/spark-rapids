@@ -51,26 +51,31 @@ def analyze(root):
         records = [read(p) for p in (run / 'runtime').glob('*/*.json') if p.stem.isdigit()]
         if len(records) != 32:
             raise AssertionError('Expected 32 observed executor processes')
-        affinity_counts, policies, libraries = Counter(), Counter(), set()
+        affinity_counts, policies, heap_policies, libraries = Counter(), Counter(), Counter(), set()
         for record in records:
             status = dict(line.split(':', 1) for line in record['status'].splitlines() if ':' in line)
             affinity_counts[len(cpus(status['Cpus_allowed_list'].strip()))] += 1
             anon = [line.split()[1] for line in record['numa_maps'].splitlines()
                     if 'anon=' in line and len(line.split()) > 1]
             policies.update(set(anon))
+            heap_policies.update(line.split()[1] for line in record['numa_maps'].splitlines()
+                                 if 'heap' in line.split())
             libraries.update(line.split()[-1] for line in record['maps'].splitlines()
                 if any(name in line for name in ('/libucp.so', '/libucs.so', '/libuct.so',
                                                   '/libcufile.so', '/libnvrtc.so', '/libnvJitLink.so')))
         expected = 144 if case['arm'] == 'unbound' else 72
         if dict(affinity_counts) != {expected: 32}:
             raise AssertionError((case['label'], 'CPU affinity differs', affinity_counts))
-        bound = any(policy.startswith('bind:') for policy in policies)
+        if sum(heap_policies.values()) != 32:
+            raise AssertionError('Missing process heap policy evidence')
+        bound = all(policy.startswith('bind:') for policy in heap_policies)
         if bound != (case['arm'] not in ('cpu-only', 'unbound')):
             raise AssertionError((case['label'], 'Memory policy differs', policies))
         second = [s for s in data['samples'] if s['iteration'] == 2]
         row = {'label': case['label'], 'arm': case['arm'], 'executor_count': len(records),
             'available_cpus_per_executor': dict(affinity_counts),
             'observed_anonymous_memory_policies': dict(policies),
+            'observed_process_heap_policies': dict(heap_policies),
             'mapped_native_libraries': sorted(libraries),
             'queries': {str(s['query']): {'first_sql_seconds': next(x['sql_seconds'] for x in data['samples']
                        if x['query'] == s['query'] and x['iteration'] == 1),

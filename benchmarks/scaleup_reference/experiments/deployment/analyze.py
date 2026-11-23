@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 import re
 import statistics
+import tarfile
 
 
 def read(path):
@@ -73,10 +74,24 @@ def analyze(root):
         if bound != (case['arm'] not in ('cpu-only', 'unbound')):
             raise AssertionError((case['label'], 'Memory policy differs', policies))
         second = [s for s in data['samples'] if s['iteration'] == 2]
+        initialized_devices = Counter()
+        for archive_path in (run / 'runtime').glob('*/executor-logs.tar.gz'):
+            with tarfile.open(archive_path) as archive:
+                for member in archive.getmembers():
+                    if member.name.endswith('/stderr'):
+                        text = archive.extractfile(member).read().decode(errors='replace')
+                        devices = set(re.findall(r'Initializing RMM ASYNC pool size = .*? on gpuId (\d+)', text))
+                        if len(devices) != 1:
+                            raise AssertionError('Missing or conflicting RMM device initialization')
+                        initialized_devices.update(devices)
+        expected_devices = {'0': 16, '1': 16} if case['arm'] == 'per-numa' else {'0': 32}
+        if dict(initialized_devices) != expected_devices:
+            raise AssertionError((case['label'], 'RMM devices differ', initialized_devices))
         row = {'label': case['label'], 'arm': case['arm'], 'executor_count': len(records),
             'available_cpus_per_executor': dict(affinity_counts),
             'observed_anonymous_memory_policies': dict(policies),
             'observed_process_heap_policies': dict(heap_policies),
+            'rmm_initialized_logical_devices': dict(initialized_devices),
             'mapped_native_libraries': sorted(libraries),
             'queries': {str(s['query']): {'first_sql_seconds': next(x['sql_seconds'] for x in data['samples']
                        if x['query'] == s['query'] and x['iteration'] == 1),

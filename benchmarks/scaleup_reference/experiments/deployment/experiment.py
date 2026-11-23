@@ -167,6 +167,10 @@ def monitor(run, local, stopped):
                         'environment': [x.decode(errors='replace') for x in
                             (path / 'environ').read_bytes().split(b'\0')
                             if x.startswith((b'UCX_', b'CUDA_', b'LD_LIBRARY_PATH=', b'CUFILE_'))]}
+                    arguments = argv.split()
+                    if '--resourcesFile' in arguments:
+                        resources_file = Path(arguments[arguments.index('--resourcesFile') + 1])
+                        record['spark_assigned_resources'] = read(resources_file)
                     write(output / (path.name + '.json'), record)
                 except (FileNotFoundError, ProcessLookupError, PermissionError):
                     pass

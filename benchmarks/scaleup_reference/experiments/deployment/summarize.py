@@ -48,6 +48,24 @@ def assignment_audit(root, plan):
     return result
 
 
+def cufile_audit(root, plan):
+    baseline = root / 'runs' / Path(plan['cases'][0]['run']).name
+    originals = {p.name: read(p) for p in (baseline / 'nodes').glob('*.cufile-source.json')}
+    if len(originals) != 8:
+        raise AssertionError('Missing baseline cuFile source hashes')
+    for case in plan['cases']:
+        run = root / 'runs' / Path(case['run']).name
+        for name, hashes in originals.items():
+            if read(run / 'nodes' / name) != hashes:
+                raise AssertionError('Host cuFile libraries changed between comparison arms')
+            if case['arm'] == 'bundled-cufile':
+                copies = read(run / 'nodes' / name.replace('.cufile-source.json', '.cufile-runtime.json'))
+                if set(copies) != set(hashes) or any(copies[k]['sha256'] != v for k, v in hashes.items()):
+                    raise AssertionError('Bundled cuFile libraries differ from baseline bytes')
+    return {'baseline_and_copied_bytes_equal_on_all_nodes': True,
+            'source_hashes_by_node': originals}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--placement', required=True, type=Path)
@@ -72,6 +90,8 @@ def main():
         data['job_id'] = read(root / 'submission.json')['job_id']
         data['controller_status'] = read(root / 'status.json')
         data['assignment_audit'] = assignment_audit(root, plan)
+        if name == 'full' and data['status'] == 'completed':
+            data['cufile_audit'] = cufile_audit(root, plan)
         for case in data['cases']:
             samples += 2 * len(case['queries'])
             if name in ('placement', 'reverse'):

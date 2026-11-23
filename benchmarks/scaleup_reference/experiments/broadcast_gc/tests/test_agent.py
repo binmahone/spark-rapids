@@ -53,5 +53,18 @@ for enabled in [False, True]:
     assert names.count('retireAfterIndependentQuery_enter') == 1
     assert names.count('retireAfterIndependentQuery_return') == 1
     records.append({'enabled': enabled, 'status': 'passed', 'events': names})
+build = json.loads((args.jar.parent / 'build-receipt.json').read_text())
+real_classes = args.output / 'real-classes'
+real_classes.mkdir()
+real_classpath = str(real_classes.resolve()) + ':' + build['commands'][0][4]
+subprocess.run([str(args.java_home / 'bin/javac'), '--release', '8', '-cp', real_classpath,
+                '-d', str(real_classes), str(HERE / 'RealClassProbe.java')], check=True)
+engine = next(p for p in build['dependency_sha256'] if Path(p).name.startswith('cudf-spark_'))
+result = subprocess.run([str(args.java_home / 'bin/java'),
+    '-javaagent:' + str(args.jar.resolve()) + '=' + str(args.output.resolve() / 'real-engine'),
+    '-cp', real_classpath, 'RealClassProbe', Path(engine).name], capture_output=True, text=True, timeout=20)
+(args.output / 'real-engine.console.log').write_text(result.stdout + result.stderr)
+assert result.returncode == 0, result.stdout + result.stderr
+records.append({'real_engine_class': True, 'status': 'passed'})
 (args.output / 'test-results.json').write_text(json.dumps(records, indent=2) + '\n')
 print(json.dumps(records))

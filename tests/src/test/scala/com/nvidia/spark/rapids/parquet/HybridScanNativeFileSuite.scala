@@ -111,13 +111,18 @@ class HybridScanNativeFileSuite extends RmmSparkRetrySuiteBase {
     assert(!NativeFileRangeReader.canRead(new Path("s3a://bucket/data/t.parquet")))
   }
 
-  test("a temp file is read natively") {
+  test("a temp file is read natively, and any other path through Hadoop") {
     withLocalFile() { path =>
       assert(NativeFileRangeReader.canRead(path))
       withResource(HybridScanFileByteSource.createRangeReader(path, Map.empty,
           gdsEnabled = false)) { reader =>
         assert(reader.isInstanceOf[NativeFileRangeReader])
       }
+    }
+    val hdfsPath = new Path("hdfs://nn:8020/data/t.parquet")
+    withResource(HybridScanFileByteSource.createRangeReader(hdfsPath, Map.empty,
+        gdsEnabled = false)) { reader =>
+      assert(reader.isInstanceOf[RapidsFileIORangeReader])
     }
   }
 

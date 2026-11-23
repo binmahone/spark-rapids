@@ -757,7 +757,8 @@ object GpuDeviceManager extends Logging {
   /**
    * Set KvikIO's compatibility mode and thread count, which libcudf takes only once per process,
    * so this must run before the first libcudf file read: at startup if hybrid scan is enabled,
-   * else before the first native read of a session that enables it.
+   * else before the first native read of a session that enables it. Compatibility mode ON reads
+   * with POSIX rather than cuFile.
    */
   private[rapids] def isKvikioInitialized: Boolean = kvikioInitialized
 

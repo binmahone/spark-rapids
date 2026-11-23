@@ -98,10 +98,10 @@ private[parquet] case class HybridScanSplit(
 /**
  * The hybrid Parquet read pipeline, shared across the modes that drive it: prune the row groups
  * the pushed filter rules out, fetch the column chunks that survive, and materialize them into a
- * table. Built once per reader; each call is given the split it reads. It is split into a phase
- * that selects and fetches ([[planAndFetch]]) and one that decodes ([[materializeFetched]]).
- * Dictionary pruning and the decode take the GPU semaphore, so only the task thread may run them.
- * It holds no per-read state, so pool threads may share it.
+ * table. Built once per scan; each call is given the split it reads. It is split into a phase that
+ * selects and fetches ([[planAndFetch]]) and one that decodes ([[materializeFetched]]). Dictionary
+ * pruning and the decode take the GPU semaphore, so only the task thread may run them. It holds no
+ * per-read state, so pool threads may share it.
  */
 private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Logging {
   import context.{execMetrics, filterKeepThreshold, gdsMode, maxH2DPackSize, minH2DPackSize,
@@ -665,12 +665,7 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
     if (filtersOnOutput(ast.isDefined)) reader.setFilter(null) else ast.foreach(reader.setFilter)
 }
 
-/**
- * The parts of the hybrid scan that take no per-scan state, so they are called without
- * constructing a `HybridScanPipeline`: parsing the footer, choosing the columns the reader
- * decodes, laying out byte ranges, and deciding on the driver whether a scan may take the hybrid
- * path at all.
- */
+/** The hybrid scan logic that does not need a pipeline instance. */
 object HybridScanPipeline extends Logging {
 
   /**
@@ -1054,7 +1049,12 @@ object HybridScanPipeline extends Logging {
       readDataSchema: StructType,
       dateRebaseMode: DateTimeRebaseMode,
       int96RebaseMode: DateTimeRebaseMode): Option[String] = {
-    readDataSchema.fields.find(field => !isSupportedType(field.dataType)) match {
+    readDataSchema.fields.find(field =>
+        field.name.contains(".") || !isSupportedType(field.dataType)) match {
+      case Some(field) if field.name.contains(".") =>
+        // Hybrid reads keep the complete file footer, so cuDF's flattened name selection can
+        // resolve a literal dotted name to an unprojected struct. Use the pruned-footer reader.
+        Some(s"column ${field.name} contains a literal dot")
       case Some(field) =>
         Some(s"column ${field.name} has type ${field.dataType.simpleString}")
       case None if !rebaseCheckable(readDataSchema, dateRebaseMode, int96RebaseMode) =>

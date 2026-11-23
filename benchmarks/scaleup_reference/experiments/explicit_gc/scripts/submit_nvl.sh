@@ -6,8 +6,9 @@
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-set -euo pipefail
+set -eo pipefail
 source /etc/profile.d/modules.sh
 module load slurm/slurm/25.05
+set -u
 readonly directory=$(cd "$(dirname "$0")/.." && pwd)
 exec python3 "$directory/experiment.py" prepare "$@"

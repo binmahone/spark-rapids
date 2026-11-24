@@ -38,7 +38,7 @@ assert components['cudf-spark-jni-version-info.properties']['revision'] == 'bf63
 assert components['cudf-spark-private-version-info.properties']['revision'] == '61e9e96803771371dec116593f0c4eced9ac44d8'
 assert not subprocess.check_output(['git', '-C', str(args.source), 'status', '--porcelain'], text=True).strip()
 files = {p.name: {'bytes': p.stat().st_size, 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()}
-         for p in (engine, args.artifacts / tools.name)}
+         for p in (engine, args.artifacts / tools.name, *args.artifacts.glob('cudf-spark-integration-tests*.jar'))}
 (args.artifacts / 'manifest.json').write_text(json.dumps({'architecture': 'arm64',
     'files': files, 'components': components, 'source_revision': revision, 'source_dirty': False}, indent=2) + '\n')
 print('ARTIFACT_READY', revision, files[engine.name]['sha256'], flush=True)

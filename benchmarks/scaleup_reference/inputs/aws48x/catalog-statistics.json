@@ -1,0 +1,283 @@
+{
+  "dataset": "/opt/dlami/nvme/aws-single-main/dataset",
+  "source": "Retained SF10K Parquet footer measurements and HyperLogLog++ NDVs (relative standard deviation 0.02) with measured Parquet footer null counts",
+  "source_sha256": "675b6b83c070489473afdd9e9e0bd80f56e6205487a0e49045dd2fb52697678f",
+  "scope": "Measured row counts, footer min/max and approximate NDV only; no primary/foreign key constraints or invented null counts",
+  "tables": {
+    "customer": {
+      "row_count": 1500000000,
+      "columns": {
+        "c_acctbal": {
+          "minimum": "-999.99",
+          "maximum": "9999.99",
+          "null_count": 0
+        },
+        "c_custkey": {
+          "minimum": "1",
+          "maximum": "1500000000",
+          "distinct_count": 1477895570,
+          "null_count": 0
+        },
+        "c_nationkey": {
+          "minimum": "0",
+          "maximum": "24",
+          "distinct_count": 25,
+          "null_count": 0
+        },
+        "c_mktsegment": {
+          "distinct_count": 5,
+          "null_count": 0
+        }
+      }
+    },
+    "lineitem": {
+      "row_count": 59999994267,
+      "columns": {
+        "l_commitdate": {
+          "minimum": "1992-01-31",
+          "maximum": "1998-10-31",
+          "distinct_count": 2467,
+          "null_count": 0
+        },
+        "l_discount": {
+          "minimum": "0.00",
+          "maximum": "0.10",
+          "distinct_count": 11,
+          "null_count": 0
+        },
+        "l_extendedprice": {
+          "minimum": "900.00",
+          "maximum": "104950.00",
+          "null_count": 0
+        },
+        "l_linenumber": {
+          "minimum": "1",
+          "maximum": "7",
+          "null_count": 0
+        },
+        "l_orderkey": {
+          "minimum": "1",
+          "maximum": "60000000000",
+          "distinct_count": 14741441403,
+          "null_count": 0
+        },
+        "l_partkey": {
+          "minimum": "1",
+          "maximum": "2000000000",
+          "distinct_count": 1851166612,
+          "null_count": 0
+        },
+        "l_quantity": {
+          "minimum": "1.00",
+          "maximum": "50.00",
+          "distinct_count": 49,
+          "null_count": 0
+        },
+        "l_receiptdate": {
+          "minimum": "1992-01-03",
+          "maximum": "1998-12-31",
+          "distinct_count": 2561,
+          "null_count": 0
+        },
+        "l_shipdate": {
+          "minimum": "1992-01-02",
+          "maximum": "1998-12-01",
+          "distinct_count": 2537,
+          "null_count": 0
+        },
+        "l_suppkey": {
+          "minimum": "1",
+          "maximum": "100000000",
+          "distinct_count": 103002159,
+          "null_count": 0
+        },
+        "l_tax": {
+          "minimum": "0.00",
+          "maximum": "0.08",
+          "distinct_count": 9,
+          "null_count": 0
+        },
+        "l_returnflag": {
+          "distinct_count": 3,
+          "null_count": 0
+        },
+        "l_linestatus": {
+          "distinct_count": 2,
+          "null_count": 0
+        },
+        "l_shipmode": {
+          "distinct_count": 7,
+          "null_count": 0
+        },
+        "l_shipinstruct": {
+          "distinct_count": 4,
+          "null_count": 0
+        }
+      }
+    },
+    "nation": {
+      "row_count": 25,
+      "columns": {
+        "n_nationkey": {
+          "minimum": "0",
+          "maximum": "24",
+          "distinct_count": 25,
+          "null_count": 0
+        },
+        "n_regionkey": {
+          "minimum": "0",
+          "maximum": "4",
+          "distinct_count": 5,
+          "null_count": 0
+        },
+        "n_name": {
+          "distinct_count": 25,
+          "null_count": 0
+        }
+      }
+    },
+    "orders": {
+      "row_count": 15000000000,
+      "columns": {
+        "o_custkey": {
+          "minimum": "1",
+          "maximum": "1499999999",
+          "distinct_count": 1006973005,
+          "null_count": 0
+        },
+        "o_orderdate": {
+          "minimum": "1992-01-01",
+          "maximum": "1998-08-02",
+          "distinct_count": 2410,
+          "null_count": 0
+        },
+        "o_orderkey": {
+          "minimum": "1",
+          "maximum": "60000000000",
+          "distinct_count": 14741441403,
+          "null_count": 0
+        },
+        "o_shippriority": {
+          "minimum": "0",
+          "maximum": "0",
+          "null_count": 0
+        },
+        "o_totalprice": {
+          "minimum": "811.90",
+          "maximum": "618092.30",
+          "null_count": 0
+        },
+        "o_orderstatus": {
+          "distinct_count": 3,
+          "null_count": 0
+        },
+        "o_orderpriority": {
+          "distinct_count": 5,
+          "null_count": 0
+        }
+      }
+    },
+    "part": {
+      "row_count": 2000000000,
+      "columns": {
+        "p_partkey": {
+          "minimum": "1",
+          "maximum": "2000000000",
+          "distinct_count": 1971366307,
+          "null_count": 0
+        },
+        "p_retailprice": {
+          "minimum": "900.00",
+          "maximum": "2099.00",
+          "null_count": 0
+        },
+        "p_size": {
+          "minimum": "1",
+          "maximum": "50",
+          "distinct_count": 50,
+          "null_count": 0
+        },
+        "p_type": {
+          "distinct_count": 151,
+          "null_count": 0
+        },
+        "p_brand": {
+          "distinct_count": 25,
+          "null_count": 0
+        },
+        "p_container": {
+          "distinct_count": 40,
+          "null_count": 0
+        },
+        "p_name": {
+          "distinct_count": 1016023817,
+          "null_count": 0
+        }
+      }
+    },
+    "partsupp": {
+      "row_count": 8000000000,
+      "columns": {
+        "ps_availqty": {
+          "minimum": "1",
+          "maximum": "9999",
+          "null_count": 0
+        },
+        "ps_partkey": {
+          "minimum": "1",
+          "maximum": "2000000000",
+          "distinct_count": 1971366307,
+          "null_count": 0
+        },
+        "ps_suppkey": {
+          "minimum": "1",
+          "maximum": "100000000",
+          "distinct_count": 103002159,
+          "null_count": 0
+        },
+        "ps_supplycost": {
+          "minimum": "1.00",
+          "maximum": "1000.00",
+          "null_count": 0
+        }
+      }
+    },
+    "region": {
+      "row_count": 5,
+      "columns": {
+        "r_regionkey": {
+          "minimum": "0",
+          "maximum": "4",
+          "distinct_count": 5,
+          "null_count": 0
+        },
+        "r_name": {
+          "distinct_count": 5,
+          "null_count": 0
+        }
+      }
+    },
+    "supplier": {
+      "row_count": 100000000,
+      "columns": {
+        "s_acctbal": {
+          "minimum": "-999.99",
+          "maximum": "9999.99",
+          "null_count": 0
+        },
+        "s_nationkey": {
+          "minimum": "0",
+          "maximum": "24",
+          "distinct_count": 25,
+          "null_count": 0
+        },
+        "s_suppkey": {
+          "minimum": "1",
+          "maximum": "100000000",
+          "distinct_count": 100000000,
+          "null_count": 0
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,662 @@
+{
+  "scope": "Pinned SQL and output-schema identity, separate from the retained correctness oracle.",
+  "source": "Archived Nov18 SQL and tested output schemas; this is not an independent CPU oracle.",
+  "queries": {
+    "1": {
+      "sql_sha256": "b19fe0c93c0fea32928a812e045aa5d00cdee47d81de4e699c554e77dc18bae7",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "l_returnflag",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "l_linestatus",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "sum_qty",
+            "type": "decimal(25,2)",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "sum_base_price",
+            "type": "decimal(25,2)",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "sum_disc_price",
+            "type": "decimal(38,4)",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "sum_charge",
+            "type": "decimal(38,6)",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "avg_qty",
+            "type": "decimal(19,6)",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "avg_price",
+            "type": "decimal(19,6)",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "avg_disc",
+            "type": "decimal(19,6)",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "count_order",
+            "type": "long",
+            "nullable": false,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 4
+    },
+    "2": {
+      "sql_sha256": "3b9c4c479ca156a0137b18e32aa00d0aa8654766743f412b48e949b62c4a99a1",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "s_acctbal",
+            "type": "decimal(15,2)",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "s_name",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "n_name",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "p_partkey",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "p_mfgr",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "s_address",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "s_phone",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "s_comment",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 100
+    },
+    "3": {
+      "sql_sha256": "9223f83f6259e65a9e33905949821489f91a58d52aaff242e542528fdb3844da",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "l_orderkey",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "revenue",
+            "type": "decimal(38,4)",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "o_orderdate",
+            "type": "date",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "o_shippriority",
+            "type": "integer",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 10
+    },
+    "4": {
+      "sql_sha256": "1c253247a4b54ad95a3cd15acfaa3f3d654244a30474a63a6baf670024d5a238",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "o_orderpriority",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "order_count",
+            "type": "long",
+            "nullable": false,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 5
+    },
+    "5": {
+      "sql_sha256": "5fe832de65889e267affedc8b9e43e29001ad605e30bf1bb77bff160e6f052f3",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "n_name",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "revenue",
+            "type": "decimal(38,4)",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 5
+    },
+    "6": {
+      "sql_sha256": "0786e07769c121c533939c27470005fe32936efbf053570f15e3cbb2a5c48b93",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "revenue",
+            "type": "decimal(38,4)",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 1
+    },
+    "7": {
+      "sql_sha256": "31c03e09a7a5d375361018c18e5ff6cd1622cff12c43a4403190fd20be4d0bb8",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "supp_nation",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "cust_nation",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "l_year",
+            "type": "integer",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "revenue",
+            "type": "decimal(38,4)",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 4
+    },
+    "8": {
+      "sql_sha256": "adabd4d80babfd2c35f0de9a256f0a4af52d3242ca09a7c276bb04bb1fec1042",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "o_year",
+            "type": "integer",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "mkt_share",
+            "type": "decimal(38,6)",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 2
+    },
+    "9": {
+      "sql_sha256": "17c1568d99fe5e1aa3612559892a14a2fb33d3a9ffe4f68b25f58f93aca1aec3",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "nation",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "o_year",
+            "type": "integer",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "sum_profit",
+            "type": "decimal(38,4)",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 175
+    },
+    "10": {
+      "sql_sha256": "35a658f5484335134a647a0502a0b24cb24d9d4201dab00dfcff15831ee92244",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "c_custkey",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "c_name",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "revenue",
+            "type": "decimal(38,4)",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "c_acctbal",
+            "type": "decimal(15,2)",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "n_name",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "c_address",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "c_phone",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "c_comment",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 20
+    },
+    "11": {
+      "sql_sha256": "37e8cda73f7649f57160d96f7f4c57da91f885f73666fa34e8dc6ceb04dc83d2",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "ps_partkey",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "value",
+            "type": "decimal(36,2)",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 9365098
+    },
+    "12": {
+      "sql_sha256": "f3d79186aa23ae7f3b6eadc5741580ff7ac617b845edcc4874510bc0ecee91bd",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "l_shipmode",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "high_line_count",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "low_line_count",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 2
+    },
+    "13": {
+      "sql_sha256": "001ab2482318e4b190f7d2e33da38b8dac35325aebf4ff784241dd5faa77f4f1",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "c_count",
+            "type": "long",
+            "nullable": false,
+            "metadata": {}
+          },
+          {
+            "name": "custdist",
+            "type": "long",
+            "nullable": false,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 10
+    },
+    "14": {
+      "sql_sha256": "415d0c392c24bd9c80c964b535ed5e045140e5cb23fac8793a39fe22a5b4eb60",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "promo_revenue",
+            "type": "decimal(38,6)",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 1
+    },
+    "15": {
+      "sql_sha256": "2a5b9c0472f6134344e8c672b5178c6c385343e36cac301101a30752dce0852b",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "s_suppkey",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "s_name",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "s_address",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "s_phone",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "total_revenue",
+            "type": "decimal(38,4)",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 1
+    },
+    "16": {
+      "sql_sha256": "df6c02b7102c46f7e247a827272ddc11d2c45f9377b1db4b79468e5fd8c07cd9",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "p_brand",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "p_type",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "p_size",
+            "type": "integer",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "supplier_cnt",
+            "type": "long",
+            "nullable": false,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 27840
+    },
+    "17": {
+      "sql_sha256": "3be9fd9681405a789e3b7fe5d072331d21a9228fd4ba2f84dfea3b2d9ed9df2f",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "avg_yearly",
+            "type": "decimal(30,6)",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 1
+    },
+    "18": {
+      "sql_sha256": "864063fbecfd736f96551f541e839f625037e0da0cb81dff69bc39d20a1ade75",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "c_name",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "c_custkey",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "o_orderkey",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "o_orderdate",
+            "type": "date",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "o_totalprice",
+            "type": "decimal(15,2)",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "sum(l_quantity)",
+            "type": "decimal(25,2)",
+            "nullable": true,
+            "metadata": {
+              "__autoGeneratedAlias": "true"
+            }
+          }
+        ]
+      },
+      "result_rows": 100
+    },
+    "19": {
+      "sql_sha256": "1311a6b563bb86b8e341f14a85a2849805065e2ee141645c65af1491bb611454",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "revenue",
+            "type": "decimal(38,4)",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 1
+    },
+    "20": {
+      "sql_sha256": "80b17f6132df79631a53b55deb4de91b8863189e19319f6ead9b9949feef9245",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "s_name",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "s_address",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 379709
+    },
+    "21": {
+      "sql_sha256": "6c64de3af8977d0b6a54e96b5008ea898d4dcfa450d4b18847eae9f080a6aa16",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "s_name",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "numwait",
+            "type": "long",
+            "nullable": false,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 100
+    },
+    "22": {
+      "sql_sha256": "443608474a6b322d2e705bcb05a3a7669ec8d975f2aa1f0df88791343f534022",
+      "schema": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "cntrycode",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "numcust",
+            "type": "long",
+            "nullable": false,
+            "metadata": {}
+          },
+          {
+            "name": "totacctbal",
+            "type": "decimal(25,2)",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "result_rows": 7
+    }
+  }
+}

@@ -448,6 +448,19 @@ class ShuffleCleanupManager(
     driverStepsOpen.countDown()
   }
 
+  /** Waits at an independent-query benchmark boundary; it initiates no additional reclaim. */
+  def awaitIndependentQueryReclaims(expectedExecutors: Int, timeoutSeconds: Long): Int = {
+    cleanupExecutor.submit(new Runnable { override def run(): Unit = {} })
+      .get(timeoutSeconds, TimeUnit.SECONDS)
+    val targets = pendingReclaims.values().asScala.toSeq
+    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds)
+    while (targets.exists(_.reported.size() < expectedExecutors)) {
+      require(System.nanoTime() < deadline, "UCX reclaim acknowledgements timed out")
+      Thread.sleep(50)
+    }
+    targets.size
+  }
+
   /** The watermark of a shuffle's open request, and the executors that reported a result. */
   private[rapids] def pendingReclaimForTesting(shuffleId: Int): Option[(Long, Set[String])] =
     Option(pendingReclaims.get(shuffleId)).map(p => (p.watermark, p.reported.asScala.toSet))

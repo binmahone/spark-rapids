@@ -1,0 +1,29 @@
+{
+  "sink": "jvm-driver-collect",
+  "rows": 4,
+  "first_rows": [
+    "[FRANCE,GERMANY,1995,1.5868804968890396E12]",
+    "[FRANCE,GERMANY,1996,1.591865286874368E12]",
+    "[GERMANY,FRANCE,1995,1.5860317543828809E12]",
+    "[GERMANY,FRANCE,1996,1.5909953099729456E12]"
+  ],
+  "last_rows": [
+    "[FRANCE,GERMANY,1995,1.5868804968890396E12]",
+    "[FRANCE,GERMANY,1996,1.591865286874368E12]",
+    "[GERMANY,FRANCE,1995,1.5860317543828809E12]",
+    "[GERMANY,FRANCE,1996,1.5909953099729456E12]"
+  ],
+  "full_result_requested": true,
+  "full_result_max_rows": 1000,
+  "full_result_persisted": true,
+  "ordered_sha256": "b9319d92895c64d854e0f9215a84bc2026127398bf5883bfd46f74cac7aeeb39",
+  "multiset_sha256_sum": "ad1bcc20b7fcba324272cbd7bb23c1dd38626b4a6d35c9e8b159fb275ba9f874",
+  "multiset_sha256_xor": "d09f5c6cb8af06c210e7cd295b3a42e7b827aa7e68de4b88da7d735da79a385a",
+  "digest_seconds": 0.002856,
+  "all_rows": [
+    "[FRANCE,GERMANY,1995,1.5868804968890396E12]",
+    "[FRANCE,GERMANY,1996,1.591865286874368E12]",
+    "[GERMANY,FRANCE,1995,1.5860317543828809E12]",
+    "[GERMANY,FRANCE,1996,1.5909953099729456E12]"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "public_base": {
+    "repository": "https://github.com/pmattione-nvidia/cudf-spark.git",
+    "commit": "d64ace4eba1f0a49c2cd4ea89644dfca8892140e"
+  },
+  "driverless_reclaim": {
+    "pull_request": "https://github.com/NVIDIA/cudf-spark/pull/17016",
+    "upstream_commit": "9a854c8d312eb36c2fc0a0760eaa80a0217f8243"
+  },
+  "private_optimizer": {
+    "repository": "https://gitlab-master.nvidia.com/mahonem/cudf-spark-private.git",
+    "commit": "61e9e96803771371dec116593f0c4eced9ac44d8"
+  },
+  "jni": {
+    "maven_version": "26.12.0-20261122.042214-52",
+    "commit": "bf63ec567eabc0bcac5366f6afba0b0bba40f30a",
+    "cudf_commit": "3c92c2094dae1931ef7c2c19ee932cc26822a000",
+    "classifiers": [
+      "cuda13-arm64",
+      "cuda13"
+    ]
+  },
+  "ucx": {
+    "repository": "https://github.com/openucx/ucx.git",
+    "base_tag": "v1.22.0",
+    "fix_commit": "ffbb1aa4c8ffdf2a93628b222f1594a70f76625c",
+    "patch": "patches/ucx-1.22-interval-search.patch",
+    "patch_sha256": "80853be416a7193d91f856f6e4898f8e276d3d69e6ee06f9617f4b920ed47795",
+    "fix_commit_note": "Upstream equivalent on the newer generic red-black tree; the included patch targets the v1.22.0 tree and includes its regression tests."
+  }
+}

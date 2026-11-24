@@ -60,7 +60,7 @@ import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
  * to broadcast, and deserialized on the executor. Both the driver's and executor's copies
  * are cleaned via GC. Because Spark closes `AutoCloseable` broadcast results after spilling
  * to disk, this class does not subclass `AutoCloseable`. Instead we implement a `closeInternal`
- * method only to be triggered via GC.
+ * method triggered via GC or an explicitly admitted independent-query benchmark boundary.
  *
  * @param data HostConcatResult populated for a broadcast that has column, otherwise it is null.
  *             It is transient because we want the executor to deserialize its `data` from Spark's
@@ -83,6 +83,27 @@ class SerializeConcatHostBuffersDeserializeBatch(
   @transient private var batchInternal: SpillableColumnarBatch = null
   // executor-local cache for build-side hash join state
   @transient private var hashBuildCacheInternal: HashBuildCache = null
+  @transient private var independentQueryRetired = false
+
+  private def requireUsable(): Unit = require(!independentQueryRetired,
+    "An independent-query benchmark attempted to reuse a retired broadcast")
+
+  /** Retires this object's resources only after the benchmark has quiesced its SQL action. */
+  private[rapids] def retireAfterIndependentQuery(): Long = this.synchronized {
+    if (independentQueryRetired) {
+      0L
+    } else {
+      val bytes = Option(batchInternal).map(_.sizeInBytes).getOrElse(0L)
+      independentQueryRetired = true
+      closeInternal()
+      bytes
+    }
+  }
+
+  private[rapids] def isRetiredAfterIndependentQuery: Boolean = this.synchronized {
+    independentQueryRetired && batchInternal == null &&
+      hashBuildCacheInternal == null && data == null
+  }
 
   private def maybeGpuBatch: Option[SpillableColumnarBatch] = Option(batchInternal)
 
@@ -94,6 +115,7 @@ class SerializeConcatHostBuffersDeserializeBatch(
   }
 
   def batch: SpillableColumnarBatch = this.synchronized {
+    requireUsable()
     maybeGpuBatch.getOrElse {
       NvtxRegistry.BROADCAST_MANIFEST_BATCH {
         val spillable =
@@ -135,6 +157,7 @@ class SerializeConcatHostBuffersDeserializeBatch(
    * NOTE: The caller is responsible to release these host columnar batches.
    */
   def hostBatch: ColumnarBatch = this.synchronized {
+    requireUsable()
     maybeGpuBatch.map { spillable =>
       withResource(spillable.getColumnarBatch()) { batch =>
         val hostColumns: Array[ColumnVector] = GpuColumnVector
@@ -222,6 +245,7 @@ class SerializeConcatHostBuffersDeserializeBatch(
    * @param out the stream to write to
    */
   def doWriteObject(out: ObjectOutputStream): Unit = this.synchronized {
+    requireUsable()
     maybeGpuBatch.map {
       case justRows: JustRowsColumnarBatch =>
         JCudfSerialization.writeRowsToStream(out, justRows.numRows())
@@ -257,6 +281,7 @@ class SerializeConcatHostBuffersDeserializeBatch(
    * Public for unit tests.
    */
   def doReadObject(in: ObjectInputStream): Unit = this.synchronized {
+    requireUsable()
     // no-op if we already have `batchInternal` or `data` set
     if (batchInternal == null && data == null) {
       NvtxRegistry.DESERIALIZE_BATCH {
@@ -284,7 +309,7 @@ class SerializeConcatHostBuffersDeserializeBatch(
   def dataSize: Long = dataLen
 
   /**
-   * This method is meant to only be called from `finalize` and it is not a regular
+   * Called from `finalize` or the admitted independent-query benchmark boundary, not a regular
    * AutoCloseable.close because we do not want Spark to close `batchInternal` when it spills
    * the broadcast block's host torrent data.
    *

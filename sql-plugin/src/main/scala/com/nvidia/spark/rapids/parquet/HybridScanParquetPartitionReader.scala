@@ -72,8 +72,8 @@ private[parquet] case class DeviceFetch(source: HybridScanByteSource, ranges: Ar
 
 /**
  * The row groups that survive pruning. `releaseSemaphoreBeforeHostFetch` when pruning took the GPU
- * semaphore only to compare dictionary pages from host memory, so the semaphore is released if the
- * column chunks then go to host memory too, and kept if they are read straight to the device.
+ * semaphore to compare dictionary pages, so the semaphore is released if the column chunks then go
+ * to host memory, and kept if they are read straight to the device.
  */
 private[parquet] case class SelectedRowGroups(
     rowGroups: Array[Int],
@@ -125,8 +125,6 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
    * memory, which only a source that can read them direct does. ON then waits for the GPU
    * semaphore in the materialize phase. AUTO takes the semaphore here if that needs no wait; if
    * the GPU is busy it reads through host memory instead, and counts the bytes.
-   * KvikIO reads into host memory with POSIX even on a file opened for cuFile, so a host read
-   * never uses GPUDirect Storage or needs the semaphore.
    */
   private def useDeviceRead(source: HybridScanByteSource, ranges: Array[ByteRange]): Boolean =
     gdsMode match {
@@ -167,20 +165,21 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
       }
       None
     } else {
-      // A MULTITHREADED pool thread can't take the GPU semaphore that dictionary pruning needs, so
-      // it fetches before the task prunes and this can count more row groups than PERFILE does.
-      addToMetric(ROW_GROUPS_FETCHED, rowGroups.length)
       setDecodeFilter(reader, ast)
       val ranges = NvtxRegistry.HYBRID_SCAN_GET_BYTE_RANGES {
         reader.allColumnChunksByteRanges(rowGroups)
       }
-      addToMetric(HYBRID_SCAN_BYTES_REQUESTED, totalBytes(ranges))
       // Checked before any release, so a device read keeps the GPU semaphore the dictionary
       // compare took rather than releasing it and waiting for it again.
       if (useDeviceRead(split.source, ranges)) {
+        // Counted when read, since a MULTITHREADED task may prune some first.
         Some(new FetchedColumnChunks(rowGroups, Array.empty,
           deviceFetch = Some(DeviceFetch(split.source, ranges))))
       } else {
+        // A MULTITHREADED pool thread can't take the GPU semaphore that dictionary pruning needs,
+        // so it fetches before the task prunes and this can count more row groups than PERFILE.
+        addToMetric(ROW_GROUPS_FETCHED, rowGroups.length)
+        addToMetric(HYBRID_SCAN_BYTES_REQUESTED, totalBytes(ranges))
         if (releaseSemaphoreBeforeHostFetch) {
           // Leaving the GPU for a while: reading the column chunks the pruning selected is the
           // longest IO of the read.
@@ -279,8 +278,9 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
           reader.filterRowGroupsWithDictionaryPages(dictPages, rowGroups)
         }
       }
-      // Keep the GPU semaphore: the chunks are usually large enough to be read to the device too.
-      SelectedRowGroups(afterDict, releaseSemaphoreBeforeHostFetch = false)
+      // Pruning can leave only chunks too small to read to the device, so these may still go
+      // to host memory. If not we won't release because it won't be a host fetch anyway. 
+      SelectedRowGroups(afterDict, releaseSemaphoreBeforeHostFetch = true)
     } else {
       val afterDict = withResource(source.fetch(dictRanges)) { hostPages =>
         compareDictionaryPages(reader, rowGroups, hostPages)
@@ -565,6 +565,8 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
       reader: HybridScanReader,
       rowGroups: Array[Int],
       deviceFetch: DeviceFetch): Table = {
+    addToMetric(ROW_GROUPS_FETCHED, rowGroups.length)
+    addToMetric(HYBRID_SCAN_BYTES_REQUESTED, totalBytes(deviceFetch.ranges))
     GpuSemaphore.acquireIfNecessary(TaskContext.get())
     // The device chunks do not outlive an attempt, so a retry reads them from the file again.
     withRetryNoSplit[Table] {
@@ -956,6 +958,12 @@ object HybridScanPipeline extends Logging {
       useFieldId: Boolean): Option[HybridScanConfig] = {
     val failOnFallback = rapidsConf.testParquetHybridScanFailOnFallback
     if (!rapidsConf.isParquetHybridScanEnabled) {
+      if (rapidsConf.isReaderGdsEnabled) {
+        logWarning(s"${RapidsConf.READER_GPU_DIRECT_STORAGE_MODE.key} is " +
+          s"${rapidsConf.readerGdsMode} but the hybrid scan reader, the only reader that uses " +
+          s"GPUDirect Storage, is disabled (${RapidsConf.PARQUET_HYBRID_SCAN_ENABLED.key}), so " +
+          "this read does not use it.")
+      }
       None
     } else if (!hybridScanAllowed) {
       reportFallback(failOnFallback, "the hybrid scan is not supported for this read in this " +

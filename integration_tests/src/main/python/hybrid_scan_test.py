@@ -700,7 +700,7 @@ def test_hybrid_scan_multithreaded_all_files_pruned(spark_tmp_path):
 @pytest.mark.parametrize('gds_mode', ['OFF', 'AUTO'])
 def test_hybrid_scan_multithreaded_reads_to_host(spark_tmp_path, gds_mode):
     """MULTITHREADED reads to the device only in ON mode, so in these modes every
-    file is read to host memory: nothing is read to the device and no file counts as a GPUDirect
+    file is read to host memory: nothing is read to the device and no split counts as a GPUDirect
     Storage fallback. A local file's chunks are all read with KvikIO, and any other file's with
     none."""
     def check(cpu_plan, gpu_plan):
@@ -718,7 +718,7 @@ def test_hybrid_scan_multithreaded_reads_to_host(spark_tmp_path, gds_mode):
         else:
             assert native_bytes in (-1, 0), 'read {} bytes of a remote file with KvikIO'.format(
                 native_bytes)
-        for name in ['hybridScanDeviceBytesRead', 'hybridScanGdsFallbackFiles']:
+        for name in ['hybridScanDeviceBytesRead', 'hybridScanGdsFallbackSplits']:
             if gds_mode == 'OFF':
                 assert plan_metric(scan, name) is None, '{} is registered with GDS off'.format(name)
             else:

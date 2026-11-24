@@ -122,7 +122,8 @@ class HybridScanDeviceReadSuite extends SparkQueryCompareTestSuite {
   /**
    * Read the whole file the way a MULTITHREADED read does: a pool thread's plan, without
    * dictionary pruning, then the task's prune and decode with a reader of its own. None when no
-   * row survives.
+   * row survives. The MULTITHREADED reader opens its own sources, so it can't be given one
+   * that forces device reads; this calls the same pipeline steps with the given source instead.
    */
   private def readMultithreaded[T](
       source: HybridScanByteSource,

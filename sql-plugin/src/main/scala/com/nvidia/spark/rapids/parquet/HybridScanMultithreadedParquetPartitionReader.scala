@@ -46,10 +46,10 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
  * those with the filter's dictionaries, which needs the GPU a pool thread may not touch, and
  * decodes what survives into one batch per file.
  *
- * With GPUDirect Storage in ON mode, a pool thread fetches nothing for a file
- * whose column chunks can be read straight to the device: the task thread prunes with the
- * dictionary pages, read from the file, and reads the surviving chunks to the device under the GPU
- * semaphore.
+ * With GPUDirect Storage in ON mode, a pool thread still parses the footer and prunes on
+ * statistics, but leaves the column chunks unfetched when they can be read straight to the
+ * device. The task thread then prunes with the dictionary pages, read from the file, and reads the
+ * surviving chunks to the device under the GPU semaphore.
  *
  * A standalone reader rather than a branch of the parquet-mr cloud reader, because Delta and
  * Iceberg customize that reader's decode and a hybrid branch inside it would bypass them.

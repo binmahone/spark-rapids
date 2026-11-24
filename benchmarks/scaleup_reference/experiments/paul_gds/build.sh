@@ -9,7 +9,7 @@
 set -euo pipefail
 readonly root=$(git rev-parse --show-toplevel)
 readonly repository="$root/.build/maven-repository"
-readonly private="$root/.build/private"
+readonly private="$root/../261124_paul_gds_private"
 readonly native=26.12.0-20261122.042214-52
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
 export PATH="$JAVA_HOME/bin:$PATH"

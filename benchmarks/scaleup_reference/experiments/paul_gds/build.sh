@@ -43,7 +43,7 @@ mvn "${args[@]}" -Dcudf.spark.jni.classifier=cuda13-arm64 \
   -DwildcardSuites=com.nvidia.spark.rapids.optimizer \
   2>&1 | tee "$root/.build/logs/private.log"
 cd "$root"
-mvn "${args[@]}" -Parm64 -DallowConventionalDistJar=true -pl integration_tests -am install \
+mvn "${args[@]}" -Parm64 -DallowConventionalDistJar=true -pl integration_tests -am package \
   "-DwildcardSuites=$suites" 2>&1 | tee "$root/.build/logs/public.log"
 cp --reflink=never dist/target/cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13-arm64.jar \
   .build/artifacts/arm64/

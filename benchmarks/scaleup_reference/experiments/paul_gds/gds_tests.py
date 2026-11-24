@@ -80,6 +80,8 @@ def node(args):
         SPARK_RAPIDS_TEST_DATAGEN_SEED='0', SPARK_RAPIDS_TEST_INJECT_OOM_SEED='0')
     for key in ('JAVA_TOOL_OPTIONS', 'JDK_JAVA_OPTIONS', '_JAVA_OPTIONS', 'SPARK_SUBMIT_OPTS'):
         env.pop(key, None)
+    env['PAUL_GDS_METRICS_LOG'] = str(run / 'reader-metrics.jsonl')
+    env['PYTHONPATH'] = str(HERE) + ':' + env.get('PYTHONPATH', '')
     env['PATH'] = d['java_home'] + '/bin:' + env['PATH']
     env['LD_LIBRARY_PATH'] = d['ucx_home'] + '/lib:/usr/local/cuda-13.1/targets/sbsa-linux/lib:/usr/local/cuda-13.0/targets/sbsa-linux/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64'
     cufile = read(local / 'cufile.json')
@@ -93,7 +95,7 @@ def node(args):
     env['RUN_DIR'] = str(run / 'pytest')
     (run / 'pytest').mkdir()
     command = ['bash', str(REPO / 'integration_tests/run_pyspark_from_build.sh'),
-        '-k', 'gds', '--tmp_path=' + str(tmp), '-rs', '--junitxml=' + str(run / 'pytest.xml')]
+        '-p', 'gds_evidence', '-k', 'gds', '--tmp_path=' + str(tmp), '-rs', '--junitxml=' + str(run / 'pytest.xml')]
     write(run / 'preflight.json', {'host': socket.gethostname(), 'mount': mount,
         'cuda_visible_devices': env.get('CUDA_VISIBLE_DEVICES'), 'engine_sha256': sha(engine),
         'environment': {k: env[k] for k in env if k.startswith(('PYSP_TEST_', 'CUFILE_', 'SPARK_RAPIDS_TEST_'))}})
@@ -117,7 +119,14 @@ def node(args):
         skipped = [t.attrib for t in tests if t.find('skipped') is not None]
         if not tests or failures or skipped:
             raise AssertionError({'tests': len(tests), 'failures': failures, 'skipped': skipped})
+        observations = [__import__('json').loads(line) for line in (run / 'reader-metrics.jsonl').read_text().splitlines()]
+        if not any(row.get('gds_required') is True for row in observations):
+            raise AssertionError('The tests did not require GDS at runtime')
+        for reader in ('test_hybrid_scan_gds_mode', 'test_hybrid_scan_multithreaded_gds_on'):
+            if not any(reader in row['test'] and row.get('metric') == 'hybridScanDeviceBytesRead' and (row.get('value') or 0) > 0 for row in observations):
+                raise AssertionError('No positive device-read metric: ' + reader)
         write(run / 'summary.json', {'status': 'completed', 'passed': len(tests),
+            'reader_observations': observations,
             'cases': [t.attrib for t in tests], 'cpu_gpu_parity': True,
             'gds_required_by_launch_configuration': True})
         write(run / 'status.json', {'status': 'completed'})

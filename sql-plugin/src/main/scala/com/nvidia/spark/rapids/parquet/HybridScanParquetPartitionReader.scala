@@ -279,7 +279,7 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
         }
       }
       // Pruning can leave only chunks too small to read to the device, so these may still go
-      // to host memory. If not we won't release because it won't be a host fetch anyway. 
+      // to host memory. If not we won't release because it won't be a host fetch anyway.
       SelectedRowGroups(afterDict, releaseSemaphoreBeforeHostFetch = true)
     } else {
       val afterDict = withResource(source.fetch(dictRanges)) { hostPages =>

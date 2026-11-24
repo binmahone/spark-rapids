@@ -21,7 +21,7 @@ HERE = Path(__file__).resolve().parent
 SUITE = HERE.parents[1]
 REPO = SUITE.parents[1]
 sys.path.insert(0, str(SUITE / 'scripts'))
-from common import expand, read, sha, write
+from common import expand, load_config, read, sha, write
 from runtime_support import node
 
 PAUL_HEAD = 'b3e85674bad145871c4a23da0c932fb28e4d80c4'
@@ -39,6 +39,10 @@ def prepare(args):
     queries = [int(q) for q in args.queries.split(',')]
     if not queries or not set(queries) <= {1, 6, 17} or len(set(queries)) != len(queries):
         raise ValueError('This experiment only supports the selected representative queries')
+    deployment = load_config('nvl72', str(args.deployment.resolve()))['deployment']
+    if deployment['nodes'] <= 0 or deployment['gpus_per_node'] != 4:
+        raise ValueError('This runner requires four GPUs per NVL node')
+    executors = deployment['nodes'] * deployment['gpus_per_node']
     root = args.run.resolve()
     root.mkdir(parents=True, exist_ok=False)
     cases, configurations = [], {}
@@ -46,9 +50,11 @@ def prepare(args):
         artifacts = REPO / '.build/artifacts' / artifact
         engine = next(artifacts.glob('cudf-spark_*.jar'))
         config, _ = benchmark.prepare(SimpleNamespace(platform='nvl72',
-            deployment=str(args.deployment.resolve()), queries=args.queries,
+            deployment=None, queries=args.queries,
             no_validate=False, iterations=2, diagnostics=False, engine=str(engine),
             tools=str(artifacts / 'benchmark-tools.jar')))
+        config['deployment'] = dict(deployment)
+        config['spark_conf']['spark.executor.instances'] = str(executors)
         benchmark.validate_target(config)
         config['spark_conf'].update({
             'spark.rapids.sql.format.parquet.reader.type': reader,
@@ -71,7 +77,7 @@ def prepare(args):
     inputs = [SUITE / 'benchmark.py', *[p for directory in ('scripts', 'configs', 'inputs')
               for p in (SUITE / directory).rglob('*') if p.is_file() and '__pycache__' not in p.parts],
               *[p for p in HERE.rglob('*') if p.is_file() and '__pycache__' not in p.parts]]
-    plan = {'cases': cases, 'queries': queries, 'nodes': 8,
+    plan = {'cases': cases, 'queries': queries, 'nodes': deployment['nodes'], 'gpus': executors,
         'paul_head': PAUL_HEAD, 'reference_score_eligible': False,
         'thread_id': os.environ.get('CODEX_THREAD_ID'),
         'runtime_input_sha256': {str(p): sha(p) for p in inputs},
@@ -86,11 +92,13 @@ def prepare(args):
     if args.submit:
         d = config['deployment']
         command = ['sbatch', '--parsable', '--export=ALL', '--job-name=paul-gds-off-on',
-            '--nodes=8', '--ntasks-per-node=1', '--cpus-per-task=144', '--gres=gpu:b200:4',
+            '--nodes=' + str(d['nodes']), '--ntasks-per-node=1', '--cpus-per-task=144', '--gres=gpu:b200:4',
             '--mem=0', '--exclusive', '--no-requeue', '--time=00:40:00',
-            '--partition=' + d['slurm_partition'], '--nodelist=' + d['node_list'],
+            '--partition=' + d['slurm_partition'],
             '--comment=codex-thread-' + str(plan['thread_id']),
             '--output=' + str(root / 'slurm-%j.log'), str(SUITE / 'scripts/run_nvl.slurm')]
+        if d.get('node_list'):
+            command.insert(-1, '--nodelist=' + d['node_list'])
         env = dict(os.environ, SCALEUP_RUN=str(root), SCALEUP_SUITE=str(HERE))
         response = subprocess.check_output(command, env=env, text=True).strip()
         write(root / 'submission.json', {'job_id': int(response.split(';')[0]), 'argv': command})
@@ -104,20 +112,27 @@ def evidence(case, queries):
         raise AssertionError('Incomplete representative-query matrix')
     if any(s['validation']['status'] != 'passed' for s in data['samples']):
         raise AssertionError('Result validation failed')
+    executors = config['deployment']['nodes'] * config['deployment']['gpus_per_node']
     receipts = list(run.glob('applications/suite/*.cleanup.json'))
-    if len(receipts) != len(queries) * 2 or any(len(read(p)) != 32 for p in receipts):
+    if len(receipts) != len(queries) * 2 or any(len(read(p)) != executors for p in receipts):
         raise AssertionError('Incomplete cleanup acknowledgement matrix')
-    for node_path in (run / 'runtime').iterdir():
+    hosts = list((run / 'runtime').iterdir())
+    if len(hosts) != config['deployment']['nodes']:
+        raise AssertionError('Missing allocated-node runtime evidence')
+    for node_path in hosts:
         snapshots = [read(p) for p in node_path.glob('*.json') if p.stem.isdigit()]
-        if len(snapshots) != 4:
+        if len(snapshots) != config['deployment']['gpus_per_node']:
             raise AssertionError('Missing actual executor evidence')
+    rdd_evidence = list((run / 'runtime').glob('*/reader-rdd-evidence.json'))
+    if len(rdd_evidence) != 1 or read(rdd_evidence[0])['rdd_names'].get('GpuDataSourceRDD', 0) <= 0:
+        raise AssertionError('MULTITHREADED DataSourceRDD did not execute')
     totals = {key: sum(s['reader_metrics'][key] for s in data['samples']) for key in (
         'hybridScanDeviceBytesRead', 'hybridScanNativeHostBytesRead', 'hybridScanGpuBusyHostBytesRead')}
     result = {'label': case['label'], 'group': case['group'], 'samples': data['samples'],
         'engine_sha256': config['engine_sha256'], 'tools_sha256': config['tools_sha256'],
         'public_source_revision': config['artifact_manifest']['source_revision'],
         'reader_totals': totals,
-        'auto_busy_branch_exercised': totals['hybridScanGpuBusyHostBytesRead'] > 0,
+        'nodes': config['deployment']['nodes'], 'gpus': executors,
         'reference_score_eligible': False}
     write(run / 'case-evidence.json', result)
     return result

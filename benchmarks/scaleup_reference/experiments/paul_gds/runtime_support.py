@@ -10,6 +10,7 @@
 
 """Owned service lifecycle and process evidence for isolated NVL PR experiments."""
 import json
+from collections import Counter
 from datetime import datetime, timezone
 import os
 from pathlib import Path
@@ -89,6 +90,21 @@ def collect(run, local):
         for path in local.glob('suite/worker-*/work/*/*/*'):
             if path.name in ('stdout', 'stderr') and path.is_file():
                 archive.add(path, arcname=str(path.relative_to(local)))
+    events = local / 'suite/events'
+    if events.exists():
+        names, stages = Counter(), 0
+        for path in events.iterdir():
+            if not path.is_file() or path.name.startswith('.'):
+                continue
+            with path.open() as stream:
+                for line in stream:
+                    event = json.loads(line)
+                    if event.get('Event') == 'SparkListenerStageSubmitted':
+                        stages += 1
+                        names.update(rdd['Name'] for rdd in event['Stage Info']['RDD Info'])
+        if stages:
+            write(output / 'reader-rdd-evidence.json',
+                  {'submitted_stages': stages, 'rdd_names': dict(names)})
     for name in ('cufile.json', 'gdscheck.txt'):
         if (local / name).exists():
             shutil.copyfile(local / name, output / name)

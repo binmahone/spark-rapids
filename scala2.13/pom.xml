@@ -2178,6 +2178,10 @@ This will force full Scala code rebuild in downstream modules.
                 <artifactId>apache-rat-plugin</artifactId>
                 <configuration>
                     <excludes>
+                        <!-- Frozen benchmark data and JSON configuration cannot carry comments. -->
+                        <exclude>benchmarks/scaleup_reference/inputs/**</exclude>
+                        <exclude>benchmarks/scaleup_reference/configs/*.json</exclude>
+                        <exclude>benchmarks/scaleup_reference/patches/*.patch</exclude>
                         <exclude>**/*.md</exclude>
                         <exclude>**/*.iml</exclude>
                         <exclude>NOTICE-binary</exclude>

@@ -67,7 +67,8 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
     poolConf: ThreadPoolConf,
     maxNumFileProcessed: Int,
     ignoreMissingFiles: Boolean,
-    keepReadsInOrder: Boolean)
+    keepReadsInOrder: Boolean,
+    openSource: Option[(Path, Map[String, GpuMetric]) => HybridScanFileByteSource] = None)
   extends MultiFileCloudPartitionReaderBase(conf, files, poolConf, maxNumFileProcessed,
     /* filters */ null, context.execMetrics, maxReadBatchSizeRows, maxReadBatchSizeBytes,
     keepReadsInOrder = keepReadsInOrder)
@@ -177,12 +178,20 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
     case _ => throw new RuntimeException("Wrong HostMemoryBuffersWithMetaData")
   }
 
+  private def fileSource(
+      filePath: Path,
+      metrics: Map[String, GpuMetric],
+      gdsEnabled: Boolean): HybridScanFileByteSource =
+    openSource.map(_(filePath, metrics)).getOrElse(
+      HybridScanMultithreadedParquetPartitionReader.createFileSource(fileIO, filePath, metrics,
+        gdsEnabled))
+
   private def hybridSplit(
       file: PartitionedFile,
       metrics: Map[String, GpuMetric]): HybridScanSplit = {
     val filePath = new Path(new URI(file.filePath.toString()))
-    val source = HybridScanMultithreadedParquetPartitionReader.createFileSource(fileIO, filePath,
-      metrics, context.gdsMode == RapidsConf.GpuDirectStorageMode.ON)
+    val source = fileSource(filePath, metrics,
+      context.gdsMode == RapidsConf.GpuDirectStorageMode.ON)
     HybridScanSplit(source, file.start, file.length)
   }
 
@@ -381,8 +390,7 @@ private[parquet] class HybridScanMultithreadedParquetPartitionReader(
     }
     withResource(footer) { _ =>
       val filePath = new Path(new URI(result.partitionedFile.filePath.toString()))
-      withResource(HybridScanMultithreadedParquetPartitionReader.createFileSource(fileIO,
-          filePath, context.execMetrics, gdsEnabled = true)) { source =>
+      withResource(fileSource(filePath, context.execMetrics, gdsEnabled = true)) { source =>
         decodeFetched(footer, new FetchedColumnChunks(result.rowGroups, Array.empty,
           deviceFetch = Some(DeviceFetch(source, result.chunkRanges))))
       }

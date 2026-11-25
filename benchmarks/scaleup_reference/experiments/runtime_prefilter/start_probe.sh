@@ -8,4 +8,14 @@ trap 'code=$?; printf "%s\n" "$code" > "$work/evidence/probe.exit"' EXIT
 ulimit -n 65536
 export JAVA_HOME="$work/jdk17"
 export PYSPARK_PYTHON=/usr/bin/python3
+python3 "$here/capture_host.py" "$work"
+python3 "$here/monitor_host.py" --work "$work" &
+monitor_pid=$!
+finish() {
+    code=$?
+    kill -TERM "$monitor_pid" 2>/dev/null || true
+    wait "$monitor_pid" || true
+    printf '%s\n' "$code" > "$work/evidence/probe.exit"
+}
+trap finish EXIT
 python3 "$here/run_matrix.py" --work "$work"

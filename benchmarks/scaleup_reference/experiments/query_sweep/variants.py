@@ -223,12 +223,34 @@ def extra_cases():
         FROM marked JOIN part ON p_partkey = l_partkey
         WHERE p_brand = 'Brand#23' AND p_container = 'MED BOX'
           AND l_quantity < probe_limit"""
-    return [Variant(17, 'single_scan_average_window', sql,
+    result = [Variant(17, 'single_scan_average_window', sql,
         'Retain selected lineitem payload for a per-key window rather than rereading lineitem',
         evidence='One lineitem scan, selective semi join, and GPU per-key average window')]
+    return result
 
 
-def catalog():
+def followup_cases():
+    result = []
+    selection = """SELECT li.* FROM lineitem li WHERE l_orderkey IN (
+        SELECT /*+ BROADCAST */ o_orderkey FROM orders
+        WHERE o_orderdate >= DATE '1994-01-01'
+          AND o_orderdate < DATE '1994-01-01' + INTERVAL '1' YEAR
+          AND o_custkey IN (SELECT c_custkey FROM customer WHERE c_nationkey IN (
+            SELECT n_nationkey FROM nation JOIN region ON n_regionkey = r_regionkey
+            WHERE r_name = 'ASIA')))"""
+    result.append(Variant(5, 'prefilter_lineitem_order_keys', wrap(original(5), 'lineitem', selection),
+        'Propagate complete existing order/customer eligibility to the fact input',
+        evidence='Order-key broadcast semi join filters lineitem before its largest exchange'))
+    for reuse in [False, True]:
+        result.append(Variant(3, 'ordinary_customer_' + ('reuse' if reuse else 'no_reuse'),
+            targeted(3).sql, 'Separate ordinary broadcast transport from hash-table reuse',
+            overrides={'spark.rapids.sql.driverlessBroadcast.enabled': 'false',
+                       'spark.rapids.sql.join.hashTable.reuse': str(reuse).lower()},
+            evidence='Ordinary GPU customer broadcast; DEBUG reuse counters prove cached hash reuse'))
+    return result
+
+
+def catalog(include_followups=False):
     result = []
     for query in ORDER:
         result.append(Variant(query, 'batch_512m', original(query),
@@ -245,4 +267,4 @@ def catalog():
         candidate = targeted(query)
         if candidate:
             result.append(candidate)
-    return result + extra_cases()
+    return result + extra_cases() + (followup_cases() if include_followups else [])

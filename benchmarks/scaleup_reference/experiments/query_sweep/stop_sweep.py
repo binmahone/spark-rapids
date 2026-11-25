@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--work', required=True)
 args = parser.parse_args()
 work = Path(args.work).resolve()
-for controller in [work / 'screen/controller.json', work / 'confirmation/controller.json']:
+for controller in [work / name / 'controller.json' for name in ['screen', 'confirmation', 'followups']]:
     if not controller.exists():
         continue
     record = read(controller)

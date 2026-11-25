@@ -29,7 +29,7 @@ def main():
     args = parser.parse_args()
     work = Path(args.work).resolve()
     selection = read(args.selection)
-    available = {(c.query, c.name): c for c in catalog()}
+    available = {(c.query, c.name): c for c in catalog(include_followups=True)}
     cases = [available[(item['query'], item['variant'])] for item in selection['candidates']]
     assert cases and len({c.query for c in cases}) == len(cases)
     if any(c.name == 'batch_512m' for c in cases):

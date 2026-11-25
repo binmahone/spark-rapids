@@ -62,7 +62,7 @@ def choose_case(query, config):
     name = config['case_variants'][str(query)]
     if name in ('baseline', 'batch_512m', 'scan_split_512m'):
         return Variant(query, name, original(query), 'Unchanged SQL configuration control')
-    return next(c for c in catalog() if c.query == query and c.name == name)
+    return next(c for c in catalog(include_followups=True) if c.query == query and c.name == name)
 
 
 def check_branch(query, candidate, plan):
@@ -83,6 +83,15 @@ def check_branch(query, candidate, plan):
             'BroadcastHashJoin' in line and 'c_custkey' in line and 'Gpu' in line
             for line in plan.splitlines()):
         raise MechanismNotReached('Customer broadcast join is absent')
+    if candidate.name.startswith('ordinary_customer_'):
+        joins = [line for line in plan.splitlines() if 'BroadcastHashJoin' in line and
+                 'c_custkey' in line]
+        if not joins or any('Driverless' in line for line in joins):
+            raise MechanismNotReached('The ordinary customer broadcast path is absent')
+    if candidate.name == 'prefilter_lineitem_order_keys' and not any(
+            'BroadcastHashJoin' in line and 'LeftSemi' in line and 'l_orderkey' in line
+            for line in plan.splitlines()):
+        raise MechanismNotReached('The order-key fact prefilter is absent')
     for name, key in [('broadcast_average_state', 'probe_partkey'),
                       ('broadcast_eligible_suppliers', 's_suppkey')]:
         if candidate.name == name and not any('BroadcastHashJoin' in line and
@@ -225,6 +234,11 @@ def main():
                 Path(str(prefix) + '.logical.txt').write_text(str(execution.optimizedPlan().toString()))
                 Path(str(prefix) + '.executed.txt').write_text(plan_text)
                 node_metrics = metrics(plan)
+                write(str(prefix) + '.metrics.json', node_metrics)
+                if (candidate.name == 'ordinary_customer_reuse' and
+                        query_profile['spark.rapids.sql.metrics.level'] == 'DEBUG' and
+                        not sum(n['metrics'].get('hashTableReuses', 0) for n in node_metrics)):
+                    raise MechanismNotReached('Cached hash-table reuse did not execute')
                 reader = {key: sum(n['metrics'].get(key, 0) for n in node_metrics) for key in (
                     'hybridScanSplits', 'hybridScanDeviceBytesRead', 'hybridScanNativeHostBytesRead',
                     'hybridScanGdsFallbackFiles', 'hybridScanGpuBusyHostBytesRead')}

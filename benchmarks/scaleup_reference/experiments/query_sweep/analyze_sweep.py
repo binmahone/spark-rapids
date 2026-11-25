@@ -79,7 +79,7 @@ def summarize(work, run):
         row['join_plan'] = [line.strip() for line in plan.splitlines() if 'Join' in line]
         row['scan_plan'] = [line.strip() for line in plan.splitlines() if 'Scan' in line]
         normalized = re.sub(r'#\d+[L]?', '#', plan)
-        normalized = re.sub(r'\[.*?(?:plan_id|loreId).*?\]', '', normalized)
+        normalized = re.sub(r'\[(?:plan_id|loreId)=[^\]]*\]', '', normalized)
         normalized = re.sub(r'@[0-9a-f]+', '@', normalized)
         row['normalized_plan'] = normalized
         rows.append(row)

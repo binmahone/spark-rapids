@@ -10,7 +10,7 @@ from pathlib import Path
 import tempfile
 
 from pyspark.sql import SparkSession
-from variants import ORDER, extra_cases, original, targeted
+from variants import ORDER, extra_cases, followup_cases, original, targeted
 
 SCHEMAS = {
     'region': 'r_regionkey BIGINT, r_name STRING, r_comment STRING',
@@ -114,7 +114,7 @@ def main():
         data = fixture()
         for table, rows in data.items():
             spark.createDataFrame(rows, SCHEMAS[table]).createOrReplaceTempView(table)
-        candidates = [targeted(q) for q in ORDER if targeted(q)] + extra_cases()
+        candidates = [targeted(q) for q in ORDER if targeted(q)] + extra_cases() + followup_cases()
         for candidate in candidates:
             query = candidate.query
             expected, expected_schema = value(spark, original(query))

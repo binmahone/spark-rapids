@@ -140,7 +140,7 @@ def main():
             if not any('BroadcastHashJoin' in line and 'LeftSemi' in line
                        for line in planned.splitlines()):
                 raise AssertionError(f'Q{planned_query}: hint did not reach a broadcast semi join')
-        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','row-propagation'):
+        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','row-propagation','aggregate-reuse'):
             checks = check_semantics(spark, SUITE, queries, config['probe_arm'])
             write(app / 'rewrite-counterexamples.json', checks)
         test = spark.range(10000).selectExpr('sum(id * id + 3) AS total')
@@ -177,6 +177,7 @@ def main():
                 timer.start()
                 hard.start()
                 try:
+                    started_unix_ns = time.time_ns()
                     started = time.perf_counter()
                     original_sql = sql_path.read_text()
                     query_sql = original_sql
@@ -213,8 +214,12 @@ def main():
                         group_key = 'l_orderkey' if query in (3,4,18) else 'o_custkey'
                         if not re.search(r'GpuHashAggregate \(keys=\[' + group_key + r'#\d+L\],', preflight):
                             raise AssertionError('Requested pre-join aggregate is absent')
+                    if config.get('suite_audit') and config['probe_arm'] == 'aggregate-reuse':
+                        if not re.search(r'Gpu\w*Window', preflight) or preflight.count('GpuFileGpuScan parquet spark_catalog.default.lineitem[')!=1:
+                            raise AssertionError('Expected one lineitem scan and a GPU window')
                     rows = frame._jdf.collect()
                     elapsed = time.perf_counter() - started
+                    ended_unix_ns = time.time_ns()
                     if expired.is_set():
                         raise TimeoutError('Query exceeded its limit')
                 finally:
@@ -239,6 +244,9 @@ def main():
                     if config['platform'] in ('aws48x', 'b200') and (reader['hybridScanDeviceBytesRead'] != 0 or
                                                         reader['hybridScanNativeHostBytesRead'] <= 0):
                         raise AssertionError('Expected native host reads did not execute')
+                write(str(prefix) + '.measurement.json', {'sql_seconds':elapsed,
+                    'started_unix_ns':started_unix_ns,'ended_unix_ns':ended_unix_ns,
+                    'reader_metrics':reader,'plan_metrics':node_metrics})
                 schema = frame.schema.jsonValue()
                 reference = str(Path(config['deployment']['scratch_root']) / run.name / 'q11-reference')
                 validation_started = time.perf_counter()
@@ -256,6 +264,7 @@ def main():
                                                      spark._jvm, str(prefix))
                 validation_seconds = time.perf_counter() - validation_started
                 sample = {'query': query, 'iteration': iteration, 'sql_seconds': elapsed,
+                          'started_unix_ns':started_unix_ns,'ended_unix_ns':ended_unix_ns,
                           'application_id': sc.applicationId,
                           'spark_session_identity': int(spark._jvm.java.lang.System.identityHashCode(
                               frame._jdf.sparkSession())),

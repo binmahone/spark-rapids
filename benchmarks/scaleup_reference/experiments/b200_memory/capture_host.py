@@ -25,15 +25,16 @@ import sys
 
 work=Path(sys.argv[1]).resolve()
 owner=json.loads((work/'evidence/owner.json').read_text())
-assert owner['gpu_indices']==[0,1,2,3]
+gpu_indices=[int(i) for i in (sys.argv[2] if len(sys.argv)>2 else '0,1,2,3').split(',')]
+assert len(set(gpu_indices))==4 and set(gpu_indices)<=set(range(8))
 def command(*args):
     return subprocess.check_output(args,text=True,stderr=subprocess.STDOUT)
 inventory=command('nvidia-smi','--query-gpu=index,uuid,name,memory.total,driver_version','--format=csv,noheader')
-selected={row[1].strip() for row in csv.reader(io.StringIO(inventory)) if int(row[0]) in [0,1,2,3]}
+selected={row[1].strip() for row in csv.reader(io.StringIO(inventory)) if int(row[0]) in gpu_indices}
 processes=command('nvidia-smi','--query-compute-apps=gpu_uuid,pid,process_name','--format=csv,noheader')
 if any(row and row[0].strip() in selected for row in csv.reader(io.StringIO(processes))):
     raise RuntimeError('A selected GPU already has a compute process')
-report={'time_utc':datetime.now(timezone.utc).isoformat(),'gpu_indices':[0,1,2,3],
+report={'time_utc':datetime.now(timezone.utc).isoformat(),'gpu_indices':gpu_indices,
         'inventory':inventory,'preexisting_gpu_processes':processes,
         'topology':command('nvidia-smi','topo','-m'),'numa':command('numactl','--hardware'),
         'java':command(str(work/'jdk17/bin/java'),'-version'),

@@ -97,6 +97,7 @@ class SuiteValidator:
             values = [[None if row.isNullAt(i) else str(row.get(i))
                        for i in range(len(schema['fields']))] for row in rows]
             actual['values'] = values
+            if unused:write(unused + '.validation-input.json', actual)
             if generated:
                 write(path, actual)
             else:

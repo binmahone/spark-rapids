@@ -16,7 +16,7 @@
 """Record physical I/O, memory pressure and GPU clocks with persistent NVML handles."""
 import argparse,ctypes,json,os,signal,time
 from pathlib import Path
-p=argparse.ArgumentParser();p.add_argument('--work',required=True);p.add_argument('--output');a=p.parse_args();work=Path(a.work).resolve();output=Path(a.output) if a.output else work/'evidence/host-monitor.jsonl';output.parent.mkdir(exist_ok=True)
+p=argparse.ArgumentParser();p.add_argument('--work',required=True);p.add_argument('--output');p.add_argument('--gpus',default='0,1,2,3');a=p.parse_args();work=Path(a.work).resolve();output=Path(a.output) if a.output else work/'evidence/host-monitor.jsonl';output.parent.mkdir(exist_ok=True)
 running=True
 def stop(*args):
  global running
@@ -25,7 +25,9 @@ signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)
 lib=ctypes.CDLL('libnvidia-ml.so.1')
 assert lib.nvmlInit_v2()==0
 handles=[];count=ctypes.c_uint();assert lib.nvmlDeviceGetCount_v2(ctypes.byref(count))==0
-for i in [0,1,2,3]:
+gpu_indices=[int(i) for i in a.gpus.split(',')]
+assert len(set(gpu_indices))==4 and set(gpu_indices)<=set(range(8))
+for i in gpu_indices:
  handle=ctypes.c_void_p();assert lib.nvmlDeviceGetHandleByIndex_v2(i,ctypes.byref(handle))==0;handles.append(handle)
 class Memory(ctypes.Structure):_fields_=[('total',ctypes.c_ulonglong),('free',ctypes.c_ulonglong),('used',ctypes.c_ulonglong)]
 class Util(ctypes.Structure):_fields_=[('gpu',ctypes.c_uint),('memory',ctypes.c_uint)]
@@ -75,7 +77,7 @@ try:
     'memory_kib':keyed('/proc/meminfo',{'MemAvailable','MemFree','Cached','Buffers','Dirty','Writeback','AnonPages','SwapFree','Slab'}),
     'vmstat':keyed('/proc/vmstat',{'pgpgin','pgpgout','pgmajfault','pgscan_kswapd','pgsteal_kswapd','pgscan_direct','pgsteal_direct','workingset_refault_file','workingset_refault_anon'}),
     'cpu_ticks':[int(v) for v in Path('/proc/stat').read_text().splitlines()[0].split()[1:]],
-    'gpus':[gpu_sample(h) for h in handles]}
+    'gpu_indices':gpu_indices,'gpus':[gpu_sample(h) for h in handles]}
    for kind in ['io','memory','cpu']:
     pressure=Path('/proc/pressure')/kind
     if pressure.exists():record['pressure_'+kind]=pressure.read_text().strip()

@@ -29,6 +29,24 @@ def transform(query, original, arm):
         result,count = re.subn(r'(\bselect\s+)', r'\1/*+ BROADCAST(customer) */ ', original,count=1,flags=re.I)
         assert count == 1 and result.replace('/*+ BROADCAST(customer) */ ', '') == original
         return result
+    if arm == 'aggregate-reuse' and query == 15:
+        return """
+WITH revenue0 AS (
+    SELECT l_suppkey AS supplier_no,
+           sum(l_extendedprice * (1 - l_discount)) AS total_revenue
+    FROM lineitem
+    WHERE l_shipdate >= date '1996-01-01'
+      AND l_shipdate < date '1996-01-01' + interval '3' month
+    GROUP BY l_suppkey
+), ranked AS (
+    SELECT supplier_no, total_revenue, max(total_revenue) OVER () AS max_revenue
+    FROM revenue0
+)
+SELECT s_suppkey, s_name, s_address, s_phone, total_revenue
+FROM supplier JOIN ranked ON s_suppkey = supplier_no
+WHERE total_revenue = max_revenue
+ORDER BY s_suppkey
+"""
     if arm == 'preaggregate' and query == 3:
         return """
 WITH line_revenue AS (
@@ -185,6 +203,13 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
         'lineitem': ('l_orderkey long, l_quantity double', [
             (11,200.),(11,150.),(11,None),(12,180.),(12,180.),
             (13,200.),(13,150.),(14,400.),(None,400.)])}
+    cases[15] = {
+        'supplier': ('s_suppkey long, s_name string, s_address string, s_phone string', [
+            (1,'A','addr','phone'),(1,'A','addr','phone'),(2,'B',None,'phone'),(None,'N','addr','phone')]),
+        'lineitem': ('l_suppkey long, l_extendedprice double, l_discount double, l_shipdate date', [
+            (1,100.,0.,date(1996,1,2)),(1,100.,0.,date(1996,2,2)),
+            (2,150.,0.,date(1996,1,2)),(None,50.,0.,date(1996,1,2)),
+            (2,999.,0.,date(1996,5,1)),(2,None,0.,date(1996,1,2))])}
     graph_tables = {
         'customer': ('c_custkey long, c_nationkey int', [(1,1),(1,1),(2,2),(3,None)]),
         'orders': ('o_orderkey long, o_custkey long, o_orderdate date', [
@@ -207,9 +232,12 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
             if query not in requested:
                 continue
             original=(suite/'inputs/aws48x/sql'/f'q{query}.sql').read_text()
-            for empty in (False,True):
+            for empty in ((False,True,'null-max') if query==15 else (False,True)):
                 for table,(schema,rows) in tables.items():
-                    spark.createDataFrame([] if empty else rows,schema).createOrReplaceTempView('__probe_'+table)
+                    data=[] if empty is True else rows
+                    if empty == 'null-max' and table == 'lineitem':
+                        data=rows+[(None,1000.,0.,date(1996,1,2))]
+                    spark.createDataFrame(data,schema).createOrReplaceTempView('__probe_'+table)
                 def renamed(sql):
                     for table in tables:
                         sql=re.sub(r'\b'+table+r'\b','__probe_'+table,sql,flags=re.I)

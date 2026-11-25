@@ -43,8 +43,12 @@ def main():
     parser.add_argument('--prefix-reference', action='store_true')
     parser.add_argument('--query-timeout', type=int, default=200)
     parser.add_argument('--iterations', type=int, default=2)
+    parser.add_argument('--gpus', default='0,1,2,3')
     args = parser.parse_args()
     work = Path(args.work).resolve()
+    gpu_indices = [int(i) for i in args.gpus.split(',')]
+    if len(set(gpu_indices)) != 4 or not set(gpu_indices) <= set(range(8)):
+        raise ValueError('Exactly four distinct physical GPUs are required')
     queries = [int(q) for q in args.queries.split(',')]
     if not queries or len(set(queries)) != len(queries) or not set(queries) <= set(range(1,23)):
         raise ValueError('Expected distinct TPC-H query numbers')
@@ -52,7 +56,7 @@ def main():
         raise ValueError('Label must be a simple directory name')
     state = {'status': 'running', 'score_eligible': False, 'arms': [],
              'classification': ('all-query opportunity audit' if args.suite_audit else 'SQL hint mechanism diagnostic'),
-             'order': ['reference'] if args.reference_only else args.order.split(','), 'rmm_budget': args.budget, 'gpu_indices': [0,1,2,3],
+             'order': ['reference'] if args.reference_only else args.order.split(','), 'rmm_budget': args.budget, 'gpu_indices': gpu_indices,
              'cache_policy': 'No cache flush; two actions per query per fresh application',
              'source_revision': subprocess.check_output(
                  ['git', '-C', str(SUITE), 'rev-parse', 'HEAD'], text=True).strip()}
@@ -74,7 +78,7 @@ def main():
         raise AssertionError('Frozen engine hash differs')
     config.update(engine=str(engine), engine_sha256=sha(engine),
                   tools=str(artifacts / 'benchmark-tools.jar'), queries=[18] if args.reference_only else queries,
-                  work=str(work), platform='b200', gpu_indices=[0,1,2,3],
+                  work=str(work), platform='b200', gpu_indices=gpu_indices,
                   dataset='/raid/knataraj/datasets/tpch/sf10k_v2_float',
                   statistics_snapshot=str(work/'evidence/catalog-statistics.json'))
     for table in read(config['statistics_snapshot'])['tables']:

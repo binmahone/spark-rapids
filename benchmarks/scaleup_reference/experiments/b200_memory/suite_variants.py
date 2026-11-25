@@ -45,6 +45,49 @@ GROUP BY l_orderkey, o_orderdate, o_shippriority
 ORDER BY revenue DESC, o_orderdate
 LIMIT 10
 """
+    if arm == 'row-propagation' and query == 5:
+        clause = """AND c_nationkey IN (
+            SELECT /*+ BROADCAST */ n_nationkey FROM nation JOIN region
+              ON n_regionkey = r_regionkey WHERE r_name = 'ASIA')
+"""
+        result,count = re.subn(r'(\bgroup\s+by\b)', clause+r'\1', original,count=1,flags=re.I)
+        assert count == 1
+        return result
+    if arm == 'row-propagation' and query == 9:
+        clause = """AND ps_partkey IN (
+            SELECT /*+ BROADCAST */ p_partkey FROM part WHERE p_name LIKE '%green%')
+"""
+        result,count = re.subn(r'(\n\s*\)\s+as\s+profit\b)', '\n'+clause+r'\1', original,count=1,flags=re.I)
+        assert count == 1
+        return result
+    if arm == 'preaggregate' and query == 4:
+        return """
+WITH eligible_orders AS (
+    SELECT l_orderkey FROM lineitem
+    WHERE l_commitdate < l_receiptdate
+    GROUP BY l_orderkey
+)
+SELECT o_orderpriority, count(*) AS order_count
+FROM orders JOIN eligible_orders ON o_orderkey = l_orderkey
+WHERE o_orderdate >= date '1993-07-01'
+  AND o_orderdate < date '1993-07-01' + interval '3' month
+GROUP BY o_orderpriority
+ORDER BY o_orderpriority
+"""
+    if arm == 'preaggregate' and query == 18:
+        return """
+WITH line_quantity AS (
+    SELECT l_orderkey, sum(l_quantity) AS sum_quantity
+    FROM lineitem GROUP BY l_orderkey HAVING sum(l_quantity) > 300
+)
+SELECT /*+ BROADCAST(line_quantity) */ c_name, c_custkey, o_orderkey,
+       o_orderdate, o_totalprice, sum(sum_quantity) AS `sum(l_quantity)`
+FROM customer JOIN orders ON c_custkey = o_custkey
+JOIN line_quantity ON o_orderkey = l_orderkey
+GROUP BY c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice
+ORDER BY o_totalprice DESC, o_orderdate
+LIMIT 100
+"""
     if arm == 'preaggregate' and query == 13:
         return """
 WITH order_counts AS (
@@ -83,7 +126,7 @@ LIMIT 20
     raise ValueError(f'No audited transformation for Q{query}, arm={arm}')
 
 
-def check_semantics(spark, suite):
+def check_semantics(spark, suite, requested, arm, require_gpu=True):
     """Try duplicate, NULL, unmatched and empty inputs on CPU and on the GPU rewrite."""
     from datetime import date
     from collections import Counter
@@ -122,10 +165,47 @@ def check_semantics(spark, suite):
             (11,99.,0.,date(1995,1,1)),(12,None,.2,date(1995,4,1)),
             (12,9.,None,date(1995,4,1)),(13,40.,0.,date(1995,4,1)),
             (None,50.,0.,date(1995,4,1))])}
+    cases[4] = {
+        'orders': ('o_orderkey long, o_orderpriority string, o_orderdate date', [
+            (11,'A',date(1993,8,1)),(11,'A',date(1993,8,1)),
+            (12,'B',date(1993,8,1)),(13,'A',date(1993,8,1)),
+            (14,None,date(1993,8,1)),(None,'A',date(1993,8,1)),
+            (15,'A',date(1993,10,1))]),
+        'lineitem': ('l_orderkey long, l_commitdate date, l_receiptdate date', [
+            (11,date(1993,8,1),date(1993,8,2)),(11,date(1993,8,1),date(1993,8,2)),
+            (12,date(1993,8,2),date(1993,8,1)),(13,None,date(1993,8,2)),
+            (14,date(1993,8,1),date(1993,8,2)),(None,date(1993,8,1),date(1993,8,2)),
+            (15,date(1993,8,1),date(1993,8,2))])}
+    cases[18] = {
+        'customer': ('c_custkey long, c_name string', [(1,'A'),(1,'A'),(2,'B'),(None,'N')]),
+        'orders': ('o_orderkey long, o_custkey long, o_orderdate date, o_totalprice double', [
+            (11,1,date(1995,1,1),500.),(11,1,date(1995,1,1),500.),
+            (12,2,date(1995,1,1),500.),(13,1,date(1995,2,1),None),
+            (None,1,date(1995,1,1),100.)]),
+        'lineitem': ('l_orderkey long, l_quantity double', [
+            (11,200.),(11,150.),(11,None),(12,180.),(12,180.),
+            (13,200.),(13,150.),(14,400.),(None,400.)])}
+    graph_tables = {
+        'customer': ('c_custkey long, c_nationkey int', [(1,1),(1,1),(2,2),(3,None)]),
+        'orders': ('o_orderkey long, o_custkey long, o_orderdate date', [
+            (11,1,date(1994,2,1)),(11,1,date(1994,2,1)),(12,2,date(1994,2,1)),
+            (13,1,date(1996,1,1)),(14,3,date(1994,2,1))]),
+        'lineitem': ('l_orderkey long, l_partkey long, l_suppkey long, l_extendedprice double, l_discount double, l_quantity double', [
+            (11,1,1,10.,0.,2.),(11,2,2,20.,0.,3.),(12,1,1,30.,0.,4.),
+            (13,3,1,40.,0.,5.),(14,None,1,50.,0.,6.),(None,1,1,None,None,None)]),
+        'supplier': ('s_suppkey long, s_nationkey int', [(1,1),(1,1),(2,2),(3,None)]),
+        'nation': ('n_nationkey int, n_name string, n_regionkey int', [(1,'A',1),(1,'A',1),(2,'B',2),(None,'N',1)]),
+        'region': ('r_regionkey int, r_name string', [(1,'ASIA'),(1,'ASIA'),(2,'OTHER'),(None,'ASIA')]),
+        'part': ('p_partkey long, p_name string', [(1,'green'),(1,'green'),(2,'green item'),(3,'red'),(None,'green')]),
+        'partsupp': ('ps_partkey long, ps_suppkey long, ps_supplycost double', [(1,1,2.),(1,1,2.),(2,2,3.),(3,1,4.),(None,1,5.)])}
+    cases[5] = {k:v for k,v in graph_tables.items() if k not in ('part','partsupp')}
+    cases[9] = {k:v for k,v in graph_tables.items() if k not in ('customer','region')}
     results=[]
     previous = spark.conf.get('spark.rapids.sql.enabled', 'true')
     try:
         for query,tables in cases.items():
+            if query not in requested:
+                continue
             original=(suite/'inputs/aws48x/sql'/f'q{query}.sql').read_text()
             for empty in (False,True):
                 for table,(schema,rows) in tables.items():
@@ -136,11 +216,16 @@ def check_semantics(spark, suite):
                     return sql
                 spark.conf.set('spark.rapids.sql.enabled','false')
                 reference=Counter(tuple(row) for row in spark.sql(renamed(original)).collect())
-                cpu=Counter(tuple(row) for row in spark.sql(renamed(transform(query,original,'preaggregate'))).collect())
+                cpu=Counter(tuple(row) for row in spark.sql(renamed(transform(query,original,arm))).collect())
                 if reference != cpu:
                     raise AssertionError(f'Q{query}: CPU counterexample failed')
+                if not require_gpu:
+                    results.append({'query':query,'empty':empty,'status':'passed',
+                                    'reference':'CPU original SQL','cpu_rewrite_equal':True,
+                                    'gpu_rewrite_checked':False})
+                    continue
                 spark.conf.set('spark.rapids.sql.enabled','true')
-                frame=spark.sql(renamed(transform(query,original,'preaggregate')))
+                frame=spark.sql(renamed(transform(query,original,arm)))
                 gpu=Counter(tuple(row) for row in frame.collect())
                 plan=str(frame._jdf.queryExecution().executedPlan().toString())
                 if reference != gpu or 'GpuHashAggregate' not in plan:

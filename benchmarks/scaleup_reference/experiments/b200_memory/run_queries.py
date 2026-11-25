@@ -139,8 +139,8 @@ def main():
             if not any('BroadcastHashJoin' in line and 'LeftSemi' in line
                        for line in planned.splitlines()):
                 raise AssertionError(f'Q{planned_query}: hint did not reach a broadcast semi join')
-        if config.get('suite_audit') and config['probe_arm'] == 'preaggregate':
-            checks = check_semantics(spark, SUITE)
+        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','row-propagation'):
+            checks = check_semantics(spark, SUITE, queries, config['probe_arm'])
             write(app / 'rewrite-counterexamples.json', checks)
         test = spark.range(10000).selectExpr('sum(id * id + 3) AS total')
         if test.collect()[0][0] != sum(i*i+3 for i in range(10000)):
@@ -202,11 +202,14 @@ def main():
                     semi = [line for line in preflight.splitlines() if 'LeftSemi' in line]
                     if config['probe_arm'] == 'hint' and not any('BroadcastHashJoin' in line for line in semi):
                         raise AssertionError('Hint did not reach a broadcast semi join')
+                    if config.get('suite_audit') and config['probe_arm'] == 'row-propagation':
+                        if not any('BroadcastHashJoin' in line and 'LeftSemi' in line for line in preflight.splitlines()):
+                            raise AssertionError('Propagated semi join is absent or not broadcast')
                     if config.get('suite_audit') and config['probe_arm'] == 'dimension-broadcast':
                         if not any('BroadcastHashJoin' in line and 'Inner' in line for line in preflight.splitlines()):
                             raise AssertionError('Dimension broadcast hint was not executed')
-                    if config.get('suite_audit') and config['probe_arm'] == 'preaggregate':
-                        group_key = 'l_orderkey' if query == 3 else 'o_custkey'
+                    if config.get('suite_audit') and config['probe_arm'] == 'preaggregate' and not config.get('prefix_reference'):
+                        group_key = 'l_orderkey' if query in (3,4,18) else 'o_custkey'
                         if not re.search(r'GpuHashAggregate \(keys=\[' + group_key + r'#\d+L\],', preflight):
                             raise AssertionError('Requested pre-join aggregate is absent')
                     rows = frame._jdf.collect()

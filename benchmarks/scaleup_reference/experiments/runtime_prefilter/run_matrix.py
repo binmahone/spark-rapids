@@ -20,15 +20,23 @@ import services
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', required=True)
+    parser.add_argument('--name', choices=['main', 'q20-isolated'], default='main')
+    parser.add_argument('--queries', default='18,20')
+    parser.add_argument('--order', default='baseline,hint,hint,baseline')
     args = parser.parse_args()
     work = Path(args.work).resolve()
+    queries = [int(q) for q in args.queries.split(',')]
+    order = args.order.split(',')
+    if not queries or not set(queries) <= {18, 20} or not set(order) <= {'baseline', 'hint'}:
+        raise ValueError('Unsupported focused matrix')
+    result_root = work / ('results' if args.name == 'main' else 'results-q20-isolated')
     state = {'status': 'running', 'score_eligible': False, 'arms': [],
              'classification': 'SQL hint mechanism diagnostic; no engine or aggregate-reuse change',
-             'order': ['baseline', 'hint', 'hint', 'baseline'],
+             'order': order, 'queries': queries, 'name': args.name,
              'cache_policy': 'No cache flush; two actions per query per fresh application',
              'source_revision': subprocess.check_output(
                  ['git', '-C', str(SUITE), 'rev-parse', 'HEAD'], text=True).strip()}
-    output = work / 'results/matrix.json'
+    output = result_root / 'matrix.json'
     if output.exists():
         raise RuntimeError('Matrix output exists; inspect it before starting another run')
     write(output, state)
@@ -40,7 +48,7 @@ def main():
     if sha(engine) != 'c267dafd65ae85b558d8c8df03a94c0947cbe42b79a1e29ddeaa63bfcadb8cce':
         raise AssertionError('Frozen engine hash differs')
     config.update(engine=str(engine), engine_sha256=sha(engine),
-                  tools=str(artifacts / 'benchmark-tools.jar'), queries=[18, 20])
+                  tools=str(artifacts / 'benchmark-tools.jar'), queries=queries)
     deployment = config['deployment']
     native = str(Path(deployment['ucx_home']) / 'lib') + ':/usr/local/cuda-13.1/lib64'
     native += ':/usr/local/cuda-13.1/targets/x86_64-linux/lib'
@@ -51,7 +59,8 @@ def main():
     env['PATH'] = deployment['java_home'] + '/bin:' + env['PATH']
     try:
         for index, arm in enumerate(state['order']):
-            run = work / 'results' / f'{index}-{arm}'
+            prefix = '' if args.name == 'main' else args.name + '-'
+            run = result_root / f'{prefix}{index}-{arm}'
             app = run / 'applications/suite'
             app.mkdir(parents=True)
             current = dict(config, probe_arm=arm)
@@ -75,7 +84,7 @@ def main():
             for component in ['driver', 'executor']:
                 profile[f'spark.{component}.extraJavaOptions'] = '-Djava.io.tmpdir=' + str(scratch / 'java-tmp')
             write(app / 'profile.json', profile)
-            write(run / 'profiles.json', {str(q): profile for q in [18, 20]})
+            write(run / 'profiles.json', {str(q): profile for q in queries})
             properties = app / 'spark-defaults.conf'
             properties.write_text(''.join(f'{k}={v}\n' for k, v in sorted(profile.items())))
             record = {'arm': arm, 'run': str(run), 'status': 'starting'}
@@ -87,7 +96,7 @@ def main():
                 '--properties-file', str(properties), '--jars',
                 'local:' + str(engine) + ',local:' + config['tools'],
                 str(HERE / 'run_queries.py'), '--run', str(run), '--app', str(app),
-                '--queries', '18,20']
+                '--queries', ','.join(map(str, queries))]
             write(app / 'command.json', {'argv': command})
             try:
                 process, receipt = services.launch(command, app / 'driver.log', env)
@@ -102,7 +111,7 @@ def main():
                 result = read(app / 'result.json')
                 if process.returncode or result['status'] != 'completed':
                     raise RuntimeError('Arm failed: ' + str(result.get('error')))
-                if len(result['samples']) != 4 or any(
+                if len(result['samples']) != 2 * len(queries) or any(
                         s['validation']['status'] != 'passed' for s in result['samples']):
                     raise AssertionError('Arm lacks complete validated outputs')
                 record.update(status='completed', samples=[{k: s[k] for k in

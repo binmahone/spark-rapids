@@ -174,8 +174,8 @@ def _start(run, config, master_host, master_port, master_ui_port, tag):
                               '-Dspark.worker.resource.gpu.discoveryScript=' + str(discover)))
         binding = '--membind=' if config['platform'] == 'nvl72' else '--preferred='
         command = ['numactl', '--cpunodebind=' + str(numa), binding + str(numa), spark_class,
-                   'org.apache.spark.deploy.worker.Worker', '--host', master_host if
-                   config['platform'] == 'aws48x' else node, '--port', '0', '--webui-port', '0',
+                   'org.apache.spark.deploy.worker.Worker', '--host', master_host,
+                   '--port', '0', '--webui-port', '0',
                    '--cores', '32' if config['platform'] == 'nvl72' else '24',
                    '--memory', '350g' if config['platform'] == 'nvl72' else '200g',
                    'spark://' + master_host + ':' + str(master_port)]

@@ -37,7 +37,11 @@ def main():
         raise RuntimeError('Matrix output exists; inspect it before starting another run')
     write(output, state)
     os.environ['SCALEUP_HEAD'] = socket.gethostname()
-    host = socket.gethostbyname(socket.gethostname())
+    host = '10.34.1.4'
+    if host not in subprocess.check_output(['hostname', '-I'], text=True).split():
+        raise RuntimeError('Expected B200 data address is unavailable')
+    os.environ['SPARK_LOCAL_IP'] = host
+    os.environ['SPARK_LOCAL_HOSTNAME'] = host
     config = load_config('aws48x', work / 'evidence/deployment.json')
     artifacts = work / 'artifacts'
     engine = artifacts / 'cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar'
@@ -61,6 +65,9 @@ def main():
                SPARK_HOME=deployment['spark_home'], PYSPARK_PYTHON='/usr/bin/python3',
                CUDA_VISIBLE_DEVICES='', LD_LIBRARY_PATH=native,
                UCX_MODULE_DIR=str(Path(deployment['ucx_home']) / 'lib/ucx'))
+    cache = work / 'scratch/cuda-cache'
+    cache.mkdir(parents=True, exist_ok=True)
+    env['CUDA_CACHE_PATH'] = str(cache)
     env['PATH'] = deployment['java_home'] + '/bin:' + env['PATH']
     try:
         for index, arm in enumerate(state['order']):
@@ -83,6 +90,9 @@ def main():
                 'spark.driver.extraClassPath': classpath,
                 'spark.executor.extraClassPath': classpath,
                 'spark.executorEnv.PYSPARK_PYTHON': '/usr/bin/python3',
+                'spark.executorEnv.SPARK_LOCAL_IP': host,
+                'spark.executorEnv.SPARK_LOCAL_HOSTNAME': host,
+                'spark.executorEnv.CUDA_CACHE_PATH': str(cache),
                 'spark.executorEnv.LD_LIBRARY_PATH': native,
                 'spark.executorEnv.UCX_MODULE_DIR': env['UCX_MODULE_DIR']})
             for component in ['driver', 'executor']:

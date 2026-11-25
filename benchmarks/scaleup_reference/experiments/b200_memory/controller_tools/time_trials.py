@@ -20,7 +20,7 @@ ROOT=Path(os.environ['B200_PROBE_ROOT']).resolve()
 owner=json.loads((ROOT/'evidence/owner.json').read_text())
 assert owner['thread_id']==os.environ['CODEX_THREAD_ID']
 p=argparse.ArgumentParser(description=__doc__)
-p.add_argument('labels',nargs='*',default=['trial-q9-0356','trial-preagg-0356','trial-q15-0356'])
+p.add_argument('labels',nargs='*',default=['trial-q9-0356','trial-preagg-0356','trial-q15-retry-0356'])
 a=p.parse_args()
 r=subprocess.run([sys.executable,str(ROOT/'scripts/suite_status.py'),*a.labels,'--analyze','--recent','1'],capture_output=True,text=True,check=True)
 raw_path=ROOT/'evidence'/('suite-'+'-'.join(a.labels)+'.json')
@@ -89,7 +89,14 @@ for label in a.labels:
    group['observed_second_pass_time_reduction_fraction']={arm:1-values['second_pass_median_seconds']/baseline
      for arm,values in group['arms'].items() if arm!='baseline' and values['second_pass_median_seconds'] is not None}
   groups.append(group)
-report={'classification':'matched four-GPU timing experiments; shared node, GPU0 thermal throttling',
+followup={}
+optimized=[r['sql_seconds'] for r in rows if r['label']=='trial-q9-reuse-0356' and r['iteration']==2]
+control=[r['sql_seconds'] for r in rows if r['label']=='trial-q9-reuse-control-0356' and r['iteration']==2]
+if optimized and control:
+ followup={'classification':'single-application-per-arm followup; optimized then control; not the original ABBA',
+  'query':9,'optimized_second_pass_seconds':optimized,'control_second_pass_seconds':control,
+  'observed_time_reduction_fraction':1-statistics.median(optimized)/statistics.median(control)}
+report={'q9_reuse_followup':followup,'classification':'matched four-GPU timing experiments; shared node, GPU0 thermal throttling',
  'gpu_indices':[0,3,5,6],'extra_rmm_alloc_size_limit':False,'independent_sf10k_cpu_reference':False,
  'limits':['Compare only within each cohort; do not compare with the previous GPU0-3 observations.',
   'Observed timing effects are specific to this environment; no healthy-node speedup qualification.',

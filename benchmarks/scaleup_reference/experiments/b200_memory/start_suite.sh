@@ -18,6 +18,7 @@ readonly work=${1:?Owned absolute directory is required}
 readonly label=${2:?Unique result label is required}
 readonly queries=${3:-1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22}
 readonly arms=${4:-baseline}
+readonly mode=${5:-measure}
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly evidence="$work/evidence/$label"
 mkdir "$evidence"
@@ -37,5 +38,7 @@ finish() {
     printf '%s\n' "$code" > "$evidence/controller.exit"
 }
 trap finish EXIT
-python3 "$here/run_matrix.py" --work "$work" --label "$label" --suite-audit \
+extra=()
+if [ "$mode" = prefix ]; then extra=(--prefix-reference --iterations 1); fi
+python3 "$here/run_matrix.py" "${extra[@]}" --work "$work" --label "$label" --suite-audit \
     --queries "$queries" --order "$arms" --query-timeout 600

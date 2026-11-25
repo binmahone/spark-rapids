@@ -34,7 +34,7 @@ from catalog_statistics import register_tables
 from common import SUITE, TABLES, apply_query_settings, read, sha, write
 from b200_validation import Validator
 from suite_validation import SuiteValidator
-from suite_variants import transform
+from suite_variants import transform, check_semantics
 
 
 def metrics(plan):
@@ -139,6 +139,9 @@ def main():
             if not any('BroadcastHashJoin' in line and 'LeftSemi' in line
                        for line in planned.splitlines()):
                 raise AssertionError(f'Q{planned_query}: hint did not reach a broadcast semi join')
+        if config.get('suite_audit') and config['probe_arm'] == 'preaggregate':
+            checks = check_semantics(spark, SUITE)
+            write(app / 'rewrite-counterexamples.json', checks)
         test = spark.range(10000).selectExpr('sum(id * id + 3) AS total')
         if test.collect()[0][0] != sum(i*i+3 for i in range(10000)):
             raise AssertionError('GPU smoke result differs')
@@ -179,6 +182,9 @@ def main():
                     if args.reference_only:
                         query_sql, count = re.subn(r'limit\s+100\s*$', 'limit 10000', query_sql, flags=re.I)
                         assert count == 1 and query == 18
+                    elif config.get('prefix_reference'):
+                        query_sql,count = re.subn(r'limit\s+\d+\s*$', 'limit 1000', query_sql,flags=re.I)
+                        assert count == 1 and query in (3,10)
                     elif config.get('suite_audit'):
                         query_sql = transform(query, original_sql, config['probe_arm'])
                     elif config['probe_arm'] == 'hint':
@@ -196,6 +202,13 @@ def main():
                     semi = [line for line in preflight.splitlines() if 'LeftSemi' in line]
                     if config['probe_arm'] == 'hint' and not any('BroadcastHashJoin' in line for line in semi):
                         raise AssertionError('Hint did not reach a broadcast semi join')
+                    if config.get('suite_audit') and config['probe_arm'] == 'dimension-broadcast':
+                        if not any('BroadcastHashJoin' in line and 'Inner' in line for line in preflight.splitlines()):
+                            raise AssertionError('Dimension broadcast hint was not executed')
+                    if config.get('suite_audit') and config['probe_arm'] == 'preaggregate':
+                        group_key = 'l_orderkey' if query == 3 else 'o_custkey'
+                        if not re.search(r'GpuHashAggregate \(keys=\[' + group_key + r'#\d+L\],', preflight):
+                            raise AssertionError('Requested pre-join aggregate is absent')
                     rows = frame._jdf.collect()
                     elapsed = time.perf_counter() - started
                     if expired.is_set():
@@ -231,10 +244,12 @@ def main():
                                for i in range(len(schema['fields']))] for row in rows]
                     Validator.write_q18_reference(config['work'], schema, values)
                     validation = {'status': 'reference-generated', 'method': 'GPU baseline cutoff-complete prefix'}
+                elif config.get('prefix_reference'):
+                    validation = validator.write_prefix(query, rows, schema, sha(sql_path), str(prefix))
                 elif validator:
                     digest = spark._jvm.com.nvidia.spark.rapids.benchmark.ResultDigest.compute(rows)
                     validation = validator.validate(query, rows, schema, sha(sql_path), digest,
-                                                     spark._jvm, reference)
+                                                     spark._jvm, str(prefix))
                 validation_seconds = time.perf_counter() - validation_started
                 sample = {'query': query, 'iteration': iteration, 'sql_seconds': elapsed,
                           'application_id': sc.applicationId,

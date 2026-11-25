@@ -40,6 +40,7 @@ def main():
     parser.add_argument('--queries', default='18,20')
     parser.add_argument('--label')
     parser.add_argument('--suite-audit', action='store_true')
+    parser.add_argument('--prefix-reference', action='store_true')
     parser.add_argument('--query-timeout', type=int, default=200)
     parser.add_argument('--iterations', type=int, default=2)
     args = parser.parse_args()
@@ -80,7 +81,7 @@ def main():
         if not any((Path(config['dataset']) / table).glob('*.parquet')):
             raise RuntimeError('Dataset table contains no Parquet files: ' + table)
     config['spark_conf']['spark.executor.instances']='4'
-    config.update(suite_audit=args.suite_audit, iterations=args.iterations,
+    config.update(suite_audit=args.suite_audit, prefix_reference=args.prefix_reference, iterations=args.iterations,
                   query_timeout_seconds=args.query_timeout)
     if args.suite_audit:
         config['view_overrides'] = {'15': {'lineitem': {

@@ -15,6 +15,7 @@
 """Retain complete GPU references; compare exact identities and bounded float differences."""
 from collections import defaultdict
 import json
+from decimal import Decimal
 import math
 from pathlib import Path
 from common import read, write
@@ -31,6 +32,43 @@ class SuiteValidator:
             return self.q18.validate(query, rows, schema, sql_sha, digest, jvm)
         actual = {'schema': schema, 'rows': len(rows), 'sql_sha256': sql_sha,
                   'sum': str(digest[2]), 'xor': str(digest[3])}
+        if query in (3,10):
+            values = [[None if row.isNullAt(i) else str(row.get(i))
+                       for i in range(len(schema['fields']))] for row in rows]
+            write(unused + '.validation-input.json', dict(actual, values=values))
+            reference = read(self.root / f'q{query}-prefix.json')
+            if reference['schema'] != schema or reference['sql_sha256'] != sql_sha:
+                raise AssertionError('Top-N reference schema or original SQL differs')
+            limit = 10 if query == 3 else 20
+            if len(values) != min(limit, len(reference['values'])):
+                raise AssertionError('Top-N output row count differs')
+            float_columns = [i for i,f in enumerate(schema['fields']) if f['type'] in ('double','float')]
+            exact_columns = [i for i in range(len(schema['fields'])) if i not in float_columns]
+            groups = defaultdict(list)
+            for row in reference['values']:
+                groups[tuple(row[i] for i in exact_columns)].append(row)
+            for row in values:
+                matches=groups[tuple(row[i] for i in exact_columns)]
+                found=None
+                for index,candidate in enumerate(matches):
+                    if all((row[i] is None and candidate[i] is None) or
+                           (row[i] is not None and candidate[i] is not None and
+                            math.isclose(float(row[i]),float(candidate[i]),rel_tol=1e-8,abs_tol=.01))
+                           for i in float_columns):
+                        found=index
+                        break
+                if found is None:
+                    raise AssertionError('Top-N row is absent from the complete cutoff prefix')
+                matches.pop(found)
+            position=1 if query == 3 else 2
+            for row,expected in zip(values, reference['values'][:limit]):
+                if not math.isclose(float(row[position]),float(expected[position]),rel_tol=1e-12,abs_tol=1e-6):
+                    raise AssertionError('Top-N revenue ranking differs')
+                if query == 3 and row[2] != expected[2]:
+                    raise AssertionError('Top-N secondary date ranking differs')
+            return {'status':'passed','method':'complete cutoff prefix membership, multiplicity and ranking',
+                    'ranking_rel_tol':1e-12,'ranking_abs_tol':1e-6,
+                    'cutoff_tie_complete':True,'independent_cpu_reference':False}
         path = self.root / f'q{query}.json'
         generated = not path.exists()
         if query == 11:
@@ -99,3 +137,21 @@ class SuiteValidator:
         return {'status': 'reference-generated' if generated else 'passed',
                 'method': 'complete GPU baseline reference', 'independent_cpu_reference': False,
                 'exact_fingerprint_equal': not generated}
+
+    def write_prefix(self, query, rows, schema, sql_sha, prefix):
+        values=[[None if row.isNullAt(i) else str(row.get(i))
+                 for i in range(len(schema['fields']))] for row in rows]
+        limit = 10 if query == 3 else 20
+        position = 1 if query == 3 else 2
+        key = lambda row: (-Decimal(row[position]), row[2] if query == 3 else '')
+        if len(values) < limit or (len(values)==1000 and key(values[-1]) <= key(values[limit-1])):
+            raise AssertionError('The prefix does not contain the full cutoff tie')
+        if sorted(values,key=key) != values:
+            raise AssertionError('Reference prefix ordering differs')
+        path=self.root/f'q{query}-prefix.json'
+        if path.exists():
+            raise AssertionError('Cutoff prefix already exists')
+        write(path,{'schema':schema,'sql_sha256':sql_sha,'values':values,
+                    'independent_cpu_reference':False,'cutoff_tie_complete':True})
+        return {'status':'reference-generated','method':'GPU baseline complete cutoff prefix',
+                'independent_cpu_reference':False}

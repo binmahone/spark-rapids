@@ -17,11 +17,14 @@ def task_metrics(events):
     stages = defaultdict(set)
     groups = {}
     counters = defaultdict(Counter)
+    finished = set()
     for path in sorted(events.glob('*')):
         if not path.is_file() or path.name.startswith('.'):
             continue
         with path.open() as stream:
             for raw in stream:
+                if not raw.endswith('\n') and path.name.endswith('.inprogress'):
+                    break
                 event = json.loads(raw)
                 kind = event.get('Event', '')
                 if kind == 'SparkListenerJobStart':
@@ -34,6 +37,8 @@ def task_metrics(events):
                     description = event.get('description', '')
                     if re.fullmatch(r'q\d+-iteration\d+', description):
                         groups[str(event['executionId'])] = description
+                elif kind.endswith('SparkListenerSQLExecutionEnd'):
+                    finished.add(str(event['executionId']))
                 elif kind == 'SparkListenerTaskEnd':
                     metric = event.get('Task Metrics') or {}
                     target = counters[event['Stage ID']]
@@ -43,6 +48,14 @@ def task_metrics(events):
                     target['shuffle_write_bytes'] += (metric.get('Shuffle Write Metrics') or {}).get(
                         'Shuffle Bytes Written', 0)
                     target['input_bytes'] += (metric.get('Input Metrics') or {}).get('Bytes Read', 0)
+                    labels = {'hybrid scan bytes read to host with KvikIO': 'native_host_read_bytes',
+                              'hybrid scan bytes read to device with GDS, including alignment padding':
+                                  'native_device_read_bytes',
+                              'hybrid scan splits read': 'native_scan_splits'}
+                    for accumulator in (event.get('Task Info') or {}).get('Accumulables', []):
+                        key = labels.get(accumulator.get('Name'))
+                        if key and 'Update' in accumulator:
+                            target[key] += int(accumulator['Update'])
                     target['task_attempts'] += 1
     result = defaultdict(Counter)
     for stage, metric in counters.items():
@@ -51,7 +64,7 @@ def task_metrics(events):
             raise AssertionError('Stage reuse spans independent query actions; attribute explicitly')
         for token in tokens:
             result[token].update(metric)
-    return result
+    return result, {groups[key] for key in finished if key in groups}
 
 
 def summarize(work, run):
@@ -59,14 +72,20 @@ def summarize(work, run):
     if not result_path.exists():
         return None
     data = read(result_path)
+    if data['status'] not in ('completed', 'failed'):
+        if not (run / 'applications/suite/driver-service.json.stopped.json').exists():
+            return None
+        data['status'] = 'interrupted; validated prefix retained'
     profile = read(run / 'applications/suite/profile.json')
     location = urlparse(profile['spark.eventLog.dir'])
     if location.scheme != 'file':
         raise ValueError('Expected host-local event logs')
-    task = task_metrics(Path(location.path))
+    task, finished = task_metrics(Path(location.path))
     rows = []
     for sample in data['samples']:
         token = f"q{sample['query']}-iteration{sample['iteration']}"
+        if token not in finished:
+            raise AssertionError('Validated sample lacks a completed SQL execution: ' + token)
         row = {key: sample[key] for key in ['query', 'iteration', 'sql_seconds',
             'cleanup_seconds', 'sql_plus_cleanup_seconds', 'validation', 'reader_metrics']}
         row['variant'] = sample.get('variant', 'baseline')

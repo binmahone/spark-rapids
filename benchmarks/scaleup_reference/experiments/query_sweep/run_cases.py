@@ -66,6 +66,12 @@ def choose_case(query, config):
 
 
 def check_branch(query, candidate, plan):
+    if query == 21 and candidate.name in ('broadcast_eligible_suppliers',
+                                        'preserve_witness_broadcast_suppliers'):
+        scans = [line for line in plan.splitlines() if 'Scan' in line and
+                 'spark_catalog.default.lineitem[' in line]
+        if len(scans) != 1:
+            raise MechanismNotReached('The one-scan complete witness state was lost')
     if candidate.name in ('reuse_revenue_with_window', 'single_scan_average_window'):
         scans = [line for line in plan.splitlines() if 'Scan' in line and
                  'spark_catalog.default.lineitem[' in line]
@@ -93,7 +99,8 @@ def check_branch(query, candidate, plan):
             for line in plan.splitlines()):
         raise MechanismNotReached('The order-key fact prefilter is absent')
     for name, key in [('broadcast_average_state', 'probe_partkey'),
-                      ('broadcast_eligible_suppliers', 's_suppkey')]:
+                      ('broadcast_eligible_suppliers', 's_suppkey'),
+                      ('preserve_witness_broadcast_suppliers', 's_suppkey')]:
         if candidate.name == name and not any('BroadcastHashJoin' in line and
                 key in line and 'Gpu' in line for line in plan.splitlines()):
             raise MechanismNotReached('The requested narrow-state broadcast join is absent')

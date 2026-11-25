@@ -247,6 +247,27 @@ def followup_cases():
             overrides={'spark.rapids.sql.driverlessBroadcast.enabled': 'false',
                        'spark.rapids.sql.join.hashTable.reuse': str(reuse).lower()},
             evidence='Ordinary GPU customer broadcast; DEBUG reuse counters prove cached hash reuse'))
+    state = """WITH witness AS (
+            SELECT l_orderkey, MIN(l_suppkey) AS probe_all_min,
+                MAX(l_suppkey) AS probe_all_max,
+                MIN(CASE WHEN l_receiptdate > l_commitdate THEN l_suppkey END) AS probe_late_min,
+                MAX(CASE WHEN l_receiptdate > l_commitdate THEN l_suppkey END) AS probe_late_max,
+                COUNT(CASE WHEN l_receiptdate > l_commitdate THEN l_suppkey END) AS probe_late_count
+            FROM lineitem GROUP BY l_orderkey)
+        SELECT s_name,
+               COALESCE(SUM(probe_late_count), 0L) AS numwait
+        FROM witness JOIN orders ON o_orderkey = l_orderkey
+        JOIN supplier ON s_suppkey = probe_late_min
+        JOIN nation ON s_nationkey = n_nationkey
+        WHERE probe_all_min <> probe_all_max AND probe_late_min = probe_late_max
+          AND o_orderstatus = 'F' AND n_name = 'SAUDI ARABIA'
+        GROUP BY s_name ORDER BY numwait DESC, s_name LIMIT 100"""
+    value = wrap(state, 'supplier', """SELECT s.* FROM supplier s WHERE s_nationkey IN (
+        SELECT /*+ BROADCAST */ n_nationkey FROM nation WHERE n_name = 'SAUDI ARABIA')""")
+    value = value.replace('SELECT s_name,', 'SELECT /*+ BROADCAST(supplier) */ s_name,', 1)
+    result.append(Variant(21, 'preserve_witness_broadcast_suppliers', value,
+        'Preserve the complete one-scan witness state while broadcasting eligible suppliers',
+        evidence='One lineitem scan, explicit min/max/count witness state, and supplier broadcast'))
     return result
 
 

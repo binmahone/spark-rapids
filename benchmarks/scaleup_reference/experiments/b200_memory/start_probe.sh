@@ -6,8 +6,10 @@ mkdir -p "$work/evidence" "$work/results"
 exec > >(tee "$work/evidence/probe.log") 2>&1
 test "$(cat "$work/evidence/prepare.exit")" = 0
 ulimit -n 65536
+ulimit -c 0
 export JAVA_HOME="$work/jdk17"
 export PYSPARK_PYTHON=/usr/bin/python3
+python3 "$here/capture_host.py" "$work"
 python3 "$here/monitor_host.py" --work "$work" &
 monitor_pid=$!
 finish() {

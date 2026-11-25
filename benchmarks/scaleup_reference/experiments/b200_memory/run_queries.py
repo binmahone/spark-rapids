@@ -122,6 +122,19 @@ def main():
             'org.apache.spark.sql.rapids.IndependentQueryBoundary$')
         boundary = boundary_class.getField('MODULE$').get(None)
         validator = Validator(config['work']) if config['validation'] else None
+        for planned_query in [18, 20]:
+            sql_path = SUITE / 'inputs/aws48x/sql' / f'q{planned_query}.sql'
+            original = sql_path.read_text()
+            column = 'l_orderkey' if planned_query == 18 else 'p_partkey'
+            hinted, count = re.subn(r'(\bselect\s+)(' + column + r'\b)',
+                r'\1/*+ BROADCAST */ \2', original, count=1, flags=re.I)
+            assert count == 1 and hinted.replace('/*+ BROADCAST */ ', '') == original
+            probe = spark.sql(hinted)
+            planned = str(probe._jdf.queryExecution().executedPlan().toString())
+            (app / f'q{planned_query}-hint-preflight.txt').write_text(planned)
+            if not any('BroadcastHashJoin' in line and 'LeftSemi' in line
+                       for line in planned.splitlines()):
+                raise AssertionError(f'Q{planned_query}: hint did not reach a broadcast semi join')
         test = spark.range(10000).selectExpr('sum(id * id + 3) AS total')
         if test.collect()[0][0] != sum(i*i+3 for i in range(10000)):
             raise AssertionError('GPU smoke result differs')

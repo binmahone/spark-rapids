@@ -21,6 +21,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import signal
 import threading
 import time
@@ -68,7 +69,7 @@ def check_branch(query, candidate, plan):
     if candidate.name in ('reuse_revenue_with_window', 'single_scan_average_window'):
         scans = [line for line in plan.splitlines() if 'Scan' in line and
                  'spark_catalog.default.lineitem[' in line]
-        if len(scans) != 1 or 'GpuWindow' not in plan:
+        if len(scans) != 1 or not re.search(r'\bGpu\w*Window\b', plan):
             raise MechanismNotReached('Single-scan reuse with a GPU window is absent')
     if candidate.name in ('early_partsupp_keys', 'early_customer_region', 'early_orders_region',
                            'broadcast_membership_keys'):

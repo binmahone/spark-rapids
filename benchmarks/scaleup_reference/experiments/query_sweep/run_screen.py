@@ -133,12 +133,12 @@ def main():
             subprocess.run(oracle_command, env=env, stdout=log, stderr=subprocess.STDOUT,
                            check=True, timeout=900)
         assert read(work / 'screen/toy-oracle.json')['status'] == 'passed'
-        phases = [('batch512', [c for c in catalog() if c.name == 'batch_512m'],
-                   {'spark.rapids.sql.batchSizeBytes': '536870912',
-                    'spark.rapids.sql.reader.batchSizeBytes': '536870912'}),
-                  ('sql', [targeted(q) for q in ORDER if targeted(q)], {}),
+        phases = [('sql', [targeted(q) for q in ORDER if targeted(q)], {}),
+                  ('sql-extra', extra_cases(), {}),
                   ('split512', [c for c in catalog() if c.name == 'scan_split_512m'], {}),
-                  ('sql-extra', extra_cases(), {})]
+                  ('batch512', [c for c in catalog() if c.name == 'batch_512m'],
+                   {'spark.rapids.sql.batchSizeBytes': '536870912',
+                    'spark.rapids.sql.reader.batchSizeBytes': '536870912'})]
         for phase, pending, overrides in phases:
             index = 0
             while pending:

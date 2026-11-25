@@ -39,10 +39,8 @@ def main():
     parser.add_argument('--hours', type=int, choices=range(1, 9), default=4)
     parser.add_argument('--market', choices=('spot', 'on-demand'), default='spot')
     parser.add_argument('--retain', action='store_true',
-                        help='Retain an on-demand host until an explicit user release')
+                        help='Omit automatic release; protect on-demand hosts from API termination')
     args = parser.parse_args()
-    if args.retain and args.market != 'on-demand':
-        parser.error('--retain requires on-demand capacity')
     state = Path(args.state).resolve()
     state.mkdir(parents=True, exist_ok=True)
     thread = os.environ.get('CODEX_THREAD_ID')
@@ -162,7 +160,7 @@ systemctl enable --now scaleup-reference-release.timer
             for kind in ('instance', 'volume', 'network-interface')]),
         '--user-data', 'file://' + str(userdata), '--client-token',
         hashlib.sha256((thread + args.region + args.market + args.ami + args.subnet + str(state)).encode()).hexdigest()]
-    if args.retain:
+    if args.retain and args.market == 'on-demand':
         command += ['--disable-api-termination']
     if args.market == 'spot':
         command += ['--instance-market-options', json.dumps({'MarketType': 'spot',
@@ -173,7 +171,8 @@ systemctl enable --now scaleup-reference-release.timer
     receipt = {**access, 'account': identity['Account'], 'instance_id': node['InstanceId'],
                 'ami': args.ami, 'subnet': args.subnet, 'market': args.market,
                 'release_deadline_utc': None if args.retain else deadline,
-                'retention_policy': 'explicit-user-release' if args.retain else 'automatic-deadline'}
+                'retention_policy': 'explicit-user-release' if args.retain else 'automatic-deadline',
+                'api_termination_protection': args.retain and args.market == 'on-demand'}
     write(receipt_path, receipt)
     print(json.dumps(receipt, indent=2))
 

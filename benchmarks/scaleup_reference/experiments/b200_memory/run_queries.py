@@ -33,6 +33,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 from catalog_statistics import register_tables
 from common import SUITE, TABLES, apply_query_settings, read, sha, write
 from b200_validation import Validator
+from suite_validation import SuiteValidator
+from suite_variants import transform
 
 
 def metrics(plan):
@@ -46,7 +48,8 @@ def metrics(plan):
         while iterator.hasNext():
             pair = iterator.next()
             values[str(pair._1())] = int(pair._2().value())
-        result.append({'node': str(node.nodeName()), 'metrics': values})
+        result.append({'node': str(node.nodeName()), 'node_id': int(node.id()),
+                       'output': str(node.output().toString()), 'metrics': values})
         children = node.children()
         pending.extend(children.apply(i) for i in range(children.size()))
     return result
@@ -121,8 +124,9 @@ def main():
         boundary_class = spark._jvm.com.nvidia.spark.rapids.ShimReflectionUtils.loadClass(
             'org.apache.spark.sql.rapids.IndependentQueryBoundary$')
         boundary = boundary_class.getField('MODULE$').get(None)
-        validator = Validator(config['work']) if config['validation'] else None
-        for planned_query in [18, 20]:
+        validator_class = SuiteValidator if config.get('suite_audit') else Validator
+        validator = validator_class(config['work']) if config['validation'] else None
+        for planned_query in ([] if config.get('suite_audit') else [18, 20]):
             sql_path = SUITE / 'inputs/aws48x/sql' / f'q{planned_query}.sql'
             original = sql_path.read_text()
             column = 'l_orderkey' if planned_query == 18 else 'p_partkey'
@@ -175,6 +179,8 @@ def main():
                     if args.reference_only:
                         query_sql, count = re.subn(r'limit\s+100\s*$', 'limit 10000', query_sql, flags=re.I)
                         assert count == 1 and query == 18
+                    elif config.get('suite_audit'):
+                        query_sql = transform(query, original_sql, config['probe_arm'])
                     elif config['probe_arm'] == 'hint':
                         column = 'l_orderkey' if query == 18 else 'p_partkey'
                         query_sql, count = re.subn(r'(\bselect\s+)(' + column + r'\b)',
@@ -185,6 +191,8 @@ def main():
                     execution = frame._jdf.queryExecution()
                     preflight = str(execution.executedPlan().toString())
                     (app / (token + '.preflight.txt')).write_text(preflight)
+                    Path(str(app / token) + '.cost.txt').write_text(str(
+                        spark._jvm.PythonSQLUtils.explainString(execution, 'cost')))
                     semi = [line for line in preflight.splitlines() if 'LeftSemi' in line]
                     if config['probe_arm'] == 'hint' and not any('BroadcastHashJoin' in line for line in semi):
                         raise AssertionError('Hint did not reach a broadcast semi join')
@@ -211,7 +219,7 @@ def main():
                         raise AssertionError('Expected Hybrid reader path did not execute')
                     if config['platform'] == 'nvl72' and reader['hybridScanDeviceBytesRead'] <= 0:
                         raise AssertionError('Expected GDS device reads did not execute')
-                    if config['platform'] == 'aws48x' and (reader['hybridScanDeviceBytesRead'] != 0 or
+                    if config['platform'] in ('aws48x', 'b200') and (reader['hybridScanDeviceBytesRead'] != 0 or
                                                         reader['hybridScanNativeHostBytesRead'] <= 0):
                         raise AssertionError('Expected native host reads did not execute')
                 schema = frame.schema.jsonValue()

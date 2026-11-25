@@ -37,15 +37,25 @@ def main():
     parser.add_argument('--budget', default='default')
     parser.add_argument('--order', default='baseline,hint,hint,baseline')
     parser.add_argument('--reference-only', action='store_true')
+    parser.add_argument('--queries', default='18,20')
+    parser.add_argument('--label')
+    parser.add_argument('--suite-audit', action='store_true')
+    parser.add_argument('--query-timeout', type=int, default=200)
+    parser.add_argument('--iterations', type=int, default=2)
     args = parser.parse_args()
     work = Path(args.work).resolve()
+    queries = [int(q) for q in args.queries.split(',')]
+    if not queries or len(set(queries)) != len(queries) or not set(queries) <= set(range(1,23)):
+        raise ValueError('Expected distinct TPC-H query numbers')
+    if args.label and (not args.label.replace('-', '').replace('_', '').isalnum()):
+        raise ValueError('Label must be a simple directory name')
     state = {'status': 'running', 'score_eligible': False, 'arms': [],
-             'classification': 'SQL hint mechanism diagnostic; no engine or aggregate-reuse change',
+             'classification': ('all-query opportunity audit' if args.suite_audit else 'SQL hint mechanism diagnostic'),
              'order': ['reference'] if args.reference_only else args.order.split(','), 'rmm_budget': args.budget, 'gpu_indices': [0,1,2,3],
              'cache_policy': 'No cache flush; two actions per query per fresh application',
              'source_revision': subprocess.check_output(
                  ['git', '-C', str(SUITE), 'rev-parse', 'HEAD'], text=True).strip()}
-    matrix_root = work / 'results' / ('reference' if args.reference_only else args.budget)
+    matrix_root = work / 'results' / (args.label or ('reference' if args.reference_only else args.budget))
     output = matrix_root / 'matrix.json'
     if output.exists():
         raise RuntimeError('Matrix output exists; inspect it before starting another run')
@@ -62,7 +72,7 @@ def main():
     if sha(engine) != 'c267dafd65ae85b558d8c8df03a94c0947cbe42b79a1e29ddeaa63bfcadb8cce':
         raise AssertionError('Frozen engine hash differs')
     config.update(engine=str(engine), engine_sha256=sha(engine),
-                  tools=str(artifacts / 'benchmark-tools.jar'), queries=[18] if args.reference_only else [18,20],
+                  tools=str(artifacts / 'benchmark-tools.jar'), queries=[18] if args.reference_only else queries,
                   work=str(work), platform='b200', gpu_indices=[0,1,2,3],
                   dataset='/raid/knataraj/datasets/tpch/sf10k_v2_float',
                   statistics_snapshot=str(work/'evidence/catalog-statistics.json'))
@@ -70,6 +80,12 @@ def main():
         if not any((Path(config['dataset']) / table).glob('*.parquet')):
             raise RuntimeError('Dataset table contains no Parquet files: ' + table)
     config['spark_conf']['spark.executor.instances']='4'
+    config.update(suite_audit=args.suite_audit, iterations=args.iterations,
+                  query_timeout_seconds=args.query_timeout)
+    if args.suite_audit:
+        config['view_overrides'] = {'15': {'lineitem': {
+            'l_extendedprice': 'decimal(15,2)', 'l_discount': 'decimal(15,2)'}}}
+    config['classification'] = state['classification']
     if args.budget != 'default':
         raise ValueError('This experiment uses the default RMM budget')
     deployment = config['deployment']
@@ -85,7 +101,7 @@ def main():
     env['PATH'] = deployment['java_home'] + '/bin:' + env['PATH']
     try:
         for index, arm in enumerate(state['order']):
-            run = matrix_root / f'{args.budget}-{index}-{arm}'
+            run = matrix_root / f'{args.label or args.budget}-{index}-{arm}'
             app = run / 'applications/suite'
             app.mkdir(parents=True)
             current = dict(config, probe_arm=arm)
@@ -112,7 +128,8 @@ def main():
             for component in ['driver', 'executor']:
                 profile[f'spark.{component}.extraJavaOptions'] = '-Djava.io.tmpdir=' + str(scratch / 'java-tmp')
             write(app / 'profile.json', profile)
-            write(run / 'profiles.json', {str(q): profile for q in config['queries']})
+            write(run / 'profiles.json', {str(q): dict(profile,
+                **config['query_overrides'].get(str(q), {})) for q in config['queries']})
             properties = app / 'spark-defaults.conf'
             properties.write_text(''.join(f'{k}={v}\n' for k, v in sorted(profile.items())))
             record = {'arm': arm, 'run': str(run), 'status': 'starting'}
@@ -134,7 +151,7 @@ def main():
                 started = time.monotonic()
                 next_size_check = started
                 while process.poll() is None:
-                    if time.monotonic() - started > 1500:
+                    if time.monotonic() - started > 420 + len(config['queries']) * config['iterations'] * (args.query_timeout + 90):
                         raise TimeoutError('Focused arm exceeded its deadline')
                     if os.statvfs(scratch).f_bavail * os.statvfs(scratch).f_frsize < 256 * 2**30:
                         raise RuntimeError('NVMe free-space guard reached')
@@ -148,7 +165,7 @@ def main():
                 result = read(app / 'result.json')
                 if process.returncode or result['status'] != 'completed':
                     raise RuntimeError('Arm failed: ' + str(result.get('error')))
-                if len(result['samples']) != (1 if args.reference_only else 4) or any(
+                if len(result['samples']) != (1 if args.reference_only else len(config['queries']) * config['iterations']) or any(
                         s['validation']['status'] not in ['passed','reference-generated'] for s in result['samples']):
                     raise AssertionError('Arm lacks complete validated outputs')
                 record.update(status='completed', samples=[{k: s[k] for k in

@@ -44,7 +44,7 @@ def submit(args):
             assert read(run / 'prepare-status.json')['status'] == 'failed'
             previous = read(run / 'prepare-submission.json')['job_id']
             state = command('sacct', '-j', previous, '-X', '-n', '-o', 'State')
-            assert state in ('FAILED', 'TIMEOUT', 'CANCELLED'), state
+            assert state in ('FAILED', 'TIMEOUT') or state.startswith('CANCELLED'), state
             archive = run / 'attempts' / str(previous)
             archive.mkdir(parents=True, exist_ok=False)
             shutil.copyfile(run / 'config.json', archive / 'config.json')
@@ -115,7 +115,7 @@ def node(args):
         write(run / 'preflight.json', {'host': socket.gethostname(), 'mount': mount,
             'tmp_target': str(default_tmp.resolve()), 'cuda_visible_devices': env.get('CUDA_VISIBLE_DEVICES'),
             'environment': {k: v for k, v in env.items() if k.startswith('CUFILE_')}})
-        argv = ['mvn', '-B', '-ntp', '-nsu', 'test-compile',
+        argv = ['mvn', '-B', '-ntp', '-nsu', '--settings', str(HERE / 'maven-settings.xml'), 'test-compile',
             'scalatest:test@hybrid-scan-gds-test', '-pl', 'tests', '-Dbuildver=353',
             '-Dgds.required=true', '-Parm64', '-Dcuda.version=cuda13',
             '-Dcudf-spark-jni.version=26.12.0-20261122.042214-52',

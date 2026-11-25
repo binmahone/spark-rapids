@@ -15,7 +15,8 @@ test -z "$(git status --porcelain)"
 git submodule update --init thirdparty/spark-rapids-common
 test "$(git -C "$private" rev-parse HEAD)" = 61e9e96803771371dec116593f0c4eced9ac44d8
 test -z "$(git -C "$private" status --porcelain)"
-args=(-B -ntp -nsu "-Dmaven.repo.local=$repository" -Dbuildver=353
+args=(-B -ntp -nsu --settings "$PAUL_SCALA_SUITE/maven-settings.xml"
+      "-Dmaven.repo.local=$repository" -Dbuildver=353
       -Dmaven.scaladoc.skip=true "-Dcudf-spark-jni.version=$native" -Dcuda.version=cuda13)
 # Dependency installation compiles tests without executing GPU suites on the CPU allocation.
 mvn "${args[@]}" -Parm64 -pl sql-plugin-api -am install -DskipTests \

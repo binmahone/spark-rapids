@@ -49,6 +49,7 @@ for label in LABELS:
   sql_plans={};sql_groups={};acc_updates=collections.Counter()
   if ANALYZE:
    events=list((w/'scratch'/run.name/'events').glob('app-*'))
+   if d.get('samples') and not events:raise RuntimeError('Raw event logs are archived; use retained results or restore the evidence archive before analysis')
    for event in events:
     if not event.is_file():continue
     with event.open('rb') as stream:
@@ -111,7 +112,8 @@ report['root_free_bytes']=os.statvfs(w).f_bavail*os.statvfs(w).f_frsize
 print(json.dumps(report))
 '''.replace('REMOTE',repr(owner['remote'])).replace('LABELS',repr(a.labels)).replace('ANALYZE',repr(a.analyze))
 ssh=['ssh','-F','/home/nvidia/mahone_gluten/cluster_ssh_config','-o','BatchMode=yes','-o','ConnectTimeout=8','mahonem@10.34.1.4','python3 -']
-r=subprocess.run(ssh,input=program,text=True,capture_output=True,check=True,timeout=120)
+r=subprocess.run(ssh,input=program,text=True,capture_output=True,timeout=120)
+if r.returncode:raise RuntimeError(r.stderr.strip())
 d=json.loads(r.stdout)
 if a.analyze:
  path=ROOT/'evidence'/('suite-'+ '-'.join(a.labels)+'.json')

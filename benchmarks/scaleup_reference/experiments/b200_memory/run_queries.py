@@ -122,6 +122,11 @@ def main():
             'org.apache.spark.sql.rapids.IndependentQueryBoundary$')
         boundary = boundary_class.getField('MODULE$').get(None)
         validator = Validator(config['work']) if config['validation'] else None
+        test = spark.range(10000).selectExpr('sum(id * id + 3) AS total')
+        if test.collect()[0][0] != sum(i*i+3 for i in range(10000)):
+            raise AssertionError('GPU smoke result differs')
+        if 'Gpu' not in str(test._jdf.queryExecution().executedPlan().toString()):
+            raise AssertionError('GPU smoke has no GPU operator')
         startup.cancel()
         state['status'] = 'running'
         write(app / 'result.json', state)

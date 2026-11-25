@@ -23,22 +23,31 @@ for base,dirs,files in os.walk(jdk):
             target=sdk/link.lstrip('/') if link.startswith('/') else None
             if target is not None and target.exists():
                 p.unlink();p.symlink_to(target)
-(w/'jdk17').symlink_to(jdk)
+if not (w/'jdk17').exists():
+    (w/'jdk17').symlink_to(jdk)
 PY
 "$work/jdk17/bin/java" -version
-bash "$suite/scripts/prepare_spark.sh" "$work/spark-venv"
+if test ! -e "$work/spark-venv"; then
+    bash "$suite/scripts/prepare_spark.sh" "$work/spark-venv"
+fi
+"$work/spark-venv/bin/python" -c 'import pyspark; assert pyspark.__version__ == "3.5.3"'
 for library in libnvrtc.so.13.1.115 libnvrtc-builtins.so.13.1.115 libnvJitLink.so.13.1.115; do
     cp -L "/raid/mahonem/artifacts/$library" "$work/runtime/native/$library"
 done
-ln -s libnvrtc.so.13.1.115 "$work/runtime/native/libnvrtc.so.13"
-ln -s libnvrtc-builtins.so.13.1.115 "$work/runtime/native/libnvrtc-builtins.so.13.1"
-ln -s libnvJitLink.so.13.1.115 "$work/runtime/native/libnvJitLink.so.13"
+ln -sf libnvrtc.so.13.1.115 "$work/runtime/native/libnvrtc.so.13"
+ln -sf libnvrtc-builtins.so.13.1.115 "$work/runtime/native/libnvrtc-builtins.so.13.1"
+ln -sf libnvJitLink.so.13.1.115 "$work/runtime/native/libnvJitLink.so.13"
 export PATH="$work/runtime/sdk/usr/bin:$PATH"
 export LIBTOOL_DATADIR="$work/runtime/sdk/usr/share/libtool"
 export ACLOCAL_PATH="$work/runtime/sdk/usr/share/aclocal"
+mkdir -p "$work/runtime/libtool-master"
+ln -sfn "$work/runtime/sdk/usr/share/libtool/build-aux" "$work/runtime/libtool-master/build-aux"
+ln -sfn "$work/runtime/sdk/usr/share/libtool" "$work/runtime/libtool-master/libltdl"
+ln -sfn "$work/runtime/sdk/usr/share/aclocal" "$work/runtime/libtool-master/m4"
+export _lt_pkgdatadir="$work/runtime/libtool-master"
 export CPPFLAGS="-I$work/runtime/sdk/usr/include"
 export LDFLAGS="-L$work/runtime/sdk/usr/lib/x86_64-linux-gnu"
-BUILD_JOBS=16 bash "$suite/scripts/build_ucx.sh" "$work/ucx" /usr/local/cuda-13.0
+BUILD_JOBS=16 bash "$(dirname "$0")/build_ucx.sh" "$work/ucx" "$suite" /usr/local/cuda-13.0
 python3 - "$work" <<'PY'
 import hashlib,json,os,sys
 from pathlib import Path

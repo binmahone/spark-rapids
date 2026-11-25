@@ -52,6 +52,19 @@ def metrics(plan):
     return result
 
 
+
+def query_text(path, query, arm):
+    original = path.read_text()
+    if arm == 'baseline':
+        return original
+    column = 'l_orderkey' if query == 18 else 'p_partkey'
+    pattern = r'(\bselect\s+)(' + column + r'\b)'
+    value, count = re.subn(pattern, r'\1/*+ BROADCAST */ \2', original, count=1, flags=re.I)
+    if count != 1 or value.replace('/*+ BROADCAST */ ', '') != original:
+        raise AssertionError('Diagnostic must differ only by a broadcast hint')
+    return value
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run', required=True)
@@ -122,6 +135,15 @@ def main():
             'org.apache.spark.sql.rapids.IndependentQueryBoundary$')
         boundary = boundary_class.getField('MODULE$').get(None)
         validator = Validator(config['platform']) if config['validation'] else None
+        for planned_query in queries:
+            path = SUITE / 'inputs/aws48x/sql' / f'q{planned_query}.sql'
+            probe = spark.sql(query_text(path, planned_query, 'hint'))
+            planned = str(probe._jdf.queryExecution().executedPlan().toString())
+            (app / f'q{planned_query}-hint-preflight.txt').write_text(planned)
+            if not any('BroadcastHashJoin' in line and 'LeftSemi' in line
+                       for line in planned.splitlines()):
+                raise AssertionError(f'Q{planned_query}: hint did not reach a broadcast semi join')
+            probe = None
         startup.cancel()
         state['status'] = 'running'
         write(app / 'result.json', state)
@@ -152,15 +174,7 @@ def main():
                 hard.start()
                 try:
                     started = time.perf_counter()
-                    original_sql = sql_path.read_text()
-                    query_sql = original_sql
-                    if config['probe_arm'] == 'hint':
-                        column = 'l_orderkey' if query == 18 else 'p_partkey'
-                        pattern = r'(\bselect\s+)(' + column + r'\b)'
-                        query_sql, replacements = re.subn(pattern, r'\1/*+ BROADCAST */ \2',
-                                                          original_sql, count=1, flags=re.I)
-                        if replacements != 1 or query_sql.replace('/*+ BROADCAST */ ', '') != original_sql:
-                            raise AssertionError('Diagnostic must differ only by a broadcast hint')
+                    query_sql = query_text(sql_path, query, config['probe_arm'])
                     (app / (token + '.sql')).write_text(query_sql)
                     frame = spark.sql(query_sql)
                     execution = frame._jdf.queryExecution()

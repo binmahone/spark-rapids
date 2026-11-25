@@ -80,6 +80,10 @@ def main():
     for table in read(config['statistics_snapshot'])['tables']:
         if not any((Path(config['dataset']) / table).glob('*.parquet')):
             raise RuntimeError('Dataset table contains no Parquet files: ' + table)
+    dataset_files = [p for table in read(config['statistics_snapshot'])['tables']
+                     for p in (Path(config['dataset']) / table).glob('*.parquet')]
+    config['dataset_contract'] = {'parquet_files': len(dataset_files),
+                                  'parquet_bytes': sum(p.stat().st_size for p in dataset_files)}
     config['spark_conf']['spark.executor.instances']='4'
     config.update(suite_audit=args.suite_audit, prefix_reference=args.prefix_reference, iterations=args.iterations,
                   query_timeout_seconds=args.query_timeout)

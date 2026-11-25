@@ -69,6 +69,7 @@ def main():
     queries = [int(v) for v in args.queries.split(',')]
     state = {'status': 'starting', 'samples': [], 'validation_enabled': config['validation'],
              'reference_only': args.reference_only, 'independent_cpu_reference': False,
+             'operator_metric_scope': 'Main physical plan; event-plan SQL accumulator IDs include scalar subqueries',
              'timing_scope': 'SQL planning through complete JVM collect; validation and cleanup excluded'}
     spark = None
     startup = threading.Timer(420, lambda: os.kill(os.getpid(), signal.SIGTERM))

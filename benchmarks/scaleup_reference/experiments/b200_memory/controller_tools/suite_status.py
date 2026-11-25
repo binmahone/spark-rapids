@@ -26,6 +26,7 @@ assert owner['thread_id']==os.environ['CODEX_THREAD_ID']
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('labels',nargs='*',default=['all22-baseline'])
 p.add_argument('--analyze',action='store_true')
+p.add_argument('--recent',type=int,default=0)
 a=p.parse_args()
 program=r'''
 from pathlib import Path
@@ -45,6 +46,7 @@ for label in LABELS:
   assert conf.get('spark.executor.instances')=='4'
   assert 'spark.rapids.memory.gpu.allocSize' not in conf
   stages=collections.defaultdict(collections.Counter);groups=collections.defaultdict(set)
+  sql_plans={};sql_groups={};acc_updates=collections.Counter()
   if ANALYZE:
    events=list((w/'scratch'/run.name/'events').glob('app-*'))
    for event in events:
@@ -55,11 +57,19 @@ for label in LABELS:
        if b'SparkListenerJobStart' in raw:
         v=json.loads(raw);group=(v.get('Properties') or {}).get('spark.jobGroup.id')
         for stage in v['Stage IDs']:groups[stage].add(group)
+        execution=(v.get('Properties') or {}).get('spark.sql.execution.id')
+        if execution is not None:sql_groups[str(execution)]=group
+       elif b'SparkListenerSQLExecutionStart' in raw:
+        v=json.loads(raw);sql_plans[str(v['executionId'])]=v['sparkPlanInfo']
        elif b'SparkListenerTaskEnd' in raw:
         v=json.loads(raw);s=stages[v['Stage ID']];metrics=v.get('Task Metrics') or {}
         s['tasks']+=1
         s['success_tasks']+=int(v.get('Task End Reason',{}).get('Reason')=='Success')
         for dest,key in [('memory_spill_bytes','Memory Bytes Spilled'),('disk_spill_bytes','Disk Bytes Spilled'),('executor_cpu_ns','Executor CPU Time'),('jvm_gc_ms','JVM GC Time')]:s[dest]+=metrics.get(key,0)
+        for accumulator in v['Task Info'].get('Accumulables',[]):
+         if accumulator.get('Metadata')=='sql' and accumulator.get('Update') is not None:
+          try:acc_updates[accumulator['ID']]+=int(accumulator['Update'])
+          except (ValueError,TypeError):pass
         s['shuffle_write_bytes']+=(metrics.get('Shuffle Write Metrics') or {}).get('Shuffle Bytes Written',0)
       except json.JSONDecodeError:continue
   for sample in d.get('samples',[]):
@@ -68,6 +78,31 @@ for label in LABELS:
    for stage,group_set in groups.items():
     if group in group_set:counter.update(stages[stage])
    row['task_metrics']=dict(counter)
+   metric_ids={};event_nodes=[];scan_ids=set()
+   for execution,execution_group in sql_groups.items():
+    if execution_group!=group or execution not in sql_plans:continue
+    pending=[sql_plans[execution]]
+    while pending:
+     node=pending.pop();pending.extend(node.get('children',[]))
+     for metric in node.get('metrics',[]):metric_ids[metric['accumulatorId']]=metric
+     if 'Scan' in node['nodeName']:
+      identity=tuple(sorted(metric['accumulatorId'] for metric in node.get('metrics',[])))
+      if identity not in scan_ids:
+       scan_ids.add(identity)
+       event_nodes.append({'node':node['nodeName'],'simple_string':node.get('simpleString'),
+         'metrics':{metric['name']:acc_updates[metric['accumulatorId']] for metric in node.get('metrics',[])}})
+   descriptions={
+    'hybrid scan splits read':'hybridScanSplits',
+    'hybrid scan bytes read to host with KvikIO':'hybridScanNativeHostBytesRead',
+    'hybrid scan bytes read to device with GDS, including alignment padding':'hybridScanDeviceBytesRead',
+    'hybrid scan bytes read to host instead of with GDS while the GPU was busy':'hybridScanGpuBusyHostBytesRead'}
+   all_reader=collections.Counter()
+   for aid,metric in metric_ids.items():
+    if metric['name'] in descriptions:all_reader[descriptions[metric['name']]]+=acc_updates[aid]
+   row['reader_metrics_all_branches']=dict(all_reader)
+   row['event_scan_metrics']=event_nodes
+   row['reader_metric_scope']='all SQL event-plan branches; shared/reused SQL accumulator IDs counted once; includes scalar subqueries'
+
    row['shared_stages']={str(stage):sorted(str(g) for g in group_set) for stage,group_set in groups.items() if group in group_set and len(group_set)>1}
    row['plan_text']=(app/f'q{sample["query"]}-iteration{sample["iteration"]}.executed.txt').read_text()
    report['rows'].append(row)
@@ -82,7 +117,7 @@ if a.analyze:
  path=ROOT/'evidence'/('suite-'+ '-'.join(a.labels)+'.json')
  path.write_text(json.dumps(d,indent=2)+'\n')
 for matrix in d['matrices']:print(matrix['status'],matrix.get('error'),[(x['arm'],x['status']) for x in matrix['arms']])
-for row in d['rows']:
+for row in (d['rows'][-a.recent:] if a.recent else d['rows']):
  m=row['task_metrics'];print(row['arm'],row['query'],row['iteration'],round(row['sql_seconds'],3),row['validation']['status'],
    {k:round(m.get(k,0)/1e9,3) for k in ('shuffle_write_bytes','memory_spill_bytes','disk_spill_bytes')} if a.analyze else '')
 for app in d.get('applications',[]):print(app['status'],app['error'],app['last_log_lines'][-1:])

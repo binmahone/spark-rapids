@@ -136,6 +136,20 @@ def targeted(query):
         return Variant(query, 'project_promo_flag', value,
             'Carry a nullable Boolean through the join instead of the full part-type string',
             evidence='Part exchange schema contains probe_promo and no p_type payload')
+    if query == 15:
+        value = """WITH revenue0 AS (
+                SELECT l_suppkey AS supplier_no,
+                       SUM(l_extendedprice * (1 - l_discount)) AS total_revenue
+                FROM lineitem WHERE l_shipdate >= DATE '1996-01-01'
+                  AND l_shipdate < DATE '1996-01-01' + INTERVAL '3' MONTH
+                GROUP BY l_suppkey),
+            marked AS (SELECT *, MAX(total_revenue) OVER () AS probe_max FROM revenue0)
+            SELECT s_suppkey, s_name, s_address, s_phone, total_revenue
+            FROM supplier JOIN marked ON s_suppkey = supplier_no
+            WHERE total_revenue = probe_max ORDER BY s_suppkey"""
+        return Variant(query, 'reuse_revenue_with_window', value,
+            'Read and aggregate revenue once; trade recomputation for gathering compact supplier state',
+            evidence='One lineitem scan; global max window operates on per-supplier state, including null key')
     if query == 16:
         value = wrap(sql, 'partsupp', """SELECT ps.* FROM partsupp ps WHERE ps_partkey IN (
             SELECT /*+ BROADCAST */ p_partkey FROM part WHERE p_brand <> 'Brand#45'
@@ -206,7 +220,7 @@ def catalog():
             overrides={'spark.rapids.sql.batchSizeBytes': '536870912',
                        'spark.rapids.sql.reader.batchSizeBytes': '536870912'},
             evidence='Effective reader and operator batch targets are 512 MiB'))
-        if query in (1, 6, 11, 15):
+        if query in (1, 6, 11):
             result.append(Variant(query, 'scan_split_512m', original(query),
                 'Auxiliary scan scheduling control for queries with little removable join payload',
                 overrides={'spark.sql.files.maxPartitionBytes': '512m',

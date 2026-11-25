@@ -28,7 +28,7 @@ import time
 from pyspark.sql import SparkSession
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-from variants import Variant, catalog, original, targeted
+from variants import Variant, original, targeted
 
 from catalog_statistics import register_tables
 from common import SUITE, TABLES, apply_query_settings, read, sha, write
@@ -68,6 +68,11 @@ def choose_case(query, config):
 
 
 def check_branch(query, candidate, plan):
+    if candidate.name == 'reuse_revenue_with_window':
+        scans = [line for line in plan.splitlines() if 'Scan' in line and
+                 'spark_catalog.default.lineitem[' in line]
+        if len(scans) != 1 or 'GpuWindow' not in plan:
+            raise MechanismNotReached('Single-scan revenue reuse with a GPU window is absent')
     if candidate.name in ('early_partsupp_keys', 'early_customer_region', 'early_orders_region',
                            'broadcast_membership_keys'):
         lines = [line for line in plan.splitlines() if 'BroadcastHashJoin' in line and

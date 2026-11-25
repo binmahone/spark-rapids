@@ -5,7 +5,9 @@ from collections import Counter
 from datetime import date, timedelta
 from decimal import Decimal
 import json
+import os
 from pathlib import Path
+import tempfile
 
 from pyspark.sql import SparkSession
 from variants import ORDER, original, targeted
@@ -76,6 +78,14 @@ def fixture():
         (100, None, 'F', Decimal(1), date(1993, 8, 1), None, None, 0, None)]
     result['lineitem'] += [result['lineitem'][0],
         (None, None, None, 1, None, None, None, None, None, None, None, None, None, None, None, None)]
+    result['orders'].append((200, 5, 'F', Decimal(7777), date(1997, 1, 1),
+                             '3-MEDIUM', 'clerk', 0, 'ordinary'))
+    for number, supplier, quantity, late in [(1, 5, 1, True), (2, 3, None, False)]:
+        result['lineitem'].append((200, 1, supplier, number,
+            None if quantity is None else Decimal(quantity), Decimal(777 + number),
+            Decimal('0.06'), Decimal('0.02'), 'N', 'O', date(1997, 1, 1),
+            date(1997, 1, 10), date(1997, 1, 20 if late else 5),
+            'DELIVER IN PERSON', 'AIR', 'witness'))
     return result
 
 
@@ -90,8 +100,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
+    scratch = tempfile.TemporaryDirectory(prefix='query-sweep-cpu-')
+    os.environ['SPARK_LOCAL_DIRS'] = scratch.name
     spark = (SparkSession.builder.master('local[2]').appName('query-sweep-cpu-counterexamples')
         .config('spark.plugins', '').config('spark.sql.shuffle.partitions', '2')
+        .config('spark.sql.extensions', '').config('spark.local.dir', scratch.name)
         .config('spark.sql.adaptive.enabled', 'false').config('spark.sql.ansi.enabled', 'false')
         .config('spark.sql.session.timeZone', 'UTC').getOrCreate())
     report = {'backend': 'Spark CPU, no SQLPlugin', 'status': 'running',
@@ -109,6 +122,10 @@ def main():
             observed, observed_schema = value(spark, candidate.sql)
             assert expected == observed, (query, candidate.name, expected - observed, observed - expected)
             assert expected_schema == observed_schema, (query, expected_schema, observed_schema)
+            if query == 21:
+                assert sum(expected.values()) > 0, 'Witness fixture must include a qualifying supplier'
+            if query == 17:
+                assert next(iter(expected))[0] is not None, 'Average fixture must include qualifying prices'
             report['checks'].append({'query': query, 'variant': candidate.name,
                 'fixture': 'duplicate keys, duplicate rows, nullable keys and payloads',
                 'output_rows': sum(expected.values()), 'status': 'passed'})
@@ -119,6 +136,15 @@ def main():
                 report['checks'].append({'query': query, 'fixture': 'empty ' + empty_table,
                                          'status': 'passed'})
             spark.createDataFrame(data[empty_table], SCHEMAS[empty_table]).createOrReplaceTempView(empty_table)
+        null_winner = (201, 1, None, 1, Decimal(1), Decimal('9999999999999.00'),
+            Decimal('0.00'), Decimal('0.00'), 'N', 'O', date(1996, 2, 1),
+            date(1996, 2, 2), date(1996, 2, 3), None, None, None)
+        spark.createDataFrame(data['lineitem'] + [null_winner], SCHEMAS['lineitem']).createOrReplaceTempView('lineitem')
+        assert value(spark, original(15)) == value(spark, targeted(15).sql)
+        assert not value(spark, original(15))[0], 'Null supplier must win the maximum without joining'
+        report['checks'].append({'query': 15, 'fixture': 'Null supplier has the largest revenue',
+                                 'status': 'passed'})
+        spark.createDataFrame(data['lineitem'], SCHEMAS['lineitem']).createOrReplaceTempView('lineitem')
         mutant = targeted(13).sql.replace('SUM(COALESCE(probe_count, 0L))', 'COUNT(probe_count)')
         assert value(spark, original(13))[0] != value(spark, mutant)[0]
         report['counterexample_mutations'].append({
@@ -132,6 +158,7 @@ def main():
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(report, indent=2) + '\n')
         spark.stop()
+        scratch.cleanup()
 
 
 if __name__ == '__main__':

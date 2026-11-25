@@ -46,7 +46,11 @@ def main():
     config.update(engine=str(engine), engine_sha256=sha(engine),
                   tools=str(artifacts / 'benchmark-tools.jar'), queries=[18] if args.reference_only else [18,20],
                   work=str(work), platform='b200', gpu_indices=[0,1,2,3],
+                  dataset='/raid/knataraj/datasets/tpch/sf10k_v2_float',
                   statistics_snapshot=str(work/'evidence/catalog-statistics.json'))
+    for table in read(config['statistics_snapshot'])['tables']:
+        if not any((Path(config['dataset']) / table).glob('*.parquet')):
+            raise RuntimeError('Dataset table contains no Parquet files: ' + table)
     config['spark_conf']['spark.executor.instances']='4'
     if args.budget != 'default':
         raise ValueError('This experiment uses the default RMM budget')

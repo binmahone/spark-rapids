@@ -31,7 +31,7 @@ def execute(program):
  return json.loads(r.stdout)
 archive=ROOT/'retained/time-trial-evidence.tar.gz';receipt=ROOT/'evidence/time-trial-retention.json'
 if a.action=='retain':
- reports=['time-trial-comparison.json','time-trial-audit.json']
+ reports=['time-trial-comparison.json','time-trial-audit.json','time-trial-cohort.json']
  subprocess.run(ssh+['mkdir -p '+shlex.quote(remote+'/evidence/time-trial-final')],check=True)
  subprocess.run(['scp','-F',ssh[2],*[str(ROOT/'evidence'/name) for name in reports],
                  'mahonem@10.34.1.4:'+remote+'/evidence/time-trial-final/'],check=True)

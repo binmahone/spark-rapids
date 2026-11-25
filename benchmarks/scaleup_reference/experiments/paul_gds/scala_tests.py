@@ -65,6 +65,13 @@ def submit(args):
         write(run / 'config.json', config)
     else:
         assert read(run / 'prepare-status.json')['status'] == 'completed'
+        config = read(run / 'config.json')
+        revision = command('git', '-C', REPO, 'rev-parse', 'HEAD')
+        assert not command('git', '-C', REPO, 'diff', config['source_revision'], revision,
+                           '--', '.', ':(exclude)benchmarks/scaleup_reference/experiments/paul_gds')
+        config['compiled_source_revision'] = config.get('compiled_source_revision', config['source_revision'])
+        config['source_revision'] = revision
+        write(run / 'config.json', config)
         assert not command('ssh', '-oBatchMode=yes', '-oConnectTimeout=8', args.node,
                            'nvidia-smi --query-compute-apps=pid,gpu_uuid --format=csv,noheader')
     deployment = read(run / 'config.json')['deployment']
@@ -96,7 +103,7 @@ def node(args):
         tmp.mkdir(mode=0o700, parents=True, exist_ok=False)
         mount = command('findmnt', '-T', tmp, '-o', 'TARGET,SOURCE,FSTYPE,OPTIONS')
         assert 'gpfs' in mount
-        default_tmp = REPO / 'tests/target/tmp'
+        default_tmp = REPO / 'tests/target/spark353/tmp'
         if default_tmp.exists():
             assert default_tmp.is_dir() and not any(default_tmp.iterdir())
             default_tmp.rmdir()
@@ -136,7 +143,7 @@ def node(args):
         code = process.wait(timeout=3300 if args.phase == 'prepare' else 700)
         assert code == 0, 'Maven exited ' + str(code)
         if args.phase == 'test':
-            reports = REPO / 'tests/target/surefire-reports'
+            reports = REPO / 'tests/target/spark353/surefire-reports'
             suites = []
             for path in reports.glob('TEST-*.xml'):
                 document = ET.parse(path).getroot()
@@ -150,6 +157,9 @@ def node(args):
             required = [c for c in cases if c.get('name') == 'a local file is opened for cuFile']
             assert len(required) == 1 and required[0].find('skipped') is None
             (run / path.name).write_bytes(path.read_bytes())
+            output = reports / 'scala-test-output.txt'
+            if output.exists():
+                shutil.copyfile(output, run / output.name)
             write(run / 'test-summary.json', {'suite': suite.attrib, 'cases': [
                 {'name': c.get('name'), 'status': 'canceled' if c.find('skipped') is not None else 'passed'}
                 for c in cases], 'required_gds_check_passed': True})
@@ -163,6 +173,8 @@ def node(args):
             services.stop(state)
         if process is not None:
             process.wait(timeout=20)
+        if args.phase == 'test' and default_tmp.is_symlink() and default_tmp.resolve() == tmp:
+            default_tmp.unlink()
 
 
 if __name__ == '__main__':

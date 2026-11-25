@@ -9,7 +9,7 @@ test "$(id -un)" = mahonem
 test "$(hostname)" = umb-b200-220
 test "$(df --output=avail -B1 "$work" | tail -1)" -gt 274877906944
 cd "$work/runtime/packages"
-apt-get download openjdk-17-jdk-headless openjdk-17-jre-headless libtool libtool-bin
+apt-get download openjdk-17-jdk-headless openjdk-17-jre-headless libtool libtool-bin libnuma-dev libnuma1
 for package in ./*.deb; do dpkg-deb -x "$package" "$work/runtime/sdk"; done
 python3 - "$work" <<'PY'
 from pathlib import Path
@@ -36,6 +36,8 @@ ln -s libnvJitLink.so.13.1.115 "$work/runtime/native/libnvJitLink.so.13"
 export PATH="$work/runtime/sdk/usr/bin:$PATH"
 export LIBTOOL_DATADIR="$work/runtime/sdk/usr/share/libtool"
 export ACLOCAL_PATH="$work/runtime/sdk/usr/share/aclocal"
+export CPPFLAGS="-I$work/runtime/sdk/usr/include"
+export LDFLAGS="-L$work/runtime/sdk/usr/lib/x86_64-linux-gnu"
 BUILD_JOBS=16 bash "$suite/scripts/build_ucx.sh" "$work/ucx" /usr/local/cuda-13.0
 python3 - "$work" <<'PY'
 import hashlib,json,os,sys

@@ -1,0 +1,36 @@
+{
+  "sink": "jvm-driver-collect",
+  "rows": 27840,
+  "first_rows": [
+    "[Brand#31,ECONOMY BRUSHED STEEL,19,128616]",
+    "[Brand#21,STANDARD ANODIZED STEEL,3,128608]",
+    "[Brand#54,LARGE BRUSHED TIN,19,128601]",
+    "[Brand#34,PROMO BURNISHED NICKEL,36,128593]",
+    "[Brand#42,ECONOMY BRUSHED COPPER,45,128588]",
+    "[Brand#22,LARGE PLATED TIN,19,128585]",
+    "[Brand#14,ECONOMY BURNISHED COPPER,9,128577]",
+    "[Brand#21,STANDARD BURNISHED COPPER,9,128575]",
+    "[Brand#24,MEDIUM BRUSHED BRASS,14,128575]",
+    "[Brand#33,ECONOMY BRUSHED NICKEL,23,128575]"
+  ],
+  "last_rows": [
+    "[Brand#24,MEDIUM BURNISHED STEEL,14,127260]",
+    "[Brand#14,STANDARD BRUSHED STEEL,14,127259]",
+    "[Brand#25,SMALL POLISHED STEEL,14,127250]",
+    "[Brand#43,PROMO BRUSHED BRASS,3,127242]",
+    "[Brand#51,MEDIUM BURNISHED NICKEL,45,127230]",
+    "[Brand#12,ECONOMY ANODIZED COPPER,14,127219]",
+    "[Brand#33,SMALL PLATED BRASS,36,127156]",
+    "[Brand#13,ECONOMY PLATED NICKEL,19,127136]",
+    "[Brand#13,MEDIUM ANODIZED COPPER,19,127118]",
+    "[Brand#24,MEDIUM PLATED NICKEL,49,127042]"
+  ],
+  "full_result_requested": true,
+  "full_result_max_rows": 1000,
+  "full_result_persisted": false,
+  "ordered_sha256": "98b5978f53308d04b945e0de7ffd28972a1d28173048555f68e866ee826c4a69",
+  "multiset_sha256_sum": "3b61dfc2f30375b4e7763b5b681d409e1e9f4fdba05b1037869b97123cba25a9",
+  "multiset_sha256_xor": "3e59e5c30cac08d24c66424eeaa57ff61b1741988f85cea4716c79b1e539c6f3",
+  "digest_seconds": 0.023953,
+  "full_result_omitted_reason": "row count 27840 exceeds limit 1000"
+}

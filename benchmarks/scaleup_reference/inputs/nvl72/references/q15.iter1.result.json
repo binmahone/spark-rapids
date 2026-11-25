@@ -1,0 +1,20 @@
+{
+  "sink": "jvm-driver-collect",
+  "rows": 1,
+  "first_rows": [
+    "[123889986,Supplier#123889986,4df8sRbJgS,,Cg837iT5iFPr,PrbyzjVOD 9o,13-919-273-9794,2915518.4048999995]"
+  ],
+  "last_rows": [
+    "[123889986,Supplier#123889986,4df8sRbJgS,,Cg837iT5iFPr,PrbyzjVOD 9o,13-919-273-9794,2915518.4048999995]"
+  ],
+  "full_result_requested": true,
+  "full_result_max_rows": 1000,
+  "full_result_persisted": true,
+  "ordered_sha256": "544c4e07b25f3df8ffd27f345aa04f0926bbff74cddc17eb06d0d1aca1d487a7",
+  "multiset_sha256_sum": "544c4e07b25f3df8ffd27f345aa04f0926bbff74cddc17eb06d0d1aca1d487a7",
+  "multiset_sha256_xor": "544c4e07b25f3df8ffd27f345aa04f0926bbff74cddc17eb06d0d1aca1d487a7",
+  "digest_seconds": 0.002309,
+  "all_rows": [
+    "[123889986,Supplier#123889986,4df8sRbJgS,,Cg837iT5iFPr,PrbyzjVOD 9o,13-919-273-9794,2915518.4048999995]"
+  ]
+}

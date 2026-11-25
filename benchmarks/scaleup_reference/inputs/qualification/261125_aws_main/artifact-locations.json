@@ -1,0 +1,30 @@
+[
+  {
+    "architecture": "amd64",
+    "prefix": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261125/01a1c86b-170e-7920-99bb-c1f74294bb9b/68d906668dca/amd64/c267dafd65ae/",
+    "source_revision": "68d906668dcaf51ce436a897e4326b8fd14fc002",
+    "files": [
+      {
+        "name": "cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar",
+        "uri": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261125/01a1c86b-170e-7920-99bb-c1f74294bb9b/68d906668dca/amd64/c267dafd65ae/cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar",
+        "bytes": 444626908,
+        "sha256": "c267dafd65ae85b558d8c8df03a94c0947cbe42b79a1e29ddeaa63bfcadb8cce",
+        "download_hash_verified": true
+      },
+      {
+        "name": "benchmark-tools.jar",
+        "uri": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261125/01a1c86b-170e-7920-99bb-c1f74294bb9b/68d906668dca/amd64/c267dafd65ae/benchmark-tools.jar",
+        "bytes": 11552,
+        "sha256": "4d28e4919d16b6a607092f91db1e271afe837100550251976c330ee25a1a2b90",
+        "download_hash_verified": true
+      },
+      {
+        "name": "manifest.json",
+        "uri": "s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261125/01a1c86b-170e-7920-99bb-c1f74294bb9b/68d906668dca/amd64/c267dafd65ae/manifest.json",
+        "bytes": 2047,
+        "sha256": "2ad320c4f2a873b9ac80aa3aa6c379ef851af6345b9f300f1a9b42d619847acf",
+        "download_hash_verified": true
+      }
+    ]
+  }
+]

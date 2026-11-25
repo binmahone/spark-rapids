@@ -1,0 +1,57 @@
+{
+  "architecture": "amd64",
+  "files": {
+    "cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar": {
+      "bytes": 444626908,
+      "sha256": "c267dafd65ae85b558d8c8df03a94c0947cbe42b79a1e29ddeaa63bfcadb8cce"
+    },
+    "benchmark-tools.jar": {
+      "bytes": 11552,
+      "sha256": "4d28e4919d16b6a607092f91db1e271afe837100550251976c330ee25a1a2b90"
+    }
+  },
+  "components": {
+    "rapids4spark-version-info.properties": {
+      "version": "26.12.0-SNAPSHOT",
+      "cudf_version": "26.12.0-20261124.043801-53",
+      "scala_library_version": "2.12.21",
+      "java_bytecode_target": "8",
+      "user": "ubuntu",
+      "revision": "68d906668dcaf51ce436a897e4326b8fd14fc002",
+      "branch": "HEAD",
+      "date": "2026-11-25T04:22:50Z",
+      "url": "https://github.com/binmahone/spark-rapids.git"
+    },
+    "cudf-spark-jni-version-info.properties": {
+      "version": "26.12.0-SNAPSHOT",
+      "user": "root",
+      "revision": "bd15415531c40a2e83067d91147fcfa51a317b1d",
+      "branch": "HEAD",
+      "date": "2026-11-24T03:42:09Z",
+      "url": "https://github.com/NVIDIA/cudf-spark-jni.git",
+      "gpu_architectures": "100;120;75;80;86;89;90"
+    },
+    "cudf-java-version-info.properties": {
+      "version": "26.12.0-SNAPSHOT",
+      "user": "root",
+      "revision": "5a2cad06ba5ef1b77a5cc3f1fc61fc0cee5bf57c",
+      "branch": "HEAD",
+      "date": "2026-11-24T03:42:05Z",
+      "url": "https://github.com/NVIDIA/cudf.git",
+      "gpu_architectures": "100;120;75;80;86;90"
+    },
+    "cudf-spark-private-version-info.properties": {
+      "version": "26.12.0-SNAPSHOT",
+      "user": "ubuntu",
+      "revision": "fe7a2e4c261bff14dd95c331d6a4384a44cad842",
+      "branch": "HEAD",
+      "date": "2026-11-25T04:19:26Z",
+      "url": "/home/ubuntu/aws-main-daily-261125/evidence/private.bundle"
+    }
+  },
+  "source_revision": "68d906668dcaf51ce436a897e4326b8fd14fc002",
+  "upstream_main": "bcbaa76b5c02313fe36ead400c2949834396ec49",
+  "jni_maven_version": "26.12.0-20261124.043801-53",
+  "experimental_cleanup": true,
+  "source_dirty": false
+}

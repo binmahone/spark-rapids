@@ -1,0 +1,302 @@
+{
+  "status": "passed",
+  "classification": "Upstream main plus restricted experimental ordinary-broadcast cleanup; AWS NVMe Daily Trend",
+  "source_revision": "68d906668dcaf51ce436a897e4326b8fd14fc002",
+  "upstream_main": "bcbaa76b5c02313fe36ead400c2949834396ec49",
+  "artifact_sha256": "c267dafd65ae85b558d8c8df03a94c0947cbe42b79a1e29ddeaa63bfcadb8cce",
+  "validated_actions": 44,
+  "application_ids": [
+    {
+      "name": "suite",
+      "id": "app-20261125042820-0000",
+      "reference_only": false
+    }
+  ],
+  "spark_session_identity": 1558930129,
+  "unique_gpus": 8,
+  "slots_per_executor": 4,
+  "cleanup_acknowledgements": 352,
+  "retired_ordinary_objects": 244,
+  "retired_ordinary_gpu_bytes_cumulative": 55501864192,
+  "positive_native_host_samples": 44,
+  "gds_device_bytes": 0,
+  "fallback_files": 0,
+  "log_matches": {
+    "errors": [],
+    "task_failures": [],
+    "reclaim_failures": [],
+    "native_fatal": []
+  },
+  "per_query": {
+    "1": {
+      "seconds": [
+        15.942987492000157,
+        15.346551685000122
+      ],
+      "best_seconds": 15.346551685000122,
+      "selected_cleanup_seconds": 0.775253727000063,
+      "selected_sql_plus_cleanup_seconds": 16.121805412000185
+    },
+    "2": {
+      "seconds": [
+        6.776828788999865,
+        6.303017229000034
+      ],
+      "best_seconds": 6.303017229000034,
+      "selected_cleanup_seconds": 0.9807693440000094,
+      "selected_sql_plus_cleanup_seconds": 7.283786573000043
+    },
+    "3": {
+      "seconds": [
+        42.28417301299987,
+        29.94550300500009
+      ],
+      "best_seconds": 29.94550300500009,
+      "selected_cleanup_seconds": 1.3904495720000796,
+      "selected_sql_plus_cleanup_seconds": 31.33595257700017
+    },
+    "4": {
+      "seconds": [
+        21.176854060999858,
+        12.085701956999856
+      ],
+      "best_seconds": 12.085701956999856,
+      "selected_cleanup_seconds": 1.1795138249999582,
+      "selected_sql_plus_cleanup_seconds": 13.265215781999814
+    },
+    "5": {
+      "seconds": [
+        37.97241807700016,
+        29.201197715000035
+      ],
+      "best_seconds": 29.201197715000035,
+      "selected_cleanup_seconds": 1.3399991600001613,
+      "selected_sql_plus_cleanup_seconds": 30.541196875000196
+    },
+    "6": {
+      "seconds": [
+        8.546091105999949,
+        8.569119544999921
+      ],
+      "best_seconds": 8.546091105999949,
+      "selected_cleanup_seconds": 0.4251469089999773,
+      "selected_sql_plus_cleanup_seconds": 8.971238014999926
+    },
+    "7": {
+      "seconds": [
+        27.18497778899996,
+        26.842933232000178
+      ],
+      "best_seconds": 26.842933232000178,
+      "selected_cleanup_seconds": 0.9877318300000297,
+      "selected_sql_plus_cleanup_seconds": 27.830665062000207
+    },
+    "8": {
+      "seconds": [
+        37.516842917000076,
+        37.45136077899997
+      ],
+      "best_seconds": 37.45136077899997,
+      "selected_cleanup_seconds": 1.0061906389998967,
+      "selected_sql_plus_cleanup_seconds": 38.457551417999866
+    },
+    "9": {
+      "seconds": [
+        65.81445517099996,
+        46.06839483600015
+      ],
+      "best_seconds": 46.06839483600015,
+      "selected_cleanup_seconds": 1.244161849999955,
+      "selected_sql_plus_cleanup_seconds": 47.31255668600011
+    },
+    "10": {
+      "seconds": [
+        41.42332010899986,
+        27.78402183900016
+      ],
+      "best_seconds": 27.78402183900016,
+      "selected_cleanup_seconds": 1.434386209999957,
+      "selected_sql_plus_cleanup_seconds": 29.218408049000118
+    },
+    "11": {
+      "seconds": [
+        7.932614592999926,
+        7.3862059809998755
+      ],
+      "best_seconds": 7.3862059809998755,
+      "selected_cleanup_seconds": 0.02454349300001013,
+      "selected_sql_plus_cleanup_seconds": 7.410749473999886
+    },
+    "12": {
+      "seconds": [
+        21.8978287489997,
+        15.111614713000108
+      ],
+      "best_seconds": 15.111614713000108,
+      "selected_cleanup_seconds": 1.2294104879997576,
+      "selected_sql_plus_cleanup_seconds": 16.341025200999866
+    },
+    "13": {
+      "seconds": [
+        33.17572405300007,
+        13.650887167999826
+      ],
+      "best_seconds": 13.650887167999826,
+      "selected_cleanup_seconds": 1.2246548879998045,
+      "selected_sql_plus_cleanup_seconds": 14.875542055999631
+    },
+    "14": {
+      "seconds": [
+        21.86485811900002,
+        16.637050854000336
+      ],
+      "best_seconds": 16.637050854000336,
+      "selected_cleanup_seconds": 1.2283855379996567,
+      "selected_sql_plus_cleanup_seconds": 17.865436391999992
+    },
+    "15": {
+      "seconds": [
+        33.83755763199997,
+        28.91314338400025
+      ],
+      "best_seconds": 28.91314338400025,
+      "selected_cleanup_seconds": 1.5356232250001085,
+      "selected_sql_plus_cleanup_seconds": 30.44876660900036
+    },
+    "16": {
+      "seconds": [
+        8.065272622000066,
+        6.674381549999907
+      ],
+      "best_seconds": 6.674381549999907,
+      "selected_cleanup_seconds": 0.02492999600008261,
+      "selected_sql_plus_cleanup_seconds": 6.69931154599999
+    },
+    "17": {
+      "seconds": [
+        31.241438118000133,
+        20.472148097999707
+      ],
+      "best_seconds": 20.472148097999707,
+      "selected_cleanup_seconds": 0.7756731780000337,
+      "selected_sql_plus_cleanup_seconds": 21.24782127599974
+    },
+    "18": {
+      "seconds": [
+        92.22456020300024,
+        71.2506230680001
+      ],
+      "best_seconds": 71.2506230680001,
+      "selected_cleanup_seconds": 0.03327002099968013,
+      "selected_sql_plus_cleanup_seconds": 71.28389308899978
+    },
+    "19": {
+      "seconds": [
+        16.1979837949998,
+        14.618381678999867
+      ],
+      "best_seconds": 14.618381678999867,
+      "selected_cleanup_seconds": 0.5346115349998399,
+      "selected_sql_plus_cleanup_seconds": 15.152993213999707
+    },
+    "20": {
+      "seconds": [
+        26.406319900999733,
+        22.927244963999783
+      ],
+      "best_seconds": 22.927244963999783,
+      "selected_cleanup_seconds": 1.3295114830002603,
+      "selected_sql_plus_cleanup_seconds": 24.256756447000043
+    },
+    "21": {
+      "seconds": [
+        47.929823553999995,
+        26.212240440000187
+      ],
+      "best_seconds": 26.212240440000187,
+      "selected_cleanup_seconds": 1.480145137999898,
+      "selected_sql_plus_cleanup_seconds": 27.692385578000085
+    },
+    "22": {
+      "seconds": [
+        14.218666756999937,
+        6.6317852249999305
+      ],
+      "best_seconds": 6.6317852249999305,
+      "selected_cleanup_seconds": 1.1287767260000692,
+      "selected_sql_plus_cleanup_seconds": 7.760561951
+    }
+  },
+  "best_sql_sum_seconds": 490.0604805070004,
+  "selected_sql_plus_cleanup_sum_seconds": 511.3736192819997,
+  "second_pass_sql_sum_seconds": 490.0835089460004,
+  "not_application_wall_time": true,
+  "query_order": [
+    3,
+    1,
+    2,
+    4,
+    5,
+    6,
+    9,
+    7,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22
+  ],
+  "cache_policy": "No OS cache flush; two consecutive executions/query",
+  "comparison_limits": "Session lifecycle, Q18 slots, source/dependencies and statistics differ from older Daily Trend points. This is not isolated attribution to one change.",
+  "event_log_resource_profiles": [
+    {
+      "Event": "SparkListenerResourceProfileAdded",
+      "Resource Profile Id": 0,
+      "Executor Resource Requests": {
+        "cores": {
+          "Resource Name": "cores",
+          "Amount": 8,
+          "Discovery Script": "",
+          "Vendor": ""
+        },
+        "memory": {
+          "Resource Name": "memory",
+          "Amount": 16384,
+          "Discovery Script": "",
+          "Vendor": ""
+        },
+        "offHeap": {
+          "Resource Name": "offHeap",
+          "Amount": 0,
+          "Discovery Script": "",
+          "Vendor": ""
+        },
+        "gpu": {
+          "Resource Name": "gpu",
+          "Amount": 1,
+          "Discovery Script": "",
+          "Vendor": ""
+        }
+      },
+      "Task Resource Requests": {
+        "cpus": {
+          "Resource Name": "cpus",
+          "Amount": 1.0
+        },
+        "gpu": {
+          "Resource Name": "gpu",
+          "Amount": 0.25
+        }
+      }
+    }
+  ]
+}

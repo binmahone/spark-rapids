@@ -144,6 +144,21 @@ def targeted(query):
         return Variant(query, 'early_partsupp_keys', value,
             'Filter partsupp with a narrow key set before joining the wider part attributes',
             evidence='Broadcast semi join precedes partsupp shuffle; count-distinct semantics unchanged')
+    if query == 17:
+        value = """SELECT /*+ BROADCAST(avg_state) */ SUM(l_extendedprice) / 7.0 AS avg_yearly
+            FROM lineitem JOIN part ON p_partkey = l_partkey
+            JOIN (
+                SELECT l_partkey AS probe_partkey, 0.2 * AVG(l_quantity) AS probe_limit
+                FROM lineitem WHERE l_partkey IN (
+                    SELECT /*+ BROADCAST */ p_partkey FROM part
+                    WHERE p_brand = 'Brand#23' AND p_container = 'MED BOX')
+                GROUP BY l_partkey
+            ) avg_state ON l_partkey = probe_partkey
+            WHERE p_brand = 'Brand#23' AND p_container = 'MED BOX'
+              AND l_quantity < probe_limit"""
+        return Variant(query, 'broadcast_average_state', value,
+            'Broadcast narrow per-key aggregate state rather than the expanded price/quantity probe',
+            evidence='Average state is the broadcast build; selective part filtering remains on both scans')
     if query in (18, 20):
         column = 'l_orderkey' if query == 18 else 'p_partkey'
         value, count = re.subn(r'(\bselect\s+)(' + column + r'\b)',
@@ -173,6 +188,13 @@ def targeted(query):
         return Variant(query, 'deduplicate_anti_keys', value,
             'Compact existence-only build keys while retaining NOT EXISTS and its null semantics',
             evidence='Key aggregate before anti join; no conversion from NOT EXISTS to NOT IN')
+    if query == 21:
+        value = wrap(sql, 'supplier', """SELECT s.* FROM supplier s WHERE s_nationkey IN (
+            SELECT /*+ BROADCAST */ n_nationkey FROM nation WHERE n_name = 'SAUDI ARABIA')""")
+        value = first_select_hint(value, 'BROADCAST(supplier)')
+        return Variant(query, 'broadcast_eligible_suppliers', value,
+            'Broadcast eligible suppliers to filter completed witness state; keep all witness rows',
+            evidence='Supplier-key broadcast join follows the complete counted-existence aggregate')
     return None
 
 
@@ -184,6 +206,12 @@ def catalog():
             overrides={'spark.rapids.sql.batchSizeBytes': '536870912',
                        'spark.rapids.sql.reader.batchSizeBytes': '536870912'},
             evidence='Effective reader and operator batch targets are 512 MiB'))
+        if query in (1, 6, 11, 15):
+            result.append(Variant(query, 'scan_split_512m', original(query),
+                'Auxiliary scan scheduling control for queries with little removable join payload',
+                overrides={'spark.sql.files.maxPartitionBytes': '512m',
+                           'spark.sql.files.maxPartitionNum': '16384'},
+                evidence='Smaller scan tasks; input bytes and aggregate semantics remain unchanged'))
         candidate = targeted(query)
         if candidate:
             result.append(candidate)

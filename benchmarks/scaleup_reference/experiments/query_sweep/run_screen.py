@@ -131,7 +131,8 @@ def main():
         phases = [('batch512', [c for c in catalog() if c.name == 'batch_512m'],
                    {'spark.rapids.sql.batchSizeBytes': '536870912',
                     'spark.rapids.sql.reader.batchSizeBytes': '536870912'}),
-                  ('sql', [targeted(q) for q in ORDER if targeted(q)], {})]
+                  ('sql', [targeted(q) for q in ORDER if targeted(q)], {}),
+                  ('split512', [c for c in catalog() if c.name == 'scan_split_512m'], {})]
         for phase, pending, overrides in phases:
             index = 0
             while pending:

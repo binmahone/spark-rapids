@@ -28,7 +28,7 @@ import time
 from pyspark.sql import SparkSession
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-from variants import Variant, original, targeted
+from variants import Variant, catalog, original, targeted
 
 from catalog_statistics import register_tables
 from common import SUITE, TABLES, apply_query_settings, read, sha, write
@@ -59,7 +59,7 @@ class MechanismNotReached(RuntimeError):
 
 def choose_case(query, config):
     name = config['case_variants'][str(query)]
-    if name in ('baseline', 'batch_512m'):
+    if name in ('baseline', 'batch_512m', 'scan_split_512m'):
         return Variant(query, name, original(query), 'Unchanged SQL configuration control')
     candidate = targeted(query)
     if candidate is None or candidate.name != name:
@@ -80,6 +80,11 @@ def check_branch(query, candidate, plan):
             'BroadcastHashJoin' in line and 'c_custkey' in line and 'Gpu' in line
             for line in plan.splitlines()):
         raise MechanismNotReached('Customer broadcast join is absent')
+    for name, key in [('broadcast_average_state', 'probe_partkey'),
+                      ('broadcast_eligible_suppliers', 's_suppkey')]:
+        if candidate.name == name and not any('BroadcastHashJoin' in line and
+                key in line and 'Gpu' in line for line in plan.splitlines()):
+            raise MechanismNotReached('The requested narrow-state broadcast join is absent')
     expected = {'deduplicate_existence_keys': 'l_orderkey',
                 'deduplicate_anti_keys': 'o_custkey'}
     if candidate.name in expected and not any(

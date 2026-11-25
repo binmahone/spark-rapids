@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import re
 import sys
+from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
@@ -58,9 +59,11 @@ def summarize(work, run):
     if not result_path.exists():
         return None
     data = read(result_path)
-    config = read(run / 'config.json')
-    scratch = Path(config['deployment']['scratch_root']) / run.name
-    task = task_metrics(scratch / 'events')
+    profile = read(run / 'applications/suite/profile.json')
+    location = urlparse(profile['spark.eventLog.dir'])
+    if location.scheme != 'file':
+        raise ValueError('Expected host-local event logs')
+    task = task_metrics(Path(location.path))
     rows = []
     for sample in data['samples']:
         token = f"q{sample['query']}-iteration{sample['iteration']}"
@@ -68,6 +71,8 @@ def summarize(work, run):
             'cleanup_seconds', 'sql_plus_cleanup_seconds', 'validation', 'reader_metrics']}
         row['variant'] = sample.get('variant', 'baseline')
         row['task_metrics'] = dict(task[token])
+        if not row['task_metrics'].get('task_attempts'):
+            raise AssertionError('Missing SQL-root task accounting: ' + str(run) + '/' + token)
         row['plan_shuffle_write_bytes'] = sum(op['metrics'].get('shuffleBytesWritten', 0)
             for op in sample['plan_metrics'] if 'Exchange' in op['node'])
         plan = (run / 'applications/suite' / (token + '.executed.txt')).read_text()

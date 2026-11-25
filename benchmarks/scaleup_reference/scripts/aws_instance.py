@@ -38,7 +38,11 @@ def main():
     parser.add_argument('--public-key', default=str(Path.home() / '.ssh/id_ed25519.pub'))
     parser.add_argument('--hours', type=int, choices=range(1, 9), default=4)
     parser.add_argument('--market', choices=('spot', 'on-demand'), default='spot')
+    parser.add_argument('--retain', action='store_true',
+                        help='Retain an on-demand host until an explicit user release')
     args = parser.parse_args()
+    if args.retain and args.market != 'on-demand':
+        parser.error('--retain requires on-demand capacity')
     state = Path(args.state).resolve()
     state.mkdir(parents=True, exist_ok=True)
     thread = os.environ.get('CODEX_THREAD_ID')
@@ -93,9 +97,13 @@ def main():
         raise ValueError('AMI is unavailable or has the wrong architecture')
     subnet = aws('ec2', 'describe-subnets', '--subnet-ids', args.subnet)['Subnets'][0]
     deadline = (datetime.now(timezone.utc) + timedelta(hours=args.hours)).strftime('%Y-%m-%d %H:%M:%S UTC')
-    tags = [{'Key': k, 'Value': v} for k, v in {
+    tag_values = {
         'Name': name, 'Workstream': name, 'Owner': 'mahonem', 'CodexThreadId': thread,
-        'Purpose': 'Reusable Scale-Up reference validation', 'ReleaseDeadlineUTC': deadline}.items()]
+        'Purpose': 'Reusable Scale-Up reference validation', 'ReleaseDeadlineUTC': deadline}
+    if args.retain:
+        tag_values.pop('ReleaseDeadlineUTC')
+        tag_values['ReleasePolicy'] = 'explicit-user-release'
+    tags = [{'Key': k, 'Value': v} for k, v in tag_values.items()]
     access_file = state / 'access-resources.json'
     if access_file.exists():
         access = read(access_file)
@@ -137,6 +145,8 @@ EOF
 systemctl daemon-reload
 systemctl enable --now scaleup-reference-release.timer
 '''.replace('DEADLINE', deadline)
+    if args.retain:
+        bootstrap = '#!/usr/bin/env bash\nset -euo pipefail\nexec > /var/log/scaleup-reference-bootstrap.log 2>&1\n'
     bootstrap += prepare + '\ntouch /var/lib/scaleup-reference-prepared\nsystemctl reboot\n'
     userdata = state / 'user-data.sh'
     userdata.write_text(bootstrap)
@@ -152,6 +162,8 @@ systemctl enable --now scaleup-reference-release.timer
             for kind in ('instance', 'volume', 'network-interface')]),
         '--user-data', 'file://' + str(userdata), '--client-token',
         hashlib.sha256((thread + args.region + args.market + args.ami + args.subnet + str(state)).encode()).hexdigest()]
+    if args.retain:
+        command += ['--disable-api-termination']
     if args.market == 'spot':
         command += ['--instance-market-options', json.dumps({'MarketType': 'spot',
                       'SpotOptions': {'SpotInstanceType': 'one-time', 'InstanceInterruptionBehavior': 'terminate'}})]
@@ -160,7 +172,8 @@ systemctl enable --now scaleup-reference-release.timer
     node = reply['Instances'][0]
     receipt = {**access, 'account': identity['Account'], 'instance_id': node['InstanceId'],
                 'ami': args.ami, 'subnet': args.subnet, 'market': args.market,
-                'release_deadline_utc': deadline}
+                'release_deadline_utc': None if args.retain else deadline,
+                'retention_policy': 'explicit-user-release' if args.retain else 'automatic-deadline'}
     write(receipt_path, receipt)
     print(json.dumps(receipt, indent=2))
 

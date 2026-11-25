@@ -2,6 +2,7 @@
 """Extract timings and work counters without treating screening as qualification."""
 import argparse
 from collections import Counter, defaultdict
+from concurrent.futures import ProcessPoolExecutor
 import json
 from pathlib import Path
 import re
@@ -109,10 +110,19 @@ def summarize(work, run):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', required=True)
+    parser.add_argument('--workers', type=int, default=1)
     args = parser.parse_args()
     work = Path(args.work).resolve()
     runs = [work / 'baseline'] + sorted((work / 'screen').glob('*-*'))
-    groups = [result for run in runs if run.is_dir() and (result := summarize(work, run))]
+    runs = [run for run in runs if run.is_dir()]
+    if args.workers < 1:
+        raise ValueError('Worker count must be positive')
+    if args.workers == 1:
+        results = [summarize(work, run) for run in runs]
+    else:
+        with ProcessPoolExecutor(max_workers=args.workers) as pool:
+            results = list(pool.map(summarize, [work] * len(runs), runs))
+    groups = [result for result in results if result]
     baseline = {s['query']: s for s in groups[0]['samples'] if s['iteration'] == 2}
     comparisons = []
     for group in groups[1:]:

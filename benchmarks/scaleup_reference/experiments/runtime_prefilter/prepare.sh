@@ -9,14 +9,27 @@ test -e /var/lib/scaleup-reference-prepared
 test "$(findmnt -n -T /opt/dlami/nvme -o TARGET)" = /opt/dlami/nvme
 ulimit -n 65536
 prepare_runtime() {
-    bash "$suite/scripts/prepare_spark.sh" "$work/spark-venv"
-    BUILD_JOBS=24 bash "$suite/scripts/build_ucx.sh" "$work/ucx" /usr/local/cuda-13.0
+    if test -d "$work/spark-venv"; then
+        "$work/spark-venv/bin/python" -c 'import pyspark; assert pyspark.__version__ == "3.5.3"'
+    else
+        bash "$suite/scripts/prepare_spark.sh" "$work/spark-venv"
+    fi
+    if test -e "$work/ucx/lib/libucp.so"; then
+        "$work/ucx/bin/ucx_info" -v
+        grep -q '\[  PASSED  \] 27 tests.' "$work/evidence/prepare-runtime-initial.log"
+    else
+        BUILD_JOBS=24 bash "$suite/scripts/build_ucx.sh" "$work/ucx" /usr/local/cuda-13.0
+    fi
     while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 3; done
-    cp -a --reflink=never /usr/lib/jvm/java-17-openjdk-amd64 "$work/jdk17"
+    if ! test -d "$work/jdk17"; then
+        cp -a --reflink=never /usr/lib/jvm/java-17-openjdk-amd64 "$work/jdk17"
+    fi
     "$work/jdk17/bin/java" -version
     readonly prefix=s3://mahonem-wild-sf10k-261012-503960270539-use1/scaleup-reference/261125/01a1c86b-170e-7920-99bb-c1f74294bb9b/68d906668dca/amd64/c267dafd65ae
     for artifact in cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar benchmark-tools.jar manifest.json; do
-        aws s3 cp "$prefix/$artifact" "$work/artifacts/main/$artifact" --region us-east-1 --only-show-errors
+        if ! test -f "$work/artifacts/main/$artifact"; then
+            aws s3 cp "$prefix/$artifact" "$work/artifacts/main/$artifact" --region us-east-1 --only-show-errors
+        fi
     done
     python3 - "$work" <<'PY'
 from pathlib import Path

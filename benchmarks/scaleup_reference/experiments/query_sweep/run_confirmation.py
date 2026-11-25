@@ -2,6 +2,7 @@
 """Confirm selected probes in ABBA order, then execute their combined 22-query workload."""
 import argparse
 from collections import defaultdict
+import os
 from pathlib import Path
 import sys
 
@@ -9,6 +10,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
 from common import read, write
 from run_screen import launch_group
+import services
 from variants import ORDER, Variant, catalog, original
 
 
@@ -39,6 +41,8 @@ def main():
               'arms': [], 'cache_policy': 'No flush; two actions per query per fresh application',
               'instance_policy': 'Retain until explicit user release'}
     write(output, report)
+    write(work / 'confirmation/controller.json', {'pid': os.getpid(),
+        'start_time': services.start_time(os.getpid()), 'owner_uid': os.getuid()})
     try:
         for index, arm in enumerate(['baseline', 'candidate', 'candidate', 'baseline']):
             current = cases if arm == 'candidate' else [

@@ -26,6 +26,8 @@ def launch_group(work, phase, index, cases, global_conf):
     engine = artifacts / 'cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar'
     if sha(engine) != 'c267dafd65ae85b558d8c8df03a94c0947cbe42b79a1e29ddeaa63bfcadb8cce':
         raise AssertionError('Frozen engine differs')
+    if sha(artifacts / 'benchmark-tools.jar') != '4d28e4919d16b6a607092f91db1e271afe837100550251976c330ee25a1a2b90':
+        raise AssertionError('Frozen validation tools differ')
     config.update(engine=str(engine), engine_sha256=sha(engine),
         tools=str(artifacts / 'benchmark-tools.jar'), queries=queries,
         case_variants={str(c.query): c.name for c in cases},
@@ -94,6 +96,9 @@ def launch_group(work, phase, index, cases, global_conf):
         result['driver_exit_code'] = process.returncode
         if process.returncode and result['status'] == 'completed':
             raise RuntimeError('Driver reported completed outputs but exited unsuccessfully')
+        if result['status'] not in ('completed', 'failed'):
+            result.update(status='failed', error='Driver exited before recording its outcome',
+                          error_kind='AbruptDriverExit')
         return run, result
     finally:
         services.stop(driver_state)

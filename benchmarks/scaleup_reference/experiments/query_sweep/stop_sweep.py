@@ -15,8 +15,9 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--work', required=True)
 args = parser.parse_args()
 work = Path(args.work).resolve()
-controller = work / 'screen/controller.json'
-if controller.exists():
+for controller in [work / 'screen/controller.json', work / 'confirmation/controller.json']:
+    if not controller.exists():
+        continue
     record = read(controller)
     try:
         if (record['owner_uid'] != os.getuid() or

@@ -28,7 +28,7 @@ import time
 from pyspark.sql import SparkSession
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-from variants import Variant, original, targeted
+from variants import Variant, catalog, original, targeted
 
 from catalog_statistics import register_tables
 from common import SUITE, TABLES, apply_query_settings, read, sha, write
@@ -61,18 +61,15 @@ def choose_case(query, config):
     name = config['case_variants'][str(query)]
     if name in ('baseline', 'batch_512m', 'scan_split_512m'):
         return Variant(query, name, original(query), 'Unchanged SQL configuration control')
-    candidate = targeted(query)
-    if candidate is None or candidate.name != name:
-        raise ValueError('Unknown query mechanism probe')
-    return candidate
+    return next(c for c in catalog() if c.query == query and c.name == name)
 
 
 def check_branch(query, candidate, plan):
-    if candidate.name == 'reuse_revenue_with_window':
+    if candidate.name in ('reuse_revenue_with_window', 'single_scan_average_window'):
         scans = [line for line in plan.splitlines() if 'Scan' in line and
                  'spark_catalog.default.lineitem[' in line]
         if len(scans) != 1 or 'GpuWindow' not in plan:
-            raise MechanismNotReached('Single-scan revenue reuse with a GPU window is absent')
+            raise MechanismNotReached('Single-scan reuse with a GPU window is absent')
     if candidate.name in ('early_partsupp_keys', 'early_customer_region', 'early_orders_region',
                            'broadcast_membership_keys'):
         lines = [line for line in plan.splitlines() if 'BroadcastHashJoin' in line and

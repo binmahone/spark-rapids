@@ -212,6 +212,22 @@ def targeted(query):
     return None
 
 
+def extra_cases():
+    sql = """WITH marked AS (
+            SELECT l_partkey, l_quantity, l_extendedprice,
+                   0.2 * AVG(l_quantity) OVER (PARTITION BY l_partkey) AS probe_limit
+            FROM lineitem WHERE l_partkey IN (
+                SELECT /*+ BROADCAST */ p_partkey FROM part
+                WHERE p_brand = 'Brand#23' AND p_container = 'MED BOX'))
+        SELECT SUM(l_extendedprice) / 7.0 AS avg_yearly
+        FROM marked JOIN part ON p_partkey = l_partkey
+        WHERE p_brand = 'Brand#23' AND p_container = 'MED BOX'
+          AND l_quantity < probe_limit"""
+    return [Variant(17, 'single_scan_average_window', sql,
+        'Retain selected lineitem payload for a per-key window rather than rereading lineitem',
+        evidence='One lineitem scan, selective semi join, and GPU per-key average window')]
+
+
 def catalog():
     result = []
     for query in ORDER:
@@ -229,4 +245,4 @@ def catalog():
         candidate = targeted(query)
         if candidate:
             result.append(candidate)
-    return result
+    return result + extra_cases()

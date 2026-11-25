@@ -14,7 +14,7 @@ SUITE = HERE.parents[1]
 sys.path.insert(0, str(SUITE / 'scripts'))
 from common import expand, load_config, read, sha, write
 import services
-from variants import ORDER, catalog, targeted
+from variants import ORDER, catalog, extra_cases, targeted
 
 
 def launch_group(work, phase, index, cases, global_conf):
@@ -137,7 +137,8 @@ def main():
                    {'spark.rapids.sql.batchSizeBytes': '536870912',
                     'spark.rapids.sql.reader.batchSizeBytes': '536870912'}),
                   ('sql', [targeted(q) for q in ORDER if targeted(q)], {}),
-                  ('split512', [c for c in catalog() if c.name == 'scan_split_512m'], {})]
+                  ('split512', [c for c in catalog() if c.name == 'scan_split_512m'], {}),
+                  ('sql-extra', extra_cases(), {})]
         for phase, pending, overrides in phases:
             index = 0
             while pending:

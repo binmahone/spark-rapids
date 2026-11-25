@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -35,17 +36,33 @@ def submit(args):
     assert command('sinfo', '-N', '-h', '-n', args.node, '-o', '%t') == 'idle'
     run = args.run.resolve()
     if args.phase == 'prepare':
-        run.mkdir(parents=True, exist_ok=False)
-        deployment = read(args.deployment)
         repository = REPO / '.build/maven-repository'
-        assert not repository.exists(), 'Inspect the existing session repository before reuse'
-        write(run / 'config.json', {'deployment': deployment,
-            'thread_id': os.environ['CODEX_THREAD_ID'],
-            'source_revision': command('git', '-C', REPO, 'rev-parse', 'HEAD'),
-            'paul_head': 'b3e85674bad145871c4a23da0c932fb28e4d80c4',
-            'maven_repository': str(repository),
-            'engine_sha256_before': sha(next((REPO / '.build/artifacts/arm64').glob('cudf-spark_*.jar'))),
-            'author_tests_unchanged': True})
+        if args.retry:
+            config = read(run / 'config.json')
+            assert config['thread_id'] == os.environ['CODEX_THREAD_ID']
+            assert config['maven_repository'] == str(repository)
+            assert read(run / 'prepare-status.json')['status'] == 'failed'
+            previous = read(run / 'prepare-submission.json')['job_id']
+            state = command('sacct', '-j', previous, '-X', '-n', '-o', 'State')
+            assert state in ('FAILED', 'TIMEOUT', 'CANCELLED'), state
+            archive = run / 'attempts' / str(previous)
+            archive.mkdir(parents=True, exist_ok=False)
+            shutil.copyfile(run / 'config.json', archive / 'config.json')
+            for path in run.glob('prepare*'):
+                if path.is_file():
+                    shutil.move(str(path), archive / path.name)
+            config['source_revision'] = command('git', '-C', REPO, 'rev-parse', 'HEAD')
+        else:
+            run.mkdir(parents=True, exist_ok=False)
+            assert not repository.exists(), 'Inspect the existing session repository before reuse'
+            config = {'deployment': read(args.deployment),
+                'thread_id': os.environ['CODEX_THREAD_ID'],
+                'source_revision': command('git', '-C', REPO, 'rev-parse', 'HEAD'),
+                'paul_head': 'b3e85674bad145871c4a23da0c932fb28e4d80c4',
+                'maven_repository': str(repository),
+                'engine_sha256_before': sha(next((REPO / '.build/artifacts/arm64').glob('cudf-spark_*.jar'))),
+                'author_tests_unchanged': True}
+        write(run / 'config.json', config)
     else:
         assert read(run / 'prepare-status.json')['status'] == 'completed'
         assert not command('ssh', '-oBatchMode=yes', '-oConnectTimeout=8', args.node,
@@ -155,5 +172,6 @@ if __name__ == '__main__':
     parser.add_argument('--phase', choices=('prepare', 'test'), required=True)
     parser.add_argument('--deployment', type=Path)
     parser.add_argument('--node', default='presto-gb200-gcn-04')
+    parser.add_argument('--retry', action='store_true')
     arguments = parser.parse_args()
     submit(arguments) if arguments.action == 'submit' else node(arguments)

@@ -7,7 +7,7 @@ set -euo pipefail
 : "${PAUL_SCALA_RUN:?}" "${PAUL_SCALA_SUITE:?}" "${PAUL_SCALA_PHASE:?}"
 bash "$SCALEUP_CONTAINER_SETUP"
 export DEBIAN_FRONTEND=noninteractive
-apt-get install -y --no-install-recommends openjdk-17-jdk-headless maven git
+apt-get install -y --no-install-recommends openjdk-17-jdk-headless maven git rsync zip unzip
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
 export PATH="$JAVA_HOME/bin:$PATH"
 export MAVEN_SKIP_RC=1 MAVEN_OPTS='-Xmx12g -XX:ReservedCodeCacheSize=1g'

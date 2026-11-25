@@ -62,7 +62,8 @@ def main():
     write(work / 'confirmation/controller.json', {'pid': os.getpid(),
         'start_time': services.start_time(os.getpid()), 'owner_uid': os.getuid()})
     try:
-        for index, arm in enumerate(['baseline', 'candidate', 'candidate', 'baseline']):
+        order = ['baseline', 'candidate', 'candidate', 'baseline'] if cases else []
+        for index, arm in enumerate(order):
             current = cases if arm == 'candidate' else [
                 Variant(c.query, 'baseline', original(c.query), 'Unchanged SQL control') for c in cases]
             run, result = launch_group(work, 'confirm-' + arm, index, current, {})

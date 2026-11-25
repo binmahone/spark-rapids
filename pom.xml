@@ -2196,9 +2196,9 @@ This will force full Scala code rebuild in downstream modules.
                         <exclude>**/src/main/java/com/nvidia/spark/rapids/format/*</exclude>
                         <exclude>**/*.csv</exclude>
                         <exclude>scripts/with_resource_nesting_baseline.json</exclude>
-                        <!-- Benchmark configuration and retained result data use strict JSON. -->
+                        <!-- Retained benchmark inputs preserve their original bytes and hashes. -->
                         <exclude>benchmarks/scaleup_reference/configs/*.json</exclude>
-                        <exclude>benchmarks/scaleup_reference/inputs/**/*.json</exclude>
+                        <exclude>benchmarks/scaleup_reference/inputs/**</exclude>
                         <exclude>benchmarks/scaleup_reference/patches/*.patch</exclude>
                         <exclude>scripts/iceberg-versions.json</exclude>
                         <exclude>scripts/tests/resources/iceberg/iceberg-versions.json</exclude>

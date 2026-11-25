@@ -39,7 +39,7 @@ for config_path in configs:
                 ('events' in path.relative_to(scratch).parts or
                  path.name in ('stdout', 'stderr') or path.suffix == '.log')):
             paths[path] = str(Path('scratch') / config_path.parent.name / path.relative_to(scratch))
-with tarfile.open(archive, 'w:gz') as target:
+with tarfile.open(archive, 'w:gz', compresslevel=1) as target:
     for path, name in sorted(paths.items(), key=lambda item: item[1]):
         size = path.stat().st_size
         target.add(path, arcname=name, recursive=False)

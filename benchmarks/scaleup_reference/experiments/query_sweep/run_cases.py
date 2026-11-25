@@ -66,6 +66,11 @@ def choose_case(query, config):
 
 
 def check_branch(query, candidate, plan):
+    if candidate.name == 'reuse_revenue_exchange':
+        scans = [line for line in plan.splitlines() if 'Scan' in line and
+                 'spark_catalog.default.lineitem[' in line]
+        if len(scans) != 1 or 'ReusedExchange' not in plan:
+            raise MechanismNotReached('The common revenue exchange was not shared')
     if query == 21 and candidate.name in ('broadcast_eligible_suppliers',
                                         'preserve_witness_broadcast_suppliers'):
         scans = [line for line in plan.splitlines() if 'Scan' in line and

@@ -139,10 +139,11 @@ def main():
             Decimal('0.00'), Decimal('0.00'), 'N', 'O', date(1996, 2, 1),
             date(1996, 2, 2), date(1996, 2, 3), None, None, None)
         spark.createDataFrame(data['lineitem'] + [null_winner], SCHEMAS['lineitem']).createOrReplaceTempView('lineitem')
-        assert value(spark, original(15)) == value(spark, targeted(15).sql)
+        for candidate in [c for c in candidates if c.query == 15]:
+            assert value(spark, original(15)) == value(spark, candidate.sql)
+            report['checks'].append({'query': 15, 'variant': candidate.name,
+                'fixture': 'Null supplier has the largest revenue', 'status': 'passed'})
         assert not value(spark, original(15))[0], 'Null supplier must win the maximum without joining'
-        report['checks'].append({'query': 15, 'fixture': 'Null supplier has the largest revenue',
-                                 'status': 'passed'})
         spark.createDataFrame(data['lineitem'], SCHEMAS['lineitem']).createOrReplaceTempView('lineitem')
         mutant = targeted(13).sql.replace('SUM(COALESCE(probe_count, 0L))', 'COUNT(probe_count)')
         assert value(spark, original(13))[0] != value(spark, mutant)[0]

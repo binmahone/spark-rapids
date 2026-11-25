@@ -268,6 +268,12 @@ def followup_cases():
     result.append(Variant(21, 'preserve_witness_broadcast_suppliers', value,
         'Preserve the complete one-scan witness state while broadcasting eligible suppliers',
         evidence='One lineitem scan, explicit min/max/count witness state, and supplier broadcast'))
+    value, count = re.subn(r'\bs_suppkey\s*=\s*supplier_no\b',
+        '(s_suppkey <=> supplier_no) AND s_suppkey IS NOT NULL', original(15), count=1)
+    assert count == 1
+    result.append(Variant(15, 'reuse_revenue_exchange', value,
+        'Preserve matching revenue inputs for exchange reuse without a global window',
+        evidence='One lineitem scan and reused aggregate exchange; null suppliers cannot join'))
     return result
 
 

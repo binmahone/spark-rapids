@@ -24,9 +24,10 @@ if output.exists():
 available = {(c.query, c.name): c for c in catalog(include_followups=True)}
 cases = [targeted(3)] + [available[key] for key in [
     (3, 'ordinary_customer_no_reuse'), (3, 'ordinary_customer_reuse'),
-    (5, 'prefilter_lineitem_order_keys'), (21, 'preserve_witness_broadcast_suppliers')]]
+    (5, 'prefilter_lineitem_order_keys'), (21, 'preserve_witness_broadcast_suppliers'),
+    (15, 'reuse_revenue_exchange')]]
 report = {'status': 'running', 'score_eligible': False, 'cases': [],
-    'budget': 'Five cases, two actions each; no automatic iterative tuning',
+    'budget': 'Six cases, two actions each; no automatic iterative tuning',
     'intent': 'Separate transport/reuse costs; target a larger remaining fact exchange',
     'instance_policy': 'Retain until explicit user release'}
 write(output, report)

@@ -71,6 +71,12 @@ LIMIT 10
         result,count = re.subn(r'(\bgroup\s+by\b)', clause+r'\1', original,count=1,flags=re.I)
         assert count == 1
         return result
+    if arm == 'row-propagation-reuse' and query == 9:
+        result=transform(query,original,'row-propagation')
+        before="WHERE p_name LIKE '%green%')"
+        after="WHERE p_name LIKE '%green%' AND p_partkey IS NOT NULL)"
+        assert result.count(before)==1
+        return result.replace(before,after)
     if arm == 'row-propagation' and query == 9:
         clause = """AND ps_partkey IN (
             SELECT /*+ BROADCAST */ p_partkey FROM part WHERE p_name LIKE '%green%')

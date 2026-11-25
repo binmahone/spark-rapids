@@ -140,7 +140,7 @@ def main():
             if not any('BroadcastHashJoin' in line and 'LeftSemi' in line
                        for line in planned.splitlines()):
                 raise AssertionError(f'Q{planned_query}: hint did not reach a broadcast semi join')
-        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','row-propagation','aggregate-reuse'):
+        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','row-propagation','row-propagation-reuse','aggregate-reuse'):
             checks = check_semantics(spark, SUITE, queries, config['probe_arm'])
             write(app / 'rewrite-counterexamples.json', checks)
         test = spark.range(10000).selectExpr('sum(id * id + 3) AS total')
@@ -204,9 +204,12 @@ def main():
                     semi = [line for line in preflight.splitlines() if 'LeftSemi' in line]
                     if config['probe_arm'] == 'hint' and not any('BroadcastHashJoin' in line for line in semi):
                         raise AssertionError('Hint did not reach a broadcast semi join')
-                    if config.get('suite_audit') and config['probe_arm'] == 'row-propagation':
+                    if config.get('suite_audit') and config['probe_arm'] in ('row-propagation','row-propagation-reuse'):
                         if not any('BroadcastHashJoin' in line and 'LeftSemi' in line for line in preflight.splitlines()):
                             raise AssertionError('Propagated semi join is absent or not broadcast')
+                    if config.get('suite_audit') and config['probe_arm'] == 'row-propagation-reuse':
+                        if 'ReusedExchange' not in preflight or preflight.count('GpuFileGpuScan parquet spark_catalog.default.part[')!=1:
+                            raise AssertionError('Expected shared part broadcast with a single part scan')
                     if config.get('suite_audit') and config['probe_arm'] == 'dimension-broadcast':
                         if not any('BroadcastHashJoin' in line and 'Inner' in line for line in preflight.splitlines()):
                             raise AssertionError('Dimension broadcast hint was not executed')

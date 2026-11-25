@@ -7,6 +7,8 @@ from decimal import Decimal
 import json
 import os
 from pathlib import Path
+import platform
+import subprocess
 import tempfile
 
 from pyspark.sql import SparkSession
@@ -57,6 +59,8 @@ def fixture():
         (1, 'forest green other', 'mfgr2', 'Brand#34', 'PROMO OTHER', 15, 'LG BOX',
          Decimal(200), 'duplicate key'), (None, None, None, None, None, None, None, None, None)]
     result['partsupp'] += [result['partsupp'][0], (None, None, 1, None, None)]
+    result['part'].append((7, 'green independent part', 'mfgr', 'Brand#23', 'LARGE BRASS',
+                           7, 'MED BOX', Decimal(100), 'predicate coupling'))
     dates = [date(1993, 8, 1), date(1993, 11, 1), date(1994, 5, 1),
              date(1995, 2, 1), date(1995, 11, 1), date(1996, 2, 1)]
     for key in range(1, 37):
@@ -86,6 +90,12 @@ def fixture():
             Decimal('0.06'), Decimal('0.02'), 'N', 'O', date(1997, 1, 1),
             date(1997, 1, 10), date(1997, 1, 20 if late else 5),
             'DELIVER IN PERSON', 'AIR', 'witness'))
+    for order, part, quantity, price in [(302, 2, 5, 101), (303, 7, 15, 102),
+                                         (304, 4, 25, 103), (305, 7, 5, 9999)]:
+        result['lineitem'].append((order, part, 3, 1, Decimal(quantity), Decimal(price),
+            Decimal('0.06'), Decimal('0.02'), 'N', 'O', date(1997, 1, 1),
+            date(1997, 1, 10), date(1997, 1, 20), 'DELIVER IN PERSON', 'AIR',
+            'separate eligible branches and reject cross-branch matches'))
     return result
 
 
@@ -108,7 +118,10 @@ def main():
         .config('spark.sql.adaptive.enabled', 'false').config('spark.sql.ansi.enabled', 'false')
         .config('spark.sql.session.timeZone', 'UTC').getOrCreate())
     report = {'backend': 'Spark CPU, no SQLPlugin', 'status': 'running',
-              'checks': [], 'counterexample_mutations': []}
+              'checks': [], 'counterexample_mutations': [], 'architecture': platform.machine(),
+              'spark_version': spark.version,
+              'source_revision': subprocess.check_output(['git', '-C', str(Path(__file__).parent),
+                                                          'rev-parse', 'HEAD'], text=True).strip()}
     output = Path(args.output)
     try:
         data = fixture()
@@ -149,6 +162,18 @@ def main():
         assert value(spark, original(13))[0] != value(spark, mutant)[0]
         report['counterexample_mutations'].append({
             'query': 13, 'mutation': 'Count matches instead of summing right-side multiplicities',
+            'detected': True})
+        for branch in range(3):
+            mutant = targeted(19).sql.replace(f'(probe_p{branch} AND probe_l{branch})', 'false', 1)
+            assert value(spark, original(19))[0] != value(spark, mutant)[0]
+            report['counterexample_mutations'].append({'query': 19,
+                'mutation': f'Remove eligible predicate branch {branch}', 'detected': True})
+        coupled = ' OR '.join(f'(probe_p{i} AND probe_l{i})' for i in range(3))
+        uncoupled = '(probe_p0 OR probe_p1 OR probe_p2) AND (probe_l0 OR probe_l1 OR probe_l2)'
+        mutant = targeted(19).sql.replace(coupled, uncoupled, 1)
+        assert value(spark, original(19))[0] != value(spark, mutant)[0]
+        report['counterexample_mutations'].append({'query': 19,
+            'mutation': 'Allow a part predicate to match another branch quantity predicate',
             'detected': True})
         report['status'] = 'passed'
     except BaseException as error:

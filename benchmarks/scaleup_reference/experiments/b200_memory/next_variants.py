@@ -19,13 +19,35 @@ import re
 def planner_overrides(arm):
     if arm in ('counted-wide', 'compact-counted-state'):
         return {'spark.rapids.sql.optimizer.aggregatePrefilter.enabled': 'false'}
-    if arm in ('profit-first', 'eligible-customer-join'):
+    if arm in ('profit-first', 'eligible-customer-join', 'eligible-orders-broadcast'):
         return {'spark.rapids.sql.optimizer.joinReorder.enabled': 'false',
                 'spark.rapids.sql.optimizer.joinGraphReorder.enabled': 'false'}
     return {}
 
 
 def transform_next(query, original, arm):
+    if query == 5 and arm == 'eligible-orders-broadcast':
+        return """
+WITH eligible_customers AS (
+    SELECT c_custkey, c_nationkey FROM customer
+    WHERE c_nationkey IN (
+        SELECT n_nationkey FROM nation JOIN region ON n_regionkey = r_regionkey
+        WHERE r_name = 'ASIA')
+), eligible_orders AS (
+    SELECT /*+ BROADCAST(eligible_customers) */ o_orderkey, c_nationkey
+    FROM orders JOIN eligible_customers ON o_custkey = c_custkey
+    WHERE o_orderdate >= date '1994-01-01' AND o_orderdate < date '1995-01-01'
+), eligible_suppliers AS (
+    SELECT s_suppkey, s_nationkey, n_name FROM supplier
+    JOIN nation ON s_nationkey = n_nationkey
+    JOIN region ON n_regionkey = r_regionkey WHERE r_name = 'ASIA'
+)
+SELECT /*+ BROADCAST(eligible_orders, eligible_suppliers) */ n_name,
+       sum(l_extendedprice * (1 - l_discount)) AS revenue
+FROM lineitem JOIN eligible_orders ON l_orderkey = o_orderkey
+JOIN eligible_suppliers ON l_suppkey = s_suppkey AND c_nationkey = s_nationkey
+GROUP BY n_name ORDER BY revenue DESC
+"""
     if query == 12 and arm == 'priority-flag':
         return """
 WITH priority_orders AS (

@@ -250,7 +250,8 @@ def main():
                             raise AssertionError('Expected one partsupp scan and a GPU window')
                     if query_arm in ('revenue-first','profit-first','country-flags','eligible-customer-join',
                                      'compact-supplier','counted-wide','compact-counted-state',
-                                     'priority-flag','promo-flag-revenue','supplier-prefilter'):
+                                     'priority-flag','promo-flag-revenue','supplier-prefilter',
+                                     'eligible-orders-broadcast'):
                         pending, nodes = [execution.executedPlan()], []
                         while pending:
                             node = pending.pop()
@@ -259,6 +260,14 @@ def main():
                             pending.extend(children.apply(i) for i in range(children.size()))
                         outputs = [str(n.output().toString()) for n in nodes
                                    if str(n.nodeName())=='GpuColumnarExchange']
+                        if query_arm == 'eligible-orders-broadcast':
+                            if not any('BroadcastHashJoin' in x and 'l_orderkey' in x and
+                                       'o_orderkey' in x for x in preflight.splitlines()):
+                                raise AssertionError('Eligible orders did not reach a broadcast fact join')
+                            if any('hashpartitioning' in str(n.toString()).splitlines()[0].lower() and
+                                   'l_orderkey' in str(n.output().toString()) for n in nodes
+                                   if str(n.nodeName())=='GpuColumnarExchange'):
+                                raise AssertionError('Lineitem order keys are still shuffled')
                         if query_arm == 'priority-flag' and not any('__high' in x and
                                 'o_orderkey' in x and 'o_orderpriority' not in x for x in outputs):
                             raise AssertionError('Priority flag did not reach the order-key exchange')

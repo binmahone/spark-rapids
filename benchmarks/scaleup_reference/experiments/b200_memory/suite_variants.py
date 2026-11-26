@@ -18,7 +18,7 @@ import re
 
 def selected_arm(query, arm):
     if arm == 'narrow-filter-screen':
-        return {12: 'priority-flag', 14: 'promo-flag-revenue',
+        return {5: 'eligible-orders-broadcast', 12: 'priority-flag', 14: 'promo-flag-revenue',
                 20: 'supplier-prefilter'}.get(query, 'baseline')
     if arm == 'next-screen':
         return {5: 'revenue-first', 7: 'country-flags', 8: 'eligible-customer-join',
@@ -40,7 +40,7 @@ def transform(query, original, arm):
     arm = selected_arm(query, arm)
     if arm in ('revenue-first','country-flags','eligible-customer-join','profit-first','compact-supplier',
                'counted-wide','compact-counted-state','priority-flag','promo-flag-revenue',
-               'supplier-prefilter'):
+               'supplier-prefilter','eligible-orders-broadcast'):
         from next_variants import transform_next
         return transform_next(query, original, arm)
     if arm == 'baseline':

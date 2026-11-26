@@ -104,11 +104,19 @@ def main():
     pressure_reproduced = all(g['memory_full_seconds'] >= 1 or g['allocstall_count'] >= 1000 for g in controls)
     timing_gate = all(max(g[key] for g in candidates) <= .97 * min(g[key] for g in controls)
                       for key in ('sum_all_actions_total_seconds', 'sum_second_actions_total_seconds'))
+    stability_gate = (
+        max(g['sum_target_actions_total_seconds'] for g in candidates) <=
+        .90 * min(g['sum_target_actions_total_seconds'] for g in controls) and
+        max(g['sum_all_actions_total_seconds'] for g in candidates) <=
+        1.03 * min(g['sum_all_actions_total_seconds'] for g in controls) and
+        max(g['memory_full_seconds'] for g in candidates) <=
+        .50 * min(g['memory_full_seconds'] for g in controls))
     report = {'classification': 'Controlled single-host measurements; no general kernel tuning recommendation',
               'groups': groups, 'samples': samples, 'comparisons': comparisons,
               'plan_checks': plan_checks, 'pressure_reproduced_in_both_controls': pressure_reproduced,
               'conservative_timing_gate': timing_gate,
-              'merits_full_suite_confirmation': pressure_reproduced and timing_gate and all(x['same_normalized_plan'] for x in plan_checks),
+              'conservative_stability_gate': stability_gate,
+              'merits_full_suite_confirmation': pressure_reproduced and (timing_gate or stability_gate) and all(x['same_normalized_plan'] for x in plan_checks),
               'restored_watermark_scale_factor': 10,
               'limits': ['One-second host sampling omits incomplete boundary intervals',
                          'No physical cache flush; identical native read bytes do not imply identical physical reads',

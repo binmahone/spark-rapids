@@ -111,6 +111,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', required=True)
     parser.add_argument('--workers', type=int, default=1)
+    parser.add_argument('--baseline-run', default='baseline',
+                        help='Relative run directory used as the explicit comparison reference')
     args = parser.parse_args()
     work = Path(args.work).resolve()
     runs = [work / 'baseline'] + sorted((work / 'screen').glob('*-*'))
@@ -123,9 +125,12 @@ def main():
         with ProcessPoolExecutor(max_workers=args.workers) as pool:
             results = list(pool.map(summarize, [work] * len(runs), runs))
     groups = [result for result in results if result]
-    baseline = {s['query']: s for s in groups[0]['samples'] if s['iteration'] == 2}
+    reference = next(g for g in groups if g['run'] == args.baseline_run)
+    baseline = {s['query']: s for s in reference['samples'] if s['iteration'] == 2}
     comparisons = []
-    for group in groups[1:]:
+    for group in groups:
+        if group['run'] == args.baseline_run:
+            continue
         for sample in group['samples']:
             if sample['iteration'] != 2:
                 continue
@@ -143,6 +148,7 @@ def main():
                 'status': 'Unqualified screen; cache/order and repeat noise remain'}
             comparisons.append(item)
     report = {'status': 'diagnostic', 'score_eligible': False, 'groups': groups,
+        'baseline_run': args.baseline_run,
         'comparisons': comparisons,
         'limits': ['Second consecutive action; no OS cache flush',
                    'Full-result validation uses retained GPU references',

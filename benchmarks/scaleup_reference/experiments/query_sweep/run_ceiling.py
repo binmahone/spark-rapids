@@ -138,10 +138,14 @@ def main():
                     case = (Variant(int(q), 'baseline', original(int(q)), 'Unchanged reference SQL')
                             if spec['name'] == 'baseline' else available[(int(q), spec['name'])])
                     selected[int(q)] = replace(case, overrides=spec['overrides'])
-                candidates = [replace(q11_total_reuse(), overrides=selected[11].overrides),
-                    replace(selected[21], overrides={**selected[21].overrides,
-                        'spark.sql.shuffle.partitions': '128',
-                        'spark.rapids.sql.batchSizeBytes': '4294967296'})]
+                candidates = [replace(q11_total_reuse(), overrides=selected[11].overrides)]
+                report['excluded_probes'] = [{
+                    'query': 21, 'setting': '128 shuffle partitions with a 4 GiB operator batch',
+                    'status': 'Not measured: intended merge-threshold change is unreachable',
+                    'reason': ('AggregateUtils.computeTargetBatchSize caps the byte target at '
+                        'Int.MaxValue. The Q21 six-long state reaches this cap with both 2 GiB '
+                        'and 4 GiB configured batches; increasing the batch does not raise it.'),
+                    'scope': 'Other operators can respond to the batch setting; no claim about their unmeasured effect'}]
                 a, b = [], []
                 for index, arm in enumerate('ABBA'):
                     values = [selected[c.query] for c in candidates] if arm == 'A' else candidates
@@ -151,14 +155,6 @@ def main():
                     d = decision(candidate.query, a, b)
                     d.update(variant=candidate.name, baseline_variant=selected[candidate.query].name,
                              overrides=candidate.overrides)
-                    if candidate.query == 21:
-                        d['probe_scope'] = ('A bounded joint setting: 128 shuffle partitions and a 4 GiB '
-                            'operator batch, following observed internal repartitioning at 128/2 GiB')
-                        d['aggregate_tasks_repartitioned'] = {
-                            arm: [sum(n['metrics'].get('numTasksRepartitioned', 0)
-                                for n in s['plan_metrics'] if n['node'] == 'GpuHashAggregate')
-                                for s in samples if s['query'] == 21 and s['iteration'] == 2]
-                            for arm, samples in [('control', a), ('candidate', b)]}
                     report['decisions'].append(d)
                     if d['accepted']:
                         selected[candidate.query] = candidate

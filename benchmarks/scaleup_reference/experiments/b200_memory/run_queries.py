@@ -140,7 +140,7 @@ def main():
             if not any('BroadcastHashJoin' in line and 'LeftSemi' in line
                        for line in planned.splitlines()):
                 raise AssertionError(f'Q{planned_query}: hint did not reach a broadcast semi join')
-        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','preaggregate-broadcast','preaggregate-prefilter','prefilter-broadcast','row-propagation','row-propagation-reuse','aggregate-reuse','window-average','aggregate-total-reuse','screen','screen-extra','combined'):
+        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','preaggregate-broadcast','preaggregate-prefilter','preaggregate-prefilter-reuse','prefilter-broadcast','row-propagation','row-propagation-reuse','aggregate-reuse','window-average','aggregate-total-reuse','screen','screen-extra','combined'):
             checks = check_semantics(spark, SUITE, queries, config['probe_arm'])
             write(app / 'rewrite-counterexamples.json', checks)
         test = spark.range(10000).selectExpr('sum(id * id + 3) AS total')
@@ -154,6 +154,13 @@ def main():
         for query in queries:
             query_arm = selected_arm(query, config['probe_arm'])
             query_profile = profiles[str(query)]
+            prefilter_key = 'spark.rapids.sql.optimizer.aggregatePrefilter.enabled'
+            planner_configuration = {prefilter_key: 'false' if query_arm ==
+                'preaggregate-prefilter-reuse' else query_profile[prefilter_key]}
+            for key, value in planner_configuration.items():
+                spark.conf.set(key, value)
+                if spark.conf.get(key) != value:
+                    raise AssertionError('Per-query planner setting differs')
             scan_configuration = {}
             if not args.reference_only:
                 scan_configuration = apply_query_settings(spark, query_profile)
@@ -214,11 +221,11 @@ def main():
                     if config.get('suite_audit') and query_arm in ('dimension-broadcast','preaggregate-broadcast'):
                         if not any('BroadcastHashJoin' in line and 'Inner' in line for line in preflight.splitlines()):
                             raise AssertionError('Dimension broadcast hint was not executed')
-                    if config.get('suite_audit') and query_arm in ('preaggregate','preaggregate-broadcast','preaggregate-prefilter') and not config.get('prefix_reference'):
+                    if config.get('suite_audit') and query_arm in ('preaggregate','preaggregate-broadcast','preaggregate-prefilter','preaggregate-prefilter-reuse') and not config.get('prefix_reference'):
                         group_key = 'l_orderkey' if query in (3,4,18) else 'o_custkey'
                         if not re.search(r'GpuHashAggregate \(keys=\[' + group_key + r'#\d+L\],', preflight):
                             raise AssertionError('Requested pre-join aggregate is absent')
-                    if config.get('suite_audit') and query_arm == 'preaggregate-prefilter':
+                    if config.get('suite_audit') and query_arm in ('preaggregate-prefilter','preaggregate-prefilter-reuse'):
                         if 'ReusedExchange' not in preflight or preflight.count('GpuFileGpuScan parquet spark_catalog.default.lineitem[')!=1:
                             raise AssertionError('Expected shared Q18 aggregate and a single lineitem scan')
                         if not any('LeftSemi' in line and 'BroadcastHashJoin' in line for line in preflight.splitlines()):
@@ -288,7 +295,8 @@ def main():
                           'semi_join_plan_lines': semi,
                           'validation': validation, 'validation_seconds': validation_seconds,
                           'reader_metrics': reader, 'plan_metrics': node_metrics,
-                          'scan_configuration': scan_configuration}
+                          'scan_configuration': scan_configuration,
+                          'planner_configuration': planner_configuration}
                 rows = frame = execution = plan = None
                 if not args.reference_only:
                     before = time.perf_counter()

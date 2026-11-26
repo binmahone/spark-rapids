@@ -33,6 +33,8 @@ def transform(query, original, arm):
     arm = selected_arm(query, arm)
     if arm == 'baseline':
         return original
+    if arm == 'preaggregate-prefilter-reuse' and query == 18:
+        return transform(query, original, 'preaggregate-prefilter')
     if arm == 'aggregate-total-reuse' and query == 11:
         return """
 WITH part_values AS (
@@ -334,10 +336,14 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
         (2,'OTHER'),(3,'ECONOMY ANODIZED STEEL'),(None,'ECONOMY ANODIZED STEEL')])
     results=[]
     previous = spark.conf.get('spark.rapids.sql.enabled', 'true')
+    prefilter_key = 'spark.rapids.sql.optimizer.aggregatePrefilter.enabled'
+    previous_prefilter = spark.conf.get(prefilter_key, 'true')
     try:
         for query,tables in cases.items():
             if query not in requested or selected_arm(query, arm) in ('baseline', 'prefilter'):
                 continue
+            spark.conf.set(prefilter_key, 'false' if selected_arm(query, arm) ==
+                           'preaggregate-prefilter-reuse' else previous_prefilter)
             original=(suite/'inputs/aws48x/sql'/f'q{query}.sql').read_text()
             for empty in ((False,True,'null-max') if query==15 else (False,True)):
                 for table,(schema,rows) in tables.items():
@@ -372,6 +378,7 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
                                 'gpu_rewrite_equal':True,'gpu_plan':plan})
     finally:
         spark.conf.set('spark.rapids.sql.enabled',previous)
+        spark.conf.set(prefilter_key,previous_prefilter)
         for table in set(t for tables in cases.values() for t in tables):
             spark.catalog.dropTempView('__probe_'+table)
     return results

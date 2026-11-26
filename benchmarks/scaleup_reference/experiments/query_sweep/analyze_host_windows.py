@@ -27,6 +27,11 @@ if allocation_path.exists():
     with allocation_path.open() as stream:
         allocation_records = [json.loads(line) for line in stream if line.endswith('\n')]
 allocation_times = [record['time_unix_ns'] for record in allocation_records]
+stack_records = []
+stack_path = work / 'evidence/ceiling-pressure-stacks.jsonl'
+if stack_path.exists():
+    with stack_path.open() as stream:
+        stack_records = [json.loads(line) for line in stream if line.endswith('\n')]
 rows = []
 for group in analysis['groups']:
     for sample in group['samples']:
@@ -74,6 +79,10 @@ for group in analysis['groups']:
             'pressure_delta_seconds': pressure,
             'allocation_counter_delta': allocation_delta,
             'allocation_sampling_coverage': allocation_coverage,
+            'pressure_stack_capture_windows': [{'start_unix_ns': item['time_unix_ns'],
+                'capture_seconds': item['capture_seconds']} for item in stack_records
+                if item['time_unix_ns'] <= end and
+                item['time_unix_ns'] + item['capture_seconds'] * 1e9 >= start],
             'min_mem_available_kib': min(record['memory_kib']['MemAvailable'] for record in selected),
             'gpu_max_temperature_c': max(gpu['temperature_c'] for gpu in gpus),
             'busy_gpu_throttle_masks': sorted({gpu['throttle_reasons'] for gpu in busy}),
@@ -84,6 +93,7 @@ report = {'classification': 'Observed host correlation, not causal attribution',
                'SQL execution windows exclude some client planning and post-query validation',
                'Host disk and memory counters may include activity outside the Spark executors',
                'Allocation sampling started during tuning; null counters indicate absent coverage, not zero activity',
+               'Bounded kernel-stack captures may perturb overlapping screening actions; their windows are retained explicitly',
                'No physical disk cache flush; native reader bytes are not physical disk bytes']}
 output = work / 'evidence/ceiling-host-correlation.json'
 output.write_text(json.dumps(report, indent=2) + '\n')

@@ -59,7 +59,7 @@ def main():
     state = {'status': 'running', 'score_eligible': False, 'arms': [],
              'classification': ('all-query opportunity audit' if args.suite_audit else 'SQL hint mechanism diagnostic'),
              'order': ['reference'] if args.reference_only else args.order.split(','), 'rmm_budget': args.budget, 'gpu_indices': gpu_indices,
-             'cache_policy': 'No cache flush; two actions per query per fresh application',
+             'cache_policy': f'No cache flush; {args.iterations} actions per query per fresh application',
              'source_revision': subprocess.check_output(
                  ['git', '-C', str(SUITE), 'rev-parse', 'HEAD'], text=True).strip()}
     state['execution_profile'] = args.execution_profile

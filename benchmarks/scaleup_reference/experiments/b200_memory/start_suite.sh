@@ -42,6 +42,7 @@ finish() {
 trap finish EXIT
 extra=()
 if [ "$mode" = prefix ]; then extra=(--prefix-reference --iterations 1); fi
+if [ "$mode" = pilot ]; then extra=(--iterations 1); fi
 python3 "$here/run_matrix.py" "${extra[@]}" --work "$work" --label "$label" --suite-audit \
     --queries "$queries" --order "$arms" --gpus "$gpus" --query-timeout 600 \
     --execution-profile "$execution_profile"

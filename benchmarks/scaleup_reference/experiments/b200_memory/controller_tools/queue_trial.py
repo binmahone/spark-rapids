@@ -32,6 +32,7 @@ parser.add_argument('--label', required=True)
 parser.add_argument('--queries', required=True)
 parser.add_argument('--arms', required=True)
 parser.add_argument('--gpus', default='0,3,4,6')
+parser.add_argument('--mode', default='measure', choices=['measure', 'pilot'])
 parser.add_argument('--execution-profile', default='reference',
                     choices=['reference', 'partitions128', 'operator512m'])
 args = parser.parse_args()
@@ -54,7 +55,7 @@ while True:
     time.sleep(5)
 subprocess.run(ssh + ['git -C ' + shlex.quote(remote + '/source') + ' pull --ff-only'], check=True)
 script = remote + '/source/benchmarks/scaleup_reference/experiments/b200_memory/start_suite.sh'
-command = ['bash', script, remote, args.label, args.queries, args.arms, 'measure', args.gpus,
+command = ['bash', script, remote, args.label, args.queries, args.arms, args.mode, args.gpus,
            args.execution_profile]
 log = remote + '/evidence/' + args.label + '-launch.log'
 launch = 'nohup ' + shlex.join(command) + ' > ' + shlex.quote(log) + ' 2>&1 < /dev/null & echo $!'

@@ -100,6 +100,26 @@ def main():
     assert evidence['final_best_total_sum_seconds'] == chosen['combined_best_total_sum_seconds']
     write(output / 'selected-cases.json', selection)
     write(output / 'measurements.json', evidence)
+    analysis_path = work / 'evidence/sweep-analysis.json'
+    host_path = work / 'evidence/ceiling-host-correlation.json'
+    if analysis_path.exists() and host_path.exists():
+        analysis, host = read(analysis_path), read(host_path)
+        host_by_sample = {(s['run'], s['query'], s['iteration']): s for s in host['samples']}
+        metrics = []
+        for group in analysis['groups']:
+            for sample in group['samples']:
+                row = {key: sample[key] for key in ('query', 'iteration', 'variant', 'sql_seconds',
+                    'cleanup_seconds', 'sql_plus_cleanup_seconds', 'task_metrics', 'reader_metrics',
+                    'plan_shuffle_write_bytes', 'execution_window_ms')}
+                row.update(run=group['run'], group_status=group['status'],
+                           host=host_by_sample[(group['run'], sample['query'], sample['iteration'])])
+                metrics.append(row)
+        write(output / 'execution-metrics.json', {
+            'classification': 'Measured execution counters and host correlation; not causal attribution',
+            'limits': host['limits'] + [
+                'GPU retry and spill duration accumulators are summed task times, not wall time',
+                'GPU duration updates are rounded to milliseconds by the event-log formatter'],
+            'samples': metrics})
     with (output / 'per-query.csv').open('w', newline='') as stream:
         writer = csv.DictWriter(stream, fieldnames=['query', 'variant', 'runtime_overrides',
             'baseline_min_sql_seconds', 'final_min_sql_seconds',

@@ -146,7 +146,7 @@ def stage_windows(run):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', required=True)
-    p.add_argument('--phase', choices=['A0', 'B1', 'B2', 'A3'], required=True)
+    p.add_argument('--phase', choices=['A0', 'B1', 'B2', 'A3', 'B3'], required=True)
     a = p.parse_args()
     work = Path(a.work)
     directory = work / 'cold-host-read' / a.phase

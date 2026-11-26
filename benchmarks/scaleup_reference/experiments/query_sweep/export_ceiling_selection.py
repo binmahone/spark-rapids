@@ -37,7 +37,8 @@ def main():
     tuned = phases['tune']
     final = next(g for g in reversed(tuned['groups']) if g['label'] == 'final-suite' and g['status'] == 'completed')
     chosen = phases.get('post', tuned)
-    if 'post' in phases and any(d['accepted'] for d in chosen['decisions']):
+    if 'post' in phases and (any(d['accepted'] for d in chosen['decisions']) or
+                            chosen.get('invalidated_unfired_shuffle_settings')):
         final = next(g for g in reversed(chosen['groups']) if g['label'] == 'post-final-suite' and g['status'] == 'completed')
     baseline = next(g for g in phases['sql']['groups'] if g['label'] == 'prior-suite' and g['status'] == 'completed')
     control = next(g for g in tuned['groups'] if g['label'] == 'tune-control' and g['status'] == 'completed')
@@ -78,6 +79,8 @@ def main():
         'excluded_probes': {phase: value['excluded_probes'] for phase, value in phases.items()
                             if 'excluded_probes' in value},
         'reader_cap_probe': tuned['reader_cap_probe'],
+        'shuffle_runtime_audit': chosen.get('shuffle_runtime_audit', []),
+        'invalidated_unfired_shuffle_settings': chosen.get('invalidated_unfired_shuffle_settings', []),
         'groups': [compact_samples(group) for phase in phases.values() for group in phase['groups']],
         'limits': ['No physical disk cache flush; each fresh application runs two actions per query',
                    'Full-scale outputs are checked against retained GPU references; CPU counterexamples cover the SQL rewrites',

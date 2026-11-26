@@ -45,6 +45,19 @@ def totals(samples, query):
     return [s['sql_plus_cleanup_seconds'] for s in samples if s['query'] == query and s['iteration'] == 2]
 
 
+def exchange_signatures(samples, query):
+    return [sorted((n['node'], n['metrics']['numPartitions']) for n in s['plan_metrics']
+                   if 'numPartitions' in n['metrics'])
+            for s in samples if s['query'] == query and s['iteration'] == 2]
+
+
+def shuffle_effect(query, controls, candidates):
+    before, after = exchange_signatures(controls, query), exchange_signatures(candidates, query)
+    return {'control_exchange_partition_metrics': before,
+            'candidate_exchange_partition_metrics': after,
+            'path_changed': bool(before and after) and all(sig and sig not in before for sig in after)}
+
+
 def decision(query, a, b):
     base, candidate = totals(a, query), totals(b, query)
     assert len(base) == len(candidate) == 2
@@ -138,6 +151,25 @@ def main():
                     case = (Variant(int(q), 'baseline', original(int(q)), 'Unchanged reference SQL')
                             if spec['name'] == 'baseline' else available[(int(q), spec['name'])])
                     selected[int(q)] = replace(case, overrides=spec['overrides'])
+                controls = [s for g in tuned['groups'] if g['label'] in ('tune-A0', 'tune-A3')
+                            for s in g['samples']]
+                probes = [s for g in tuned['groups'] if g['label'] in ('tune-B1', 'tune-B2')
+                          for s in g['samples']]
+                invalidated = []
+                report['shuffle_runtime_audit'] = []
+                for d in tuned['decisions']:
+                    if 'spark.sql.shuffle.partitions' not in d.get('overrides', {}):
+                        continue
+                    q = d['query']
+                    effect = shuffle_effect(q, controls, probes)
+                    report['shuffle_runtime_audit'].append({'query': q,
+                        'timing_gate_accepted': d['accepted'], **effect})
+                    if d['accepted'] and not effect['path_changed']:
+                        case = selected[q]
+                        selected[q] = replace(case, overrides={k: v for k, v in case.overrides.items()
+                            if k != 'spark.sql.shuffle.partitions'})
+                        invalidated.append(q)
+                report['invalidated_unfired_shuffle_settings'] = invalidated
                 candidates = [replace(q11_total_reuse(), overrides=selected[11].overrides)]
                 report['excluded_probes'] = [{
                     'query': 21, 'setting': '128 shuffle partitions with a 4 GiB operator batch',
@@ -158,7 +190,7 @@ def main():
                     report['decisions'].append(d)
                     if d['accepted']:
                         selected[candidate.query] = candidate
-                if any(d['accepted'] for d in report['decisions']):
+                if invalidated or any(d['accepted'] for d in report['decisions']):
                     combined = run('post-final-suite', [selected[q] for q in ORDER])
                     report['combined_best_sql_sum_seconds'] = sum(min(s['sql_seconds'] for s in combined
                         if s['query'] == q) for q in ORDER)
@@ -225,6 +257,8 @@ def main():
                     # The established Q13 scan override takes precedence over a global scan setting.
                     if q == 13 and name == 'scan4g':
                         continue
+                    if name.startswith('shuffle') and not shuffle_effect(q, baseline_samples, samples)['path_changed']:
+                        continue
                     candidate = totals(samples, q)[0]
                     baseline = totals(baseline_samples, q)[0]
                     if candidate < baseline * .95 and candidate < winners.get(q, {}).get('time', float('inf')):
@@ -243,6 +277,9 @@ def main():
                 for case in candidates:
                     d = decision(case.query, a, b)
                     d.update(variant=case.name, overrides=case.overrides)
+                    if 'spark.sql.shuffle.partitions' in case.overrides:
+                        d['runtime_effect'] = shuffle_effect(case.query, a, b)
+                        d['accepted'] = d['accepted'] and d['runtime_effect']['path_changed']
                     report['decisions'].append(d)
                     if d['accepted']:
                         selected[case.query] = case

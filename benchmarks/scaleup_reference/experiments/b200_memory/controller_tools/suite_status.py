@@ -126,7 +126,13 @@ for label in LABELS:
    row['shared_stages']={str(stage):sorted(str(g) for g in group_set) for stage,group_set in groups.items() if group in group_set and len(group_set)>1}
    row['plan_text']=(app/f'q{sample["query"]}-iteration{sample["iteration"]}.executed.txt').read_text()
    report['rows'].append(row)
-  report.setdefault('applications',[]).append({'path':str(app),'status':d['status'],'error':d.get('error'),'last_log_lines':(app/'driver.log').read_text(errors='replace').splitlines()[-3:]})
+  config=json.loads((run/'config.json').read_text())
+  report.setdefault('applications',[]).append({'path':str(app),'status':d['status'],'error':d.get('error'),
+   'application_id':d.get('application_id'),'probe_arm':config['probe_arm'],
+   'engine_sha256':config['engine_sha256'],'gpu_indices':config['gpu_indices'],
+   'dataset':config['dataset'],'dataset_contract':config.get('dataset_contract'),
+   'execution_profile':config.get('execution_profile','reference'),'effective_conf':conf,
+   'last_log_lines':(app/'driver.log').read_text(errors='replace').splitlines()[-3:]})
 report['root_free_bytes']=os.statvfs(w).f_bavail*os.statvfs(w).f_frsize
 print(json.dumps(report))
 '''.replace('REMOTE',repr(str(a.retained_root.resolve()) if a.retained_root else owner['remote'])).replace('LABELS',repr(a.labels)).replace('ANALYZE',repr(a.analyze))

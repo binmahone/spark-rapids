@@ -29,6 +29,9 @@ data = json.loads(source.read_text())
 assert all(m['status'] == 'completed' for m in data['matrices'])
 assert {r['probe_arm'] for r in data['rows']} == {'baseline', 'combined'}
 assert len({tuple(r['gpu_indices']) for r in data['rows']}) == 1
+assert len({a['engine_sha256'] for a in data['applications']}) == 1
+assert len({a['dataset'] for a in data['applications']}) == 1
+assert len({json.dumps(a['dataset_contract'],sort_keys=True) for a in data['applications']}) == 1
 queries = list(range(1, 23))
 arms = {}
 for arm in ('baseline', 'combined'):
@@ -64,6 +67,10 @@ report = {'classification': 'Complete measured four-GPU baseline versus combined
     'healthy_node_performance_qualified': False,
     'limits': data['limits'], 'source_evidence': str(source), 'matrices': data['matrices'],
     'gpu_indices': data['rows'][0]['gpu_indices'], 'extra_rmm_alloc_size_limit': False,
+    'engine_sha256':data['applications'][0]['engine_sha256'],
+    'dataset':data['applications'][0]['dataset'],
+    'dataset_contract':data['applications'][0]['dataset_contract'],
+    'applications':data['applications'],
     'query_execution_count': len(data['rows']), 'all_existing_reference_comparisons_passed': True,
     'arms': arms, 'observed_time_reduction_fraction': reductions}
 output = root/'evidence'/('comparison-' + args.label + '.json')

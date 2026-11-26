@@ -20,6 +20,7 @@ readonly queries=${3:-1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22}
 readonly arms=${4:-baseline}
 readonly mode=${5:-measure}
 readonly gpus=${6:-0,1,2,3}
+readonly execution_profile=${7:-reference}
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly evidence="$work/evidence/$label"
 mkdir "$evidence"
@@ -42,4 +43,5 @@ trap finish EXIT
 extra=()
 if [ "$mode" = prefix ]; then extra=(--prefix-reference --iterations 1); fi
 python3 "$here/run_matrix.py" "${extra[@]}" --work "$work" --label "$label" --suite-audit \
-    --queries "$queries" --order "$arms" --gpus "$gpus" --query-timeout 600
+    --queries "$queries" --order "$arms" --gpus "$gpus" --query-timeout 600 \
+    --execution-profile "$execution_profile"

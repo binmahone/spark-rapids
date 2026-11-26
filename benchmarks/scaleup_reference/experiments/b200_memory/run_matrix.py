@@ -44,6 +44,8 @@ def main():
     parser.add_argument('--query-timeout', type=int, default=200)
     parser.add_argument('--iterations', type=int, default=2)
     parser.add_argument('--gpus', default='0,1,2,3')
+    parser.add_argument('--execution-profile', default='reference',
+                        choices=['reference', 'partitions128', 'operator512m'])
     args = parser.parse_args()
     work = Path(args.work).resolve()
     gpu_indices = [int(i) for i in args.gpus.split(',')]
@@ -60,6 +62,7 @@ def main():
              'cache_policy': 'No cache flush; two actions per query per fresh application',
              'source_revision': subprocess.check_output(
                  ['git', '-C', str(SUITE), 'rev-parse', 'HEAD'], text=True).strip()}
+    state['execution_profile'] = args.execution_profile
     matrix_root = work / 'results' / (args.label or ('reference' if args.reference_only else args.budget))
     output = matrix_root / 'matrix.json'
     if output.exists():
@@ -89,6 +92,11 @@ def main():
     config['dataset_contract'] = {'parquet_files': len(dataset_files),
                                   'parquet_bytes': sum(p.stat().st_size for p in dataset_files)}
     config['spark_conf']['spark.executor.instances']='4'
+    if args.execution_profile == 'partitions128':
+        config['spark_conf']['spark.sql.shuffle.partitions'] = '128'
+    elif args.execution_profile == 'operator512m':
+        config['spark_conf']['spark.rapids.sql.batchSizeBytes'] = '536870912'
+    config['execution_profile'] = args.execution_profile
     config.update(suite_audit=args.suite_audit, prefix_reference=args.prefix_reference, iterations=args.iterations,
                   query_timeout_seconds=args.query_timeout)
     if args.suite_audit:

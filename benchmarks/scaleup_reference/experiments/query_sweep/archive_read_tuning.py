@@ -16,8 +16,6 @@
 import argparse
 from pathlib import Path
 import sys
-import os
-import re
 import subprocess
 import tarfile
 
@@ -46,27 +44,6 @@ for state_path in states:
         live = path.exists() and path.read_text().split(') ', 1)[1].split()[19] == str(record['start_time'])
         profile_audit.append({'pid': record['pid'], 'start_time': record['start_time'], 'live': live})
         assert not live
-    for path in state_path.parent.glob('*.data'):
-        assert path.is_file() and not path.is_symlink()
-        subprocess.run(['sudo', '-n', 'chown', str(os.getuid()) + ':' + str(os.getgid()), str(path)], check=True)
-    analysis_path = state_path.parent / 'analysis.json'
-    if analysis_path.exists():
-        analysis = read(analysis_path)
-        analysis['finalizer_revision'] = revision
-        old = 'Reclaim stacks sample every 257 events per CPU; counts are not exact event totals'
-        new = 'The requested reclaim sample period was 257, but this kernel emitted approximately one record per allocstall; never multiply trace counts by 257'
-        analysis['limits'] = [new if value == old else value for value in analysis['limits']]
-        log = state_path.parent / 'reclaim.log'
-        if log.exists():
-            observed = int(re.search(r'\((\d+) samples\)', log.read_text())[1])
-            import json
-            rows = [json.loads(line) for line in (state_path.parent / 'vm.jsonl').open()]
-            delta = sum(rows[-1]['vmstat'][key] - rows[0]['vmstat'][key]
-                        for key in rows[0]['vmstat'] if key.startswith('allocstall'))
-            analysis['reclaim_capture_calibration'] = {'requested_period': 257,
-                'recorded_samples': observed, 'host_allocstall_delta': delta,
-                'interpretation': 'Trace records were effectively not downsampled; count raw records and retain profiling overhead caveat'}
-        write(analysis_path, analysis)
 write(directory / 'profiler-audit.json', {'records': profile_audit, 'source_revision': revision,
     'all_stopped': True, 'watermark_scale_factor': 10, 'retention': 'Explicit user release only'})
 archive = work / 'evidence/read-tuning-complete.tar.gz'

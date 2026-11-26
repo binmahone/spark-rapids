@@ -222,8 +222,6 @@ def main():
               'source_revision': state['source_revision'], 'perf_monotonic_to_unix_offset_ns': offset,
               'limits': ['Identical host, VM, GPM and pool monitoring in all arms; no kernel profiling',
                          'Fresh applications and fixed query order do not guarantee identical page-cache contents',
-                         'Kernel CPU samples include idle; nonidle and executor counts are separate',
-                         'The requested reclaim sample period was 257, but this kernel emitted approximately one record per allocstall; never multiply trace counts by 257',
                          'GPM percentages and throughput are half-second interval observations',
                          'Whole-query averages do not establish a critical-stage hardware ceiling',
                          'CPU memory-controller counters are unavailable in the exposed PMUs']}

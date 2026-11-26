@@ -65,7 +65,7 @@ separated = max(r['second_total_seconds'] for r in candidates) <= .97 * min(r['s
 regression_guard = all(row['second_action_median_change_fraction'] <= .05 for row in per_query if row['query'] in (9, 12, 13))
 report = {'complete_ABBA': complete, 'groups': rows, 'queries': per_query,
           'normalized_plans_match': plans_match,
-          'initial_hot_regression_above_20_percent': by_name['B1']['second_total_seconds'] > 1.20 * by_name['A0']['second_total_seconds'],
+          'initial_second_action_regression_above_20_percent': by_name['B1']['second_total_seconds'] > 1.20 * by_name['A0']['second_total_seconds'],
           'worst_candidate_second_total_3_percent_below_best_control': separated,
           'critical_query_second_action_regression_below_5_percent': regression_guard,
           'eligible_for_full_suite': complete and plans_match and separated and regression_guard,

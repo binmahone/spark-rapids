@@ -57,7 +57,7 @@ def main():
         selected[q] = (case, digest, spec['overrides'])
     selection = read(HERE / 'selected-cases.json')
     selection.update(
-        classification='Best measured bounded experimental selection; not an absolute hardware bound or Daily Trend main score',
+        classification='Validated bounded experimental selection; not an absolute hardware bound or Daily Trend main score',
         candidates=[{'query': q, 'variant': case.name} for q, (case, _, _) in selected.items() if case.name != 'baseline'],
         runtime_overrides_by_query={str(q): overrides for q, (_, _, overrides) in selected.items() if overrides},
         sql_sha256_by_query={str(q): digest for q, (_, digest, _) in selected.items()},

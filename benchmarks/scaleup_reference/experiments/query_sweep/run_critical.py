@@ -113,8 +113,15 @@ def main():
                 queries = choice['queries']
                 assert queries and set(queries) <= {8, 9, 21}
                 if a.phase == 'confirm':
+                    wide = replace(available[(21, 'critical_witness_wide')], overrides=control[21].overrides)
+                    if 21 in queries:
+                        result = run('W0', [wide])
+                        assert result['status'] == 'completed' and result['driver_exit_code'] == 0
                     for index, arm in enumerate('ABBA'):
                         result = run(arm + str(index), [(control if arm == 'A' else probes)[q] for q in queries])
+                        assert result['status'] == 'completed' and result['driver_exit_code'] == 0
+                    if 21 in queries:
+                        result = run('W1', [wide])
                         assert result['status'] == 'completed' and result['driver_exit_code'] == 0
                 else:
                     assert choice['confirmed']

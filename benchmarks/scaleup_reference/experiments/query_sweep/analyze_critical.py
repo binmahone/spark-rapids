@@ -71,6 +71,14 @@ def main():
             assert len(before) == len(after) == 2
             report['decisions'].append({'query': q, 'control_second_totals': before,
                 'candidate_second_totals': after, 'accepted': max(after) <= .97 * min(before)})
+        wide = [s['sql_plus_cleanup_seconds'] for g in groups if g['label'].startswith('W')
+                for s in g['samples'] if s['query'] == 21 and s['iteration'] == 2]
+        if wide:
+            narrow = [s['sql_plus_cleanup_seconds'] for s in candidates if s['query'] == 21 and s['iteration'] == 2]
+            assert len(wide) == len(narrow) == 2
+            report['witness_width_control'] = {'wide_second_totals': wide,
+                'narrow_second_totals': narrow, 'separated_by_at_least_3_percent': max(narrow) <= .97 * min(wide),
+                'scope': 'Identical explicit SQL except four supplier extrema use INT instead of BIGINT'}
     else:
         samples = groups[0]['samples']
         assert len(samples) == 44 and all(s['validation']['status'] == 'passed' for s in samples)

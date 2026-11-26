@@ -58,6 +58,12 @@ def main():
             .config('spark.sql.session.timeZone', 'UTC').getOrCreate())
         report['spark_version'] = spark.version
         data = fixture()
+        if args.q11:
+            nation = next(row for row in data['nation'] if row[1] == 'GERMANY')
+            supplier = next(row for row in data['supplier'] if row[3] == nation[0])
+            data['nation'].append(nation)
+            data['supplier'].append(supplier)
+            data['partsupp'].append(next(row for row in data['partsupp'] if row[1] == supplier[0]))
         try:
             modes = ['duplicates-null', 'empty-lineitem', 'large-signed-decimals']
             if args.q11:
@@ -85,8 +91,8 @@ def main():
                         elif table == 'partsupp':
                             values = [(1, 888, 1, Decimal('0.02'), ''),
                                       (2, 888, 1, Decimal('999999.99'), ''),
-                                      (3, 888, 1, Decimal('999999.99'), ''),
-                                      (None, 888, 1, None, '')]
+                                      (None, 888, 1, Decimal('999999.99'), ''),
+                                      (3, 888, 1, None, '')]
                     spark.createDataFrame(values, SCHEMAS[table]).createOrReplaceTempView(table)
                 for case in requested:
                     expected, schema = result(spark, original(case.query))
@@ -98,7 +104,8 @@ def main():
                     if mode == 'duplicates-null':
                         assert expected, ('Positive output is required', case.name)
                     report['checks'].append({'query': case.query, 'variant': case.name,
-                        'fixture': mode, 'rows': sum(expected.values()), 'status': 'passed'})
+                        'fixture': 'empty-partsupp' if args.q11 and mode == 'empty-lineitem' else mode,
+                        'rows': sum(expected.values()), 'status': 'passed'})
             if args.q11:
                 case = q11_total_reuse()
                 mutant = case.sql.replace('SUM(value) OVER ()', 'MAX(value) OVER ()')

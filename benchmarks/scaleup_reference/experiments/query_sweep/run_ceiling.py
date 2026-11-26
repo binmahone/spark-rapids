@@ -109,7 +109,8 @@ def main():
             settings = [
                 ('shuffle128', {'spark.sql.shuffle.partitions': '128'}),
                 ('shuffle64', {'spark.sql.shuffle.partitions': '64'}),
-                ('operator512', {'spark.rapids.sql.batchSizeBytes': '536870912'})]
+                ('operator512', {'spark.rapids.sql.batchSizeBytes': '536870912'}),
+                ('reader512', {'spark.rapids.sql.reader.batchSizeBytes': '536870912'})]
             winners = {}
             for name, overrides in settings:
                 samples = run('screen-' + name, [selected[q] for q in ORDER], overrides)

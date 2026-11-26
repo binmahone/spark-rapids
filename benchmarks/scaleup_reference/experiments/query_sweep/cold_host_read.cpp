@@ -23,7 +23,7 @@ namespace {
 constexpr size_t max_request = 8 * 1024 * 1024;
 constexpr size_t min_request = 1024 * 1024;
 enum Counter { ELIGIBLE, BUFFERED, DIRECT, DIRECT_BYTES, COLD, RESIDENT,
-               MIXED, INSPECT_FAIL, DIRECT_FAIL, REQUEST_BYTES, COUNTERS };
+               MIXED, INSPECT_FAIL, DIRECT_FAIL, REQUEST_BYTES, MIXED_DIRECT, COUNTERS };
 uint64_t* counters = nullptr;
 const char* prefix = nullptr;
 bool enabled = false;
@@ -125,24 +125,36 @@ ssize_t read_request(Read real, int fd, void* dst, size_t bytes, off64_t offset)
   const size_t pages = (map_length + page_size - 1) / page_size;
   size_t present = 0;
   for (size_t i = 0; i < pages; ++i) present += residency[i] & 1;
-  if (present) {
-    count(present == pages ? RESIDENT : MIXED);
+  if (present == pages) {
+    count(RESIDENT);
     return buffered();
   }
-  count(COLD);
+  count(present ? MIXED : COLD);
+  struct Range { size_t begin, end; } ranges[max_request / min_request + 1];
+  size_t range_count = 0;
+  const size_t request_begin = size_t(offset - map_offset);
+  const size_t request_end = request_begin + bytes;
+  // Read large absent spans directly. Small holes share the buffered runs between them.
+  for (size_t i = 0; i < pages;) {
+    if (residency[i] & 1) { ++i; continue; }
+    const size_t start = i;
+    while (i < pages && !(residency[i] & 1)) ++i;
+    const size_t begin = std::max(start * size_t(page_size), request_begin);
+    const size_t end = std::min(i * size_t(page_size), request_end);
+    if (end - begin >= min_request) ranges[range_count++] = {begin, end};
+  }
+  if (!range_count) return buffered();
   // A residency snapshot controls cost only; immutable file contents define correctness.
   struct statx alignment {};
   if (statx(fd, "", AT_EMPTY_PATH, STATX_DIOALIGN, &alignment) ||
       !(alignment.stx_mask & STATX_DIOALIGN) || !alignment.stx_dio_offset_align ||
       !alignment.stx_dio_mem_align || alignment.stx_dio_mem_align > size_t(page_size) ||
       page_size % alignment.stx_dio_mem_align ||
-      alignment.stx_dio_offset_align > size_t(page_size)) {
+      alignment.stx_dio_offset_align > size_t(page_size) ||
+      page_size % alignment.stx_dio_offset_align) {
     count(DIRECT_FAIL); return buffered();
   }
-  const size_t align = alignment.stx_dio_offset_align;
-  const off64_t begin = offset / align * align;
-  const size_t skip = size_t(offset - begin);
-  const size_t length = ((skip + bytes + align - 1) / align) * align;
+  const size_t length = pages * size_t(page_size);
   thread_local Bounce bounce;
   if (!bounce.reserve(length)) { count(DIRECT_FAIL); return buffered(); }
   // Reopen the descriptor's inode, not the pathname which could have been replaced.
@@ -153,12 +165,32 @@ ssize_t read_request(Read real, int fd, void* dst, size_t bytes, off64_t offset)
       direct_info.st_dev != info.st_dev) {
     close(direct_fd); count(DIRECT_FAIL); return buffered();
   }
-  const ssize_t got = real(direct_fd, bounce.address, length, begin);
+  bool succeeded = true;
+  size_t direct_bytes = 0;
+  for (size_t i = 0; i < range_count && succeeded; ++i) {
+    const size_t begin = ranges[i].begin / page_size * page_size;
+    const size_t end = (ranges[i].end + page_size - 1) / page_size * page_size;
+    const ssize_t got = real(direct_fd, static_cast<char*>(bounce.address) + begin,
+                             end - begin, map_offset + begin);
+    succeeded = got >= 0 && size_t(got) >= ranges[i].end - begin;
+    direct_bytes += ranges[i].end - ranges[i].begin;
+  }
   close(direct_fd);
   // Do not expose a partial direct read. The original read handles EOF and errors.
-  if (got < 0 || size_t(got) < skip + bytes) { count(DIRECT_FAIL); return buffered(); }
-  memcpy(dst, static_cast<char*>(bounce.address) + skip, bytes);
-  count(DIRECT); count(DIRECT_BYTES, bytes);
+  if (!succeeded) { count(DIRECT_FAIL); return buffered(); }
+  size_t cursor = request_begin;
+  for (size_t i = 0; i <= range_count; ++i) {
+    const size_t end = i == range_count ? request_end : ranges[i].begin;
+    if (end > cursor) {
+      const ssize_t got = real(fd, static_cast<char*>(bounce.address) + cursor,
+                               end - cursor, map_offset + cursor);
+      if (got < 0 || size_t(got) != end - cursor) { count(DIRECT_FAIL); return buffered(); }
+    }
+    if (i < range_count) cursor = ranges[i].end;
+  }
+  memcpy(dst, static_cast<char*>(bounce.address) + request_begin, bytes);
+  count(DIRECT); count(DIRECT_BYTES, direct_bytes);
+  if (present) count(MIXED_DIRECT);
   errno = incoming_errno;
   return bytes;
 }

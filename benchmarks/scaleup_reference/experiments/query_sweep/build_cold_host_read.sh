@@ -3,7 +3,7 @@ set -euo pipefail
 readonly work=${1:?Prepared work directory}
 readonly scratch=${2:?Private scratch directory}
 readonly here=$(cd "$(dirname "$0")" && pwd)
-readonly out="$work/artifacts/cold-host-read"
+readonly out="$work/artifacts/cold-host-read-v2"
 mkdir -p "$out" "$scratch"
 exec > >(tee "$out/build-and-tests.log") 2>&1
 readonly stat_header=/usr/src/linux-aws-6.8-headers-6.8.0-1066/include/uapi/linux/stat.h

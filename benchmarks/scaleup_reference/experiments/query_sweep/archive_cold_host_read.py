@@ -82,7 +82,7 @@ for state_path in states:
 for name in ('owner.json', 'deployment.json', 'host-prerequisites.json'):
     path = work / 'evidence' / name
     paths[path] = str(path.relative_to(work))
-for path in (work / 'artifacts/cold-host-read').rglob('*'):
+for path in (work / 'artifacts').glob('cold-host-read*/**/*'):
     if path.is_file() and not path.is_symlink():
         paths[path] = str(path.relative_to(work))
 manifest = []

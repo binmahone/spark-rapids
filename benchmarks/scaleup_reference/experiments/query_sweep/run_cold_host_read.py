@@ -60,7 +60,7 @@ def main():
               'kvikio_threads': 32,
               'cache_policy': 'No cache flush; two actions per query',
               'instance_policy': 'Retain until explicit user release'}
-    adapter = work / 'artifacts/cold-host-read/libcold_host_read.so'
+    adapter = work / 'artifacts/cold-host-read-v2/libcold_host_read.so'
     for test in ('buffered', 'cold-direct', 'error', 'short'):
         assert read(adapter.parent / test / 'result.json')['status'] == 'passed'
     stats = directory / 'native-counters'

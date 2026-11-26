@@ -8,11 +8,17 @@ import struct
 import time
 
 NAMES = ['eligible', 'buffered', 'direct', 'direct_bytes', 'cold', 'resident',
-         'mixed', 'inspect_fail', 'direct_fail', 'request_bytes']
+         'mixed', 'inspect_fail', 'direct_fail', 'request_bytes', 'mixed_direct']
 
 def snapshot(directory):
-    return {p.stem: dict(zip(NAMES, struct.unpack('=10Q', p.read_bytes())))
-            for p in directory.glob('*.bin') if p.stat().st_size == 80}
+    result = {}
+    for p in directory.glob('*.bin'):
+        raw = p.read_bytes()
+        if len(raw) not in (80, 88):
+            continue
+        values = struct.unpack('=' + str(len(raw) // 8) + 'Q', raw)
+        result[p.stem] = dict(zip(NAMES, (*values, 0) if len(values) == 10 else values))
+    return result
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)

@@ -31,10 +31,10 @@ lib.pread.argtypes = lib.pread64.argtypes
 lib.pread.restype = ctypes.c_ssize_t
 stats = Path(os.environ['SCALEUP_COLD_READ_STATS']) / (str(os.getpid()) + '.bin')
 names = ['eligible', 'buffered', 'direct', 'direct_bytes', 'cold', 'resident',
-         'mixed', 'inspect_fail', 'direct_fail', 'request_bytes']
+         'mixed', 'inspect_fail', 'direct_fail', 'request_bytes', 'mixed_direct']
 
 def counters():
-    return dict(zip(names, struct.unpack('=10Q', stats.read_bytes())))
+    return dict(zip(names, struct.unpack('=11Q', stats.read_bytes())))
 
 def read(offset, size, symbol='pread64', handle=fd):
     assert lib.prctl(15, ctypes.c_char_p(b'kvikio-0'), 0, 0, 0) == 0
@@ -74,6 +74,7 @@ try:
     after_mixed = counters()
     if a.expect_direct:
         assert after_mixed['mixed'] > after_hot['mixed'], after_mixed
+        assert after_mixed['mixed_direct'] > after_hot['mixed_direct'], after_mixed
     os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
     with concurrent.futures.ThreadPoolExecutor(max_workers=32) as pool:
         list(pool.map(lambda i: read((i + 2) * 2 * 1024 * 1024 + 3,

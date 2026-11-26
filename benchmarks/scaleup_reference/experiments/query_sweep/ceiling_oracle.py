@@ -16,10 +16,12 @@
 import argparse
 from collections import Counter
 from decimal import Decimal
+import hashlib
 import json
 import os
 from pathlib import Path
 import tempfile
+import subprocess
 
 from pyspark.sql import SparkSession
 from ceiling_variants import cases, prepare_frame
@@ -38,6 +40,11 @@ def main():
     args = parser.parse_args()
     report = {'status': 'running', 'checks': [], 'mutations': [],
               'scope': 'CPU semantic counterexamples; full-scale GPU qualification remains required'}
+    here = Path(__file__).resolve().parent
+    report['source_revision'] = subprocess.check_output(
+        ['git', '-C', str(here), 'rev-parse', 'HEAD'], text=True).strip()
+    report['source_sha256'] = {name: hashlib.sha256((here / name).read_bytes()).hexdigest()
+        for name in ('ceiling_oracle.py', 'ceiling_variants.py', 'toy_oracle.py', 'variants.py')}
     with tempfile.TemporaryDirectory(prefix='scaleup-ceiling-cpu-') as scratch:
         os.environ['SPARK_LOCAL_DIRS'] = scratch
         spark = (SparkSession.builder.master('local[2]').appName('scaleup-ceiling-decimal-oracle')
@@ -45,6 +52,7 @@ def main():
             .config('spark.sql.shuffle.partitions', '2').config('spark.local.dir', scratch)
             .config('spark.sql.adaptive.enabled', 'false').config('spark.sql.ansi.enabled', 'false')
             .config('spark.sql.session.timeZone', 'UTC').getOrCreate())
+        report['spark_version'] = spark.version
         data = fixture()
         try:
             for mode in ('duplicates-null', 'empty-lineitem', 'large-signed-decimals'):

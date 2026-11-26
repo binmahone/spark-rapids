@@ -32,7 +32,23 @@ assert len({tuple(r['gpu_indices']) for r in data['rows']}) == 1
 assert len({a['engine_sha256'] for a in data['applications']}) == 1
 assert len({a['dataset'] for a in data['applications']}) == 1
 assert len({json.dumps(a['dataset_contract'],sort_keys=True) for a in data['applications']}) == 1
-configurations = {a['probe_arm']: a['effective_conf'] for a in data['applications']}
+identity_keys = {'spark.app.id', 'spark.driver.port', 'spark.app.submitTime', 'spark.app.startTime'}
+configurations = {}
+identity_configuration = {}
+for application in data['applications']:
+    conf = application['effective_conf']
+    assert conf['spark.app.id'] == application['application_id']
+    assert 0 < int(conf['spark.driver.port']) < 65536
+    assert int(conf['spark.app.startTime']) >= int(conf['spark.app.submitTime'])
+    run_name = Path(application['path']).parents[1].name
+    marker = '/scratch/' + run_name + '/'
+    for key in ('spark.local.dir', 'spark.eventLog.dir', 'spark.driver.extraJavaOptions',
+                'spark.executor.extraJavaOptions'):
+        assert marker in conf[key], (key, conf[key])
+    configurations[application['probe_arm']] = {
+        key: value.replace(marker, '/scratch/<application>/')
+        for key, value in conf.items() if key not in identity_keys}
+    identity_configuration[application['probe_arm']] = {key: conf[key] for key in identity_keys}
 changed_conf = {key: [configurations['baseline'].get(key), configurations['combined'].get(key)]
                 for key in set(configurations['baseline']) | set(configurations['combined'])
                 if configurations['baseline'].get(key) != configurations['combined'].get(key)}
@@ -98,6 +114,8 @@ report = {'classification': 'Complete measured four-GPU baseline versus combined
     'dataset_contract':data['applications'][0]['dataset_contract'],
     'applications':data['applications'],
     'effective_configuration_changes': changed_conf,
+    'application_identity_configuration': identity_configuration,
+    'configuration_normalization': 'Validate app IDs, ports and times; normalize only the recorded application scratch directory; preserve and compare every JVM option.',
     'query_execution_count': len(data['rows']), 'all_existing_reference_comparisons_passed': True,
     'arms': arms, 'observed_time_reduction_fraction': reductions}
 output = root/'evidence'/('comparison-' + args.label + '.json')

@@ -35,6 +35,14 @@ def main():
             s['normalized_plan_sha256'] = hashlib.sha256(s.pop('normalized_plan').encode()).hexdigest()
             scans = [n for n in raw[(s['query'], s['iteration'])]['plan_metrics'] if n['node'].startswith('GpuScan')]
             s['scan_metrics'] = scans
+            fields = {'numOutputRows', 'numOutputBatches', 'dataSize', 'numPartitions',
+                      'shuffleBytesWritten', 'shuffleRecordsWritten', 'opTimeNew',
+                      'opTimeNewShuffleWrite', 'opTimeNewShuffleRead', 'buildTime', 'streamTime'}
+            s['work_metrics'] = [
+                {'plan_metric_index': i, 'node': n['node'],
+                 'metrics': {k: v for k, v in n['metrics'].items() if k in fields}}
+                for i, n in enumerate(raw[(s['query'], s['iteration'])]['plan_metrics'])
+                if any(kind in n['node'] for kind in ('Exchange', 'Aggregate', 'Join'))]
             s['summed_scan_buffer_seconds'] = sum(n['metrics'].get('bufferTime', 0) for n in scans) / 1e9
             s['summed_scan_gpu_decode_seconds'] = sum(n['metrics'].get('gpuDecodeTime', 0) for n in scans) / 1e9
             window = s['execution_window_ms']

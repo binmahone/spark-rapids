@@ -67,6 +67,11 @@ def choose_case(query, config):
 
 
 def check_branch(query, candidate, plan):
+    if candidate.name == 'single_scan_partsupp_total':
+        scans = [line for line in plan.splitlines() if 'Scan' in line and
+                 'spark_catalog.default.partsupp[' in line]
+        if len(scans) != 1 or not re.search(r'\bGpu\w*Window\b', plan):
+            raise MechanismNotReached('Single-scan partsupp total reuse is absent')
     if candidate.name in ('single_scan_quantity_state', 'single_scan_filtered_orders'):
         scans = [line for line in plan.splitlines() if 'Scan' in line and
                  'spark_catalog.default.lineitem[' in line]

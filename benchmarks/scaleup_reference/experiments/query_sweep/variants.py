@@ -294,5 +294,6 @@ def catalog(include_followups=False):
         candidate = targeted(query)
         if candidate:
             result.append(candidate)
-    from ceiling_variants import cases, refinements
-    return result + extra_cases() + (followup_cases() + cases() + refinements() if include_followups else [])
+    from ceiling_variants import cases, refinements, q11_total_reuse
+    return result + extra_cases() + (followup_cases() + cases() + refinements() +
+                                    [q11_total_reuse()] if include_followups else [])

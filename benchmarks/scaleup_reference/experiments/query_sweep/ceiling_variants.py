@@ -97,3 +97,19 @@ def refinements():
         Variant(18, 'single_scan_filtered_orders', q18,
                 'Apply qualifying quantity state to orders before attaching customer payloads',
                 evidence='One lineitem scan; grouped quantity and filtered orders both use GPU broadcast')]
+
+
+def q11_total_reuse():
+    sql = """WITH part_values AS (
+        SELECT ps_partkey, SUM(ps_supplycost * ps_availqty) AS value
+        FROM partsupp JOIN supplier ON ps_suppkey = s_suppkey
+        JOIN nation ON s_nationkey = n_nationkey
+        WHERE n_name = 'GERMANY' GROUP BY ps_partkey),
+        marked AS (
+        SELECT ps_partkey, value,
+            CAST(SUM(value) OVER () AS DECIMAL(36,2)) AS probe_total FROM part_values)
+        SELECT ps_partkey, value FROM marked
+        WHERE value > probe_total * 0.00000001 ORDER BY value DESC"""
+    return Variant(11, 'single_scan_partsupp_total', sql,
+        'Share grouped part values with the threshold total while preserving its decimal precision',
+        evidence='One partsupp scan and a GPU window over the grouped values')

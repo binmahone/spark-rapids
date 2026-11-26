@@ -25,7 +25,7 @@ import sys
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
 from common import read, write
-from ceiling_variants import cases as new_sql_cases
+from ceiling_variants import cases as new_sql_cases, refinements
 from run_screen import launch_group
 from variants import ORDER, Variant, catalog, original
 import services
@@ -58,7 +58,7 @@ def decision(query, a, b):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', required=True)
-    parser.add_argument('--phase', choices=['sql', 'tune'], required=True)
+    parser.add_argument('--phase', choices=['sql', 'refine', 'tune'], required=True)
     parser.add_argument('--resume', action='store_true', help='Resume a failed phase without discarding its evidence')
     args = parser.parse_args()
     work = Path(args.work).resolve()
@@ -132,6 +132,26 @@ def main():
             assert prior['status'] == 'completed'
             available = {(c.query, c.name): c for c in catalog(include_followups=True)}
             for q, spec in prior['selected'].items():
+                if spec['name'] != 'baseline':
+                    selected[int(q)] = available[(int(q), spec['name'])]
+            if args.phase == 'refine':
+                candidates = refinements()
+                a, b = [], []
+                for index, arm in enumerate('ABBA'):
+                    values = [selected[c.query] for c in candidates] if arm == 'A' else candidates
+                    samples = run('refine-' + arm + str(index), values)
+                    (a if arm == 'A' else b).extend(samples)
+                for case in candidates:
+                    d = decision(case.query, a, b)
+                    d.update(variant=case.name, baseline_variant=selected[case.query].name)
+                    report['decisions'].append(d)
+                    if d['accepted']:
+                        selected[case.query] = case
+                report.update(status='completed', selected={str(q): vars(c) for q, c in selected.items()})
+                return
+            refined = read(work / 'ceiling/refine.json')
+            assert refined['status'] == 'completed'
+            for q, spec in refined['selected'].items():
                 if spec['name'] != 'baseline':
                     selected[int(q)] = available[(int(q), spec['name'])]
             baseline_samples = run('tune-control', [selected[q] for q in ORDER])

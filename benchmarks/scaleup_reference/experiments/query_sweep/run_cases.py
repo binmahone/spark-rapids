@@ -67,12 +67,16 @@ def choose_case(query, config):
 
 
 def check_branch(query, candidate, plan):
-    if candidate.name == 'single_scan_quantity_state':
+    if candidate.name in ('single_scan_quantity_state', 'single_scan_filtered_orders'):
         scans = [line for line in plan.splitlines() if 'Scan' in line and
                  'spark_catalog.default.lineitem[' in line]
         if len(scans) != 1 or not any('Gpu' in line and 'BroadcastHashJoin' in line and
                 'l_orderkey' in line for line in plan.splitlines()):
             raise MechanismNotReached('Single-scan grouped quantity broadcast is absent')
+    if candidate.name in ('single_scan_filtered_orders', 'preaggregate_broadcast_customer'):
+        if not any('Gpu' in line and 'BroadcastHashJoin' in line and 'c_custkey' in line
+                   for line in plan.splitlines()):
+            raise MechanismNotReached('The customer join still requires a shuffle')
     if candidate.name == 'prefilter_partsupp_reuse':
         scans = [line for line in plan.splitlines() if 'Scan' in line and
                  'spark_catalog.default.part[' in line]
@@ -80,7 +84,8 @@ def check_branch(query, candidate, plan):
                    and 'ps_partkey' in line for line in plan.splitlines())
         if len(scans) != 1 or 'ReusedExchange' not in plan or not semi:
             raise MechanismNotReached('Selective part-key broadcast was not shared')
-    if candidate.name in ('preaggregate_line_revenue', 'preaggregate_customer_revenue'):
+    if candidate.name in ('preaggregate_line_revenue', 'preaggregate_customer_revenue',
+                          'preaggregate_broadcast_customer'):
         key = 'l_orderkey' if query == 3 else 'o_custkey'
         if not any('GpuHashAggregate' in line and 'sum(' in line and
                    re.search(r'keys=\[' + key + r'#[0-9]+L?\]', line)

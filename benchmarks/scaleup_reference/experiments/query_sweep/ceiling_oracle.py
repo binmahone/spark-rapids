@@ -24,7 +24,7 @@ import tempfile
 import subprocess
 
 from pyspark.sql import SparkSession
-from ceiling_variants import cases, prepare_frame
+from ceiling_variants import cases, prepare_frame, refinements
 from toy_oracle import SCHEMAS, fixture
 from variants import original
 
@@ -37,7 +37,9 @@ def result(spark, sql):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True)
+    parser.add_argument('--refinements', action='store_true')
     args = parser.parse_args()
+    requested = refinements() if args.refinements else cases()
     report = {'status': 'running', 'checks': [], 'mutations': [],
               'scope': 'CPU semantic counterexamples; full-scale GPU qualification remains required'}
     here = Path(__file__).resolve().parent
@@ -68,7 +70,7 @@ def main():
                             row[6] = Decimal('0.07')
                             values.append(tuple(row))
                     spark.createDataFrame(values, SCHEMAS[table]).createOrReplaceTempView(table)
-                for case in cases():
+                for case in requested:
                     expected, schema = result(spark, original(case.query))
                     frame = prepare_frame(spark, case)
                     observed = Counter(tuple(row) for row in frame.collect())
@@ -81,7 +83,7 @@ def main():
                         'fixture': mode, 'rows': sum(expected.values()), 'status': 'passed'})
             for table, rows in data.items():
                 spark.createDataFrame(rows, SCHEMAS[table]).createOrReplaceTempView(table)
-            for case in cases():
+            for case in requested:
                 if case.query not in (3, 10, 18):
                     continue
                 variable = 'probe_quantity' if case.query == 18 else 'probe_revenue'

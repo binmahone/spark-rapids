@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 readonly work=${1:?Prepared host work directory is required}
-readonly phase=${2:?Phase sql, refine or tune is required}
+readonly phase=${2:?Phase sql, refine, tune or post is required}
 readonly attempt=${3:-initial}
 readonly here=$(cd "$(dirname "$0")" && pwd)
-[[ "$phase" = sql || "$phase" = refine || "$phase" = tune ]] || exit 2
+[[ "$phase" = sql || "$phase" = refine || "$phase" = tune || "$phase" = post ]] || exit 2
 [[ "$attempt" =~ ^[A-Za-z0-9_-]+$ ]] || exit 2
 tag="ceiling-$phase"
 resume_args=()

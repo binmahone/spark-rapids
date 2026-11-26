@@ -31,9 +31,14 @@ def main():
     if output.exists():
         raise RuntimeError('Export target exists; use a new snapshot directory')
     phases = {phase: read(work / 'ceiling' / (phase + '.json')) for phase in ('sql', 'refine', 'tune')}
+    if (work / 'ceiling/post.json').exists():
+        phases['post'] = read(work / 'ceiling/post.json')
     assert all(value['status'] == 'completed' for value in phases.values())
     tuned = phases['tune']
     final = next(g for g in reversed(tuned['groups']) if g['label'] == 'final-suite' and g['status'] == 'completed')
+    chosen = phases.get('post', tuned)
+    if 'post' in phases and any(d['accepted'] for d in chosen['decisions']):
+        final = next(g for g in reversed(chosen['groups']) if g['label'] == 'post-final-suite' and g['status'] == 'completed')
     baseline = next(g for g in phases['sql']['groups'] if g['label'] == 'prior-suite' and g['status'] == 'completed')
     control = next(g for g in tuned['groups'] if g['label'] == 'tune-control' and g['status'] == 'completed')
     assert len(final['samples']) == len(baseline['samples']) == len(control['samples']) == 44
@@ -42,7 +47,7 @@ def main():
     available = {(c.query, c.name): c for c in catalog(include_followups=True)}
     selected = {}
     for q in ORDER:
-        spec = tuned['selected'][str(q)]
+        spec = chosen['selected'][str(q)]
         case = (Variant(q, 'baseline', original(q), 'Unchanged reference SQL') if spec['name'] == 'baseline'
                 else available[(q, spec['name'])])
         digest = hashlib.sha256(case.sql.encode()).hexdigest()
@@ -77,8 +82,8 @@ def main():
                    'The combined score is measured, not a sum of independent candidate bests',
                    'SQL rewrites and per-query settings are experimental selections, not a general optimizer implementation',
                    'No claim that native kernels, reader architecture or every possible configuration has reached its physical limit']}
-    assert evidence['final_best_sql_sum_seconds'] == tuned['combined_best_sql_sum_seconds']
-    assert evidence['final_best_total_sum_seconds'] == tuned['combined_best_total_sum_seconds']
+    assert evidence['final_best_sql_sum_seconds'] == chosen['combined_best_sql_sum_seconds']
+    assert evidence['final_best_total_sum_seconds'] == chosen['combined_best_total_sum_seconds']
     write(output / 'selected-cases.json', selection)
     write(output / 'measurements.json', evidence)
     print('Exported the measured selection and compact evidence to', output)

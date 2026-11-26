@@ -25,7 +25,7 @@ import sys
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
 from common import read, write
-from ceiling_variants import cases as new_sql_cases, refinements
+from ceiling_variants import cases as new_sql_cases, refinements, q11_total_reuse
 from run_screen import launch_group
 from variants import ORDER, Variant, catalog, original
 import services
@@ -58,7 +58,7 @@ def decision(query, a, b):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', required=True)
-    parser.add_argument('--phase', choices=['sql', 'refine', 'tune'], required=True)
+    parser.add_argument('--phase', choices=['sql', 'refine', 'tune', 'post'], required=True)
     parser.add_argument('--resume', action='store_true', help='Resume a failed phase without discarding its evidence')
     args = parser.parse_args()
     work = Path(args.work).resolve()
@@ -131,6 +131,34 @@ def main():
             prior = read(work / 'ceiling/sql.json')
             assert prior['status'] == 'completed'
             available = {(c.query, c.name): c for c in catalog(include_followups=True)}
+            if args.phase == 'post':
+                tuned = read(work / 'ceiling/tune.json')
+                assert tuned['status'] == 'completed'
+                for q, spec in tuned['selected'].items():
+                    case = (Variant(int(q), 'baseline', original(int(q)), 'Unchanged reference SQL')
+                            if spec['name'] == 'baseline' else available[(int(q), spec['name'])])
+                    selected[int(q)] = replace(case, overrides=spec['overrides'])
+                candidate = replace(q11_total_reuse(), overrides=selected[11].overrides)
+                a, b = [], []
+                for index, arm in enumerate('ABBA'):
+                    samples = run('post-' + arm + str(index), [selected[11] if arm == 'A' else candidate])
+                    (a if arm == 'A' else b).extend(samples)
+                d = decision(11, a, b)
+                d.update(variant=candidate.name, baseline_variant=selected[11].name)
+                report['decisions'].append(d)
+                if d['accepted']:
+                    selected[11] = candidate
+                    combined = run('post-final-suite', [selected[q] for q in ORDER])
+                    report['combined_best_sql_sum_seconds'] = sum(min(s['sql_seconds'] for s in combined
+                        if s['query'] == q) for q in ORDER)
+                    report['combined_best_total_sum_seconds'] = sum(min(s['sql_plus_cleanup_seconds']
+                        for s in combined if s['query'] == q) for q in ORDER)
+                else:
+                    report['combined_best_sql_sum_seconds'] = tuned['combined_best_sql_sum_seconds']
+                    report['combined_best_total_sum_seconds'] = tuned['combined_best_total_sum_seconds']
+                    report['combined_source_phase'] = 'tune'
+                report.update(status='completed', selected={str(q): vars(c) for q, c in selected.items()})
+                return
             for q, spec in prior['selected'].items():
                 if spec['name'] != 'baseline':
                     selected[int(q)] = available[(int(q), spec['name'])]

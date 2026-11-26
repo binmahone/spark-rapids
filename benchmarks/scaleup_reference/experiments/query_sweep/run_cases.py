@@ -233,6 +233,16 @@ def main():
             'org.apache.spark.sql.rapids.IndependentQueryBoundary$')
         boundary = boundary_class.getField('MODULE$').get(None)
         validator = Validator(config['platform']) if config['validation'] else None
+        collector_config = config.get('experimental_collector')
+        if collector_config:
+            assert sha(Path(collector_config['jar'])) == collector_config['sha256']
+            from early_shuffle_self_test import verify
+            boundary.begin(sc._jsc.sc(), 'collector-self-test')
+            try:
+                verify(spark, app)
+            finally:
+                boundary.finish(sc._jsc.sc(), 'collector-self-test', executors, slots)
+            state['collector_self_test'] = read(app / 'collector-self-test.json')
         startup.cancel()
         state['status'] = 'running'
         write(app / 'result.json', state)
@@ -285,7 +295,12 @@ def main():
                     (app / (token + '.preflight.txt')).write_text(preflight)
                     (app / (token + '.sql')).write_text(candidate.sql)
                     check_branch(query, candidate, preflight)
-                    rows = frame._jdf.collect()
+                    if collector_config:
+                        rows = spark._jvm.com.nvidia.spark.rapids.benchmark.EarlyShuffleCollector.collect(
+                            frame._jdf, collector_config['mode'] == 'early-leaves',
+                            str(app / (token + '.collector.json')))
+                    else:
+                        rows = frame._jdf.collect()
                     elapsed = time.perf_counter() - started
                     if expired.is_set():
                         raise TimeoutError('Query exceeded its limit')

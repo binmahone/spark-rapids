@@ -17,7 +17,7 @@ import services
 from variants import ORDER, catalog, extra_cases, targeted
 
 
-def launch_group(work, phase, index, cases, global_conf):
+def launch_group(work, phase, index, cases, global_conf, collector=None):
     deployment = read(work / 'evidence/deployment.json')
     config = load_config('aws48x', work / 'evidence/deployment.json')
     config['spark_conf'].update(global_conf)
@@ -41,6 +41,13 @@ def launch_group(work, phase, index, cases, global_conf):
             SUITE / 'scripts/common.py', SUITE / 'scripts/services.py',
             SUITE / 'scripts/catalog_statistics.py', SUITE / 'scripts/validation.py']},
         classification='Unqualified screening, not a Daily Trend score')
+    helper = None
+    if collector is not None:
+        assert collector in ('original', 'early-leaves')
+        helper = work / 'artifacts/early-shuffle/early-shuffle.jar'
+        assert helper.exists()
+        config['experimental_collector'] = {'mode': collector, 'jar': str(helper),
+                                            'sha256': sha(helper)}
     profiles = expand(config, queries)
     for case in cases:
         profiles[str(case.query)].update(case.overrides)
@@ -57,6 +64,8 @@ def launch_group(work, phase, index, cases, global_conf):
     native = str(Path(deployment['ucx_home']) / 'lib')
     native += ':/usr/local/cuda-13.1/lib64:/usr/local/cuda-13.1/targets/x86_64-linux/lib'
     classpath = str(engine) + ':' + config['tools']
+    if helper:
+        classpath += ':' + str(helper)
     runtime = {'spark.master': f'spark://{host}:19077', 'spark.cores.max': '64',
         'spark.driver.host': host, 'spark.driver.bindAddress': host, 'spark.ui.port': '0',
         'spark.eventLog.enabled': 'true', 'spark.eventLog.compress': 'false',
@@ -83,7 +92,8 @@ def launch_group(work, phase, index, cases, global_conf):
     driver_state = app / 'driver-service.json'
     command = [str(Path(deployment['spark_home']) / 'bin/spark-submit'),
         '--properties-file', str(properties), '--jars',
-        'local:' + str(engine) + ',local:' + config['tools'], str(HERE / 'run_cases.py'),
+        'local:' + str(engine) + ',local:' + config['tools'] +
+        (',local:' + str(helper) if helper else ''), str(HERE / 'run_cases.py'),
         '--run', str(run), '--app', str(app), '--queries', ','.join(map(str, queries))]
     write(app / 'command.json', {'argv': command})
     try:

@@ -140,7 +140,7 @@ def main():
             if not any('BroadcastHashJoin' in line and 'LeftSemi' in line
                        for line in planned.splitlines()):
                 raise AssertionError(f'Q{planned_query}: hint did not reach a broadcast semi join')
-        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','preaggregate-broadcast','row-propagation','row-propagation-reuse','aggregate-reuse','window-average','screen'):
+        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','preaggregate-broadcast','preaggregate-prefilter','row-propagation','row-propagation-reuse','aggregate-reuse','window-average','screen'):
             checks = check_semantics(spark, SUITE, queries, config['probe_arm'])
             write(app / 'rewrite-counterexamples.json', checks)
         test = spark.range(10000).selectExpr('sum(id * id + 3) AS total')
@@ -214,10 +214,15 @@ def main():
                     if config.get('suite_audit') and query_arm in ('dimension-broadcast','preaggregate-broadcast'):
                         if not any('BroadcastHashJoin' in line and 'Inner' in line for line in preflight.splitlines()):
                             raise AssertionError('Dimension broadcast hint was not executed')
-                    if config.get('suite_audit') and query_arm in ('preaggregate','preaggregate-broadcast') and not config.get('prefix_reference'):
+                    if config.get('suite_audit') and query_arm in ('preaggregate','preaggregate-broadcast','preaggregate-prefilter') and not config.get('prefix_reference'):
                         group_key = 'l_orderkey' if query in (3,4,18) else 'o_custkey'
                         if not re.search(r'GpuHashAggregate \(keys=\[' + group_key + r'#\d+L\],', preflight):
                             raise AssertionError('Requested pre-join aggregate is absent')
+                    if config.get('suite_audit') and query_arm == 'preaggregate-prefilter':
+                        if 'ReusedExchange' not in preflight or preflight.count('GpuFileGpuScan parquet spark_catalog.default.lineitem[')!=1:
+                            raise AssertionError('Expected shared Q18 aggregate and a single lineitem scan')
+                        if not any('LeftSemi' in line and 'BroadcastHashJoin' in line for line in preflight.splitlines()):
+                            raise AssertionError('Expected early order-key broadcast filter')
                     if config.get('suite_audit') and query_arm in ('aggregate-reuse','window-average'):
                         if not re.search(r'Gpu\w*Window', preflight) or preflight.count('GpuFileGpuScan parquet spark_catalog.default.lineitem[')!=1:
                             raise AssertionError('Expected one lineitem scan and a GPU window')

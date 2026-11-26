@@ -46,7 +46,7 @@ for label in LABELS:
   assert conf.get('spark.executor.instances')=='4'
   assert 'spark.rapids.memory.gpu.allocSize' not in conf
   stages=collections.defaultdict(collections.Counter);groups=collections.defaultdict(set)
-  sql_plans={};sql_groups={};acc_updates=collections.Counter()
+  sql_plans={};sql_groups={};acc_updates=collections.Counter();jobs=[];sql_roots={};root_groups={}
   if ANALYZE:
    events=list((w/'scratch'/run.name/'events').glob('app-*'))
    if d.get('samples') and not events:raise RuntimeError('Raw event logs are archived; use retained results or restore the evidence archive before analysis')
@@ -57,11 +57,19 @@ for label in LABELS:
       try:
        if b'SparkListenerJobStart' in raw:
         v=json.loads(raw);group=(v.get('Properties') or {}).get('spark.jobGroup.id')
-        for stage in v['Stage IDs']:groups[stage].add(group)
         execution=(v.get('Properties') or {}).get('spark.sql.execution.id')
-        if execution is not None:sql_groups[str(execution)]=group
+        root=(v.get('Properties') or {}).get('spark.sql.execution.root.id',execution)
+        jobs.append((v['Stage IDs'],group,str(execution) if execution is not None else None,
+                     str(root) if root is not None else None))
+        if root is not None and group and re.fullmatch(r'q\d+-iteration\d+',group):
+         assert str(root) not in root_groups or root_groups[str(root)]==group
+         root_groups[str(root)]=group
        elif b'SparkListenerSQLExecutionStart' in raw:
-        v=json.loads(raw);sql_plans[str(v['executionId'])]=v['sparkPlanInfo']
+        v=json.loads(raw);execution=str(v['executionId']);sql_plans[execution]=v['sparkPlanInfo']
+        root=str(v.get('rootExecutionId',v['executionId']));sql_roots[execution]=root
+        if re.fullmatch(r'q\d+-iteration\d+',v.get('description','')):
+         assert root not in root_groups or root_groups[root]==v['description']
+         root_groups[root]=v['description']
        elif b'SparkListenerTaskEnd' in raw:
         v=json.loads(raw);s=stages[v['Stage ID']];metrics=v.get('Task Metrics') or {}
         s['tasks']+=1
@@ -73,12 +81,17 @@ for label in LABELS:
           except (ValueError,TypeError):pass
         s['shuffle_write_bytes']+=(metrics.get('Shuffle Write Metrics') or {}).get('Shuffle Bytes Written',0)
       except json.JSONDecodeError:continue
+   for execution,root in sql_roots.items():sql_groups[execution]=root_groups.get(root)
+   for stage_ids,group,execution,root in jobs:
+    canonical=root_groups.get(root,group)
+    for stage in stage_ids:groups[stage].add(canonical)
   for sample in d.get('samples',[]):
    row=dict(sample,label=label,arm=run.name)
    counter=collections.Counter();group=f'q{sample["query"]}-iteration{sample["iteration"]}'
    for stage,group_set in groups.items():
     if group in group_set:counter.update(stages[stage])
    row['task_metrics']=dict(counter)
+   row['task_metric_scope']='All jobs in the query SQL root, including asynchronous broadcast jobs with UUID groups; explicit query cleanup jobs included; stage IDs deduplicated.'
    metric_ids={};event_nodes=[];scan_ids=set()
    for execution,execution_group in sql_groups.items():
     if execution_group!=group or execution not in sql_plans:continue
@@ -101,6 +114,11 @@ for label in LABELS:
    for aid,metric in metric_ids.items():
     if metric['name'] in descriptions:all_reader[descriptions[metric['name']]]+=acc_updates[aid]
    row['reader_metrics_all_branches']=dict(all_reader)
+   shuffle_metrics=[aid for aid,metric in metric_ids.items() if metric['name']=='shuffle bytes written']
+   row['sql_accumulator_shuffle_write_bytes']=sum(acc_updates[aid] for aid in shuffle_metrics)
+   row['sql_shuffle_crosscheck_available']=bool(shuffle_metrics)
+   if shuffle_metrics and row['sql_accumulator_shuffle_write_bytes']!=counter.get('shuffle_write_bytes',0):
+    raise AssertionError('Query-root task and SQL shuffle counters differ: '+str((label,run.name,group,row['sql_accumulator_shuffle_write_bytes'],counter)))
    row['event_scan_metrics']=event_nodes
    row['reader_metric_scope']='all SQL event-plan branches; shared/reused SQL accumulator IDs counted once; includes scalar subqueries'
 

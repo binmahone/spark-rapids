@@ -32,6 +32,17 @@ def transform(query, original, arm):
         before = 'SELECT l_orderkey, sum(revenue) AS revenue'
         assert value.count(before) == 1
         return value.replace(before, 'SELECT /*+ BROADCAST(customer) */ l_orderkey, sum(revenue) AS revenue')
+    if arm == 'preaggregate-prefilter' and query == 18:
+        value = transform(query, original, 'preaggregate')
+        value = value.replace('FROM lineitem GROUP BY l_orderkey',
+                              'FROM lineitem WHERE l_orderkey IS NOT NULL GROUP BY l_orderkey')
+        before = 'FROM customer JOIN orders ON c_custkey = o_custkey'
+        after = '''FROM customer JOIN (
+    SELECT * FROM orders WHERE o_orderkey IN (
+        SELECT /*+ BROADCAST */ l_orderkey FROM line_quantity)
+) orders ON c_custkey = o_custkey'''
+        assert value.count(before) == 1
+        return value.replace(before, after)
     if arm == 'window-average' and query == 17:
         return """
 WITH marked AS (

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Export a completed, measured ceiling selection without requiring the search to be rerun."""
 import argparse
+import csv
 import hashlib
+import json
 from pathlib import Path
 import sys
 
@@ -98,6 +100,20 @@ def main():
     assert evidence['final_best_total_sum_seconds'] == chosen['combined_best_total_sum_seconds']
     write(output / 'selected-cases.json', selection)
     write(output / 'measurements.json', evidence)
+    with (output / 'per-query.csv').open('w', newline='') as stream:
+        writer = csv.DictWriter(stream, fieldnames=['query', 'variant', 'runtime_overrides',
+            'baseline_min_sql_seconds', 'final_min_sql_seconds',
+            'baseline_min_sql_plus_cleanup_seconds', 'final_min_sql_plus_cleanup_seconds'])
+        writer.writeheader()
+        for q, (case, _, overrides) in selected.items():
+            row = {'query': q, 'variant': case.name,
+                   'runtime_overrides': json.dumps(overrides, sort_keys=True)}
+            for label, group in [('baseline', baseline), ('final', final)]:
+                for short, field in [('sql', 'sql_seconds'),
+                                     ('sql_plus_cleanup', 'sql_plus_cleanup_seconds')]:
+                    row[label + '_min_' + short + '_seconds'] = min(
+                        s[field] for s in group['samples'] if s['query'] == q)
+            writer.writerow(row)
     print('Exported the measured selection and compact evidence to', output)
 
 

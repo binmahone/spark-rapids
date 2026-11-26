@@ -3,6 +3,7 @@ set -euo pipefail
 readonly work=${1:?Prepared host directory is required}
 readonly name=${2:?Unique run name is required}
 readonly here=$(cd "$(dirname "$0")" && pwd)
+readonly selection=${3:-$here/selected-cases.json}
 [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || exit 2
 mkdir -p "$work/evidence"
 [[ ! -e "$work/evidence/$name.log" ]] || { echo 'Run log exists; choose a new name' >&2; exit 1; }
@@ -19,4 +20,4 @@ finish() {
     printf '%s\n' "$code" > "$work/evidence/$name.exit"
 }
 trap finish EXIT
-python3 "$here/run_selected_suite.py" --work "$work" --name "$name"
+python3 "$here/run_selected_suite.py" --work "$work" --name "$name" --selection "$selection"

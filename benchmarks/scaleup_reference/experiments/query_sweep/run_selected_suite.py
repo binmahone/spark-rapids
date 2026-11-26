@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run the selected SQL rewrites as one fully validated AWS48x TPC-H suite."""
 import argparse
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import hashlib
 from pathlib import Path
@@ -10,7 +11,7 @@ import sys
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
-from common import read, write
+from common import read, sha, write
 from run_screen import launch_group
 from variants import ORDER, Variant, catalog, original
 
@@ -27,6 +28,16 @@ if selection['platform'] != 'aws48x' or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9
 if (selection['engine_sha256'] != 'c267dafd65ae85b558d8c8df03a94c0947cbe42b79a1e29ddeaa63bfcadb8cce'
         or selection['query_order'] != ORDER):
     raise AssertionError('Engine identity or query order differs from the tested suite')
+if selection.get('common_configuration_sha256') and selection['common_configuration_sha256'] != sha(
+        HERE.parents[1] / 'configs/aws48x.json'):
+    raise AssertionError('Common configuration differs from the measured selection')
+overrides = selection.get('runtime_overrides_by_query', {})
+allowed = {'spark.sql.shuffle.partitions', 'spark.rapids.sql.batchSizeBytes',
+           'spark.sql.files.maxPartitionBytes'}
+if any(q not in {str(q) for q in ORDER} or set(values) - allowed
+       or any(not isinstance(value, str) for value in values.values())
+       for q, values in overrides.items()):
+    raise ValueError('Selection contains unsupported runtime overrides')
 available = {(c.query, c.name): c for c in catalog(include_followups=True)}
 selected = {}
 for record in selection['candidates']:
@@ -35,11 +46,12 @@ for record in selection['candidates']:
         raise ValueError('Selected SQL rewrites must be unique and keep the common configuration')
     selected[case.query] = case
 cases = [selected.get(q, Variant(q, 'baseline', original(q), 'Unchanged reference SQL')) for q in ORDER]
+cases = [replace(case, overrides=overrides.get(str(case.query), {})) for case in cases]
 for case in cases:
     if hashlib.sha256(case.sql.encode()).hexdigest() != selection['sql_sha256_by_query'][str(case.query)]:
         raise AssertionError('Selected SQL differs from the tested query: ' + str(case.query))
 if args.verify_only:
-    print('Verified all 22 SQL fingerprints; no services were started')
+    print('Verified all 22 SQL fingerprints and runtime override contracts; no services were started')
     raise SystemExit(0)
 host = socket.gethostbyname(socket.gethostname())
 for port in (19077, 19080):

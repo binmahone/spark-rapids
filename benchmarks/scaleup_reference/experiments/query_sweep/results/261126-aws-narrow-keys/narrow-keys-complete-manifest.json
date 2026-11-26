@@ -1,0 +1,808 @@
+{
+  "archive": "narrow-keys-complete.tar.gz",
+  "bytes": 22297913,
+  "sha256": "d38927b4a4fa0d123e1037d46ce0b6e43873e6c8e6d21d4eb788865e06111ae9",
+  "files": [
+    {
+      "name": "evidence/deployment.json",
+      "bytes": 368
+    },
+    {
+      "name": "evidence/host-prerequisites.json",
+      "bytes": 5862
+    },
+    {
+      "name": "evidence/narrow-keys-A0.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/narrow-keys-A0.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/narrow-keys-B1.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/narrow-keys-B1.log",
+      "bytes": 436
+    },
+    {
+      "name": "evidence/narrow-keys-B2.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/narrow-keys-B2.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/owner.json",
+      "bytes": 450
+    },
+    {
+      "name": "narrow-keys/A0/analysis.json",
+      "bytes": 167660
+    },
+    {
+      "name": "narrow-keys/A0/controller.json",
+      "bytes": 68
+    },
+    {
+      "name": "narrow-keys/A0/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "narrow-keys/A0/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "narrow-keys/A0/gpm.jsonl",
+      "bytes": 474073
+    },
+    {
+      "name": "narrow-keys/A0/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "narrow-keys/A0/host.jsonl",
+      "bytes": 604515
+    },
+    {
+      "name": "narrow-keys/A0/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "narrow-keys/A0/pool.jsonl",
+      "bytes": 162871
+    },
+    {
+      "name": "narrow-keys/A0/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "narrow-keys/A0/state.json",
+      "bytes": 64191
+    },
+    {
+      "name": "narrow-keys/A0/vm-owner.json",
+      "bytes": 748
+    },
+    {
+      "name": "narrow-keys/A0/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "narrow-keys/A0/vm.jsonl",
+      "bytes": 212342
+    },
+    {
+      "name": "narrow-keys/A0/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "narrow-keys/B1/controller.json",
+      "bytes": 68
+    },
+    {
+      "name": "narrow-keys/B1/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "narrow-keys/B1/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "narrow-keys/B1/gpm.jsonl",
+      "bytes": 95259
+    },
+    {
+      "name": "narrow-keys/B1/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "narrow-keys/B1/host.jsonl",
+      "bytes": 121454
+    },
+    {
+      "name": "narrow-keys/B1/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "narrow-keys/B1/pool.jsonl",
+      "bytes": 16050
+    },
+    {
+      "name": "narrow-keys/B1/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "narrow-keys/B1/state.json",
+      "bytes": 3207
+    },
+    {
+      "name": "narrow-keys/B1/vm-owner.json",
+      "bytes": 748
+    },
+    {
+      "name": "narrow-keys/B1/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "narrow-keys/B1/vm.jsonl",
+      "bytes": 52021
+    },
+    {
+      "name": "narrow-keys/B1/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "narrow-keys/B2/analysis.json",
+      "bytes": 148886
+    },
+    {
+      "name": "narrow-keys/B2/controller.json",
+      "bytes": 68
+    },
+    {
+      "name": "narrow-keys/B2/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "narrow-keys/B2/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "narrow-keys/B2/gpm.jsonl",
+      "bytes": 545330
+    },
+    {
+      "name": "narrow-keys/B2/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "narrow-keys/B2/host.jsonl",
+      "bytes": 695617
+    },
+    {
+      "name": "narrow-keys/B2/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "narrow-keys/B2/pool.jsonl",
+      "bytes": 191519
+    },
+    {
+      "name": "narrow-keys/B2/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "narrow-keys/B2/state.json",
+      "bytes": 64565
+    },
+    {
+      "name": "narrow-keys/B2/vm-owner.json",
+      "bytes": 748
+    },
+    {
+      "name": "narrow-keys/B2/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "narrow-keys/B2/vm.jsonl",
+      "bytes": 240188
+    },
+    {
+      "name": "narrow-keys/B2/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "narrow-keys/lifecycle-audit.json",
+      "bytes": 255
+    },
+    {
+      "name": "narrow-keys/oracle.exit",
+      "bytes": 2
+    },
+    {
+      "name": "narrow-keys/oracle.json",
+      "bytes": 411937
+    },
+    {
+      "name": "narrow-keys/oracle.log",
+      "bytes": 714
+    },
+    {
+      "name": "narrow-keys/profiler-audit.json",
+      "bytes": 1519
+    },
+    {
+      "name": "narrow-keys/resource-log-audit.json",
+      "bytes": 18168
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/events/app-20261126142722-0000",
+      "bytes": 60789120
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/master.log",
+      "bytes": 5340
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-0/work/app-20261126142722-0000/0/stderr",
+      "bytes": 2238713
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-0/work/app-20261126142722-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-0/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-1/work/app-20261126142722-0000/3/stderr",
+      "bytes": 2160813
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-1/work/app-20261126142722-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-1/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-2/work/app-20261126142722-0000/4/stderr",
+      "bytes": 2183370
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-2/work/app-20261126142722-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-2/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-3/work/app-20261126142722-0000/6/stderr",
+      "bytes": 2249189
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-3/work/app-20261126142722-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-3/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-4/work/app-20261126142722-0000/1/stderr",
+      "bytes": 2193083
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-4/work/app-20261126142722-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-4/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-5/work/app-20261126142722-0000/5/stderr",
+      "bytes": 2146748
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-5/work/app-20261126142722-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-5/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-6/work/app-20261126142722-0000/2/stderr",
+      "bytes": 2202502
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-6/work/app-20261126142722-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-6/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-7/work/app-20261126142722-0000/7/stderr",
+      "bytes": 2222301
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-7/work/app-20261126142722-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-A0-0/suite/worker-7/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/events/app-20261126143007-0000",
+      "bytes": 564889
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/master.log",
+      "bytes": 5244
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-0/work/app-20261126143007-0000/3/stderr",
+      "bytes": 24426
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-0/work/app-20261126143007-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-0/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-1/work/app-20261126143007-0000/6/stderr",
+      "bytes": 26859
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-1/work/app-20261126143007-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-1/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-2/work/app-20261126143007-0000/0/stderr",
+      "bytes": 23105
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-2/work/app-20261126143007-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-2/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-3/work/app-20261126143007-0000/5/stderr",
+      "bytes": 25616
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-3/work/app-20261126143007-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-3/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-4/work/app-20261126143007-0000/2/stderr",
+      "bytes": 26388
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-4/work/app-20261126143007-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-4/worker.log",
+      "bytes": 6389
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-5/work/app-20261126143007-0000/4/stderr",
+      "bytes": 26773
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-5/work/app-20261126143007-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-5/worker.log",
+      "bytes": 6389
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-6/work/app-20261126143007-0000/7/stderr",
+      "bytes": 23644
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-6/work/app-20261126143007-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-6/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-7/work/app-20261126143007-0000/1/stderr",
+      "bytes": 25526
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-7/work/app-20261126143007-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B1-0/suite/worker-7/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/events/app-20261126143159-0000",
+      "bytes": 62566201
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/master.log",
+      "bytes": 4860
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-0/work/app-20261126143159-0000/0/stderr",
+      "bytes": 2269340
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-0/work/app-20261126143159-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-0/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-1/work/app-20261126143159-0000/2/stderr",
+      "bytes": 2175367
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-1/work/app-20261126143159-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-1/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-2/work/app-20261126143159-0000/3/stderr",
+      "bytes": 2272911
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-2/work/app-20261126143159-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-2/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-3/work/app-20261126143159-0000/5/stderr",
+      "bytes": 2223092
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-3/work/app-20261126143159-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-3/worker.log",
+      "bytes": 5802
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-4/work/app-20261126143159-0000/4/stderr",
+      "bytes": 2213008
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-4/work/app-20261126143159-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-4/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-5/work/app-20261126143159-0000/6/stderr",
+      "bytes": 2249837
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-5/work/app-20261126143159-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-5/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-6/work/app-20261126143159-0000/1/stderr",
+      "bytes": 2226607
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-6/work/app-20261126143159-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-6/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-7/work/app-20261126143159-0000/7/stderr",
+      "bytes": 2233863
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-7/work/app-20261126143159-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/narrow-keys-B2-0/suite/worker-7/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/command.json",
+      "bytes": 799
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/driver-service.json",
+      "bytes": 958
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/driver.log",
+      "bytes": 3327488
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/profile.json",
+      "bytes": 6026
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/q9-iteration1.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/q9-iteration1.executed.txt",
+      "bytes": 9226
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/q9-iteration1.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/q9-iteration1.metrics.json",
+      "bytes": 17828
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/q9-iteration1.observed.json",
+      "bytes": 20623
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/q9-iteration1.preflight.txt",
+      "bytes": 9226
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/q9-iteration1.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/q9-iteration2.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/q9-iteration2.executed.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/q9-iteration2.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/q9-iteration2.metrics.json",
+      "bytes": 17824
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/q9-iteration2.observed.json",
+      "bytes": 20620
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/q9-iteration2.preflight.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/q9-iteration2.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/result.json",
+      "bytes": 83627
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/applications/suite/spark-defaults.conf",
+      "bytes": 5207
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/config.json",
+      "bytes": 8060
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/profiles.json",
+      "bytes": 6243
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/services/suite/ip-172-31-21-17.json",
+      "bytes": 4979
+    },
+    {
+      "name": "screen/narrow-keys-A0-0/services/suite/ip-172-31-21-17.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/narrow-keys-B1-0/applications/suite/command.json",
+      "bytes": 799
+    },
+    {
+      "name": "screen/narrow-keys-B1-0/applications/suite/driver-service.json",
+      "bytes": 958
+    },
+    {
+      "name": "screen/narrow-keys-B1-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/narrow-keys-B1-0/applications/suite/driver.log",
+      "bytes": 71243
+    },
+    {
+      "name": "screen/narrow-keys-B1-0/applications/suite/profile.json",
+      "bytes": 6026
+    },
+    {
+      "name": "screen/narrow-keys-B1-0/applications/suite/q9-iteration1.preflight.txt",
+      "bytes": 11232
+    },
+    {
+      "name": "screen/narrow-keys-B1-0/applications/suite/q9-iteration1.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/narrow-keys-B1-0/applications/suite/result.json",
+      "bytes": 36348
+    },
+    {
+      "name": "screen/narrow-keys-B1-0/applications/suite/spark-defaults.conf",
+      "bytes": 5207
+    },
+    {
+      "name": "screen/narrow-keys-B1-0/config.json",
+      "bytes": 8042
+    },
+    {
+      "name": "screen/narrow-keys-B1-0/profiles.json",
+      "bytes": 6243
+    },
+    {
+      "name": "screen/narrow-keys-B1-0/services/suite/ip-172-31-21-17.json",
+      "bytes": 4979
+    },
+    {
+      "name": "screen/narrow-keys-B1-0/services/suite/ip-172-31-21-17.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/command.json",
+      "bytes": 799
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/driver-service.json",
+      "bytes": 958
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/driver.log",
+      "bytes": 3327201
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/profile.json",
+      "bytes": 6026
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/q9-iteration1.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/q9-iteration1.executed.txt",
+      "bytes": 9607
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/q9-iteration1.logical.txt",
+      "bytes": 4340
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/q9-iteration1.metrics.json",
+      "bytes": 17917
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/q9-iteration1.observed.json",
+      "bytes": 20724
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/q9-iteration1.preflight.txt",
+      "bytes": 9607
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/q9-iteration1.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/q9-iteration2.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/q9-iteration2.executed.txt",
+      "bytes": 9614
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/q9-iteration2.logical.txt",
+      "bytes": 4340
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/q9-iteration2.metrics.json",
+      "bytes": 17909
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/q9-iteration2.observed.json",
+      "bytes": 20717
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/q9-iteration2.preflight.txt",
+      "bytes": 9614
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/q9-iteration2.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/result.json",
+      "bytes": 83877
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/applications/suite/spark-defaults.conf",
+      "bytes": 5207
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/config.json",
+      "bytes": 8051
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/profiles.json",
+      "bytes": 6243
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/services/suite/ip-172-31-21-17.json",
+      "bytes": 4979
+    },
+    {
+      "name": "screen/narrow-keys-B2-0/services/suite/ip-172-31-21-17.json.stopped.json",
+      "bytes": 62
+    }
+  ],
+  "instance_policy": "Release session-created instance after useful investigations and evidence retention"
+}

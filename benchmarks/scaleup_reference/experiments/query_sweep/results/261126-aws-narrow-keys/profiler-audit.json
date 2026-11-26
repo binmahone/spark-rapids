@@ -1,0 +1,83 @@
+{
+  "records": [
+    {
+      "pid": 703123,
+      "start_time": "2742598",
+      "live": false
+    },
+    {
+      "pid": 703129,
+      "start_time": "2742614",
+      "live": false
+    },
+    {
+      "pid": 703130,
+      "start_time": "2742614",
+      "live": false
+    },
+    {
+      "pid": 703131,
+      "start_time": "2742614",
+      "live": false
+    },
+    {
+      "pid": 703132,
+      "start_time": "2742614",
+      "live": false
+    },
+    {
+      "pid": 711542,
+      "start_time": "2759080",
+      "live": false
+    },
+    {
+      "pid": 711548,
+      "start_time": "2759097",
+      "live": false
+    },
+    {
+      "pid": 711549,
+      "start_time": "2759097",
+      "live": false
+    },
+    {
+      "pid": 711550,
+      "start_time": "2759097",
+      "live": false
+    },
+    {
+      "pid": 711551,
+      "start_time": "2759097",
+      "live": false
+    },
+    {
+      "pid": 717113,
+      "start_time": "2770292",
+      "live": false
+    },
+    {
+      "pid": 717118,
+      "start_time": "2770309",
+      "live": false
+    },
+    {
+      "pid": 717119,
+      "start_time": "2770309",
+      "live": false
+    },
+    {
+      "pid": 717120,
+      "start_time": "2770309",
+      "live": false
+    },
+    {
+      "pid": 717121,
+      "start_time": "2770309",
+      "live": false
+    }
+  ],
+  "source_revision": "00991a8bf84be0d3c9e6b561f00901ae8b170d3e",
+  "all_stopped": true,
+  "watermark_scale_factor": 10,
+  "retention": "Release session-created instance after useful investigations and evidence retention"
+}

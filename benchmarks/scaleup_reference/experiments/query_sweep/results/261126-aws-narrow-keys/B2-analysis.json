@@ -1,0 +1,4072 @@
+{
+  "phase": "B2",
+  "kvikio_threads": 32,
+  "pool_verified": true,
+  "samples": [
+    {
+      "query": 9,
+      "iteration": 1,
+      "sql_seconds": 52.27865760900022,
+      "cleanup_seconds": 1.3449838009983068,
+      "sql_plus_cleanup_seconds": 53.62364140999853,
+      "validation": {
+        "status": "passed",
+        "method": "complete ordered rows"
+      },
+      "reader_metrics": {
+        "hybridScanSplits": 2561,
+        "hybridScanDeviceBytesRead": 0,
+        "hybridScanNativeHostBytesRead": 1433905350757,
+        "hybridScanGdsFallbackFiles": 0,
+        "hybridScanGpuBusyHostBytesRead": 0
+      },
+      "variant": "prefilter_partsupp_reuse",
+      "task_metrics": {
+        "Memory Bytes Spilled": 0,
+        "Disk Bytes Spilled": 0,
+        "Executor Run Time": 1465440,
+        "Executor CPU Time": 1120955205144,
+        "JVM GC Time": 4297,
+        "shuffle_write_bytes": 299223430874,
+        "input_bytes": 1434236231364,
+        "native_scan_splits": 2561,
+        "native_host_read_bytes": 1433905350757,
+        "task_attempts": 3543
+      },
+      "execution_window_ms": {
+        "start": 1795703535630,
+        "end": 1795703587198
+      },
+      "plan_shuffle_write_bytes": 299223430874,
+      "join_plan": [
+        "+- GpuDriverlessBroadcastHashJoin [s_nationkey#463L], [n_nationkey#208L], Inner, GpuBuildRight",
+        ":  +- GpuShuffledSymmetricHashJoin Inner, [l_orderkey#128L], [o_orderkey#260L], true, 2147483648, 1.0, CoalesceReadOption(true,GPU,false), false",
+        ":     :        +- GpuShuffledSymmetricHashJoin Inner, [l_suppkey#505, l_partkey#129L], [ps_suppkey#549, ps_partkey#388L], true, 2147483648, 1.0, CoalesceReadOption(true,GPU,false), false",
+        ":     :           :        +- GpuBroadcastHashJoin [l_partkey#129L], [p_partkey#332L], Inner, GpuBuildRight, false",
+        ":     :           :           :  +- GpuDriverlessBroadcastHashJoin [l_suppkey#505], [s_suppkey#563], Inner, GpuBuildRight",
+        ":     :                    +- GpuBroadcastHashJoin [ps_partkey#388L], [p_partkey#577L], LeftSemi, GpuBuildRight, false"
+      ],
+      "scan_plan": [
+        ":     :           :           :     :        +- GpuFileGpuScan parquet spark_catalog.default.lineitem[l_orderkey#128L,l_partkey#129L,l_suppkey#130L,l_quantity#132,l_extendedprice#133,l_discount#134] Batched: true, DataFilters: [isnotnull(cast(l_suppkey#130L as int)), isnotnull(l_partkey#129L), isnotnull(l_orderkey#128L)], Eager_IO_Prefetch: false, Format: Parquet, Location: InMemoryFileIndex[file:/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem], PartitionFilters: [], PushedFilters: [IsNotNull(l_partkey), IsNotNull(l_orderkey)], ReadSchema: struct<l_orderkey:bigint,l_partkey:bigint,l_suppkey:bigint,l_quantity:decimal(15,2),l_extendedpri...",
+        ":     :           :           :                 +- GpuFileGpuScan parquet spark_catalog.default.supplier[s_suppkey#460L,s_nationkey#463L] Batched: true, DataFilters: [isnotnull(cast(s_suppkey#460L as int)), isnotnull(s_nationkey#463L)], Eager_IO_Prefetch: false, Format: Parquet, Location: InMemoryFileIndex[file:/opt/dlami/nvme/daily-trend-hardened/dataset/supplier], PartitionFilters: [], PushedFilters: [IsNotNull(s_nationkey)], ReadSchema: struct<s_suppkey:bigint,s_nationkey:bigint>",
+        ":     :           :                       +- GpuFileGpuScan parquet spark_catalog.default.part[p_partkey#332L,p_name#333] Batched: true, DataFilters: [isnotnull(p_name#333), Contains(p_name#333, green), isnotnull(p_partkey#332L)], Eager_IO_Prefetch: false, Format: Parquet, Location: InMemoryFileIndex[file:/opt/dlami/nvme/daily-trend-hardened/dataset/part], PartitionFilters: [], PushedFilters: [IsNotNull(p_name), StringContains(p_name,green), IsNotNull(p_partkey)], ReadSchema: struct<p_partkey:bigint,p_name:string>",
+        ":     :                       :     +- GpuFileGpuScan parquet spark_catalog.default.partsupp[ps_partkey#388L,ps_suppkey#389L,ps_supplycost#391] Batched: true, DataFilters: [isnotnull(cast(ps_suppkey#389L as int)), isnotnull(ps_partkey#388L)], Eager_IO_Prefetch: false, Format: Parquet, Location: InMemoryFileIndex[file:/opt/dlami/nvme/daily-trend-hardened/dataset/partsupp], PartitionFilters: [], PushedFilters: [IsNotNull(ps_partkey)], ReadSchema: struct<ps_partkey:bigint,ps_suppkey:bigint,ps_supplycost:decimal(15,2)>",
+        ":                 +- GpuFileGpuScan parquet spark_catalog.default.orders[o_orderkey#260L,o_orderdate#264] Batched: true, DataFilters: [isnotnull(o_orderkey#260L)], Eager_IO_Prefetch: false, Format: Parquet, Location: InMemoryFileIndex[file:/opt/dlami/nvme/daily-trend-hardened/dataset/orders], PartitionFilters: [], PushedFilters: [IsNotNull(o_orderkey)], ReadSchema: struct<o_orderkey:bigint,o_orderdate:date>",
+        "+- GpuFileGpuScan parquet spark_catalog.default.nation[n_nationkey#208L,n_name#209] Batched: true, DataFilters: [isnotnull(n_nationkey#208L)], Eager_IO_Prefetch: false, Format: Parquet, Location: InMemoryFileIndex[file:/opt/dlami/nvme/daily-trend-hardened/dataset/nation], PartitionFilters: [], PushedFilters: [IsNotNull(n_nationkey)], ReadSchema: struct<n_nationkey:bigint,n_name:string>"
+      ],
+      "normalized_plan_sha256": "ee0d204c1e7bb53ea7c2bd8c2e15e9d21a98213ef017c6d7b630a5b213d1b204",
+      "host_sampled_seconds": 50.563285251,
+      "host_boundary_gap_seconds": 1.0047147489999944,
+      "disk_read_bytes": {
+        "nvme0n1": 0,
+        "nvme0n1p1": 0,
+        "nvme0n1p14": 0,
+        "nvme0n1p15": 0,
+        "nvme1n1": 0,
+        "nvme3n1": 0,
+        "nvme2n1": 0,
+        "nvme4n1": 32768,
+        "dm-0": 32768
+      },
+      "memory_full_seconds": 0.0,
+      "cpu_percent": {
+        "user": 17.513282202881772,
+        "nice": 0.0,
+        "system": 18.005705662249603,
+        "idle": 64.45062328158271,
+        "iowait": 0.0014470882517106651,
+        "irq": 0.0,
+        "softirq": 0.026977859549748826,
+        "steal": 0.001963905484464474
+      },
+      "min_free_gib": 8.977489471435547,
+      "vm_deltas": {
+        "workingset_nodes": -3,
+        "workingset_refault_anon": 0,
+        "workingset_refault_file": 9,
+        "workingset_activate_anon": 0,
+        "workingset_activate_file": 1,
+        "workingset_restore_anon": 0,
+        "workingset_restore_file": 1,
+        "workingset_nodereclaim": 0,
+        "allocstall_dma": 0,
+        "allocstall_dma32": 0,
+        "allocstall_normal": 0,
+        "allocstall_movable": 0,
+        "allocstall_device": 0,
+        "pgsteal_kswapd": 0,
+        "pgsteal_direct": 0,
+        "pgsteal_khugepaged": 0,
+        "pgscan_kswapd": 0,
+        "pgscan_direct": 0,
+        "pgscan_khugepaged": 0,
+        "pgscan_direct_throttle": 0,
+        "pgscan_anon": 0,
+        "pgscan_file": 0,
+        "pgsteal_anon": 0,
+        "pgsteal_file": 0,
+        "thp_migration_success": 0,
+        "thp_migration_fail": 0,
+        "thp_migration_split": 0,
+        "compact_migrate_scanned": 0,
+        "compact_free_scanned": 0,
+        "compact_isolated": 0,
+        "compact_stall": 0,
+        "compact_fail": 0,
+        "compact_success": 0,
+        "compact_daemon_wake": 0,
+        "compact_daemon_migrate_scanned": 0,
+        "compact_daemon_free_scanned": 0,
+        "thp_fault_alloc": 0,
+        "thp_fault_fallback": 0,
+        "thp_fault_fallback_charge": 0,
+        "thp_collapse_alloc": 0,
+        "thp_collapse_alloc_failed": 0,
+        "thp_file_alloc": 0,
+        "thp_file_fallback": 0,
+        "thp_file_fallback_charge": 0,
+        "thp_file_mapped": 0,
+        "thp_split_page": 0,
+        "thp_split_page_failed": 0,
+        "thp_deferred_split_page": 0,
+        "thp_split_pmd": 0,
+        "thp_scan_exceed_none_pte": 0,
+        "thp_scan_exceed_swap_pte": 0,
+        "thp_scan_exceed_share_pte": 0,
+        "thp_split_pud": 0,
+        "thp_zero_page_alloc": 0,
+        "thp_zero_page_alloc_failed": 0,
+        "thp_swpout": 0,
+        "thp_swpout_fallback": 0
+      },
+      "min_node_free_gib": {
+        "node0": 7.925701141357422,
+        "node1": 1.0886192321777344
+      },
+      "gpm_samples": 101,
+      "gpm_sampled_seconds": 50.779442151,
+      "gpm_by_gpu": [
+        {
+          "sm_active_percent": {
+            "mean": 60.35815413212836,
+            "median": 69.90770783681542,
+            "p95": 97.6062501453241,
+            "max": 98.46296399453392
+          },
+          "sm_occupancy_percent": {
+            "mean": 32.590752220662246,
+            "median": 36.2051544316718,
+            "p95": 56.12886988560678,
+            "max": 56.84284670769488
+          },
+          "dram_bandwidth_percent": {
+            "mean": 20.124508808967867,
+            "median": 21.60740690702932,
+            "p95": 34.19283030347419,
+            "max": 36.25280119951369
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 957.602091956491,
+            "median": 476.4034531432915,
+            "p95": 5477.137445532827,
+            "max": 6424.297346927291
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4679.479332404828,
+            "median": 4071.237035341126,
+            "p95": 9328.171741161026,
+            "max": 10260.346888635655
+          }
+        },
+        {
+          "sm_active_percent": {
+            "mean": 58.53601534537989,
+            "median": 69.12917729614554,
+            "p95": 97.4991706387673,
+            "max": 99.0932794671233
+          },
+          "sm_occupancy_percent": {
+            "mean": 31.61812597856499,
+            "median": 34.953628847083635,
+            "p95": 56.895599010505485,
+            "max": 57.79709074770313
+          },
+          "dram_bandwidth_percent": {
+            "mean": 19.473620044687237,
+            "median": 20.610529811687414,
+            "p95": 34.21785982321661,
+            "max": 35.63422757669097
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 977.9649862412754,
+            "median": 452.42631356126117,
+            "p95": 6287.023231028613,
+            "max": 7238.304952356841
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4509.567533353763,
+            "median": 4194.022392203907,
+            "p95": 9330.715679495788,
+            "max": 11607.209818435864
+          }
+        },
+        {
+          "sm_active_percent": {
+            "mean": 58.92343967411534,
+            "median": 69.69906305897705,
+            "p95": 97.30333018320646,
+            "max": 98.96295426680472
+          },
+          "sm_occupancy_percent": {
+            "mean": 31.695476773547625,
+            "median": 35.726641010295666,
+            "p95": 55.72121299636841,
+            "max": 56.98212210413843
+          },
+          "dram_bandwidth_percent": {
+            "mean": 19.546378727389477,
+            "median": 20.57054785338056,
+            "p95": 33.86507957862772,
+            "max": 35.55830945962958
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 980.5715333309589,
+            "median": 422.7115762419481,
+            "p95": 5760.293722972277,
+            "max": 7235.325677422076
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4551.507649724676,
+            "median": 4464.587638542188,
+            "p95": 9263.326533495767,
+            "max": 9320.207884178559
+          }
+        },
+        {
+          "sm_active_percent": {
+            "mean": 57.64796154752535,
+            "median": 67.20310485834017,
+            "p95": 97.36896001397375,
+            "max": 98.1352760873278
+          },
+          "sm_occupancy_percent": {
+            "mean": 30.99921584867136,
+            "median": 35.023286053449695,
+            "p95": 56.57505532902762,
+            "max": 57.601677240178915
+          },
+          "dram_bandwidth_percent": {
+            "mean": 19.053759580557106,
+            "median": 20.891788646133573,
+            "p95": 33.50159220553174,
+            "max": 35.565217813133685
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 975.2650862276744,
+            "median": 429.14931307805585,
+            "p95": 6144.8428544643375,
+            "max": 7018.8064668843235
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4401.782924429685,
+            "median": 3983.9516994917035,
+            "p95": 9258.18781473827,
+            "max": 9387.499199655043
+          }
+        },
+        {
+          "sm_active_percent": {
+            "mean": 58.29603646285709,
+            "median": 69.56311809974343,
+            "p95": 96.44568739577547,
+            "max": 99.30183676471698
+          },
+          "sm_occupancy_percent": {
+            "mean": 31.530438608140795,
+            "median": 34.415139545617194,
+            "p95": 55.183690523703234,
+            "max": 57.5229904809033
+          },
+          "dram_bandwidth_percent": {
+            "mean": 19.43601409903755,
+            "median": 21.19585662549967,
+            "p95": 33.47802727690224,
+            "max": 35.12498428431225
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 969.2267439993594,
+            "median": 470.42170720022176,
+            "p95": 5862.381761450322,
+            "max": 6524.3001275977
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4518.858190289592,
+            "median": 4035.7821239927257,
+            "p95": 9277.816411694004,
+            "max": 9433.256556007016
+          }
+        },
+        {
+          "sm_active_percent": {
+            "mean": 59.19413193721098,
+            "median": 68.62475223468586,
+            "p95": 98.00100977701287,
+            "max": 99.62986734034358
+          },
+          "sm_occupancy_percent": {
+            "mean": 31.950057226214454,
+            "median": 33.893135098627155,
+            "p95": 56.41822859320623,
+            "max": 57.32875088678734
+          },
+          "dram_bandwidth_percent": {
+            "mean": 19.78031713969801,
+            "median": 20.0718813149916,
+            "p95": 34.11870405173135,
+            "max": 35.21575740844163
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 949.8937605878721,
+            "median": 443.95330302569704,
+            "p95": 5269.862667939924,
+            "max": 6600.66353555875
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4631.441940460938,
+            "median": 4046.37111589624,
+            "p95": 9310.708551803828,
+            "max": 11469.137111595855
+          }
+        },
+        {
+          "sm_active_percent": {
+            "mean": 57.914739694421975,
+            "median": 68.80859489392832,
+            "p95": 97.00430301588085,
+            "max": 99.5689997972886
+          },
+          "sm_occupancy_percent": {
+            "mean": 31.202281661282754,
+            "median": 33.85531321314133,
+            "p95": 56.00164023122429,
+            "max": 57.557749684073364
+          },
+          "dram_bandwidth_percent": {
+            "mean": 19.336470636562954,
+            "median": 20.702472933990897,
+            "p95": 33.90182355616915,
+            "max": 36.11397011176234
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 952.2215288944074,
+            "median": 417.5577538280599,
+            "p95": 5248.623002580514,
+            "max": 6606.9661622052745
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4532.480437755627,
+            "median": 4256.555964964545,
+            "p95": 9333.766372448728,
+            "max": 9818.239321922285
+          }
+        },
+        {
+          "sm_active_percent": {
+            "mean": 58.16327718760268,
+            "median": 69.51199600983138,
+            "p95": 97.22935909036083,
+            "max": 98.5397406984366
+          },
+          "sm_occupancy_percent": {
+            "mean": 31.37176119450232,
+            "median": 35.570710587957564,
+            "p95": 56.58474186342025,
+            "max": 57.024625721324064
+          },
+          "dram_bandwidth_percent": {
+            "mean": 19.419730745881807,
+            "median": 22.23376956131949,
+            "p95": 33.60888077926567,
+            "max": 35.11562824917298
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 947.3720350153752,
+            "median": 474.3158616562814,
+            "p95": 5583.025929881159,
+            "max": 6120.376367495521
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4583.568466625369,
+            "median": 4164.650669706185,
+            "p95": 9273.598511474132,
+            "max": 9432.42893687234
+          }
+        }
+      ],
+      "gpm_all_gpu_mean": {
+        "sm_active_percent": 58.62921949765521,
+        "sm_occupancy_percent": 31.619763688948318,
+        "dram_bandwidth_percent": 19.52134997284775,
+        "pcie_tx_mib_per_second": 963.7647207816767,
+        "pcie_rx_mib_per_second": 4551.08580938056
+      },
+      "stages": [
+        {
+          "stage": 9,
+          "start_ms": 1795703535842,
+          "end_ms": 1795703537582,
+          "span_seconds": 1.74,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.55298828125,
+            "median": 0.528,
+            "p95": 0.932,
+            "max": 1.17
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 35161810754,
+          "shuffle_write_bytes": 0,
+          "gpm_samples": 2,
+          "gpm_by_gpu": [
+            {
+              "sm_active_percent": {
+                "mean": 10.40434840730654,
+                "median": 10.40434840730654,
+                "p95": 20.08630056213183,
+                "max": 20.08630056213183
+              },
+              "sm_occupancy_percent": {
+                "mean": 2.367537251267095,
+                "median": 2.367537251267095,
+                "p95": 4.570708111982706,
+                "max": 4.570708111982706
+              },
+              "dram_bandwidth_percent": {
+                "mean": 2.8067600856788024,
+                "median": 2.8067600856788024,
+                "p95": 5.055204142982812,
+                "max": 5.055204142982812
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 257.64636716816636,
+                "median": 257.64636716816636,
+                "p95": 476.4034531432915,
+                "max": 476.4034531432915
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 2833.139376425014,
+                "median": 2833.139376425014,
+                "p95": 5093.960096830325,
+                "max": 5093.960096830325
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 8.284942380266601,
+                "median": 8.284942380266601,
+                "p95": 15.781254599967273,
+                "max": 15.781254599967273
+              },
+              "sm_occupancy_percent": {
+                "mean": 2.1464411500108764,
+                "median": 2.1464411500108764,
+                "p95": 4.138271419643777,
+                "max": 4.138271419643777
+              },
+              "dram_bandwidth_percent": {
+                "mean": 2.610993083967015,
+                "median": 2.610993083967015,
+                "p95": 4.688395758388393,
+                "max": 4.688395758388393
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 245.6671943367633,
+                "median": 245.6671943367633,
+                "p95": 452.42631356126117,
+                "max": 452.42631356126117
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 2827.178457568222,
+                "median": 2827.178457568222,
+                "p95": 5081.854380369355,
+                "max": 5081.854380369355
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 12.432000415381102,
+                "median": 12.432000415381102,
+                "p95": 23.789181742870902,
+                "max": 23.789181742870902
+              },
+              "sm_occupancy_percent": {
+                "mean": 2.4746965937228844,
+                "median": 2.4746965937228844,
+                "p95": 4.725470638266995,
+                "max": 4.725470638266995
+              },
+              "dram_bandwidth_percent": {
+                "mean": 2.9384178427435943,
+                "median": 2.9384178427435943,
+                "p95": 5.123213833495714,
+                "max": 5.123213833495714
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 270.41766630347394,
+                "median": 270.41766630347394,
+                "p95": 451.96541159070495,
+                "max": 451.96541159070495
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 2974.295463826409,
+                "median": 2974.295463826409,
+                "p95": 4810.731477669947,
+                "max": 4810.731477669947
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 9.68438435481419,
+                "median": 9.68438435481419,
+                "p95": 18.200837409473365,
+                "max": 18.200837409473365
+              },
+              "sm_occupancy_percent": {
+                "mean": 2.3467236184189635,
+                "median": 2.3467236184189635,
+                "p95": 4.419940699045747,
+                "max": 4.419940699045747
+              },
+              "dram_bandwidth_percent": {
+                "mean": 2.849450217311892,
+                "median": 2.849450217311892,
+                "p95": 4.582268643351114,
+                "max": 4.582268643351114
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 266.7453958407693,
+                "median": 266.7453958407693,
+                "p95": 429.14931307805585,
+                "max": 429.14931307805585
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 2974.561121668578,
+                "median": 2974.561121668578,
+                "p95": 4810.689570717121,
+                "max": 4810.689570717121
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 11.21602750814105,
+                "median": 11.21602750814105,
+                "p95": 21.726442412519322,
+                "max": 21.726442412519322
+              },
+              "sm_occupancy_percent": {
+                "mean": 2.7290512799443025,
+                "median": 2.7290512799443025,
+                "p95": 5.331069404048038,
+                "max": 5.331069404048038
+              },
+              "dram_bandwidth_percent": {
+                "mean": 3.3725809313364197,
+                "median": 3.3725809313364197,
+                "p95": 6.300500308485264,
+                "max": 6.300500308485264
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 308.87557950867506,
+                "median": 308.87557950867506,
+                "p95": 578.9879782565786,
+                "max": 578.9879782565786
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3398.675609352199,
+                "median": 3398.675609352199,
+                "p95": 6226.967564920242,
+                "max": 6226.967564920242
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 12.255774322930188,
+                "median": 12.255774322930188,
+                "p95": 23.43139315548522,
+                "max": 23.43139315548522
+              },
+              "sm_occupancy_percent": {
+                "mean": 3.243817268794893,
+                "median": 3.243817268794893,
+                "p95": 6.231196864612809,
+                "max": 6.231196864612809
+              },
+              "dram_bandwidth_percent": {
+                "mean": 3.946052226897954,
+                "median": 3.946052226897954,
+                "p95": 6.774516996552718,
+                "max": 6.774516996552718
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 360.26688671928645,
+                "median": 360.26688671928645,
+                "p95": 616.2091208928987,
+                "max": 616.2091208928987
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3965.073794368755,
+                "median": 3965.073794368755,
+                "p95": 6791.784701983281,
+                "max": 6791.784701983281
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 8.854149827586978,
+                "median": 8.854149827586978,
+                "p95": 17.033286376513303,
+                "max": 17.033286376513303
+              },
+              "sm_occupancy_percent": {
+                "mean": 2.2308211272101914,
+                "median": 2.2308211272101914,
+                "p95": 4.32196285239788,
+                "max": 4.32196285239788
+              },
+              "dram_bandwidth_percent": {
+                "mean": 2.812075946869903,
+                "median": 2.812075946869903,
+                "p95": 5.178288824162233,
+                "max": 5.178288824162233
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 257.642088375442,
+                "median": 257.642088375442,
+                "p95": 476.6549215197263,
+                "max": 476.6549215197263
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 2832.68847081333,
+                "median": 2832.68847081333,
+                "p95": 5095.047692754017,
+                "max": 5095.047692754017
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 13.67502596831141,
+                "median": 13.67502596831141,
+                "p95": 25.306845902790094,
+                "max": 25.306845902790094
+              },
+              "sm_occupancy_percent": {
+                "mean": 3.4723332466003205,
+                "median": 3.4723332466003205,
+                "p95": 6.4141459905968645,
+                "max": 6.4141459905968645
+              },
+              "dram_bandwidth_percent": {
+                "mean": 4.558887016056287,
+                "median": 4.558887016056287,
+                "p95": 6.875647951800665,
+                "max": 6.875647951800665
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 430.75415418686987,
+                "median": 430.75415418686987,
+                "p95": 655.0032975558754,
+                "max": 655.0032975558754
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 4841.122216905086,
+                "median": 4841.122216905086,
+                "p95": 7415.779297322565,
+                "max": 7415.779297322565
+              }
+            }
+          ]
+        },
+        {
+          "stage": 11,
+          "start_ms": 1795703540259,
+          "end_ms": 1795703544794,
+          "span_seconds": 4.535,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.52383203125,
+            "median": 0.193,
+            "p95": 2.896,
+            "max": 3.011
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 73599573877,
+          "shuffle_write_bytes": 5685948984,
+          "gpm_samples": 8,
+          "gpm_by_gpu": [
+            {
+              "sm_active_percent": {
+                "mean": 20.690756640321364,
+                "median": 1.1078608702208221,
+                "p95": 69.90770783681542,
+                "max": 69.90770783681542
+              },
+              "sm_occupancy_percent": {
+                "mean": 10.302894716334446,
+                "median": 0.48505261360552965,
+                "p95": 36.2051544316718,
+                "max": 36.2051544316718
+              },
+              "dram_bandwidth_percent": {
+                "mean": 5.57541332112848,
+                "median": 0.9195911181803144,
+                "p95": 18.54320523260885,
+                "max": 18.54320523260885
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 161.78281009429602,
+                "median": 80.89912129532222,
+                "p95": 521.3935783138102,
+                "max": 521.3935783138102
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 2182.7698377282177,
+                "median": 1055.9245398667288,
+                "p95": 6973.0074228226185,
+                "max": 6973.0074228226185
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 24.47584275904475,
+                "median": 1.6676286476927957,
+                "p95": 80.28169177875222,
+                "max": 80.28169177875222
+              },
+              "sm_occupancy_percent": {
+                "mean": 12.142145771276883,
+                "median": 0.9315311604128202,
+                "p95": 40.88977206552582,
+                "max": 40.88977206552582
+              },
+              "dram_bandwidth_percent": {
+                "mean": 6.700701397155962,
+                "median": 1.6845459722029745,
+                "p95": 22.09792479510241,
+                "max": 22.09792479510241
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 186.17489073114666,
+                "median": 98.14330831296411,
+                "p95": 542.8502568466844,
+                "max": 542.8502568466844
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 2498.495378419476,
+                "median": 1485.7027714067735,
+                "p95": 7264.467824645004,
+                "max": 7264.467824645004
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 23.085169132924207,
+                "median": 4.294226766425177,
+                "p95": 74.87683389246358,
+                "max": 74.87683389246358
+              },
+              "sm_occupancy_percent": {
+                "mean": 10.823328745796895,
+                "median": 2.299077000605641,
+                "p95": 37.72780711394479,
+                "max": 37.72780711394479
+              },
+              "dram_bandwidth_percent": {
+                "mean": 6.174288142751917,
+                "median": 3.0773129090172757,
+                "p95": 19.39401637532291,
+                "max": 19.39401637532291
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 184.62702887590814,
+                "median": 99.13670003273985,
+                "p95": 534.057323661915,
+                "max": 534.057323661915
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 2491.9715496537874,
+                "median": 1281.7955466182614,
+                "p95": 7187.347438156114,
+                "max": 7187.347438156114
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 21.583414655259084,
+                "median": 2.3796116015318374,
+                "p95": 73.33954729301124,
+                "max": 73.33954729301124
+              },
+              "sm_occupancy_percent": {
+                "mean": 10.431063338744528,
+                "median": 1.3271114085270375,
+                "p95": 37.50215652053506,
+                "max": 37.50215652053506
+              },
+              "dram_bandwidth_percent": {
+                "mean": 5.76918052177984,
+                "median": 1.792432282580203,
+                "p95": 19.36877698948275,
+                "max": 19.36877698948275
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 172.86049005809562,
+                "median": 98.09256986994875,
+                "p95": 497.93382569147474,
+                "max": 497.93382569147474
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 2330.6002680862084,
+                "median": 1486.0037159684748,
+                "p95": 6509.959725231877,
+                "max": 6509.959725231877
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 24.38926640499571,
+                "median": 3.333936391094794,
+                "p95": 80.51068635507484,
+                "max": 80.51068635507484
+              },
+              "sm_occupancy_percent": {
+                "mean": 11.77969862566106,
+                "median": 1.8425221641378338,
+                "p95": 40.699753470795635,
+                "max": 40.699753470795635
+              },
+              "dram_bandwidth_percent": {
+                "mean": 6.548871943199043,
+                "median": 1.8162338091112236,
+                "p95": 21.51842500829837,
+                "max": 21.51842500829837
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 195.29410425350315,
+                "median": 99.21411928768788,
+                "p95": 540.9715276318285,
+                "max": 540.9715276318285
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 2639.3831037985556,
+                "median": 1489.2322156314601,
+                "p95": 7198.194987545951,
+                "max": 7198.194987545951
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 22.483078372113308,
+                "median": 4.027849848962569,
+                "p95": 69.08300333412242,
+                "max": 69.08300333412242
+              },
+              "sm_occupancy_percent": {
+                "mean": 10.642295992175853,
+                "median": 2.07272014439432,
+                "p95": 36.544853373239896,
+                "max": 36.544853373239896
+              },
+              "dram_bandwidth_percent": {
+                "mean": 6.023751683895847,
+                "median": 2.349232124222996,
+                "p95": 19.375167537783277,
+                "max": 19.375167537783277
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 174.9969316839776,
+                "median": 95.96794337839356,
+                "p95": 543.2300344109497,
+                "max": 543.2300344109497
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 2347.8622188467484,
+                "median": 1295.9088517449081,
+                "p95": 7191.509673955356,
+                "max": 7191.509673955356
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 24.366504034254227,
+                "median": 5.984033333902018,
+                "p95": 71.58532093525118,
+                "max": 71.58532093525118
+              },
+              "sm_occupancy_percent": {
+                "mean": 11.318011200682811,
+                "median": 3.0962841944918726,
+                "p95": 35.70775086127867,
+                "max": 35.70775086127867
+              },
+              "dram_bandwidth_percent": {
+                "mean": 6.514745527491091,
+                "median": 3.562165992759687,
+                "p95": 19.92027840754656,
+                "max": 19.92027840754656
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 186.17294474974145,
+                "median": 120.5311721223051,
+                "p95": 542.5728343973217,
+                "max": 542.5728343973217
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 2497.4098587891585,
+                "median": 1599.490466774936,
+                "p95": 7192.012474870992,
+                "max": 7192.012474870992
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 25.834714075384124,
+                "median": 3.809682075300267,
+                "p95": 82.13901696937636,
+                "max": 82.13901696937636
+              },
+              "sm_occupancy_percent": {
+                "mean": 12.242402436263985,
+                "median": 1.967149460090194,
+                "p95": 40.864361422071205,
+                "max": 40.864361422071205
+              },
+              "dram_bandwidth_percent": {
+                "mean": 6.853508895599606,
+                "median": 2.0622285358717765,
+                "p95": 22.37314794496183,
+                "max": 22.37314794496183
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 192.38179282568453,
+                "median": 119.15307955758627,
+                "p95": 551.0818797527256,
+                "max": 551.0818797527256
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 2578.4041034407833,
+                "median": 1587.264873227933,
+                "p95": 7251.197806399416,
+                "max": 7251.197806399416
+              }
+            }
+          ]
+        },
+        {
+          "stage": 10,
+          "start_ms": 1795703543009,
+          "end_ms": 1795703543444,
+          "span_seconds": 0.435,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.03541015625,
+            "median": 0.029,
+            "p95": 0.093,
+            "max": 0.1
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 532394878,
+          "shuffle_write_bytes": 690859837,
+          "gpm_samples": 0
+        },
+        {
+          "stage": 12,
+          "start_ms": 1795703544647,
+          "end_ms": 1795703574948,
+          "span_seconds": 30.301,
+          "tasks": 1152,
+          "task_seconds": {
+            "mean": 0.8330642361111111,
+            "median": 0.838,
+            "p95": 1.041,
+            "max": 1.381
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 1240182802827,
+          "shuffle_write_bytes": 94343296674,
+          "gpm_samples": 60,
+          "gpm_by_gpu": [
+            {
+              "sm_active_percent": {
+                "mean": 80.59778376362439,
+                "median": 86.10146164841588,
+                "p95": 97.73943697634483,
+                "max": 98.46296399453392
+              },
+              "sm_occupancy_percent": {
+                "mean": 45.6377792963846,
+                "median": 48.56784152420481,
+                "p95": 56.28978823215955,
+                "max": 56.84284670769488
+              },
+              "dram_bandwidth_percent": {
+                "mean": 27.49049732034354,
+                "median": 28.124425685313547,
+                "p95": 35.05778188298754,
+                "max": 36.25280119951369
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 425.06765615009886,
+                "median": 502.1518966163202,
+                "p95": 685.4443532507308,
+                "max": 1182.9297429680678
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5617.175186452023,
+                "median": 6775.950669588916,
+                "p95": 9347.730371653104,
+                "max": 9365.259985519828
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 77.62963072291306,
+                "median": 79.50573122809642,
+                "p95": 98.55132409377904,
+                "max": 99.0932794671233
+              },
+              "sm_occupancy_percent": {
+                "mean": 44.218989102652706,
+                "median": 45.624767755298095,
+                "p95": 57.54746548852867,
+                "max": 57.79709074770313
+              },
+              "dram_bandwidth_percent": {
+                "mean": 26.57425428279192,
+                "median": 26.718489452840814,
+                "p95": 35.09502942768827,
+                "max": 35.63422757669097
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 408.96938451004706,
+                "median": 481.890115029965,
+                "p95": 803.6590179902242,
+                "max": 945.3171569833443
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5432.560523877249,
+                "median": 6444.7074015216185,
+                "p95": 9362.567358722397,
+                "max": 11607.209818435864
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 77.91508436061757,
+                "median": 79.77025867282745,
+                "p95": 98.72358794125057,
+                "max": 98.96295426680472
+              },
+              "sm_occupancy_percent": {
+                "mean": 44.191159144611774,
+                "median": 44.599929252716024,
+                "p95": 56.6624947838567,
+                "max": 56.98212210413843
+              },
+              "dram_bandwidth_percent": {
+                "mean": 26.478020625331137,
+                "median": 26.183460292473747,
+                "p95": 34.23487411716148,
+                "max": 35.55830945962958
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 419.12670794288425,
+                "median": 427.4072647644956,
+                "p95": 683.315002540077,
+                "max": 1678.745403594927
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5407.636567696634,
+                "median": 5975.012853496673,
+                "p95": 9301.21482819479,
+                "max": 9320.207884178559
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 76.67961295277232,
+                "median": 76.28249827920243,
+                "p95": 97.89166045273275,
+                "max": 98.1352760873278
+              },
+              "sm_occupancy_percent": {
+                "mean": 43.441346585017996,
+                "median": 43.67978806324203,
+                "p95": 57.253769383902785,
+                "max": 57.601677240178915
+              },
+              "dram_bandwidth_percent": {
+                "mean": 26.027633055934587,
+                "median": 25.372612484910146,
+                "p95": 34.45342103500044,
+                "max": 35.565217813133685
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 406.9674862700094,
+                "median": 468.91112079809307,
+                "p95": 680.7136737303554,
+                "max": 1562.0702263904318
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5277.410351573077,
+                "median": 6466.758829865701,
+                "p95": 9302.809013892604,
+                "max": 9387.499199655043
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 77.71643315643695,
+                "median": 81.01876362735113,
+                "p95": 96.89954628185755,
+                "max": 99.30183676471698
+              },
+              "sm_occupancy_percent": {
+                "mean": 44.25716244787249,
+                "median": 45.7467940343776,
+                "p95": 57.01397021006528,
+                "max": 57.5229904809033
+              },
+              "dram_bandwidth_percent": {
+                "mean": 26.64009357474423,
+                "median": 28.08492638852293,
+                "p95": 34.73588014010458,
+                "max": 35.12498428431225
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 422.65945943305695,
+                "median": 471.80277621191453,
+                "p95": 691.2750309592666,
+                "max": 1617.8624542557595
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5459.5432919029245,
+                "median": 6483.616976638397,
+                "p95": 9371.321487197058,
+                "max": 9433.256556007016
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 79.2332655579347,
+                "median": 86.00171044559283,
+                "p95": 98.70072058452538,
+                "max": 99.62986734034358
+              },
+              "sm_occupancy_percent": {
+                "mean": 44.86250462399322,
+                "median": 48.21791577022577,
+                "p95": 57.182682666644205,
+                "max": 57.32875088678734
+              },
+              "dram_bandwidth_percent": {
+                "mean": 27.037883807399982,
+                "median": 29.47720331958676,
+                "p95": 34.42245696842291,
+                "max": 35.21575740844163
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 434.0140387966881,
+                "median": 460.8863357144982,
+                "p95": 684.8998015358609,
+                "max": 1872.3829438919545
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5531.27795811444,
+                "median": 6136.429333737986,
+                "p95": 9343.591790492286,
+                "max": 11469.137111595855
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 76.89041407492942,
+                "median": 80.7432706050038,
+                "p95": 98.512665657938,
+                "max": 99.5689997972886
+              },
+              "sm_occupancy_percent": {
+                "mean": 43.6031598029895,
+                "median": 46.20937591889066,
+                "p95": 56.891726097847005,
+                "max": 57.557749684073364
+              },
+              "dram_bandwidth_percent": {
+                "mean": 26.276756633528137,
+                "median": 27.96167863339666,
+                "p95": 34.75169644417741,
+                "max": 36.11397011176234
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 421.9165360164985,
+                "median": 457.8714652333648,
+                "p95": 685.2672256577549,
+                "max": 2050.5470435417265
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5375.550876453067,
+                "median": 6467.354175075523,
+                "p95": 9355.420078021103,
+                "max": 9818.239321922285
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 76.027013218572,
+                "median": 77.11613807604199,
+                "p95": 97.90375171402066,
+                "max": 98.5397406984366
+              },
+              "sm_occupancy_percent": {
+                "mean": 43.176136012069136,
+                "median": 44.197777988618746,
+                "p95": 56.95064016551697,
+                "max": 57.024625721324064
+              },
+              "dram_bandwidth_percent": {
+                "mean": 25.998591113624933,
+                "median": 26.60118946689697,
+                "p95": 34.438903853404135,
+                "max": 35.11562824917298
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 417.06196424735776,
+                "median": 498.144161662284,
+                "p95": 682.8013907839509,
+                "max": 1811.2418066014127
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5347.537170090209,
+                "median": 6521.564053587607,
+                "p95": 9312.096343782581,
+                "max": 9432.42893687234
+              }
+            }
+          ]
+        },
+        {
+          "stage": 14,
+          "start_ms": 1795703574469,
+          "end_ms": 1795703581897,
+          "span_seconds": 7.428,
+          "tasks": 342,
+          "task_seconds": {
+            "mean": 0.2866023391812865,
+            "median": 0.29,
+            "p95": 0.389,
+            "max": 0.583
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 84759647864,
+          "shuffle_write_bytes": 120624497630,
+          "gpm_samples": 14,
+          "gpm_by_gpu": [
+            {
+              "sm_active_percent": {
+                "mean": 56.40382110452467,
+                "median": 43.49312646107666,
+                "p95": 92.74581541229949,
+                "max": 92.74581541229949
+              },
+              "sm_occupancy_percent": {
+                "mean": 22.37067180159246,
+                "median": 17.48893648185217,
+                "p95": 37.22327559596012,
+                "max": 37.22327559596012
+              },
+              "dram_bandwidth_percent": {
+                "mean": 13.37138234762063,
+                "median": 10.888406975992268,
+                "p95": 21.60740690702932,
+                "max": 21.60740690702932
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1821.7510676732827,
+                "median": 2331.0036158140783,
+                "p95": 3187.4550906473587,
+                "max": 3187.4550906473587
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3830.3279188377496,
+                "median": 3746.9536278232285,
+                "p95": 4879.83317623538,
+                "max": 4879.83317623538
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 57.12560799484357,
+                "median": 48.85940775235447,
+                "p95": 88.76175196874793,
+                "max": 88.76175196874793
+              },
+              "sm_occupancy_percent": {
+                "mean": 22.183539746342593,
+                "median": 19.614265126143646,
+                "p95": 34.45355768662527,
+                "max": 34.45355768662527
+              },
+              "dram_bandwidth_percent": {
+                "mean": 13.550707009012918,
+                "median": 11.8958134322942,
+                "p95": 20.623759269434593,
+                "max": 20.623759269434593
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1798.4086072957468,
+                "median": 2549.671583219212,
+                "p95": 3200.1353924537507,
+                "max": 3200.1353924537507
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3929.8275007704137,
+                "median": 3933.9391619428643,
+                "p95": 5191.366632997869,
+                "max": 5191.366632997869
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 56.5066406253107,
+                "median": 52.1046083464588,
+                "p95": 87.89897486481301,
+                "max": 87.89897486481301
+              },
+              "sm_occupancy_percent": {
+                "mean": 22.105945367874625,
+                "median": 21.095572033846445,
+                "p95": 34.64987354306833,
+                "max": 34.64987354306833
+              },
+              "dram_bandwidth_percent": {
+                "mean": 13.448841193287379,
+                "median": 13.643876554733371,
+                "p95": 21.082771813585328,
+                "max": 21.082771813585328
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1811.8098659680343,
+                "median": 2640.533026356098,
+                "p95": 3193.7801940864524,
+                "max": 3193.7801940864524
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3767.7211883984723,
+                "median": 3726.846086464074,
+                "p95": 4639.175360754687,
+                "max": 4639.175360754687
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 55.8568177647798,
+                "median": 44.68806840608296,
+                "p95": 91.26074740938485,
+                "max": 91.26074740938485
+              },
+              "sm_occupancy_percent": {
+                "mean": 21.763556637577118,
+                "median": 17.866474429295813,
+                "p95": 35.43253200164274,
+                "max": 35.43253200164274
+              },
+              "dram_bandwidth_percent": {
+                "mean": 13.198756710620867,
+                "median": 10.963988629506371,
+                "p95": 21.07876692244591,
+                "max": 21.07876692244591
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1734.0638729416216,
+                "median": 2401.7906999153283,
+                "p95": 3019.0084125281555,
+                "max": 3019.0084125281555
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3835.818318789129,
+                "median": 3923.4974368780213,
+                "p95": 4434.791138011193,
+                "max": 4434.791138011193
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 55.26064655183631,
+                "median": 39.79005941335622,
+                "p95": 89.57122150498225,
+                "max": 89.57122150498225
+              },
+              "sm_occupancy_percent": {
+                "mean": 21.661723058050764,
+                "median": 15.697312861224265,
+                "p95": 36.17266216246603,
+                "max": 36.17266216246603
+              },
+              "dram_bandwidth_percent": {
+                "mean": 13.196491328585571,
+                "median": 9.48357236505789,
+                "p95": 21.261899399738564,
+                "max": 21.261899399738564
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1800.5874841683678,
+                "median": 2180.237754830542,
+                "p95": 3206.043016351238,
+                "max": 3206.043016351238
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3735.0101167901325,
+                "median": 3742.1172572766613,
+                "p95": 4950.688759585483,
+                "max": 4950.688759585483
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 54.65042263629407,
+                "median": 43.15472760703823,
+                "p95": 89.86628945522791,
+                "max": 89.86628945522791
+              },
+              "sm_occupancy_percent": {
+                "mean": 21.400971074398544,
+                "median": 17.377487836094765,
+                "p95": 35.36358124052858,
+                "max": 35.36358124052858
+              },
+              "dram_bandwidth_percent": {
+                "mean": 12.805771422833113,
+                "median": 10.440953980776523,
+                "p95": 20.24888240251534,
+                "max": 20.24888240251534
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1792.3049322839972,
+                "median": 2346.6933134842257,
+                "p95": 3100.4893620777284,
+                "max": 3100.4893620777284
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3631.2532618909468,
+                "median": 3654.200171424605,
+                "p95": 4336.079459928498,
+                "max": 4336.079459928498
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 54.007490738526165,
+                "median": 39.494728424107784,
+                "p95": 89.28342281463114,
+                "max": 89.28342281463114
+              },
+              "sm_occupancy_percent": {
+                "mean": 20.957149373321908,
+                "median": 15.84502750699843,
+                "p95": 34.89749024118745,
+                "max": 34.89749024118745
+              },
+              "dram_bandwidth_percent": {
+                "mean": 12.717830912269779,
+                "median": 9.532066298949326,
+                "p95": 20.490848408982686,
+                "max": 20.490848408982686
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1751.3076894174878,
+                "median": 1994.3611596041656,
+                "p95": 3249.386870611909,
+                "max": 3249.386870611909
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3726.395925424459,
+                "median": 3764.464340966151,
+                "p95": 4987.260440593987,
+                "max": 4987.260440593987
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 57.72606827387252,
+                "median": 53.25334868455826,
+                "p95": 89.75391555537935,
+                "max": 89.75391555537935
+              },
+              "sm_occupancy_percent": {
+                "mean": 23.068334110255446,
+                "median": 21.505542751182055,
+                "p95": 35.25706225232473,
+                "max": 35.25706225232473
+              },
+              "dram_bandwidth_percent": {
+                "mean": 13.70871862439312,
+                "median": 12.930414766733833,
+                "p95": 20.384976969068436,
+                "max": 20.384976969068436
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1781.499528369615,
+                "median": 2426.3882240092603,
+                "p95": 3103.9027911364046,
+                "max": 3103.9027911364046
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3757.0313085266516,
+                "median": 3649.7004791813038,
+                "p95": 4828.313040163945,
+                "max": 4828.313040163945
+              }
+            }
+          ]
+        },
+        {
+          "stage": 13,
+          "start_ms": 1795703575049,
+          "end_ms": 1795703579517,
+          "span_seconds": 4.468,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.50925,
+            "median": 0.502,
+            "p95": 0.742,
+            "max": 0.83
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 0,
+          "shuffle_write_bytes": 77872339455,
+          "gpm_samples": 8,
+          "gpm_by_gpu": [
+            {
+              "sm_active_percent": {
+                "mean": 35.18334411908702,
+                "median": 36.45337779146999,
+                "p95": 44.16438919020164,
+                "max": 44.16438919020164
+              },
+              "sm_occupancy_percent": {
+                "mean": 14.25230867982901,
+                "median": 14.870759057502855,
+                "p95": 18.347343403251035,
+                "max": 18.347343403251035
+              },
+              "dram_bandwidth_percent": {
+                "mean": 8.895981202727878,
+                "median": 9.102468956288844,
+                "p95": 10.96780943699051,
+                "max": 10.96780943699051
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2887.976893434198,
+                "median": 3020.246548661,
+                "p95": 3187.4550906473587,
+                "max": 3187.4550906473587
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3750.933457080597,
+                "median": 3699.9752348819547,
+                "p95": 4476.548843810029,
+                "max": 4476.548843810029
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 35.44885448145229,
+                "median": 36.54001294453066,
+                "p95": 48.904660836628906,
+                "max": 48.904660836628906
+              },
+              "sm_occupancy_percent": {
+                "mean": 14.454343122183362,
+                "median": 14.798159950575334,
+                "p95": 19.881933106737822,
+                "max": 19.881933106737822
+              },
+              "dram_bandwidth_percent": {
+                "mean": 9.08318827486066,
+                "median": 9.015441768409627,
+                "p95": 11.917618296842722,
+                "max": 11.917618296842722
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2884.6621039637776,
+                "median": 2926.5665452479225,
+                "p95": 3200.1353924537507,
+                "max": 3200.1353924537507
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3767.716004546243,
+                "median": 3926.7779779123707,
+                "p95": 4194.022392203907,
+                "max": 4194.022392203907
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 34.973041105330616,
+                "median": 34.34830334214925,
+                "p95": 67.41051018381738,
+                "max": 67.41051018381738
+              },
+              "sm_occupancy_percent": {
+                "mean": 14.250860730137617,
+                "median": 14.535723990726355,
+                "p95": 26.91743814012654,
+                "max": 26.91743814012654
+              },
+              "dram_bandwidth_percent": {
+                "mean": 8.958380597763766,
+                "median": 8.806982990366892,
+                "p95": 17.324585278224912,
+                "max": 17.324585278224912
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2900.624909077872,
+                "median": 2893.114251679148,
+                "p95": 3193.7801940864524,
+                "max": 3193.7801940864524
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3745.5003255751653,
+                "median": 3741.8663383328612,
+                "p95": 4427.44962783213,
+                "max": 4427.44962783213
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 34.99458365470335,
+                "median": 35.07352765407804,
+                "p95": 50.53103372544013,
+                "max": 50.53103372544013
+              },
+              "sm_occupancy_percent": {
+                "mean": 14.150130807307638,
+                "median": 14.137481306896962,
+                "p95": 19.86571872396627,
+                "max": 19.86571872396627
+              },
+              "dram_bandwidth_percent": {
+                "mean": 8.970491640095332,
+                "median": 8.878932779812484,
+                "p95": 12.01300772707138,
+                "max": 12.01300772707138
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2767.435209073267,
+                "median": 2831.3148630937385,
+                "p95": 3019.0084125281555,
+                "max": 3019.0084125281555
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3744.3281625717086,
+                "median": 3879.1139591909896,
+                "p95": 4434.791138011193,
+                "max": 4434.791138011193
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 34.04796792509748,
+                "median": 33.88691909534188,
+                "p95": 42.22983349985482,
+                "max": 42.22983349985482
+              },
+              "sm_occupancy_percent": {
+                "mean": 13.640422076816122,
+                "median": 13.981393273396847,
+                "p95": 16.801481619096077,
+                "max": 16.801481619096077
+              },
+              "dram_bandwidth_percent": {
+                "mean": 8.495739966557199,
+                "median": 8.545686421464394,
+                "p95": 10.190314799788798,
+                "max": 10.190314799788798
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2834.387414747935,
+                "median": 2994.7872300448325,
+                "p95": 3206.043016351238,
+                "max": 3206.043016351238
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3573.0740702891762,
+                "median": 3523.2104921290675,
+                "p95": 4074.1711976738397,
+                "max": 4074.1711976738397
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 34.560896627296486,
+                "median": 35.14151016917744,
+                "p95": 44.538246623745984,
+                "max": 44.538246623745984
+              },
+              "sm_occupancy_percent": {
+                "mean": 13.904229862852237,
+                "median": 13.870469258342776,
+                "p95": 18.111958001201014,
+                "max": 18.111958001201014
+              },
+              "dram_bandwidth_percent": {
+                "mean": 8.784512366702968,
+                "median": 8.726182045147784,
+                "p95": 10.81928118982378,
+                "max": 10.81928118982378
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2853.5223097410635,
+                "median": 2991.333380270881,
+                "p95": 3100.4893620777284,
+                "max": 3100.4893620777284
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3702.346019322432,
+                "median": 3654.200171424605,
+                "p95": 4151.538580036773,
+                "max": 4151.538580036773
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 35.313201268801436,
+                "median": 35.221719223320804,
+                "p95": 40.86106818663096,
+                "max": 40.86106818663096
+              },
+              "sm_occupancy_percent": {
+                "mean": 14.274308961562356,
+                "median": 14.26098977619228,
+                "p95": 16.175420359022525,
+                "max": 16.175420359022525
+              },
+              "dram_bandwidth_percent": {
+                "mean": 8.752926871871704,
+                "median": 8.697855992503154,
+                "p95": 10.123866315039217,
+                "max": 10.123866315039217
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2746.6376089529203,
+                "median": 2924.8389732034825,
+                "p95": 3249.386870611909,
+                "max": 3249.386870611909
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3640.604626018705,
+                "median": 3670.221974635704,
+                "p95": 4987.260440593987,
+                "max": 4987.260440593987
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 37.95259648333583,
+                "median": 34.20068123630745,
+                "p95": 62.67584915709069,
+                "max": 62.67584915709069
+              },
+              "sm_occupancy_percent": {
+                "mean": 15.392020605910883,
+                "median": 13.505122667490104,
+                "p95": 25.269832090613836,
+                "max": 25.269832090613836
+              },
+              "dram_bandwidth_percent": {
+                "mean": 9.382341134454789,
+                "median": 9.011910900334158,
+                "p95": 14.37633448228719,
+                "max": 14.37633448228719
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2850.7727187474184,
+                "median": 2941.544009805353,
+                "p95": 3103.9027911364046,
+                "max": 3103.9027911364046
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3678.7476796911956,
+                "median": 3649.7004791813038,
+                "p95": 4048.1102770265275,
+                "max": 4048.1102770265275
+              }
+            }
+          ]
+        },
+        {
+          "stage": 15,
+          "start_ms": 1795703581730,
+          "end_ms": 1795703581779,
+          "span_seconds": 0.049,
+          "tasks": 1,
+          "task_seconds": {
+            "mean": 0.049,
+            "median": 0.049,
+            "p95": 0.049,
+            "max": 0.049
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 1164,
+          "shuffle_write_bytes": 433,
+          "gpm_samples": 0
+        },
+        {
+          "stage": 16,
+          "start_ms": 1795703581968,
+          "end_ms": 1795703585695,
+          "span_seconds": 3.727,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.45116796875,
+            "median": 0.452,
+            "p95": 0.631,
+            "max": 0.744
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 0,
+          "shuffle_write_bytes": 6476083,
+          "gpm_samples": 6,
+          "gpm_by_gpu": [
+            {
+              "sm_active_percent": {
+                "mean": 36.55711983478476,
+                "median": 35.18164026030421,
+                "p95": 51.29715335794076,
+                "max": 51.29715335794076
+              },
+              "sm_occupancy_percent": {
+                "mean": 21.087747973394176,
+                "median": 20.547857757705692,
+                "p95": 29.950447923086177,
+                "max": 29.950447923086177
+              },
+              "dram_bandwidth_percent": {
+                "mean": 20.670776274778465,
+                "median": 19.89082094157387,
+                "p95": 29.979961063032917,
+                "max": 29.979961063032917
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 6055.670848484462,
+                "median": 6134.811961711843,
+                "p95": 6424.297346927291,
+                "max": 6424.297346927291
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 8405.548657338557,
+                "median": 8317.026292837196,
+                "p95": 10260.346888635655,
+                "max": 10260.346888635655
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 28.16197536266388,
+                "median": 28.1468399128224,
+                "p95": 33.4571424013471,
+                "max": 33.4571424013471
+              },
+              "sm_occupancy_percent": {
+                "mean": 16.301927123402727,
+                "median": 16.352896396358318,
+                "p95": 19.130086882888914,
+                "max": 19.130086882888914
+              },
+              "dram_bandwidth_percent": {
+                "mean": 16.315812166526023,
+                "median": 16.409342978455236,
+                "p95": 20.14421413006135,
+                "max": 20.14421413006135
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 6654.662538302079,
+                "median": 6551.828556233453,
+                "p95": 7238.304952356841,
+                "max": 7238.304952356841
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 6347.789929360586,
+                "median": 6086.288095201442,
+                "p95": 9483.90997631617,
+                "max": 9483.90997631617
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 32.40432532451172,
+                "median": 28.131065212668034,
+                "p95": 48.55611395641105,
+                "max": 48.55611395641105
+              },
+              "sm_occupancy_percent": {
+                "mean": 18.824268709304334,
+                "median": 16.17698358357635,
+                "p95": 28.681248393463232,
+                "max": 28.681248393463232
+              },
+              "dram_bandwidth_percent": {
+                "mean": 18.454601501921534,
+                "median": 16.09408405076472,
+                "p95": 27.937763773148205,
+                "max": 27.937763773148205
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 6395.610211650353,
+                "median": 6323.322952186902,
+                "p95": 7235.325677422076,
+                "max": 7235.325677422076
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 7205.926363556213,
+                "median": 7004.379118942033,
+                "p95": 8200.732056180932,
+                "max": 8200.732056180932
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 27.834738103154937,
+                "median": 29.14237505389769,
+                "p95": 29.47701862480162,
+                "max": 29.47701862480162
+              },
+              "sm_occupancy_percent": {
+                "mean": 16.11662006075249,
+                "median": 16.895956171640577,
+                "p95": 17.061889585198436,
+                "max": 17.061889585198436
+              },
+              "dram_bandwidth_percent": {
+                "mean": 15.696386098560534,
+                "median": 16.467228471389515,
+                "p95": 16.55885052443139,
+                "max": 16.55885052443139
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 6587.385218441394,
+                "median": 6536.296714802978,
+                "p95": 7018.8064668843235,
+                "max": 7018.8064668843235
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 6491.663809350081,
+                "median": 6576.4067810927045,
+                "p95": 7199.838598696965,
+                "max": 7199.838598696965
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 27.56982243462074,
+                "median": 28.492541954449933,
+                "p95": 28.924624771031482,
+                "max": 28.924624771031482
+              },
+              "sm_occupancy_percent": {
+                "mean": 16.087698401753887,
+                "median": 16.60593703880683,
+                "p95": 17.053408953510477,
+                "max": 17.053408953510477
+              },
+              "dram_bandwidth_percent": {
+                "mean": 15.781699426622756,
+                "median": 16.23332464007976,
+                "p95": 16.435142282703016,
+                "max": 16.435142282703016
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 6225.092158630468,
+                "median": 6245.547360451565,
+                "p95": 6524.3001275977,
+                "max": 6524.3001275977
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 6167.951247266719,
+                "median": 6951.900455009274,
+                "p95": 8104.912036734248,
+                "max": 8104.912036734248
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 34.164765649790425,
+                "median": 32.9841553088553,
+                "p95": 44.022731484913244,
+                "max": 44.022731484913244
+              },
+              "sm_occupancy_percent": {
+                "mean": 19.906232529934712,
+                "median": 19.091717244054717,
+                "p95": 26.188595195797763,
+                "max": 26.188595195797763
+              },
+              "dram_bandwidth_percent": {
+                "mean": 19.400907971599327,
+                "median": 19.042366992316285,
+                "p95": 24.202069936088133,
+                "max": 24.202069936088133
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 5991.0755437527005,
+                "median": 6015.51032006799,
+                "p95": 6600.66353555875,
+                "max": 6600.66353555875
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 7834.188654434427,
+                "median": 7514.5348812308985,
+                "p95": 10801.88448068412,
+                "max": 10801.88448068412
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 31.907858606057946,
+                "median": 33.90039597946155,
+                "p95": 46.43301975794657,
+                "max": 46.43301975794657
+              },
+              "sm_occupancy_percent": {
+                "mean": 18.569745981928314,
+                "median": 19.99963599870088,
+                "p95": 27.17633049014372,
+                "max": 27.17633049014372
+              },
+              "dram_bandwidth_percent": {
+                "mean": 18.29893433492241,
+                "median": 19.91874952734177,
+                "p95": 26.813948576795383,
+                "max": 26.813948576795383
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 6146.000485245796,
+                "median": 6271.472062365343,
+                "p95": 6606.9661622052745,
+                "max": 6606.9661622052745
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 7100.6169173039025,
+                "median": 6741.070286836834,
+                "p95": 8192.242173961962,
+                "max": 8192.242173961962
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 34.76533931880132,
+                "median": 35.68185423594683,
+                "p95": 45.01567435905709,
+                "max": 45.01567435905709
+              },
+              "sm_occupancy_percent": {
+                "mean": 20.170877610277252,
+                "median": 20.540096651232943,
+                "p95": 26.902419641307535,
+                "max": 26.902419641307535
+              },
+              "dram_bandwidth_percent": {
+                "mean": 20.02086422806233,
+                "median": 20.163642798269027,
+                "p95": 27.32034670216306,
+                "max": 27.32034670216306
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 5935.821973344661,
+                "median": 6012.208681516212,
+                "p95": 6120.376367495521,
+                "max": 6120.376367495521
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 7695.713187208286,
+                "median": 7782.3560605333205,
+                "p95": 8262.3277949064,
+                "max": 8262.3277949064
+              }
+            }
+          ]
+        },
+        {
+          "stage": 17,
+          "start_ms": 1795703585719,
+          "end_ms": 1795703586201,
+          "span_seconds": 0.482,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.05776953125,
+            "median": 0.031,
+            "p95": 0.26,
+            "max": 0.289
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 0,
+          "shuffle_write_bytes": 0,
+          "gpm_samples": 0
+        },
+        {
+          "stage": 25,
+          "start_ms": 1795703586262,
+          "end_ms": 1795703586536,
+          "span_seconds": 0.274,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.0317265625,
+            "median": 0.0315,
+            "p95": 0.078,
+            "max": 0.097
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 0,
+          "shuffle_write_bytes": 11778,
+          "gpm_samples": 0
+        },
+        {
+          "stage": 26,
+          "start_ms": 1795703586553,
+          "end_ms": 1795703586691,
+          "span_seconds": 0.138,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.0161171875,
+            "median": 0.01,
+            "p95": 0.063,
+            "max": 0.067
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 0,
+          "shuffle_write_bytes": 0,
+          "gpm_samples": 0
+        }
+      ],
+      "gpm_link_states": [
+        [
+          5,
+          16
+        ]
+      ],
+      "scan_task_seconds": {
+        "bufferTime": 106.965361692,
+        "gpuDecodeTime": 211.035411719,
+        "opTimeNew": 390.180830973
+      }
+    },
+    {
+      "query": 9,
+      "iteration": 2,
+      "sql_seconds": 48.042335925998486,
+      "cleanup_seconds": 1.4519987589992525,
+      "sql_plus_cleanup_seconds": 49.49433468499774,
+      "validation": {
+        "status": "passed",
+        "method": "complete ordered rows"
+      },
+      "reader_metrics": {
+        "hybridScanSplits": 2561,
+        "hybridScanDeviceBytesRead": 0,
+        "hybridScanNativeHostBytesRead": 1433905350757,
+        "hybridScanGdsFallbackFiles": 0,
+        "hybridScanGpuBusyHostBytesRead": 0
+      },
+      "variant": "prefilter_partsupp_reuse",
+      "task_metrics": {
+        "Memory Bytes Spilled": 0,
+        "Disk Bytes Spilled": 0,
+        "Executor Run Time": 1408832,
+        "Executor CPU Time": 1110015050569,
+        "JVM GC Time": 2678,
+        "shuffle_write_bytes": 299216417606,
+        "input_bytes": 1434236231364,
+        "native_scan_splits": 2561,
+        "native_host_read_bytes": 1433905350757,
+        "task_attempts": 3543
+      },
+      "execution_window_ms": {
+        "start": 1795703588914,
+        "end": 1795703636757
+      },
+      "plan_shuffle_write_bytes": 299216417606,
+      "join_plan": [
+        "+- GpuDriverlessBroadcastHashJoin [s_nationkey#463L], [n_nationkey#208L], Inner, GpuBuildRight",
+        ":  +- GpuShuffledSymmetricHashJoin Inner, [l_orderkey#128L], [o_orderkey#260L], true, 2147483648, 1.0, CoalesceReadOption(true,GPU,false), false",
+        ":     :        +- GpuShuffledSymmetricHashJoin Inner, [l_suppkey#505, l_partkey#129L], [ps_suppkey#549, ps_partkey#388L], true, 2147483648, 1.0, CoalesceReadOption(true,GPU,false), false",
+        ":     :           :        +- GpuBroadcastHashJoin [l_partkey#129L], [p_partkey#332L], Inner, GpuBuildRight, false",
+        ":     :           :           :  +- GpuDriverlessBroadcastHashJoin [l_suppkey#505], [s_suppkey#563], Inner, GpuBuildRight",
+        ":     :                    +- GpuBroadcastHashJoin [ps_partkey#388L], [p_partkey#625L], LeftSemi, GpuBuildRight, false"
+      ],
+      "scan_plan": [
+        ":     :           :           :     :        +- GpuFileGpuScan parquet spark_catalog.default.lineitem[l_orderkey#128L,l_partkey#129L,l_suppkey#130L,l_quantity#132,l_extendedprice#133,l_discount#134] Batched: true, DataFilters: [isnotnull(cast(l_suppkey#130L as int)), isnotnull(l_partkey#129L), isnotnull(l_orderkey#128L)], Eager_IO_Prefetch: false, Format: Parquet, Location: InMemoryFileIndex[file:/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem], PartitionFilters: [], PushedFilters: [IsNotNull(l_partkey), IsNotNull(l_orderkey)], ReadSchema: struct<l_orderkey:bigint,l_partkey:bigint,l_suppkey:bigint,l_quantity:decimal(15,2),l_extendedpri...",
+        ":     :           :           :                 +- GpuFileGpuScan parquet spark_catalog.default.supplier[s_suppkey#460L,s_nationkey#463L] Batched: true, DataFilters: [isnotnull(cast(s_suppkey#460L as int)), isnotnull(s_nationkey#463L)], Eager_IO_Prefetch: false, Format: Parquet, Location: InMemoryFileIndex[file:/opt/dlami/nvme/daily-trend-hardened/dataset/supplier], PartitionFilters: [], PushedFilters: [IsNotNull(s_nationkey)], ReadSchema: struct<s_suppkey:bigint,s_nationkey:bigint>",
+        ":     :           :                       +- GpuFileGpuScan parquet spark_catalog.default.part[p_partkey#332L,p_name#333] Batched: true, DataFilters: [isnotnull(p_name#333), Contains(p_name#333, green), isnotnull(p_partkey#332L)], Eager_IO_Prefetch: false, Format: Parquet, Location: InMemoryFileIndex[file:/opt/dlami/nvme/daily-trend-hardened/dataset/part], PartitionFilters: [], PushedFilters: [IsNotNull(p_name), StringContains(p_name,green), IsNotNull(p_partkey)], ReadSchema: struct<p_partkey:bigint,p_name:string>",
+        ":     :                       :     +- GpuFileGpuScan parquet spark_catalog.default.partsupp[ps_partkey#388L,ps_suppkey#389L,ps_supplycost#391] Batched: true, DataFilters: [isnotnull(cast(ps_suppkey#389L as int)), isnotnull(ps_partkey#388L)], Eager_IO_Prefetch: false, Format: Parquet, Location: InMemoryFileIndex[file:/opt/dlami/nvme/daily-trend-hardened/dataset/partsupp], PartitionFilters: [], PushedFilters: [IsNotNull(ps_partkey)], ReadSchema: struct<ps_partkey:bigint,ps_suppkey:bigint,ps_supplycost:decimal(15,2)>",
+        ":                 +- GpuFileGpuScan parquet spark_catalog.default.orders[o_orderkey#260L,o_orderdate#264] Batched: true, DataFilters: [isnotnull(o_orderkey#260L)], Eager_IO_Prefetch: false, Format: Parquet, Location: InMemoryFileIndex[file:/opt/dlami/nvme/daily-trend-hardened/dataset/orders], PartitionFilters: [], PushedFilters: [IsNotNull(o_orderkey)], ReadSchema: struct<o_orderkey:bigint,o_orderdate:date>",
+        "+- GpuFileGpuScan parquet spark_catalog.default.nation[n_nationkey#208L,n_name#209] Batched: true, DataFilters: [isnotnull(n_nationkey#208L)], Eager_IO_Prefetch: false, Format: Parquet, Location: InMemoryFileIndex[file:/opt/dlami/nvme/daily-trend-hardened/dataset/nation], PartitionFilters: [], PushedFilters: [IsNotNull(n_nationkey)], ReadSchema: struct<n_nationkey:bigint,n_name:string>"
+      ],
+      "normalized_plan_sha256": "ee0d204c1e7bb53ea7c2bd8c2e15e9d21a98213ef017c6d7b630a5b213d1b204",
+      "host_sampled_seconds": 46.474386462,
+      "host_boundary_gap_seconds": 1.3686135380000053,
+      "disk_read_bytes": {
+        "nvme0n1": 0,
+        "nvme0n1p1": 0,
+        "nvme0n1p14": 0,
+        "nvme0n1p15": 0,
+        "nvme1n1": 0,
+        "nvme3n1": 0,
+        "nvme2n1": 0,
+        "nvme4n1": 0,
+        "dm-0": 0
+      },
+      "memory_full_seconds": 0.013999,
+      "cpu_percent": {
+        "user": 15.90504944685615,
+        "nice": 0.0,
+        "system": 17.099687289943596,
+        "idle": 66.96772409575986,
+        "iowait": 0.0015736667108792075,
+        "irq": 0.0,
+        "softirq": 0.024054619723439315,
+        "steal": 0.0019108810060676092
+      },
+      "min_free_gib": 4.162696838378906,
+      "vm_deltas": {
+        "workingset_nodes": 31295,
+        "workingset_refault_anon": 0,
+        "workingset_refault_file": 9,
+        "workingset_activate_anon": 0,
+        "workingset_activate_file": 1,
+        "workingset_restore_anon": 0,
+        "workingset_restore_file": 1,
+        "workingset_nodereclaim": 0,
+        "allocstall_dma": 0,
+        "allocstall_dma32": 0,
+        "allocstall_normal": 0,
+        "allocstall_movable": 0,
+        "allocstall_device": 0,
+        "pgsteal_kswapd": 2216697,
+        "pgsteal_direct": 0,
+        "pgsteal_khugepaged": 0,
+        "pgscan_kswapd": 2216697,
+        "pgscan_direct": 0,
+        "pgscan_khugepaged": 0,
+        "pgscan_direct_throttle": 0,
+        "pgscan_anon": 0,
+        "pgscan_file": 2216697,
+        "pgsteal_anon": 0,
+        "pgsteal_file": 2216697,
+        "thp_migration_success": 0,
+        "thp_migration_fail": 0,
+        "thp_migration_split": 0,
+        "compact_migrate_scanned": 0,
+        "compact_free_scanned": 0,
+        "compact_isolated": 0,
+        "compact_stall": 0,
+        "compact_fail": 0,
+        "compact_success": 0,
+        "compact_daemon_wake": 3,
+        "compact_daemon_migrate_scanned": 0,
+        "compact_daemon_free_scanned": 0,
+        "thp_fault_alloc": 0,
+        "thp_fault_fallback": 0,
+        "thp_fault_fallback_charge": 0,
+        "thp_collapse_alloc": 0,
+        "thp_collapse_alloc_failed": 0,
+        "thp_file_alloc": 0,
+        "thp_file_fallback": 0,
+        "thp_file_fallback_charge": 0,
+        "thp_file_mapped": 0,
+        "thp_split_page": 0,
+        "thp_split_page_failed": 0,
+        "thp_deferred_split_page": 0,
+        "thp_split_pmd": 0,
+        "thp_scan_exceed_none_pte": 0,
+        "thp_scan_exceed_swap_pte": 0,
+        "thp_scan_exceed_share_pte": 0,
+        "thp_split_pud": 0,
+        "thp_zero_page_alloc": 0,
+        "thp_zero_page_alloc_failed": 0,
+        "thp_swpout": 0,
+        "thp_swpout_fallback": 0
+      },
+      "min_node_free_gib": {
+        "node0": 3.0117416381835938,
+        "node1": 1.0845375061035156
+      },
+      "gpm_samples": 94,
+      "gpm_sampled_seconds": 47.252519991,
+      "gpm_by_gpu": [
+        {
+          "sm_active_percent": {
+            "mean": 64.33757111352978,
+            "median": 74.00413938724034,
+            "p95": 98.71532806552489,
+            "max": 99.41885031369199
+          },
+          "sm_occupancy_percent": {
+            "mean": 34.97512329373457,
+            "median": 38.19494674811707,
+            "p95": 57.037228415979335,
+            "max": 57.92308445470395
+          },
+          "dram_bandwidth_percent": {
+            "mean": 21.45230663963295,
+            "median": 23.53429684478248,
+            "p95": 34.41568978909132,
+            "max": 35.93455153906447
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 1045.3765571989818,
+            "median": 500.6950258342313,
+            "p95": 6596.274435192622,
+            "max": 7802.739295314286
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4926.90996974002,
+            "median": 4640.517955195135,
+            "p95": 9333.850093744624,
+            "max": 9578.090395273937
+          }
+        },
+        {
+          "sm_active_percent": {
+            "mean": 62.50698553086268,
+            "median": 70.74082552823941,
+            "p95": 98.2943826154246,
+            "max": 98.97623476089609
+          },
+          "sm_occupancy_percent": {
+            "mean": 33.9278500006091,
+            "median": 38.43028142157188,
+            "p95": 57.1817240941936,
+            "max": 57.884002117231795
+          },
+          "dram_bandwidth_percent": {
+            "mean": 20.908531835439288,
+            "median": 22.247349521282217,
+            "p95": 34.42975883099621,
+            "max": 35.999494028396974
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 1026.0905766870399,
+            "median": 484.1334887625833,
+            "p95": 6282.048421423044,
+            "max": 7703.75700346163
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4800.99480638173,
+            "median": 4316.130738682516,
+            "p95": 9324.66556349107,
+            "max": 9400.475857257143
+          }
+        },
+        {
+          "sm_active_percent": {
+            "mean": 62.98954352532803,
+            "median": 72.29598811287181,
+            "p95": 97.07071007576465,
+            "max": 99.5130050390825
+          },
+          "sm_occupancy_percent": {
+            "mean": 34.108816011394985,
+            "median": 38.625224224000036,
+            "p95": 56.66141879187015,
+            "max": 57.63471890317759
+          },
+          "dram_bandwidth_percent": {
+            "mean": 21.032553079131183,
+            "median": 22.534510434320346,
+            "p95": 34.72623896634169,
+            "max": 35.58628554902866
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 1032.334284004852,
+            "median": 446.8412068720469,
+            "p95": 6397.908489447608,
+            "max": 7347.335320423764
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4864.896359734579,
+            "median": 4848.506966481087,
+            "p95": 9278.683609656286,
+            "max": 11191.116566407934
+          }
+        },
+        {
+          "sm_active_percent": {
+            "mean": 62.24056900795896,
+            "median": 71.61925875810529,
+            "p95": 97.72372465358306,
+            "max": 99.01574575040144
+          },
+          "sm_occupancy_percent": {
+            "mean": 33.57503577914781,
+            "median": 38.331983648649626,
+            "p95": 56.44292638992421,
+            "max": 57.02637892617527
+          },
+          "dram_bandwidth_percent": {
+            "mean": 20.709847933347337,
+            "median": 21.69320750475029,
+            "p95": 34.51120490641149,
+            "max": 35.38163012799941
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 1026.274842129569,
+            "median": 466.0271999501542,
+            "p95": 5868.165431825156,
+            "max": 7686.88355409472
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4780.015368839958,
+            "median": 4739.031024930993,
+            "p95": 9295.391092741054,
+            "max": 10739.710425823858
+          }
+        },
+        {
+          "sm_active_percent": {
+            "mean": 62.130477370536575,
+            "median": 69.335914483276,
+            "p95": 96.92426097630673,
+            "max": 98.6133067486281
+          },
+          "sm_occupancy_percent": {
+            "mean": 33.63514410373123,
+            "median": 37.06938847111955,
+            "p95": 56.610175337526,
+            "max": 57.74843999163046
+          },
+          "dram_bandwidth_percent": {
+            "mean": 20.832805075008615,
+            "median": 22.18441988001263,
+            "p95": 34.74382429432853,
+            "max": 37.49978265112683
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 1013.8652424779001,
+            "median": 465.87287511185036,
+            "p95": 6056.618075918217,
+            "max": 7658.3049515158655
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4828.794367935585,
+            "median": 4601.509169387169,
+            "p95": 9330.419174304403,
+            "max": 9531.60132253951
+          }
+        },
+        {
+          "sm_active_percent": {
+            "mean": 62.9784079590185,
+            "median": 74.0339401392973,
+            "p95": 98.68684489422333,
+            "max": 99.21457149334603
+          },
+          "sm_occupancy_percent": {
+            "mean": 34.1123024594366,
+            "median": 39.902651798374364,
+            "p95": 57.12165309245988,
+            "max": 58.44798530980919
+          },
+          "dram_bandwidth_percent": {
+            "mean": 20.97861676830867,
+            "median": 23.472204821789887,
+            "p95": 34.12872010900267,
+            "max": 35.03207884763081
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 1058.6149949433777,
+            "median": 458.0579322197583,
+            "p95": 6540.078448181089,
+            "max": 8123.939887986668
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4858.613303131358,
+            "median": 4640.824463962501,
+            "p95": 9339.276752489663,
+            "max": 9455.864621130304
+          }
+        },
+        {
+          "sm_active_percent": {
+            "mean": 62.572411207848035,
+            "median": 72.15929731927957,
+            "p95": 97.49397550007315,
+            "max": 99.31618197898516
+          },
+          "sm_occupancy_percent": {
+            "mean": 33.91805938301799,
+            "median": 38.026627749627856,
+            "p95": 56.907828310154606,
+            "max": 57.616883523869674
+          },
+          "dram_bandwidth_percent": {
+            "mean": 20.8778047318897,
+            "median": 21.710715331022538,
+            "p95": 34.09999153303496,
+            "max": 35.94232029388844
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 1015.6517796617396,
+            "median": 458.3788150794361,
+            "p95": 6035.727969905707,
+            "max": 7781.8318938148095
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4848.027381309369,
+            "median": 4765.747435948724,
+            "p95": 9305.440538081042,
+            "max": 10923.822051385738
+          }
+        },
+        {
+          "sm_active_percent": {
+            "mean": 62.05687146735049,
+            "median": 68.02806926399003,
+            "p95": 98.11191113312444,
+            "max": 99.19780841628355
+          },
+          "sm_occupancy_percent": {
+            "mean": 33.50080614670703,
+            "median": 36.88632581181569,
+            "p95": 56.51868873952953,
+            "max": 57.88403998912359
+          },
+          "dram_bandwidth_percent": {
+            "mean": 20.78334216504367,
+            "median": 21.945144295097165,
+            "p95": 34.5727316913605,
+            "max": 37.448519806754504
+          },
+          "pcie_tx_mib_per_second": {
+            "mean": 1019.5017640445838,
+            "median": 454.4979729703588,
+            "p95": 6218.711525000976,
+            "max": 6921.96146725005
+          },
+          "pcie_rx_mib_per_second": {
+            "mean": 4840.57341746539,
+            "median": 4591.9331619617715,
+            "p95": 9286.741489901513,
+            "max": 11506.212977181836
+          }
+        }
+      ],
+      "gpm_all_gpu_mean": {
+        "sm_active_percent": 62.72660464780413,
+        "sm_occupancy_percent": 33.96914214722241,
+        "dram_bandwidth_percent": 20.946976028475177,
+        "pcie_tx_mib_per_second": 1029.7137551435055,
+        "pcie_rx_mib_per_second": 4843.603121817248
+      },
+      "stages": [
+        {
+          "stage": 28,
+          "start_ms": 1795703588946,
+          "end_ms": 1795703589869,
+          "span_seconds": 0.923,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.3360078125,
+            "median": 0.3495,
+            "p95": 0.424,
+            "max": 0.457
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 35161810754,
+          "shuffle_write_bytes": 0,
+          "gpm_samples": 0
+        },
+        {
+          "stage": 29,
+          "start_ms": 1795703592172,
+          "end_ms": 1795703592416,
+          "span_seconds": 0.244,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.0284140625,
+            "median": 0.023,
+            "p95": 0.056,
+            "max": 0.06
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 532394878,
+          "shuffle_write_bytes": 690858671,
+          "gpm_samples": 0
+        },
+        {
+          "stage": 31,
+          "start_ms": 1795703592387,
+          "end_ms": 1795703625448,
+          "span_seconds": 33.061,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.46511328125,
+            "median": 0.188,
+            "p95": 2.439,
+            "max": 2.576
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 73599573877,
+          "shuffle_write_bytes": 5684994371,
+          "gpm_samples": 65,
+          "gpm_by_gpu": [
+            {
+              "sm_active_percent": {
+                "mean": 75.46316683527618,
+                "median": 80.93177499311673,
+                "p95": 98.75095801946647,
+                "max": 99.41885031369199
+              },
+              "sm_occupancy_percent": {
+                "mean": 42.91509845789803,
+                "median": 45.48068704527839,
+                "p95": 57.27090535186713,
+                "max": 57.92308445470395
+              },
+              "dram_bandwidth_percent": {
+                "mean": 25.63274165029023,
+                "median": 27.667347846960467,
+                "p95": 34.78230369537065,
+                "max": 35.93455153906447
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 411.5847309117044,
+                "median": 483.5608714053265,
+                "p95": 681.7194496226481,
+                "max": 1195.9698839410376
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5334.682061745497,
+                "median": 6259.9069560922935,
+                "p95": 9333.850093744624,
+                "max": 9356.853091779114
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 73.92292845553678,
+                "median": 76.32862272630099,
+                "p95": 98.50561419072561,
+                "max": 98.97623476089609
+              },
+              "sm_occupancy_percent": {
+                "mean": 41.992265319131555,
+                "median": 43.3693736095382,
+                "p95": 57.30824979500157,
+                "max": 57.884002117231795
+              },
+              "dram_bandwidth_percent": {
+                "mean": 25.248953762546194,
+                "median": 26.20243205709116,
+                "p95": 34.63264431159859,
+                "max": 35.999494028396974
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 406.81348615838175,
+                "median": 477.7448644539555,
+                "p95": 685.5988835433609,
+                "max": 1641.6597061547207
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5290.742764574795,
+                "median": 6490.326100477805,
+                "p95": 9326.117978291524,
+                "max": 9400.475857257143
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 73.37811859418859,
+                "median": 76.00600499669706,
+                "p95": 97.56100996789269,
+                "max": 99.5130050390825
+              },
+              "sm_occupancy_percent": {
+                "mean": 41.65940778138544,
+                "median": 42.86314122532644,
+                "p95": 56.94319474771592,
+                "max": 57.63471890317759
+              },
+              "dram_bandwidth_percent": {
+                "mean": 25.056107511423576,
+                "median": 26.447713712154215,
+                "p95": 35.005503278423575,
+                "max": 35.58628554902866
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 401.70554693523053,
+                "median": 440.22323630619155,
+                "p95": 682.79938872566,
+                "max": 1719.1538731418318
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5203.7213771953975,
+                "median": 6198.203004199793,
+                "p95": 9278.11366247302,
+                "max": 9352.273238632848
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 73.21768046106425,
+                "median": 76.83175503143892,
+                "p95": 97.81263064376199,
+                "max": 99.01574575040144
+              },
+              "sm_occupancy_percent": {
+                "mean": 41.40046010816045,
+                "median": 42.19314249436574,
+                "p95": 56.915151029718594,
+                "max": 57.02637892617527
+              },
+              "dram_bandwidth_percent": {
+                "mean": 24.891452863965217,
+                "median": 26.24599396575405,
+                "p95": 34.59180374397024,
+                "max": 35.38163012799941
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 399.6491497078311,
+                "median": 455.5910605471241,
+                "p95": 683.1016878692803,
+                "max": 1133.677094515156
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5184.107013325528,
+                "median": 5901.903005218644,
+                "p95": 9295.391092741054,
+                "max": 9331.01745274494
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 73.51269829014521,
+                "median": 77.78791775074636,
+                "p95": 97.1453491145798,
+                "max": 98.6133067486281
+              },
+              "sm_occupancy_percent": {
+                "mean": 41.59278188490334,
+                "median": 43.57059924471077,
+                "p95": 56.76145068602685,
+                "max": 57.74843999163046
+              },
+              "dram_bandwidth_percent": {
+                "mean": 25.0864557253501,
+                "median": 26.461910983401793,
+                "p95": 34.788186872003365,
+                "max": 37.49978265112683
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 403.8811928037166,
+                "median": 428.9930157234895,
+                "p95": 681.6816807217998,
+                "max": 1596.564508829347
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5232.986127331382,
+                "median": 5658.613648114147,
+                "p95": 9279.836082422156,
+                "max": 9373.888369826236
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 74.26608380101074,
+                "median": 77.9747301458952,
+                "p95": 98.73518510363228,
+                "max": 99.21457149334603
+              },
+              "sm_occupancy_percent": {
+                "mean": 42.18856101193062,
+                "median": 43.830010429543314,
+                "p95": 57.18255843128457,
+                "max": 58.44798530980919
+              },
+              "dram_bandwidth_percent": {
+                "mean": 25.341269336194372,
+                "median": 25.79341078902849,
+                "p95": 34.23187212255682,
+                "max": 35.03207884763081
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 409.4449688486393,
+                "median": 438.17715554429304,
+                "p95": 682.5345413417087,
+                "max": 1298.1106211344488
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5318.846768725998,
+                "median": 5690.876596262607,
+                "p95": 9341.044351391658,
+                "max": 9455.864621130304
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 73.4805242850856,
+                "median": 78.30824140456487,
+                "p95": 97.5638184137067,
+                "max": 99.31618197898516
+              },
+              "sm_occupancy_percent": {
+                "mean": 41.66699818344442,
+                "median": 44.44855642100549,
+                "p95": 56.9568672350244,
+                "max": 57.616883523869674
+              },
+              "dram_bandwidth_percent": {
+                "mean": 24.95433417778916,
+                "median": 25.6914720510768,
+                "p95": 34.63161243469523,
+                "max": 35.94232029388844
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 401.49601716196713,
+                "median": 458.3704119470474,
+                "p95": 686.6747364076299,
+                "max": 981.3072219577267
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5219.590303138883,
+                "median": 5931.375040212123,
+                "p95": 9285.522325210277,
+                "max": 9360.354581965355
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 72.59005426700203,
+                "median": 76.58532912903355,
+                "p95": 98.48823502843605,
+                "max": 99.19780841628355
+              },
+              "sm_occupancy_percent": {
+                "mean": 41.00966018671642,
+                "median": 43.00950333616247,
+                "p95": 56.935859968966284,
+                "max": 57.88403998912359
+              },
+              "dram_bandwidth_percent": {
+                "mean": 24.722432006828257,
+                "median": 25.381561834105966,
+                "p95": 34.60111442013278,
+                "max": 37.448519806754504
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 399.43077318708885,
+                "median": 415.9276225569781,
+                "p95": 679.21348084722,
+                "max": 1595.8263197540211
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5180.678733598294,
+                "median": 6021.925012936478,
+                "p95": 9266.706254924487,
+                "max": 11450.522568144868
+              }
+            }
+          ]
+        },
+        {
+          "stage": 30,
+          "start_ms": 1795703594665,
+          "end_ms": 1795703624254,
+          "span_seconds": 29.589,
+          "tasks": 1152,
+          "task_seconds": {
+            "mean": 0.8121354166666667,
+            "median": 0.824,
+            "p95": 0.951,
+            "max": 1.396
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 1240182802827,
+          "shuffle_write_bytes": 94342114345,
+          "gpm_samples": 58,
+          "gpm_by_gpu": [
+            {
+              "sm_active_percent": {
+                "mean": 81.31290676594011,
+                "median": 83.51922553532165,
+                "p95": 98.76266549187295,
+                "max": 99.41885031369199
+              },
+              "sm_occupancy_percent": {
+                "mean": 46.47086201809468,
+                "median": 47.311243683409955,
+                "p95": 57.70360888195335,
+                "max": 57.92308445470395
+              },
+              "dram_bandwidth_percent": {
+                "mean": 27.887206257817688,
+                "median": 28.39122428879024,
+                "p95": 34.833931035463166,
+                "max": 35.93455153906447
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 431.17183250605433,
+                "median": 500.6950258342313,
+                "p95": 681.7194496226481,
+                "max": 1195.9698839410376
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5651.964625532731,
+                "median": 6489.858185053329,
+                "p95": 9343.969528648478,
+                "max": 9356.853091779114
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 80.34144799197097,
+                "median": 79.57043633535635,
+                "p95": 98.50984712791974,
+                "max": 98.97623476089609
+              },
+              "sm_occupancy_percent": {
+                "mean": 45.809867548178154,
+                "median": 45.48645272176235,
+                "p95": 57.709336629689936,
+                "max": 57.884002117231795
+              },
+              "dram_bandwidth_percent": {
+                "mean": 27.606826806089387,
+                "median": 27.242875113516455,
+                "p95": 35.87543833592846,
+                "max": 35.999494028396974
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 436.69814668154936,
+                "median": 534.7490803330337,
+                "p95": 686.2047668848456,
+                "max": 1641.6597061547207
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5669.136391265122,
+                "median": 7063.998596694055,
+                "p95": 9359.97281367182,
+                "max": 9400.475857257143
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 79.4827773000588,
+                "median": 78.75461508246279,
+                "p95": 98.67048010474859,
+                "max": 99.5130050390825
+              },
+              "sm_occupancy_percent": {
+                "mean": 45.322196182141695,
+                "median": 44.16611323191969,
+                "p95": 57.13496560297672,
+                "max": 57.63471890317759
+              },
+              "dram_bandwidth_percent": {
+                "mean": 27.30212114319523,
+                "median": 27.19004086933133,
+                "p95": 35.181020304464006,
+                "max": 35.58628554902866
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 432.0750097224829,
+                "median": 471.3149641214047,
+                "p95": 683.3733495603932,
+                "max": 1719.1538731418318
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5587.5706404338525,
+                "median": 6477.37626592046,
+                "p95": 9278.683609656286,
+                "max": 9352.273238632848
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 78.99775174020445,
+                "median": 77.90759486357749,
+                "p95": 97.95436305782614,
+                "max": 99.01574575040144
+              },
+              "sm_occupancy_percent": {
+                "mean": 44.834357278688636,
+                "median": 45.29577817915167,
+                "p95": 56.96033472161414,
+                "max": 57.02637892617527
+              },
+              "dram_bandwidth_percent": {
+                "mean": 27.077690028668833,
+                "median": 27.356883338819,
+                "p95": 34.724709293815195,
+                "max": 35.38163012799941
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 420.72586192231597,
+                "median": 495.3649716831061,
+                "p95": 683.1016878692803,
+                "max": 1133.677094515156
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5545.148438202785,
+                "median": 6450.991176472418,
+                "p95": 9313.496956888708,
+                "max": 9331.01745274494
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 79.33729532019797,
+                "median": 80.67514724878832,
+                "p95": 98.28185773463679,
+                "max": 98.6133067486281
+              },
+              "sm_occupancy_percent": {
+                "mean": 45.11614117400673,
+                "median": 45.82078835980536,
+                "p95": 56.80835245888426,
+                "max": 57.74843999163046
+              },
+              "dram_bandwidth_percent": {
+                "mean": 27.243173932326503,
+                "median": 27.621358927147416,
+                "p95": 35.092715082478,
+                "max": 37.49978265112683
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 430.8328514944558,
+                "median": 473.7312684848853,
+                "p95": 682.5564246457915,
+                "max": 1596.564508829347
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5572.1224886655955,
+                "median": 6283.150033753618,
+                "p95": 9330.419174304403,
+                "max": 9373.888369826236
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 80.1402810952278,
+                "median": 78.44216910815234,
+                "p95": 98.79000089123699,
+                "max": 99.21457149334603
+              },
+              "sm_occupancy_percent": {
+                "mean": 45.73108274597653,
+                "median": 45.37086176388394,
+                "p95": 57.53932710622237,
+                "max": 58.44798530980919
+              },
+              "dram_bandwidth_percent": {
+                "mean": 27.549249779181952,
+                "median": 27.564956583042807,
+                "p95": 34.26807125504823,
+                "max": 35.03207884763081
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 432.82768184775273,
+                "median": 482.0487449715737,
+                "p95": 684.7964367235269,
+                "max": 1298.1106211344488
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5701.2706107589165,
+                "median": 6589.835186871072,
+                "p95": 9341.895529170688,
+                "max": 9455.864621130304
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 79.42841109184727,
+                "median": 80.25922879516602,
+                "p95": 97.60234403282114,
+                "max": 99.31618197898516
+              },
+              "sm_occupancy_percent": {
+                "mean": 45.13910238798696,
+                "median": 45.166219172412056,
+                "p95": 57.336062487710926,
+                "max": 57.616883523869674
+              },
+              "dram_bandwidth_percent": {
+                "mean": 27.10633966987638,
+                "median": 27.257538230014802,
+                "p95": 34.76455994055451,
+                "max": 35.94232029388844
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 420.2085960579381,
+                "median": 477.9285136185718,
+                "p95": 686.6747364076299,
+                "max": 856.7205257747272
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5611.500441381974,
+                "median": 6267.102293781145,
+                "p95": 9305.440538081042,
+                "max": 9360.354581965355
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 78.27137166677743,
+                "median": 77.93536090226468,
+                "p95": 98.75009470858518,
+                "max": 99.19780841628355
+              },
+              "sm_occupancy_percent": {
+                "mean": 44.45015039786007,
+                "median": 44.083496798387856,
+                "p95": 57.446434271459026,
+                "max": 57.88403998912359
+              },
+              "dram_bandwidth_percent": {
+                "mean": 26.84297917150758,
+                "median": 26.16571451657029,
+                "p95": 34.710542368827355,
+                "max": 37.448519806754504
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 425.95069749763354,
+                "median": 452.124435413309,
+                "p95": 679.6303049924117,
+                "max": 1595.8263197540211
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 5514.407346554722,
+                "median": 6162.664177455497,
+                "p95": 9286.741489901513,
+                "max": 11450.522568144868
+              }
+            }
+          ]
+        },
+        {
+          "stage": 33,
+          "start_ms": 1795703625262,
+          "end_ms": 1795703632531,
+          "span_seconds": 7.269,
+          "tasks": 342,
+          "task_seconds": {
+            "mean": 0.2843333333333333,
+            "median": 0.29,
+            "p95": 0.377,
+            "max": 0.465
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 84759647864,
+          "shuffle_write_bytes": 120620267488,
+          "gpm_samples": 13,
+          "gpm_by_gpu": [
+            {
+              "sm_active_percent": {
+                "mean": 56.51890560270683,
+                "median": 45.20136490282847,
+                "p95": 92.29286704527902,
+                "max": 92.29286704527902
+              },
+              "sm_occupancy_percent": {
+                "mean": 22.43271627196615,
+                "median": 20.23062533775377,
+                "p95": 37.025353251880475,
+                "max": 37.025353251880475
+              },
+              "dram_bandwidth_percent": {
+                "mean": 13.323403305457232,
+                "median": 12.200179789318542,
+                "p95": 21.551330065500856,
+                "max": 21.551330065500856
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1978.4214148731814,
+                "median": 2553.001455399172,
+                "p95": 4133.010082349821,
+                "max": 4133.010082349821
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3876.9404598809974,
+                "median": 3772.593968713003,
+                "p95": 5222.081846627321,
+                "max": 5222.081846627321
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 52.635424466480174,
+                "median": 39.184511392863605,
+                "p95": 90.06399544860045,
+                "max": 90.06399544860045
+              },
+              "sm_occupancy_percent": {
+                "mean": 20.968562591029393,
+                "median": 15.470705839548039,
+                "p95": 34.24957065571375,
+                "max": 34.24957065571375
+              },
+              "dram_bandwidth_percent": {
+                "mean": 12.837357594207178,
+                "median": 10.790896375526014,
+                "p95": 20.352899521542664,
+                "max": 20.352899521542664
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1907.7248779116392,
+                "median": 2334.1052442526898,
+                "p95": 3600.2751220602386,
+                "max": 3600.2751220602386
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3835.10259028254,
+                "median": 3855.8338992517465,
+                "p95": 4424.864063943886,
+                "max": 4424.864063943886
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 57.27132443681021,
+                "median": 41.58098700183505,
+                "p95": 93.81364374288943,
+                "max": 93.81364374288943
+              },
+              "sm_occupancy_percent": {
+                "mean": 22.548176701485332,
+                "median": 16.894824207989064,
+                "p95": 37.14655209222067,
+                "max": 37.14655209222067
+              },
+              "dram_bandwidth_percent": {
+                "mean": 13.388740577969848,
+                "median": 10.823528520051363,
+                "p95": 21.855527014535667,
+                "max": 21.855527014535667
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1902.388778022459,
+                "median": 2415.337251833059,
+                "p95": 3321.333805397167,
+                "max": 3321.333805397167
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 4073.7904048895143,
+                "median": 4051.146719234559,
+                "p95": 5225.97485950414,
+                "max": 5225.97485950414
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 52.9224404803914,
+                "median": 47.090175188627406,
+                "p95": 88.9984079778904,
+                "max": 88.9984079778904
+              },
+              "sm_occupancy_percent": {
+                "mean": 20.733588335915258,
+                "median": 18.466769747586213,
+                "p95": 34.287275265771314,
+                "max": 34.287275265771314
+              },
+              "dram_bandwidth_percent": {
+                "mean": 12.608251874903681,
+                "median": 11.282988595847918,
+                "p95": 20.39036703070277,
+                "max": 20.39036703070277
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1866.4024378065865,
+                "median": 2489.7135952523104,
+                "p95": 3266.6960473929103,
+                "max": 3266.6960473929103
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3809.2305568134893,
+                "median": 3620.612581103017,
+                "p95": 4807.135934528016,
+                "max": 4807.135934528016
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 51.065133189871545,
+                "median": 38.60329129642439,
+                "p95": 87.60560751528392,
+                "max": 87.60560751528392
+              },
+              "sm_occupancy_percent": {
+                "mean": 20.574477118622205,
+                "median": 15.263164605672152,
+                "p95": 35.493304102226745,
+                "max": 35.493304102226745
+              },
+              "dram_bandwidth_percent": {
+                "mean": 12.329816391455557,
+                "median": 10.05094196851292,
+                "p95": 20.501146957704,
+                "max": 20.501146957704
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1873.500708369273,
+                "median": 2621.7368147721195,
+                "p95": 3176.819428839715,
+                "max": 3176.819428839715
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3672.4164423837483,
+                "median": 3806.7218208160416,
+                "p95": 4513.367001398787,
+                "max": 4513.367001398787
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 55.78091393849038,
+                "median": 44.44749579586868,
+                "p95": 90.26160382741878,
+                "max": 90.26160382741878
+              },
+              "sm_occupancy_percent": {
+                "mean": 21.668284937865465,
+                "median": 18.081497836402296,
+                "p95": 34.74025476519022,
+                "max": 34.74025476519022
+              },
+              "dram_bandwidth_percent": {
+                "mean": 13.13648868844465,
+                "median": 10.787469072549737,
+                "p95": 20.225029150185456,
+                "max": 20.225029150185456
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1923.4882131347272,
+                "median": 2522.4127613234264,
+                "p95": 3344.7202865347,
+                "max": 3344.7202865347
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 4064.1901207457327,
+                "median": 4049.670185561393,
+                "p95": 4629.4946361628545,
+                "max": 4629.4946361628545
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 53.78826951795876,
+                "median": 43.96886710694252,
+                "p95": 89.70617769120864,
+                "max": 89.70617769120864
+              },
+              "sm_occupancy_percent": {
+                "mean": 21.115834310890286,
+                "median": 17.70819431470007,
+                "p95": 35.68236160549047,
+                "max": 35.68236160549047
+              },
+              "dram_bandwidth_percent": {
+                "mean": 12.763314425266211,
+                "median": 10.924940297583666,
+                "p95": 20.92149679911013,
+                "max": 20.92149679911013
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1900.5073054945556,
+                "median": 2463.097490888814,
+                "p95": 3803.5927754129266,
+                "max": 3803.5927754129266
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3742.652158998194,
+                "median": 3700.0997466181966,
+                "p95": 5042.160994157643,
+                "max": 5042.160994157643
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 54.905281264955555,
+                "median": 53.8417763277519,
+                "p95": 93.64698133484161,
+                "max": 93.64698133484161
+              },
+              "sm_occupancy_percent": {
+                "mean": 21.675922232513873,
+                "median": 22.326085028000904,
+                "p95": 36.49235609498216,
+                "max": 36.49235609498216
+              },
+              "dram_bandwidth_percent": {
+                "mean": 13.190888382092629,
+                "median": 12.785138410665642,
+                "p95": 21.712307559993757,
+                "max": 21.712307559993757
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 1899.1112122616266,
+                "median": 2791.9017930099317,
+                "p95": 3132.609247779797,
+                "max": 3132.609247779797
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3749.3507939269493,
+                "median": 3737.2880043071245,
+                "p95": 4599.465742980326,
+                "max": 4599.465742980326
+              }
+            }
+          ]
+        },
+        {
+          "stage": 32,
+          "start_ms": 1795703625492,
+          "end_ms": 1795703630084,
+          "span_seconds": 4.592,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.5078203125,
+            "median": 0.5015000000000001,
+            "p95": 0.732,
+            "max": 0.819
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 0,
+          "shuffle_write_bytes": 77871630059,
+          "gpm_samples": 8,
+          "gpm_by_gpu": [
+            {
+              "sm_active_percent": {
+                "mean": 36.69142433710642,
+                "median": 34.27985720328762,
+                "p95": 56.04266955208417,
+                "max": 56.04266955208417
+              },
+              "sm_occupancy_percent": {
+                "mean": 14.914166381378003,
+                "median": 14.13125928324187,
+                "p95": 20.559614756380682,
+                "max": 20.559614756380682
+              },
+              "dram_bandwidth_percent": {
+                "mean": 9.170430674367331,
+                "median": 8.689395644719099,
+                "p95": 12.494825824185584,
+                "max": 12.494825824185584
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2963.5517723664366,
+                "median": 2956.212358210712,
+                "p95": 4133.010082349821,
+                "max": 4133.010082349821
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3690.7239863455593,
+                "median": 3704.127028286569,
+                "p95": 4234.960597739082,
+                "max": 4234.960597739082
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 35.01614117958936,
+                "median": 35.01862179266678,
+                "p95": 49.091708228987116,
+                "max": 49.091708228987116
+              },
+              "sm_occupancy_percent": {
+                "mean": 14.007013425168598,
+                "median": 14.172528223872568,
+                "p95": 18.339203187460647,
+                "max": 18.339203187460647
+              },
+              "dram_bandwidth_percent": {
+                "mean": 8.817118867390391,
+                "median": 9.183336157195082,
+                "p95": 10.844187334284598,
+                "max": 10.844187334284598
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2903.946745691484,
+                "median": 2918.365497577958,
+                "p95": 3600.2751220602386,
+                "max": 3600.2751220602386
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3884.7164408594044,
+                "median": 3815.5945590817482,
+                "p95": 4358.47287983322,
+                "max": 4358.47287983322
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 38.92131115346763,
+                "median": 36.28779056485287,
+                "p95": 56.73031121744797,
+                "max": 56.73031121744797
+              },
+              "sm_occupancy_percent": {
+                "mean": 15.33355712381006,
+                "median": 14.369815020617816,
+                "p95": 20.264326398292393,
+                "max": 20.264326398292393
+              },
+              "dram_bandwidth_percent": {
+                "mean": 9.648035239041452,
+                "median": 9.056622450673819,
+                "p95": 12.12493185389831,
+                "max": 12.12493185389831
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2877.59273457529,
+                "median": 2938.0605617739902,
+                "p95": 3321.333805397167,
+                "max": 3321.333805397167
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3964.32519819556,
+                "median": 3905.3982315616995,
+                "p95": 4571.255338608916,
+                "max": 4571.255338608916
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 36.856991136391116,
+                "median": 38.09640722440636,
+                "p95": 49.72507482973646,
+                "max": 49.72507482973646
+              },
+              "sm_occupancy_percent": {
+                "mean": 14.558462528513495,
+                "median": 15.422259556007996,
+                "p95": 19.146598010976838,
+                "max": 19.146598010976838
+              },
+              "dram_bandwidth_percent": {
+                "mean": 8.993912271696804,
+                "median": 9.528413357496635,
+                "p95": 12.55363005604159,
+                "max": 12.55363005604159
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2843.9263772853783,
+                "median": 2894.2990865778197,
+                "p95": 3266.6960473929103,
+                "max": 3266.6960473929103
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3882.7512850667636,
+                "median": 3640.9082319988383,
+                "p95": 4457.83883967776,
+                "max": 4457.83883967776
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 34.84511405009499,
+                "median": 34.42773249152999,
+                "p95": 44.62785287411088,
+                "max": 44.62785287411088
+              },
+              "sm_occupancy_percent": {
+                "mean": 14.093715957460518,
+                "median": 14.007057110128924,
+                "p95": 16.305890748993004,
+                "max": 16.305890748993004
+              },
+              "dram_bandwidth_percent": {
+                "mean": 8.789333264825201,
+                "median": 8.813802477239381,
+                "p95": 10.198750493188093,
+                "max": 10.198750493188093
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2868.313731938463,
+                "median": 2893.479996414916,
+                "p95": 3176.819428839715,
+                "max": 3176.819428839715
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3861.676247809839,
+                "median": 3849.4035070124646,
+                "p95": 4513.367001398787,
+                "max": 4513.367001398787
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 37.55722900746389,
+                "median": 39.609076617883034,
+                "p95": 48.60162707815984,
+                "max": 48.60162707815984
+              },
+              "sm_occupancy_percent": {
+                "mean": 14.93258260718998,
+                "median": 15.807889489752377,
+                "p95": 18.19765334281909,
+                "max": 18.19765334281909
+              },
+              "dram_bandwidth_percent": {
+                "mean": 9.406473008037992,
+                "median": 9.892403365035698,
+                "p95": 12.558026109788468,
+                "max": 12.558026109788468
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2920.373432320377,
+                "median": 2970.624734230717,
+                "p95": 3344.7202865347,
+                "max": 3344.7202865347
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 4059.9579609371567,
+                "median": 3990.564905490761,
+                "p95": 4629.4946361628545,
+                "max": 4629.4946361628545
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 37.85985263792694,
+                "median": 34.16042367350883,
+                "p95": 64.48985085176017,
+                "max": 64.48985085176017
+              },
+              "sm_occupancy_percent": {
+                "mean": 15.221665324293998,
+                "median": 14.35942437210079,
+                "p95": 24.657109508807807,
+                "max": 24.657109508807807
+              },
+              "dram_bandwidth_percent": {
+                "mean": 9.364040552482901,
+                "median": 9.070872125838408,
+                "p95": 14.508810375923401,
+                "max": 14.508810375923401
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2900.7738672391065,
+                "median": 2922.6235031828396,
+                "p95": 3803.5927754129266,
+                "max": 3803.5927754129266
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3796.0637085096128,
+                "median": 3680.9722424908696,
+                "p95": 5042.160994157643,
+                "max": 5042.160994157643
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 38.270546498181716,
+                "median": 34.02824543787854,
+                "p95": 60.48664208055897,
+                "max": 60.48664208055897
+              },
+              "sm_occupancy_percent": {
+                "mean": 15.41722013595659,
+                "median": 13.975662080212405,
+                "p95": 22.80828986209033,
+                "max": 22.80828986209033
+              },
+              "dram_bandwidth_percent": {
+                "mean": 9.675496745187022,
+                "median": 8.833043207165696,
+                "p95": 14.353789120047026,
+                "max": 14.353789120047026
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 2900.4484204774244,
+                "median": 2875.0398392427223,
+                "p95": 3132.609247779797,
+                "max": 3132.609247779797
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 3798.6972095507126,
+                "median": 3708.7869077083406,
+                "p95": 4599.465742980326,
+                "max": 4599.465742980326
+              }
+            }
+          ]
+        },
+        {
+          "stage": 34,
+          "start_ms": 1795703632346,
+          "end_ms": 1795703632368,
+          "span_seconds": 0.022,
+          "tasks": 1,
+          "task_seconds": {
+            "mean": 0.022,
+            "median": 0.022,
+            "p95": 0.022,
+            "max": 0.022
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 1164,
+          "shuffle_write_bytes": 430,
+          "gpm_samples": 0
+        },
+        {
+          "stage": 35,
+          "start_ms": 1795703632606,
+          "end_ms": 1795703636159,
+          "span_seconds": 3.553,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.4244140625,
+            "median": 0.431,
+            "p95": 0.617,
+            "max": 0.834
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 0,
+          "shuffle_write_bytes": 6540464,
+          "gpm_samples": 7,
+          "gpm_by_gpu": [
+            {
+              "sm_active_percent": {
+                "mean": 34.40838738149234,
+                "median": 31.983406159746025,
+                "p95": 46.943510852302595,
+                "max": 46.943510852302595
+              },
+              "sm_occupancy_percent": {
+                "mean": 20.10513175722415,
+                "median": 18.284358963781735,
+                "p95": 28.14722985599265,
+                "max": 28.14722985599265
+              },
+              "dram_bandwidth_percent": {
+                "mean": 19.453230699191298,
+                "median": 17.71441427277669,
+                "p95": 26.88230041426673,
+                "max": 26.88230041426673
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 6390.799670757335,
+                "median": 6616.390000885902,
+                "p95": 7802.739295314286,
+                "max": 7802.739295314286
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 7682.378203896844,
+                "median": 7532.645957672428,
+                "p95": 9578.090395273937,
+                "max": 9578.090395273937
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 29.00605656704113,
+                "median": 27.153056816577614,
+                "p95": 35.37833165343774,
+                "max": 35.37833165343774
+              },
+              "sm_occupancy_percent": {
+                "mean": 16.76114528064398,
+                "median": 15.652550260318362,
+                "p95": 20.674725620070905,
+                "max": 20.674725620070905
+              },
+              "dram_bandwidth_percent": {
+                "mean": 16.56149728294931,
+                "median": 16.065992330173,
+                "p95": 20.107925034765202,
+                "max": 20.107925034765202
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 6314.254678988844,
+                "median": 6483.729105200558,
+                "p95": 7703.75700346163,
+                "max": 7703.75700346163
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 6582.7655300774695,
+                "median": 6521.366936966761,
+                "p95": 8942.483081784712,
+                "max": 8942.483081784712
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 33.999081870319216,
+                "median": 34.452628740576124,
+                "p95": 49.77060638744691,
+                "max": 49.77060638744691
+              },
+              "sm_occupancy_percent": {
+                "mean": 19.861709645181705,
+                "median": 20.253496817303127,
+                "p95": 29.456680900812366,
+                "max": 29.456680900812366
+              },
+              "dram_bandwidth_percent": {
+                "mean": 19.379826598097587,
+                "median": 20.127039052392306,
+                "p95": 28.89062856970096,
+                "max": 28.89062856970096
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 6453.569208931954,
+                "median": 6492.933833214113,
+                "p95": 7347.335320423764,
+                "max": 7347.335320423764
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 7752.679962991105,
+                "median": 6862.079378323915,
+                "p95": 11191.116566407934,
+                "max": 11191.116566407934
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 30.773913199393444,
+                "median": 29.87967068763739,
+                "p95": 38.45956117619684,
+                "max": 38.45956117619684
+              },
+              "sm_occupancy_percent": {
+                "mean": 17.854921608008095,
+                "median": 17.33135856234706,
+                "p95": 22.163385603321434,
+                "max": 22.163385603321434
+              },
+              "dram_bandwidth_percent": {
+                "mean": 17.562090755843396,
+                "median": 16.903593683960704,
+                "p95": 21.63455466181499,
+                "max": 21.63455466181499
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 6438.238931031955,
+                "median": 5993.610082371025,
+                "p95": 7686.88355409472,
+                "max": 7686.88355409472
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 7005.904732289507,
+                "median": 7898.062836875108,
+                "p95": 10739.710425823858,
+                "max": 10739.710425823858
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 31.867119247618813,
+                "median": 31.969363271083655,
+                "p95": 34.52392489354583,
+                "max": 34.52392489354583
+              },
+              "sm_occupancy_percent": {
+                "mean": 18.344946791956517,
+                "median": 18.698022949842354,
+                "p95": 19.56984145465454,
+                "max": 19.56984145465454
+              },
+              "dram_bandwidth_percent": {
+                "mean": 18.354590187493564,
+                "median": 17.86063326846691,
+                "p95": 20.161416282739594,
+                "max": 20.161416282739594
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 6213.04600912099,
+                "median": 6234.636133766996,
+                "p95": 7658.3049515158655,
+                "max": 7658.3049515158655
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 7497.074013052701,
+                "median": 8739.823107837106,
+                "p95": 9531.60132253951,
+                "max": 9531.60132253951
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 28.60923457235618,
+                "median": 27.952303527223116,
+                "p95": 42.48725151727169,
+                "max": 42.48725151727169
+              },
+              "sm_occupancy_percent": {
+                "mean": 16.508636516893866,
+                "median": 16.019698337432608,
+                "p95": 24.547649465284277,
+                "max": 24.547649465284277
+              },
+              "dram_bandwidth_percent": {
+                "mean": 16.457553467089216,
+                "median": 16.232756299442674,
+                "p95": 24.28008973997059,
+                "max": 24.28008973997059
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 6702.229179481783,
+                "median": 6854.236075093721,
+                "p95": 8123.939887986668,
+                "max": 8123.939887986668
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 6748.416204710542,
+                "median": 6512.40428119962,
+                "p95": 9179.920958726349,
+                "max": 9179.920958726349
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 34.3718030532151,
+                "median": 34.01079426139206,
+                "p95": 47.43676545584708,
+                "max": 47.43676545584708
+              },
+              "sm_occupancy_percent": {
+                "mean": 19.77848509333287,
+                "median": 20.17035491823457,
+                "p95": 28.179965799948782,
+                "max": 28.179965799948782
+              },
+              "dram_bandwidth_percent": {
+                "mean": 19.27527964941625,
+                "median": 20.20832822472241,
+                "p95": 28.124780566753316,
+                "max": 28.124780566753316
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 6234.232218123423,
+                "median": 6110.357495363068,
+                "p95": 7781.8318938148095,
+                "max": 7781.8318938148095
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 7962.5704432958555,
+                "median": 6661.2279372056655,
+                "p95": 10923.822051385738,
+                "max": 10923.822051385738
+              }
+            },
+            {
+              "sm_active_percent": {
+                "mean": 34.71696137705197,
+                "median": 35.245901676146914,
+                "p95": 42.91971702350371,
+                "max": 42.91971702350371
+              },
+              "sm_occupancy_percent": {
+                "mean": 20.217276436366284,
+                "median": 20.345846619952475,
+                "p95": 25.414950744890767,
+                "max": 25.414950744890767
+              },
+              "dram_bandwidth_percent": {
+                "mean": 19.74691628171454,
+                "median": 19.99595059436746,
+                "p95": 23.19155985200709,
+                "max": 23.19155985200709
+              },
+              "pcie_tx_mib_per_second": {
+                "mean": 6282.583343313056,
+                "median": 6470.9013273761775,
+                "p95": 6921.96146725005,
+                "max": 6921.96146725005
+              },
+              "pcie_rx_mib_per_second": {
+                "mean": 7949.08602418154,
+                "median": 7172.607112582293,
+                "p95": 11506.212977181836,
+                "max": 11506.212977181836
+              }
+            }
+          ]
+        },
+        {
+          "stage": 36,
+          "start_ms": 1795703636177,
+          "end_ms": 1795703636403,
+          "span_seconds": 0.226,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.02626171875,
+            "median": 0.0265,
+            "p95": 0.063,
+            "max": 0.091
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 0,
+          "shuffle_write_bytes": 0,
+          "gpm_samples": 0
+        },
+        {
+          "stage": 44,
+          "start_ms": 1795703636439,
+          "end_ms": 1795703636659,
+          "span_seconds": 0.22,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.02558203125,
+            "median": 0.028,
+            "p95": 0.061,
+            "max": 0.097
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 0,
+          "shuffle_write_bytes": 11778,
+          "gpm_samples": 0
+        },
+        {
+          "stage": 45,
+          "start_ms": 1795703636667,
+          "end_ms": 1795703636751,
+          "span_seconds": 0.084,
+          "tasks": 256,
+          "task_seconds": {
+            "mean": 0.00912109375,
+            "median": 0.008,
+            "p95": 0.016,
+            "max": 0.018
+          },
+          "failed_or_killed": 0,
+          "input_bytes": 0,
+          "shuffle_write_bytes": 0,
+          "gpm_samples": 0
+        }
+      ],
+      "gpm_link_states": [
+        [
+          5,
+          16
+        ]
+      ],
+      "scan_task_seconds": {
+        "bufferTime": 95.619962096,
+        "gpuDecodeTime": 210.831376591,
+        "opTimeNew": 360.870777587
+      }
+    }
+  ],
+  "perf": {},
+  "source_revision": "00991a8bf84be0d3c9e6b561f00901ae8b170d3e",
+  "perf_monotonic_to_unix_offset_ns": 1795675810304592270,
+  "limits": [
+    "Identical host, VM, GPM and pool monitoring in all arms; no kernel profiling",
+    "Fresh applications and fixed query order do not guarantee identical page-cache contents",
+    "GPM percentages and throughput are half-second interval observations",
+    "Whole-query averages do not establish a critical-stage hardware ceiling",
+    "CPU memory-controller counters are unavailable in the exposed PMUs"
+  ],
+  "finalizer_revision": "00991a8bf84be0d3c9e6b561f00901ae8b170d3e"
+}

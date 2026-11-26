@@ -1,0 +1,101 @@
+{
+  "scope": "Q9-only internal integer representation pilot; no complete-suite score",
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "validated_actions": 4,
+  "failed_preflights": {
+    "B1": "AssertionError()"
+  },
+  "seconds": {
+    "A0": [
+      {
+        "iteration": 1,
+        "sql": 44.22021434400085,
+        "cleanup": 0.9254195550020086,
+        "plan_shuffle_write_bytes": 298193979969,
+        "task_metrics": {
+          "Memory Bytes Spilled": 0,
+          "Disk Bytes Spilled": 0,
+          "Executor Run Time": 1196444,
+          "Executor CPU Time": 789833514492,
+          "JVM GC Time": 3482,
+          "shuffle_write_bytes": 298193979969,
+          "input_bytes": 1434236231364,
+          "native_scan_splits": 2561,
+          "native_host_read_bytes": 1433905350757,
+          "task_attempts": 3543
+        }
+      },
+      {
+        "iteration": 2,
+        "sql": 40.402834945001814,
+        "cleanup": 0.9505682390008587,
+        "plan_shuffle_write_bytes": 298193313195,
+        "task_metrics": {
+          "Memory Bytes Spilled": 0,
+          "Disk Bytes Spilled": 0,
+          "Executor Run Time": 1158576,
+          "Executor CPU Time": 770888847683,
+          "JVM GC Time": 2166,
+          "shuffle_write_bytes": 298193313195,
+          "input_bytes": 1434236231364,
+          "native_scan_splits": 2561,
+          "native_host_read_bytes": 1433905350757,
+          "task_attempts": 3543
+        }
+      }
+    ],
+    "B2": [
+      {
+        "iteration": 1,
+        "sql": 52.27865760900022,
+        "cleanup": 1.3449838009983068,
+        "plan_shuffle_write_bytes": 299223430874,
+        "task_metrics": {
+          "Memory Bytes Spilled": 0,
+          "Disk Bytes Spilled": 0,
+          "Executor Run Time": 1465440,
+          "Executor CPU Time": 1120955205144,
+          "JVM GC Time": 4297,
+          "shuffle_write_bytes": 299223430874,
+          "input_bytes": 1434236231364,
+          "native_scan_splits": 2561,
+          "native_host_read_bytes": 1433905350757,
+          "task_attempts": 3543
+        }
+      },
+      {
+        "iteration": 2,
+        "sql": 48.042335925998486,
+        "cleanup": 1.4519987589992525,
+        "plan_shuffle_write_bytes": 299216417606,
+        "task_metrics": {
+          "Memory Bytes Spilled": 0,
+          "Disk Bytes Spilled": 0,
+          "Executor Run Time": 1408832,
+          "Executor CPU Time": 1110015050569,
+          "JVM GC Time": 2678,
+          "shuffle_write_bytes": 299216417606,
+          "input_bytes": 1434236231364,
+          "native_scan_splits": 2561,
+          "native_host_read_bytes": 1433905350757,
+          "task_attempts": 3543
+        }
+      }
+    ]
+  },
+  "mechanism": "Initial six-key candidate was rejected by the existing shared-broadcast guard before timing. B2 narrows only the three supplier keys; part keys remain BIGINT. Control creates BIGINT views. Full retained Q9 results checked for timed actions. Output and decimal arithmetic are unchanged.",
+  "domain": "Every row group of all 1024 input files has signed int32 key extrema; file set, sizes and mtimes are checked before both benchmark arms. Immutable-input assumption remains.",
+  "decision": "Do not select the SQL-cast prototype. B1 loses part broadcast reuse; B2 restores reuse but changes join ordering. A physical representation change that preserves cost statistics is a distinct unmeasured follow-up, not disproved by these probes.",
+  "limits": [
+    "Candidate key casts can change Catalyst statistics, join order and hash partition distribution as well as shuffle width; inspect retained plans before attribution",
+    "No page-cache flush; physical I/O is recorded for every query",
+    "Native KvikIO fixed at 32 threads; no native preload or early-shuffle companion",
+    "This is a proof-gated experiment, not an automatic production narrowing rule"
+  ],
+  "setup_index": "../261126-aws-speed-of-light",
+  "selected_queries_index": "../261126-aws-critical-queries",
+  "entrypoint": "../../start_narrow_keys.sh",
+  "domain_oracle": "../../narrow_key_oracle.py",
+  "cleanup_authorization": "Terminate only instances created by this session after useful investigation and evidence preservation"
+}

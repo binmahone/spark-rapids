@@ -1,0 +1,11 @@
+{
+  "archive": "/home/nvidia/mahone_gluten/wild_spark_rapids/261126_aws_speed_of_light/evidence/raw/narrow-keys-complete.tar.gz",
+  "bytes": 22297913,
+  "sha256": "d38927b4a4fa0d123e1037d46ce0b6e43873e6c8e6d21d4eb788865e06111ae9",
+  "analysis_source_revision": "00991a8bf84be0d3c9e6b561f00901ae8b170d3e",
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "verified": true,
+  "transfer": "Eight immutable SSH ranges, verified full SHA-256",
+  "retention": "Release session-created instance after useful investigations and evidence retention"
+}

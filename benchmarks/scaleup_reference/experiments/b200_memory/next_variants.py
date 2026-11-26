@@ -26,6 +26,55 @@ def planner_overrides(arm):
 
 
 def transform_next(query, original, arm):
+    if query == 12 and arm == 'priority-flag':
+        return """
+WITH priority_orders AS (
+    SELECT o_orderkey, o_orderpriority IN ('1-URGENT', '2-HIGH') AS __high
+    FROM orders
+)
+SELECT l_shipmode,
+       sum(CASE WHEN __high THEN 1 ELSE 0 END) AS high_line_count,
+       sum(CASE WHEN NOT __high THEN 1 ELSE 0 END) AS low_line_count
+FROM priority_orders JOIN lineitem ON o_orderkey = l_orderkey
+WHERE l_shipmode IN ('MAIL', 'SHIP') AND l_commitdate < l_receiptdate
+  AND l_shipdate < l_commitdate AND l_receiptdate >= date '1994-01-01'
+  AND l_receiptdate < date '1995-01-01'
+GROUP BY l_shipmode ORDER BY l_shipmode
+"""
+    if query == 14 and arm == 'promo-flag-revenue':
+        return """
+WITH promo_part AS (
+    SELECT p_partkey, p_type LIKE 'PROMO%' AS __promo FROM part
+), line_revenue AS (
+    SELECT l_partkey, l_extendedprice * (1 - l_discount) AS __revenue
+    FROM lineitem WHERE l_shipdate >= date '1995-09-01'
+      AND l_shipdate < date '1995-10-01'
+)
+SELECT 100.00 * sum(CASE WHEN __promo THEN __revenue ELSE 0 END)
+       / sum(__revenue) AS promo_revenue
+FROM line_revenue JOIN promo_part ON l_partkey = p_partkey
+"""
+    if query == 20 and arm == 'supplier-prefilter':
+        value, count = re.subn(r'\blineitem\b', '__eligible_lineitem', original, flags=re.I)
+        assert count == 1
+        value, count = re.subn(r'\bpartsupp\b', '__eligible_partsupp', value, flags=re.I)
+        assert count == 1
+        value, count = re.subn(r'(\bselect\s+)(p_partkey\b)',
+                               r'\1/*+ BROADCAST */ \2', value, count=1, flags=re.I)
+        assert count == 1
+        return """WITH __eligible_suppliers AS (
+    SELECT s_suppkey FROM supplier
+    WHERE s_suppkey IS NOT NULL AND s_nationkey IN (
+        SELECT n_nationkey FROM nation
+        WHERE n_name = 'CANADA' AND n_nationkey IS NOT NULL)
+), __eligible_lineitem AS (
+    SELECT * FROM lineitem WHERE l_suppkey IN (
+        SELECT /*+ BROADCAST */ s_suppkey FROM __eligible_suppliers)
+), __eligible_partsupp AS (
+    SELECT * FROM partsupp WHERE ps_suppkey IN (
+        SELECT /*+ BROADCAST */ s_suppkey FROM __eligible_suppliers)
+)
+""" + value
     if query == 21 and arm in ('counted-wide', 'compact-counted-state'):
         supplier = 'CAST(l_suppkey AS INT)' if arm == 'compact-counted-state' else 'l_suppkey'
         return f"""

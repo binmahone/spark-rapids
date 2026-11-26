@@ -17,6 +17,9 @@ import re
 
 
 def selected_arm(query, arm):
+    if arm == 'narrow-filter-screen':
+        return {12: 'priority-flag', 14: 'promo-flag-revenue',
+                20: 'supplier-prefilter'}.get(query, 'baseline')
     if arm == 'next-screen':
         return {5: 'revenue-first', 7: 'country-flags', 8: 'eligible-customer-join',
                 9: 'profit-first', 21: 'compact-supplier'}.get(query, 'baseline')
@@ -36,7 +39,8 @@ def selected_arm(query, arm):
 def transform(query, original, arm):
     arm = selected_arm(query, arm)
     if arm in ('revenue-first','country-flags','eligible-customer-join','profit-first','compact-supplier',
-               'counted-wide','compact-counted-state'):
+               'counted-wide','compact-counted-state','priority-flag','promo-flag-revenue',
+               'supplier-prefilter'):
         from next_variants import transform_next
         return transform_next(query, original, arm)
     if arm == 'baseline':
@@ -370,6 +374,45 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
     cases[8]['part'] = ('p_partkey long, p_type string', [
         (1,'ECONOMY ANODIZED STEEL'),(1,'ECONOMY ANODIZED STEEL'),
         (2,'OTHER'),(3,'ECONOMY ANODIZED STEEL'),(None,'ECONOMY ANODIZED STEEL')])
+    cases[12] = {
+        'orders': ('o_orderkey long, o_orderpriority string', [
+            (1,'1-URGENT'),(1,'1-URGENT'),(2,'2-HIGH'),(3,'3-MEDIUM'),
+            (4,None),(None,'1-URGENT')]),
+        'lineitem': ('l_orderkey long, l_shipmode string, l_shipdate date, '
+                     'l_commitdate date, l_receiptdate date', [
+            (key,mode,ship,commit,receipt) for key,mode,ship,commit,receipt in (
+                (1,'MAIL',date(1994,1,1),date(1994,1,2),date(1994,1,3)),
+                (1,'MAIL',date(1994,1,1),date(1994,1,2),date(1994,1,3)),
+                (2,'SHIP',date(1994,1,1),date(1994,1,2),date(1994,1,3)),
+                (3,'SHIP',date(1994,1,1),date(1994,1,2),date(1994,1,3)),
+                (4,'MAIL',date(1994,1,1),date(1994,1,2),date(1994,1,3)),
+                (1,None,date(1994,1,1),date(1994,1,2),date(1994,1,3)),
+                (1,'MAIL',None,date(1994,1,2),date(1994,1,3)),
+                (None,'MAIL',date(1994,1,1),date(1994,1,2),date(1994,1,3)),
+                (1,'MAIL',date(1994,12,30),date(1994,12,31),date(1995,1,1)))])}
+    cases[14] = {
+        'part': ('p_partkey long, p_type string', [
+            (1,'PROMO A'),(1,'OTHER'),(2,None),(3,'PROMO B'),(None,'PROMO')]),
+        'lineitem': ('l_partkey long, l_extendedprice double, l_discount double, l_shipdate date', [
+            (1,10.,.5,date(1995,9,1)),(1,10.,.5,date(1995,9,1)),
+            (2,20.,0.,date(1995,9,30)),(3,None,0.,date(1995,9,2)),
+            (3,30.,None,date(1995,9,2)),(1,40.,0.,date(1995,10,1)),
+            (1,50.,0.,None),(None,60.,0.,date(1995,9,1))])}
+    cases[20] = {
+        'supplier': ('s_suppkey long, s_name string, s_address string, s_nationkey int', [
+            (1,'A','addr',1),(1,'A','addr',1),(2,'B',None,2),(3,'C','addr',1),
+            (4,'D','addr',1),(None,'N','addr',1)]),
+        'nation': ('n_nationkey int, n_name string', [
+            (1,'CANADA'),(1,'CANADA'),(2,'OTHER'),(None,'CANADA')]),
+        'part': ('p_partkey long, p_name string', [
+            (1,'forest green'),(1,'forest green'),(2,'red'),(3,'forest'),(None,'forest')]),
+        'partsupp': ('ps_partkey long, ps_suppkey long, ps_availqty int', [
+            (1,1,20),(1,1,20),(1,2,20),(3,3,100),(3,4,100),(None,1,100),(1,None,100)]),
+        'lineitem': ('l_partkey long, l_suppkey long, l_quantity double, l_shipdate date', [
+            (1,1,10.,date(1994,1,1)),(1,1,10.,date(1994,1,1)),
+            (1,2,10.,date(1994,1,1)),(3,3,None,date(1994,1,2)),
+            (3,4,10.,date(1995,1,1)),(1,None,10.,date(1994,1,1)),
+            (None,1,10.,date(1994,1,1)),(1,1,10.,None)])}
     results=[]
     previous = spark.conf.get('spark.rapids.sql.enabled', 'true')
     prefilter_key = 'spark.rapids.sql.optimizer.aggregatePrefilter.enabled'

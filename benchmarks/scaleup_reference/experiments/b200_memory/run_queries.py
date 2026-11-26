@@ -249,7 +249,8 @@ def main():
                         if not re.search(r'Gpu\w*Window', preflight) or preflight.count('GpuFileGpuScan parquet spark_catalog.default.partsupp[')!=1:
                             raise AssertionError('Expected one partsupp scan and a GPU window')
                     if query_arm in ('revenue-first','profit-first','country-flags','eligible-customer-join',
-                                     'compact-supplier','counted-wide','compact-counted-state'):
+                                     'compact-supplier','counted-wide','compact-counted-state',
+                                     'priority-flag','promo-flag-revenue','supplier-prefilter'):
                         pending, nodes = [execution.executedPlan()], []
                         while pending:
                             node = pending.pop()
@@ -258,6 +259,22 @@ def main():
                             pending.extend(children.apply(i) for i in range(children.size()))
                         outputs = [str(n.output().toString()) for n in nodes
                                    if str(n.nodeName())=='GpuColumnarExchange']
+                        if query_arm == 'priority-flag' and not any('__high' in x and
+                                'o_orderkey' in x and 'o_orderpriority' not in x for x in outputs):
+                            raise AssertionError('Priority flag did not reach the order-key exchange')
+                        if query_arm == 'promo-flag-revenue':
+                            if not any('__promo' in x and 'p_type' not in x for x in outputs):
+                                raise AssertionError('Promo flag did not narrow the part exchange')
+                            if not any('__revenue' in x and 'l_extendedprice' not in x
+                                       and 'l_discount' not in x for x in outputs):
+                                raise AssertionError('Revenue did not narrow the lineitem exchange')
+                        if query_arm == 'supplier-prefilter':
+                            if preflight.count('GpuFileGpuScan parquet spark_catalog.default.lineitem[')!=1:
+                                raise AssertionError('Expected one lineitem scan')
+                            if not any(str(n.nodeName())=='GpuHashAggregate' and
+                                       re.search(r'BroadcastHashJoin \[l_suppkey#',str(n.toString()))
+                                       for n in nodes):
+                                raise AssertionError('Supplier filter did not reach the pre-aggregate path')
                         if query_arm == 'revenue-first' and not any('__line_revenue' in x and
                                 'l_extendedprice' not in x and 'l_discount' not in x for x in outputs):
                             raise AssertionError('Revenue projection did not narrow shuffle payload')

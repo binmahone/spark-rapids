@@ -155,11 +155,29 @@ def main():
                 if spec['name'] != 'baseline':
                     selected[int(q)] = available[(int(q), spec['name'])]
             baseline_samples = run('tune-control', [selected[q] for q in ORDER])
+            reader_probe = run('reader-cap-reachability', [selected[q] for q in (1, 9)],
+                {'spark.rapids.sql.reader.batchSizeBytes': '536870912'})
+            def scan_signature(samples, query):
+                sample = next(s for s in samples if s['query'] == query and s['iteration'] == 2)
+                return sorted((n['node'], *(n['metrics'].get(key, 0) for key in
+                    ('numOutputBatches', 'numOutputRows', 'hybridScanSplits',
+                     'hybridScanNativeHostBytesRead'))) for n in sample['plan_metrics']
+                    if n['node'].startswith('GpuScan'))
+            report['reader_cap_probe'] = [{'query': q,
+                'control_scan_signature': scan_signature(baseline_samples, q),
+                'probe_scan_signature': scan_signature(reader_probe, q),
+                'same_scan_batches': scan_signature(baseline_samples, q) == scan_signature(reader_probe, q)}
+                for q in (1, 9)]
+            report['reader_cap_scope'] = (
+                'Hybrid MULTITHREADED decodes a split eagerly; the reader byte cap is only used '
+                'by the disabled file-combining branch. This reachability control is not a tuning candidate.')
+            write(output, report)
+            assert all(p['same_scan_batches'] for p in report['reader_cap_probe']), (
+                'Reader-cap scan counters changed; investigate before excluding this tuning direction')
             settings = [
                 ('shuffle128', {'spark.sql.shuffle.partitions': '128'}),
                 ('shuffle64', {'spark.sql.shuffle.partitions': '64'}),
                 ('operator512', {'spark.rapids.sql.batchSizeBytes': '536870912'}),
-                ('reader512', {'spark.rapids.sql.reader.batchSizeBytes': '536870912'}),
                 ('scan4g', {'spark.sql.files.maxPartitionBytes': '4g'})]
             winners = {}
             for name, overrides in settings:

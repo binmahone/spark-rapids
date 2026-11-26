@@ -27,6 +27,11 @@ def transform(query, original, arm):
     arm = selected_arm(query, arm)
     if arm == 'baseline':
         return original
+    if arm == 'preaggregate-broadcast' and query == 3:
+        value = transform(query, original, 'preaggregate')
+        before = 'SELECT l_orderkey, sum(revenue) AS revenue'
+        assert value.count(before) == 1
+        return value.replace(before, 'SELECT /*+ BROADCAST(customer) */ l_orderkey, sum(revenue) AS revenue')
     if arm == 'window-average' and query == 17:
         return """
 WITH marked AS (

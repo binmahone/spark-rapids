@@ -140,7 +140,7 @@ def main():
             if not any('BroadcastHashJoin' in line and 'LeftSemi' in line
                        for line in planned.splitlines()):
                 raise AssertionError(f'Q{planned_query}: hint did not reach a broadcast semi join')
-        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','row-propagation','row-propagation-reuse','aggregate-reuse','window-average','screen'):
+        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','preaggregate-broadcast','row-propagation','row-propagation-reuse','aggregate-reuse','window-average','screen'):
             checks = check_semantics(spark, SUITE, queries, config['probe_arm'])
             write(app / 'rewrite-counterexamples.json', checks)
         test = spark.range(10000).selectExpr('sum(id * id + 3) AS total')
@@ -211,10 +211,10 @@ def main():
                     if config.get('suite_audit') and query_arm == 'row-propagation-reuse':
                         if 'ReusedExchange' not in preflight or preflight.count('GpuFileGpuScan parquet spark_catalog.default.part[')!=1:
                             raise AssertionError('Expected shared part broadcast with a single part scan')
-                    if config.get('suite_audit') and query_arm == 'dimension-broadcast':
+                    if config.get('suite_audit') and query_arm in ('dimension-broadcast','preaggregate-broadcast'):
                         if not any('BroadcastHashJoin' in line and 'Inner' in line for line in preflight.splitlines()):
                             raise AssertionError('Dimension broadcast hint was not executed')
-                    if config.get('suite_audit') and query_arm == 'preaggregate' and not config.get('prefix_reference'):
+                    if config.get('suite_audit') and query_arm in ('preaggregate','preaggregate-broadcast') and not config.get('prefix_reference'):
                         group_key = 'l_orderkey' if query in (3,4,18) else 'o_custkey'
                         if not re.search(r'GpuHashAggregate \(keys=\[' + group_key + r'#\d+L\],', preflight):
                             raise AssertionError('Requested pre-join aggregate is absent')

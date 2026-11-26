@@ -37,6 +37,26 @@ changed_conf = {key: [configurations['baseline'].get(key), configurations['combi
                 for key in set(configurations['baseline']) | set(configurations['combined'])
                 if configurations['baseline'].get(key) != configurations['combined'].get(key)}
 assert set(changed_conf) <= {'spark.sql.shuffle.partitions'}, changed_conf
+for row in data['rows']:
+    if row['probe_arm'] != 'combined':
+        continue
+    query = row['query']
+    if query == 3:
+        assert any(n['node'] == 'GpuDriverlessBroadcastHashJoin' and
+                   n['metrics'].get('executorBuilds', 0) > 0 for n in row['plan_metrics'])
+    if query == 9:
+        assert row['part_scan_count'] == 1 and 'ReusedExchange' in row['plan_text']
+    if query == 11:
+        assert sum(n['node'].endswith('.partsupp') for n in row['event_scan_metrics']) == 1
+    if query in (15, 17):
+        assert row['lineitem_scan_count'] == 1
+    if query == 18:
+        assert any('BroadcastHashJoin' in line and 'Inner' in line and
+                   'c_custkey' in line and 'o_custkey' in line
+                   for line in row['plan_text'].splitlines())
+    if query == 20:
+        assert any('BroadcastHashJoin' in line and 'LeftSemi' in line
+                   for line in row['plan_text'].splitlines())
 queries = list(range(1, 23))
 arms = {}
 for arm in ('baseline', 'combined'):

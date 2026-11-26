@@ -1,0 +1,1504 @@
+{
+  "archive": "early-shuffle-complete.tar.gz",
+  "bytes": 33966353,
+  "sha256": "66ad066913bbc0ef3512039af833a7d8b2fdc8b93525371be0275f7e256bbb2d",
+  "files": [
+    {
+      "name": "artifacts/early-shuffle/build.log",
+      "bytes": 3328
+    },
+    {
+      "name": "artifacts/early-shuffle/classes/com/nvidia/spark/rapids/benchmark/EarlyShuffleCollector$1.class",
+      "bytes": 3288
+    },
+    {
+      "name": "artifacts/early-shuffle/classes/com/nvidia/spark/rapids/benchmark/EarlyShuffleCollector.class",
+      "bytes": 5058
+    },
+    {
+      "name": "artifacts/early-shuffle/early-shuffle.jar",
+      "bytes": 5508
+    },
+    {
+      "name": "artifacts/early-shuffle/sha256.txt",
+      "bytes": 339
+    },
+    {
+      "name": "artifacts/early-shuffle/source-revision.txt",
+      "bytes": 41
+    },
+    {
+      "name": "artifacts/early-shuffle/versions/6a53db9e38288e84a64e59cc7ff8f55d1138f4f47c56e5ff9b01a261d6dc8cc2/build.log",
+      "bytes": 3328
+    },
+    {
+      "name": "artifacts/early-shuffle/versions/6a53db9e38288e84a64e59cc7ff8f55d1138f4f47c56e5ff9b01a261d6dc8cc2/early-shuffle.jar",
+      "bytes": 5539
+    },
+    {
+      "name": "artifacts/early-shuffle/versions/6a53db9e38288e84a64e59cc7ff8f55d1138f4f47c56e5ff9b01a261d6dc8cc2/sha256.txt",
+      "bytes": 339
+    },
+    {
+      "name": "artifacts/early-shuffle/versions/6a53db9e38288e84a64e59cc7ff8f55d1138f4f47c56e5ff9b01a261d6dc8cc2/source-revision.txt",
+      "bytes": 41
+    },
+    {
+      "name": "early-shuffle/A0-retry/controller.json",
+      "bytes": 68
+    },
+    {
+      "name": "early-shuffle/A0-retry/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "early-shuffle/A0-retry/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "early-shuffle/A0-retry/gpm.jsonl",
+      "bytes": 99384
+    },
+    {
+      "name": "early-shuffle/A0-retry/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/A0-retry/host.jsonl",
+      "bytes": 131988
+    },
+    {
+      "name": "early-shuffle/A0-retry/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/A0-retry/pool.jsonl",
+      "bytes": 19631
+    },
+    {
+      "name": "early-shuffle/A0-retry/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/A0-retry/state.json",
+      "bytes": 3129
+    },
+    {
+      "name": "early-shuffle/A0-retry/vm-owner.json",
+      "bytes": 748
+    },
+    {
+      "name": "early-shuffle/A0-retry/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "early-shuffle/A0-retry/vm.jsonl",
+      "bytes": 55789
+    },
+    {
+      "name": "early-shuffle/A0-retry/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/A0-verified/analysis.json",
+      "bytes": 167774
+    },
+    {
+      "name": "early-shuffle/A0-verified/controller.json",
+      "bytes": 68
+    },
+    {
+      "name": "early-shuffle/A0-verified/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "early-shuffle/A0-verified/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "early-shuffle/A0-verified/gpm.jsonl",
+      "bytes": 476793
+    },
+    {
+      "name": "early-shuffle/A0-verified/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/A0-verified/host.jsonl",
+      "bytes": 620045
+    },
+    {
+      "name": "early-shuffle/A0-verified/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/A0-verified/pool.jsonl",
+      "bytes": 166452
+    },
+    {
+      "name": "early-shuffle/A0-verified/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/A0-verified/state.json",
+      "bytes": 65441
+    },
+    {
+      "name": "early-shuffle/A0-verified/vm-owner.json",
+      "bytes": 748
+    },
+    {
+      "name": "early-shuffle/A0-verified/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "early-shuffle/A0-verified/vm.jsonl",
+      "bytes": 212261
+    },
+    {
+      "name": "early-shuffle/A0-verified/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/A0/controller.json",
+      "bytes": 68
+    },
+    {
+      "name": "early-shuffle/A0/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "early-shuffle/A0/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "early-shuffle/A0/gpm.jsonl",
+      "bytes": 89259
+    },
+    {
+      "name": "early-shuffle/A0/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/A0/host.jsonl",
+      "bytes": 111557
+    },
+    {
+      "name": "early-shuffle/A0/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/A0/pool.jsonl",
+      "bytes": 12524
+    },
+    {
+      "name": "early-shuffle/A0/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/A0/state.json",
+      "bytes": 3009
+    },
+    {
+      "name": "early-shuffle/A0/vm-owner.json",
+      "bytes": 748
+    },
+    {
+      "name": "early-shuffle/A0/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "early-shuffle/A0/vm.jsonl",
+      "bytes": 50157
+    },
+    {
+      "name": "early-shuffle/A0/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/A3/analysis.json",
+      "bytes": 158166
+    },
+    {
+      "name": "early-shuffle/A3/controller.json",
+      "bytes": 68
+    },
+    {
+      "name": "early-shuffle/A3/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "early-shuffle/A3/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "early-shuffle/A3/gpm.jsonl",
+      "bytes": 479809
+    },
+    {
+      "name": "early-shuffle/A3/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/A3/host.jsonl",
+      "bytes": 620582
+    },
+    {
+      "name": "early-shuffle/A3/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/A3/pool.jsonl",
+      "bytes": 166452
+    },
+    {
+      "name": "early-shuffle/A3/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/A3/state.json",
+      "bytes": 65305
+    },
+    {
+      "name": "early-shuffle/A3/vm-owner.json",
+      "bytes": 748
+    },
+    {
+      "name": "early-shuffle/A3/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "early-shuffle/A3/vm.jsonl",
+      "bytes": 214089
+    },
+    {
+      "name": "early-shuffle/A3/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/B1/analysis.json",
+      "bytes": 157917
+    },
+    {
+      "name": "early-shuffle/B1/controller.json",
+      "bytes": 68
+    },
+    {
+      "name": "early-shuffle/B1/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "early-shuffle/B1/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "early-shuffle/B1/gpm.jsonl",
+      "bytes": 478562
+    },
+    {
+      "name": "early-shuffle/B1/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/B1/host.jsonl",
+      "bytes": 618429
+    },
+    {
+      "name": "early-shuffle/B1/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/B1/pool.jsonl",
+      "bytes": 166452
+    },
+    {
+      "name": "early-shuffle/B1/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/B1/state.json",
+      "bytes": 67239
+    },
+    {
+      "name": "early-shuffle/B1/vm-owner.json",
+      "bytes": 748
+    },
+    {
+      "name": "early-shuffle/B1/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "early-shuffle/B1/vm.jsonl",
+      "bytes": 212330
+    },
+    {
+      "name": "early-shuffle/B1/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "early-shuffle/lifecycle-audit.json",
+      "bytes": 255
+    },
+    {
+      "name": "early-shuffle/profiler-audit.json",
+      "bytes": 2312
+    },
+    {
+      "name": "early-shuffle/resource-log-audit.json",
+      "bytes": 30464
+    },
+    {
+      "name": "evidence/deployment.json",
+      "bytes": 368
+    },
+    {
+      "name": "evidence/early-shuffle-A0-retry.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/early-shuffle-A0-retry.log",
+      "bytes": 440
+    },
+    {
+      "name": "evidence/early-shuffle-A0-verified.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/early-shuffle-A0-verified.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/early-shuffle-A0.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/early-shuffle-A0.log",
+      "bytes": 440
+    },
+    {
+      "name": "evidence/early-shuffle-A3.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/early-shuffle-A3.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/early-shuffle-B1.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/early-shuffle-B1.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/host-prerequisites.json",
+      "bytes": 5862
+    },
+    {
+      "name": "evidence/owner.json",
+      "bytes": 450
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/events/app-20261126141033-0000",
+      "bytes": 564377
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/master.log",
+      "bytes": 5244
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-0/work/app-20261126141033-0000/4/stderr",
+      "bytes": 24889
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-0/work/app-20261126141033-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-0/worker.log",
+      "bytes": 6478
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-1/work/app-20261126141033-0000/0/stderr",
+      "bytes": 23885
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-1/work/app-20261126141033-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-1/worker.log",
+      "bytes": 5892
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-2/work/app-20261126141033-0000/7/stderr",
+      "bytes": 24340
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-2/work/app-20261126141033-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-2/worker.log",
+      "bytes": 6478
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-3/work/app-20261126141033-0000/5/stderr",
+      "bytes": 26547
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-3/work/app-20261126141033-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-3/worker.log",
+      "bytes": 6477
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-4/work/app-20261126141033-0000/6/stderr",
+      "bytes": 27506
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-4/work/app-20261126141033-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-4/worker.log",
+      "bytes": 5892
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-5/work/app-20261126141033-0000/3/stderr",
+      "bytes": 26050
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-5/work/app-20261126141033-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-5/worker.log",
+      "bytes": 5892
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-6/work/app-20261126141033-0000/1/stderr",
+      "bytes": 24136
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-6/work/app-20261126141033-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-6/worker.log",
+      "bytes": 5892
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-7/work/app-20261126141033-0000/2/stderr",
+      "bytes": 24390
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-7/work/app-20261126141033-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-0/suite/worker-7/worker.log",
+      "bytes": 6478
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/events/app-20261126141224-0000",
+      "bytes": 2254755
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/master.log",
+      "bytes": 4860
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-0/work/app-20261126141224-0000/3/stderr",
+      "bytes": 57352
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-0/work/app-20261126141224-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-0/worker.log",
+      "bytes": 5917
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-1/work/app-20261126141224-0000/7/stderr",
+      "bytes": 59821
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-1/work/app-20261126141224-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-1/worker.log",
+      "bytes": 5917
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-2/work/app-20261126141224-0000/6/stderr",
+      "bytes": 59917
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-2/work/app-20261126141224-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-2/worker.log",
+      "bytes": 5916
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-3/work/app-20261126141224-0000/2/stderr",
+      "bytes": 61650
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-3/work/app-20261126141224-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-3/worker.log",
+      "bytes": 5916
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-4/work/app-20261126141224-0000/0/stderr",
+      "bytes": 61548
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-4/work/app-20261126141224-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-4/worker.log",
+      "bytes": 5916
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-5/work/app-20261126141224-0000/1/stderr",
+      "bytes": 58096
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-5/work/app-20261126141224-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-5/worker.log",
+      "bytes": 5917
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-6/work/app-20261126141224-0000/4/stderr",
+      "bytes": 59415
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-6/work/app-20261126141224-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-6/worker.log",
+      "bytes": 5917
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-7/work/app-20261126141224-0000/5/stderr",
+      "bytes": 58298
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-7/work/app-20261126141224-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-retry-0/suite/worker-7/worker.log",
+      "bytes": 5917
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/events/app-20261126141348-0000",
+      "bytes": 62851857
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/master.log",
+      "bytes": 4860
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-0/work/app-20261126141348-0000/5/stderr",
+      "bytes": 2244294
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-0/work/app-20261126141348-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-0/worker.log",
+      "bytes": 5929
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-1/work/app-20261126141348-0000/2/stderr",
+      "bytes": 2245961
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-1/work/app-20261126141348-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-1/worker.log",
+      "bytes": 5928
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-2/work/app-20261126141348-0000/3/stderr",
+      "bytes": 2166506
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-2/work/app-20261126141348-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-2/worker.log",
+      "bytes": 5928
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-3/work/app-20261126141348-0000/0/stderr",
+      "bytes": 2300721
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-3/work/app-20261126141348-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-3/worker.log",
+      "bytes": 5929
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-4/work/app-20261126141348-0000/1/stderr",
+      "bytes": 2209221
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-4/work/app-20261126141348-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-4/worker.log",
+      "bytes": 5928
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-5/work/app-20261126141348-0000/7/stderr",
+      "bytes": 2238509
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-5/work/app-20261126141348-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-5/worker.log",
+      "bytes": 5928
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-6/work/app-20261126141348-0000/6/stderr",
+      "bytes": 2235371
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-6/work/app-20261126141348-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-6/worker.log",
+      "bytes": 5929
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-7/work/app-20261126141348-0000/4/stderr",
+      "bytes": 2249281
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-7/work/app-20261126141348-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A0-verified-0/suite/worker-7/worker.log",
+      "bytes": 5928
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/events/app-20261126142301-0000",
+      "bytes": 62792338
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/master.log",
+      "bytes": 4956
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-0/work/app-20261126142301-0000/1/stderr",
+      "bytes": 2247102
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-0/work/app-20261126142301-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-0/worker.log",
+      "bytes": 5893
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-1/work/app-20261126142301-0000/6/stderr",
+      "bytes": 2252907
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-1/work/app-20261126142301-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-1/worker.log",
+      "bytes": 5892
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-2/work/app-20261126142301-0000/5/stderr",
+      "bytes": 2282068
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-2/work/app-20261126142301-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-2/worker.log",
+      "bytes": 5892
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-3/work/app-20261126142301-0000/4/stderr",
+      "bytes": 2219364
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-3/work/app-20261126142301-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-3/worker.log",
+      "bytes": 5893
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-4/work/app-20261126142301-0000/7/stderr",
+      "bytes": 2234383
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-4/work/app-20261126142301-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-4/worker.log",
+      "bytes": 5892
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-5/work/app-20261126142301-0000/0/stderr",
+      "bytes": 2205669
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-5/work/app-20261126142301-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-5/worker.log",
+      "bytes": 5892
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-6/work/app-20261126142301-0000/2/stderr",
+      "bytes": 2248908
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-6/work/app-20261126142301-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-6/worker.log",
+      "bytes": 6477
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-7/work/app-20261126142301-0000/3/stderr",
+      "bytes": 2198422
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-7/work/app-20261126142301-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-A3-0/suite/worker-7/worker.log",
+      "bytes": 5893
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/events/app-20261126141737-0000",
+      "bytes": 62962350
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/master.log",
+      "bytes": 4860
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-0/work/app-20261126141737-0000/6/stderr",
+      "bytes": 2277976
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-0/work/app-20261126141737-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-0/worker.log",
+      "bytes": 5892
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-1/work/app-20261126141737-0000/4/stderr",
+      "bytes": 2238530
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-1/work/app-20261126141737-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-1/worker.log",
+      "bytes": 5893
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-2/work/app-20261126141737-0000/2/stderr",
+      "bytes": 2200743
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-2/work/app-20261126141737-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-2/worker.log",
+      "bytes": 5892
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-3/work/app-20261126141737-0000/3/stderr",
+      "bytes": 2218368
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-3/work/app-20261126141737-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-3/worker.log",
+      "bytes": 5893
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-4/work/app-20261126141737-0000/1/stderr",
+      "bytes": 2217804
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-4/work/app-20261126141737-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-4/worker.log",
+      "bytes": 5893
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-5/work/app-20261126141737-0000/7/stderr",
+      "bytes": 2190336
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-5/work/app-20261126141737-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-5/worker.log",
+      "bytes": 5892
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-6/work/app-20261126141737-0000/5/stderr",
+      "bytes": 2284121
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-6/work/app-20261126141737-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-6/worker.log",
+      "bytes": 5892
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-7/work/app-20261126141737-0000/0/stderr",
+      "bytes": 2257095
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-7/work/app-20261126141737-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/early-shuffle-B1-0/suite/worker-7/worker.log",
+      "bytes": 5892
+    },
+    {
+      "name": "screen/early-shuffle-A0-0/applications/suite/command.json",
+      "bytes": 892
+    },
+    {
+      "name": "screen/early-shuffle-A0-0/applications/suite/driver-service.json",
+      "bytes": 1051
+    },
+    {
+      "name": "screen/early-shuffle-A0-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/early-shuffle-A0-0/applications/suite/driver.log",
+      "bytes": 67637
+    },
+    {
+      "name": "screen/early-shuffle-A0-0/applications/suite/profile.json",
+      "bytes": 6196
+    },
+    {
+      "name": "screen/early-shuffle-A0-0/applications/suite/result.json",
+      "bytes": 36674
+    },
+    {
+      "name": "screen/early-shuffle-A0-0/applications/suite/spark-defaults.conf",
+      "bytes": 5377
+    },
+    {
+      "name": "screen/early-shuffle-A0-0/config.json",
+      "bytes": 7792
+    },
+    {
+      "name": "screen/early-shuffle-A0-0/profiles.json",
+      "bytes": 6413
+    },
+    {
+      "name": "screen/early-shuffle-A0-0/services/suite/ip-172-31-21-17.json",
+      "bytes": 4979
+    },
+    {
+      "name": "screen/early-shuffle-A0-0/services/suite/ip-172-31-21-17.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/early-shuffle-A0-retry-0/applications/suite/collector-self-test-failure.json",
+      "bytes": 122
+    },
+    {
+      "name": "screen/early-shuffle-A0-retry-0/applications/suite/collector-test-0-False.json",
+      "bytes": 81
+    },
+    {
+      "name": "screen/early-shuffle-A0-retry-0/applications/suite/collector-test-0-True.json",
+      "bytes": 81
+    },
+    {
+      "name": "screen/early-shuffle-A0-retry-0/applications/suite/command.json",
+      "bytes": 910
+    },
+    {
+      "name": "screen/early-shuffle-A0-retry-0/applications/suite/driver-service.json",
+      "bytes": 1069
+    },
+    {
+      "name": "screen/early-shuffle-A0-retry-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/early-shuffle-A0-retry-0/applications/suite/driver.log",
+      "bytes": 159776
+    },
+    {
+      "name": "screen/early-shuffle-A0-retry-0/applications/suite/profile.json",
+      "bytes": 6220
+    },
+    {
+      "name": "screen/early-shuffle-A0-retry-0/applications/suite/result.json",
+      "bytes": 36766
+    },
+    {
+      "name": "screen/early-shuffle-A0-retry-0/applications/suite/spark-defaults.conf",
+      "bytes": 5401
+    },
+    {
+      "name": "screen/early-shuffle-A0-retry-0/config.json",
+      "bytes": 7792
+    },
+    {
+      "name": "screen/early-shuffle-A0-retry-0/profiles.json",
+      "bytes": 6437
+    },
+    {
+      "name": "screen/early-shuffle-A0-retry-0/services/suite/ip-172-31-21-17.json",
+      "bytes": 4979
+    },
+    {
+      "name": "screen/early-shuffle-A0-retry-0/services/suite/ip-172-31-21-17.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/collector-self-test.json",
+      "bytes": 862
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/collector-test-0-False.json",
+      "bytes": 82
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/collector-test-0-False.plan.txt",
+      "bytes": 1898
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/collector-test-0-True.json",
+      "bytes": 504
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/collector-test-0-True.plan.txt",
+      "bytes": 1898
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/collector-test-1-False.json",
+      "bytes": 82
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/collector-test-1-False.plan.txt",
+      "bytes": 199
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/collector-test-1-True.json",
+      "bytes": 81
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/collector-test-1-True.plan.txt",
+      "bytes": 199
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/collector-test-2-False.json",
+      "bytes": 82
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/collector-test-2-False.plan.txt",
+      "bytes": 60
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/collector-test-2-True.json",
+      "bytes": 81
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/collector-test-2-True.plan.txt",
+      "bytes": 60
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/command.json",
+      "bytes": 919
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/driver-service.json",
+      "bytes": 1078
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/driver.log",
+      "bytes": 3471330
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/profile.json",
+      "bytes": 6232
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration1.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration1.collector.json",
+      "bytes": 83
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration1.executed.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration1.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration1.metrics.json",
+      "bytes": 17828
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration1.observed.json",
+      "bytes": 20623
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration1.preflight.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration1.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration2.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration2.collector.json",
+      "bytes": 83
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration2.executed.txt",
+      "bytes": 9236
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration2.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration2.metrics.json",
+      "bytes": 17818
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration2.observed.json",
+      "bytes": 20614
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration2.preflight.txt",
+      "bytes": 9236
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/q9-iteration2.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/result.json",
+      "bytes": 85072
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/applications/suite/spark-defaults.conf",
+      "bytes": 5413
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/config.json",
+      "bytes": 7792
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/profiles.json",
+      "bytes": 6449
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/services/suite/ip-172-31-21-17.json",
+      "bytes": 4979
+    },
+    {
+      "name": "screen/early-shuffle-A0-verified-0/services/suite/ip-172-31-21-17.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/collector-self-test.json",
+      "bytes": 862
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/collector-test-0-False.json",
+      "bytes": 82
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/collector-test-0-False.plan.txt",
+      "bytes": 1898
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/collector-test-0-True.json",
+      "bytes": 502
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/collector-test-0-True.plan.txt",
+      "bytes": 1898
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/collector-test-1-False.json",
+      "bytes": 82
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/collector-test-1-False.plan.txt",
+      "bytes": 199
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/collector-test-1-True.json",
+      "bytes": 81
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/collector-test-1-True.plan.txt",
+      "bytes": 199
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/collector-test-2-False.json",
+      "bytes": 82
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/collector-test-2-False.plan.txt",
+      "bytes": 60
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/collector-test-2-True.json",
+      "bytes": 81
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/collector-test-2-True.plan.txt",
+      "bytes": 60
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/command.json",
+      "bytes": 892
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/driver-service.json",
+      "bytes": 1051
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/driver.log",
+      "bytes": 3468817
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/profile.json",
+      "bytes": 6196
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration1.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration1.collector.json",
+      "bytes": 83
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration1.executed.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration1.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration1.metrics.json",
+      "bytes": 17826
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration1.observed.json",
+      "bytes": 20622
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration1.preflight.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration1.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration2.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration2.collector.json",
+      "bytes": 83
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration2.executed.txt",
+      "bytes": 9236
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration2.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration2.metrics.json",
+      "bytes": 17820
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration2.observed.json",
+      "bytes": 20614
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration2.preflight.txt",
+      "bytes": 9236
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/q9-iteration2.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/result.json",
+      "bytes": 85035
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/applications/suite/spark-defaults.conf",
+      "bytes": 5377
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/config.json",
+      "bytes": 7792
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/profiles.json",
+      "bytes": 6413
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/services/suite/ip-172-31-21-17.json",
+      "bytes": 4979
+    },
+    {
+      "name": "screen/early-shuffle-A3-0/services/suite/ip-172-31-21-17.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/collector-self-test.json",
+      "bytes": 862
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/collector-test-0-False.json",
+      "bytes": 82
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/collector-test-0-False.plan.txt",
+      "bytes": 1898
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/collector-test-0-True.json",
+      "bytes": 501
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/collector-test-0-True.plan.txt",
+      "bytes": 1898
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/collector-test-1-False.json",
+      "bytes": 82
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/collector-test-1-False.plan.txt",
+      "bytes": 199
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/collector-test-1-True.json",
+      "bytes": 80
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/collector-test-1-True.plan.txt",
+      "bytes": 199
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/collector-test-2-False.json",
+      "bytes": 82
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/collector-test-2-False.plan.txt",
+      "bytes": 60
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/collector-test-2-True.json",
+      "bytes": 81
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/collector-test-2-True.plan.txt",
+      "bytes": 60
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/command.json",
+      "bytes": 892
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/driver-service.json",
+      "bytes": 1051
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/driver.log",
+      "bytes": 3467378
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/profile.json",
+      "bytes": 6196
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration1.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration1.collector.json",
+      "bytes": 770
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration1.executed.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration1.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration1.metrics.json",
+      "bytes": 17828
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration1.observed.json",
+      "bytes": 20624
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration1.preflight.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration1.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration2.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration2.collector.json",
+      "bytes": 773
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration2.executed.txt",
+      "bytes": 9236
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration2.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration2.metrics.json",
+      "bytes": 17821
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration2.observed.json",
+      "bytes": 20616
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration2.preflight.txt",
+      "bytes": 9236
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/q9-iteration2.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/result.json",
+      "bytes": 85037
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/applications/suite/spark-defaults.conf",
+      "bytes": 5377
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/config.json",
+      "bytes": 7796
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/profiles.json",
+      "bytes": 6413
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/services/suite/ip-172-31-21-17.json",
+      "bytes": 4979
+    },
+    {
+      "name": "screen/early-shuffle-B1-0/services/suite/ip-172-31-21-17.json.stopped.json",
+      "bytes": 62
+    }
+  ],
+  "instance_policy": "Retain until explicit user release"
+}

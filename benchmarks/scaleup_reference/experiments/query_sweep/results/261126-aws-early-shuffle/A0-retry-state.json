@@ -1,0 +1,95 @@
+{
+  "status": "failed",
+  "phase": "A0-retry",
+  "groups": [
+    {
+      "run": "/home/ubuntu/aws-speed-of-light-261126/screen/early-shuffle-A0-retry-0",
+      "status": "failed",
+      "samples": [],
+      "error": "AssertionError({'enabled': True, 'submissions': [], 'status': 'passed', 'elapsed_seconds': 0.298609172})",
+      "driver_exit_code": 1
+    }
+  ],
+  "profilers": [
+    {
+      "name": "host",
+      "pid": 669391,
+      "start_time": "2652804",
+      "command": [
+        "/usr/bin/python3",
+        "/home/ubuntu/aws-speed-of-light-261126/source/benchmarks/scaleup_reference/experiments/runtime_prefilter/monitor_host.py",
+        "--work",
+        "/home/ubuntu/aws-speed-of-light-261126",
+        "--output",
+        "/home/ubuntu/aws-speed-of-light-261126/early-shuffle/A0-retry/host.jsonl"
+      ],
+      "privileged": false,
+      "exit_code": 0
+    },
+    {
+      "name": "vm",
+      "pid": 669392,
+      "start_time": "2652804",
+      "command": [
+        "/usr/bin/python3",
+        "/home/ubuntu/aws-speed-of-light-261126/source/benchmarks/scaleup_reference/experiments/query_sweep/monitor_vm.py",
+        "--work",
+        "/home/ubuntu/aws-speed-of-light-261126",
+        "--thread-id",
+        "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+        "--controller",
+        "/home/ubuntu/aws-speed-of-light-261126/early-shuffle/A0-retry/controller.json",
+        "--output",
+        "/home/ubuntu/aws-speed-of-light-261126/early-shuffle/A0-retry/vm.jsonl"
+      ],
+      "privileged": false,
+      "exit_code": 0
+    },
+    {
+      "name": "pool",
+      "pid": 669393,
+      "start_time": "2652804",
+      "command": [
+        "/usr/bin/python3",
+        "/home/ubuntu/aws-speed-of-light-261126/source/benchmarks/scaleup_reference/experiments/query_sweep/monitor_read_pool.py",
+        "--work",
+        "/home/ubuntu/aws-speed-of-light-261126",
+        "--output",
+        "/home/ubuntu/aws-speed-of-light-261126/early-shuffle/A0-retry/pool.jsonl"
+      ],
+      "privileged": false,
+      "exit_code": 0
+    },
+    {
+      "name": "gpm",
+      "pid": 669394,
+      "start_time": "2652804",
+      "command": [
+        "sudo",
+        "-n",
+        "/usr/bin/python3",
+        "/home/ubuntu/aws-speed-of-light-261126/source/benchmarks/scaleup_reference/experiments/query_sweep/monitor_gpm.py",
+        "--directory",
+        "/home/ubuntu/aws-speed-of-light-261126/early-shuffle/A0-retry"
+      ],
+      "privileged": true,
+      "exit_code": 0
+    }
+  ],
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "source_revision": "8ca9d326dfbf4c7ff7e088fa5ae0ac55a32985b5",
+  "classification": "Experimental collect scheduling; frozen engine and original reader",
+  "tuning_key": "spark.rapids.sql.reader.kvikio.numThreads",
+  "kvikio_threads": 32,
+  "cache_policy": "No cache flush; two actions per query",
+  "instance_policy": "Retain until explicit user release",
+  "queries": [
+    9
+  ],
+  "start_unix_ns": 1795702339360931697,
+  "start_monotonic_ns": 26529053279521,
+  "error": "AssertionError()",
+  "end_unix_ns": 1795702368733586395,
+  "gpm_restored": true
+}

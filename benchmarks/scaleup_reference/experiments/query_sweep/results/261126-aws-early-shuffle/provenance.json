@@ -1,0 +1,63 @@
+{
+  "scope": "Q9-only scheduling pilot; no complete-suite score",
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "validated_actions": 6,
+  "failed_preflights": {
+    "A0": "AssertionError()",
+    "A0-retry": "AssertionError()"
+  },
+  "seconds": {
+    "B1": [
+      {
+        "iteration": 1,
+        "sql": 41.611335093999514,
+        "cleanup": 1.0561047169976518
+      },
+      {
+        "iteration": 2,
+        "sql": 40.50863062600183,
+        "cleanup": 0.9039804329986509
+      }
+    ],
+    "A3": [
+      {
+        "iteration": 1,
+        "sql": 41.584488686999975,
+        "cleanup": 0.756799527000112
+      },
+      {
+        "iteration": 2,
+        "sql": 39.6283392990008,
+        "cleanup": 0.7585555820005538
+      }
+    ],
+    "A0-verified": [
+      {
+        "iteration": 1,
+        "sql": 41.30414806800036,
+        "cleanup": 1.1620085110007494
+      },
+      {
+        "iteration": 2,
+        "sql": 39.743463327002246,
+        "cleanup": 1.30423994100056
+      }
+    ]
+  },
+  "decision": "Do not select early leaf submission: the bounded matched pilot has no query-wall benefit. This does not exclude a resource-aware scheduler or pressure-dependent benefit.",
+  "mechanism": "Candidate invokes mapOutputStatisticsFuture on three actual leaf GPU hash exchanges inside the original Dataset action. Runtime receipts record actual shuffle IDs; normal collect consumes the same dependencies.",
+  "limits": [
+    "Spark 3.5.3 reflective companion, not a production scheduler change",
+    "Only one candidate application bracketed by two controls; no statistical performance guarantee",
+    "Hot data with little physical disk I/O; does not isolate cold-cache scheduling benefit",
+    "Identical semantic preflight in all three measured applications; failed preflights are not samples",
+    "Native KvikIO fixed at 32 threads and original buffered reader"
+  ],
+  "setup_index": "../261126-aws-speed-of-light",
+  "selected_queries_index": "../261126-aws-critical-queries",
+  "entrypoint": "../../start_early_shuffle.sh",
+  "source": "../../EarlyShuffleCollector.java",
+  "build": "../../build_early_shuffle.sh",
+  "cleanup_authorization": "Terminate only instances created by this session after useful investigation and evidence preservation"
+}

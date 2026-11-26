@@ -1,0 +1,133 @@
+{
+  "records": [
+    {
+      "pid": 663850,
+      "start_time": "2641622",
+      "live": false
+    },
+    {
+      "pid": 663856,
+      "start_time": "2641638",
+      "live": false
+    },
+    {
+      "pid": 663857,
+      "start_time": "2641638",
+      "live": false
+    },
+    {
+      "pid": 663858,
+      "start_time": "2641639",
+      "live": false
+    },
+    {
+      "pid": 663859,
+      "start_time": "2641639",
+      "live": false
+    },
+    {
+      "pid": 669385,
+      "start_time": "2652788",
+      "live": false
+    },
+    {
+      "pid": 669391,
+      "start_time": "2652804",
+      "live": false
+    },
+    {
+      "pid": 669392,
+      "start_time": "2652804",
+      "live": false
+    },
+    {
+      "pid": 669393,
+      "start_time": "2652804",
+      "live": false
+    },
+    {
+      "pid": 669394,
+      "start_time": "2652804",
+      "live": false
+    },
+    {
+      "pid": 675578,
+      "start_time": "2661162",
+      "live": false
+    },
+    {
+      "pid": 675584,
+      "start_time": "2661178",
+      "live": false
+    },
+    {
+      "pid": 675585,
+      "start_time": "2661178",
+      "live": false
+    },
+    {
+      "pid": 675586,
+      "start_time": "2661178",
+      "live": false
+    },
+    {
+      "pid": 675587,
+      "start_time": "2661179",
+      "live": false
+    },
+    {
+      "pid": 692505,
+      "start_time": "2716438",
+      "live": false
+    },
+    {
+      "pid": 692511,
+      "start_time": "2716454",
+      "live": false
+    },
+    {
+      "pid": 692512,
+      "start_time": "2716454",
+      "live": false
+    },
+    {
+      "pid": 692513,
+      "start_time": "2716454",
+      "live": false
+    },
+    {
+      "pid": 692514,
+      "start_time": "2716454",
+      "live": false
+    },
+    {
+      "pid": 684173,
+      "start_time": "2684037",
+      "live": false
+    },
+    {
+      "pid": 684179,
+      "start_time": "2684054",
+      "live": false
+    },
+    {
+      "pid": 684180,
+      "start_time": "2684054",
+      "live": false
+    },
+    {
+      "pid": 684181,
+      "start_time": "2684054",
+      "live": false
+    },
+    {
+      "pid": 684182,
+      "start_time": "2684054",
+      "live": false
+    }
+  ],
+  "source_revision": "6069c6a5e6708b8161391c73e6c0e4735e4c9d96",
+  "all_stopped": true,
+  "watermark_scale_factor": 10,
+  "retention": "Explicit user release only"
+}

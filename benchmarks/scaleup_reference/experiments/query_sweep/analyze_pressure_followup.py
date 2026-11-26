@@ -45,13 +45,17 @@ def main():
     assert (work / 'evidence' / ('pressure-' + args.mode + '.exit')).read_text().strip() == '0'
     host, vm = records(directory / 'host-monitor.jsonl'), records(directory / 'vm-monitor.jsonl')
     host_times, vm_times = [s['time_unix_ns'] for s in host], [s['time_unix_ns'] for s in vm]
-    groups, samples = [], []
+    groups, samples, profile_hashes = [], [], []
     target_queries = {12, 13, 18}
     for group in state['groups']:
         data = summarize(work, Path(group['run']))
         assert data['status'] == 'completed'
         original = read(Path(group['run']) / 'applications/suite/result.json')
         original_samples = {(s['query'], s['iteration']): s for s in original['samples']}
+        profiles = read(Path(group['run']) / 'profiles.json')
+        normalized_profiles = json.dumps(profiles, sort_keys=True).replace(
+            '/' + Path(group['run']).name + '/', '/<run>/')
+        profile_hashes.append(hashlib.sha256(normalized_profiles.encode()).hexdigest())
         rows = []
         for sample in data['samples']:
             raw = original_samples[(sample['query'], sample['iteration'])]
@@ -103,6 +107,7 @@ def main():
             'physical_read_bytes': sum(s['physical_read_bytes'] for s in rows)})
     controls, candidates = ([g for g in groups if g['arm'] == arm] for arm in ('A', 'B'))
     assert len(controls) == len(candidates) == 2
+    assert len(set(profile_hashes)) == 1, 'Query profiles differ beyond run-specific temporary and event paths'
     comparisons = {key: {'controls': [g[key] for g in controls], 'candidates': [g[key] for g in candidates]}
                    for key in groups[0] if key not in ('arm', 'index', 'run')}
     plan_checks = [{'query': q, 'same_normalized_plan': len({s['normalized_plan_sha256'] for s in samples if s['query'] == q}) == 1,
@@ -120,6 +125,8 @@ def main():
         .50 * min(g['memory_full_seconds'] for g in controls))
     report = {'classification': 'Controlled single-host measurements; no general kernel tuning recommendation',
               'groups': groups, 'samples': samples, 'comparisons': comparisons,
+              'query_profiles_equal_after_normalizing_run_paths': True,
+              'normalized_query_profile_sha256': profile_hashes[0],
               'plan_checks': plan_checks, 'pressure_reproduced_in_both_controls': pressure_reproduced,
               'conservative_timing_gate': timing_gate,
               'conservative_stability_gate': stability_gate,

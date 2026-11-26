@@ -80,8 +80,9 @@ for proc in Path('/proc').iterdir():
    if state!='Z':orphans.append(int(proc.name))
  except (FileNotFoundError,ProcessLookupError,PermissionError):pass
 assert not orphans,orphans
-print(json.dumps({'retained_startup_failure':json.loads((w/'evidence/trial-q15-startup-hang.json').read_text()),
- 'remaining_owned_prefix_processes':orphans,'query_execution_status':'core_trials_completed',
+historical_failure=w/'evidence/trial-q15-startup-hang.json'
+print(json.dumps({'retained_historical_startup_failure':json.loads(historical_failure.read_text()) if historical_failure.exists() else None,
+ 'remaining_owned_prefix_processes':orphans,'query_execution_status':'requested_trials_completed',
  'performance_qualified':False,'timing_limit':'Matched four-GPU cohort; GPU0 thermal throttling; no healthy-node speedup qualification',
  'applications':apps,'task_end_reasons':dict(reasons),'remaining_recorded_service_processes':remaining,
  'cleanup_acknowledgements':len(receipts),'maximum_rmm_after_cleanup_bytes':max(r['rmm_after'] for r in receipts),

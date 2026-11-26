@@ -93,7 +93,8 @@ for label in args.labels:
                 'memory_spill_bytes': [r['task_metrics'].get('memory_spill_bytes', 0) for r in selected],
                 'lineitem_scan_counts': [r['lineitem_scan_count'] for r in selected]}
         report['groups'].append(group)
-        print('Q' + str(query), {a: [round(t, 3) for t in g['second_pass_seconds']]
+        print('Q' + str(query), {a: {'second_pass': [round(t, 3) for t in g['second_pass_seconds']],
+                                    'first_pass': [round(run[2], 3) for run in g['runs'] if run[1] == 1]}
                                 for a, g in group['arms'].items()})
 output = root / 'evidence' / ('sol-' + '-'.join(args.labels) + '.json')
 output.write_text(json.dumps(report, indent=2) + '\n')

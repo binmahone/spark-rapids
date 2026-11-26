@@ -34,7 +34,7 @@ from catalog_statistics import register_tables
 from common import SUITE, TABLES, apply_query_settings, read, sha, write
 from b200_validation import Validator
 from suite_validation import SuiteValidator
-from suite_variants import transform, check_semantics
+from suite_variants import transform, check_semantics, selected_arm
 
 
 def metrics(plan):
@@ -140,7 +140,7 @@ def main():
             if not any('BroadcastHashJoin' in line and 'LeftSemi' in line
                        for line in planned.splitlines()):
                 raise AssertionError(f'Q{planned_query}: hint did not reach a broadcast semi join')
-        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','row-propagation','row-propagation-reuse','aggregate-reuse'):
+        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','row-propagation','row-propagation-reuse','aggregate-reuse','window-average','screen'):
             checks = check_semantics(spark, SUITE, queries, config['probe_arm'])
             write(app / 'rewrite-counterexamples.json', checks)
         test = spark.range(10000).selectExpr('sum(id * id + 3) AS total')
@@ -152,6 +152,7 @@ def main():
         state['status'] = 'running'
         write(app / 'result.json', state)
         for query in queries:
+            query_arm = selected_arm(query, config['probe_arm'])
             query_profile = profiles[str(query)]
             scan_configuration = {}
             if not args.reference_only:
@@ -204,20 +205,20 @@ def main():
                     semi = [line for line in preflight.splitlines() if 'LeftSemi' in line]
                     if config['probe_arm'] == 'hint' and not any('BroadcastHashJoin' in line for line in semi):
                         raise AssertionError('Hint did not reach a broadcast semi join')
-                    if config.get('suite_audit') and config['probe_arm'] in ('row-propagation','row-propagation-reuse'):
+                    if config.get('suite_audit') and query_arm in ('row-propagation','row-propagation-reuse'):
                         if not any('BroadcastHashJoin' in line and 'LeftSemi' in line for line in preflight.splitlines()):
                             raise AssertionError('Propagated semi join is absent or not broadcast')
-                    if config.get('suite_audit') and config['probe_arm'] == 'row-propagation-reuse':
+                    if config.get('suite_audit') and query_arm == 'row-propagation-reuse':
                         if 'ReusedExchange' not in preflight or preflight.count('GpuFileGpuScan parquet spark_catalog.default.part[')!=1:
                             raise AssertionError('Expected shared part broadcast with a single part scan')
-                    if config.get('suite_audit') and config['probe_arm'] == 'dimension-broadcast':
+                    if config.get('suite_audit') and query_arm == 'dimension-broadcast':
                         if not any('BroadcastHashJoin' in line and 'Inner' in line for line in preflight.splitlines()):
                             raise AssertionError('Dimension broadcast hint was not executed')
-                    if config.get('suite_audit') and config['probe_arm'] == 'preaggregate' and not config.get('prefix_reference'):
+                    if config.get('suite_audit') and query_arm == 'preaggregate' and not config.get('prefix_reference'):
                         group_key = 'l_orderkey' if query in (3,4,18) else 'o_custkey'
                         if not re.search(r'GpuHashAggregate \(keys=\[' + group_key + r'#\d+L\],', preflight):
                             raise AssertionError('Requested pre-join aggregate is absent')
-                    if config.get('suite_audit') and config['probe_arm'] == 'aggregate-reuse':
+                    if config.get('suite_audit') and query_arm in ('aggregate-reuse','window-average'):
                         if not re.search(r'Gpu\w*Window', preflight) or preflight.count('GpuFileGpuScan parquet spark_catalog.default.lineitem[')!=1:
                             raise AssertionError('Expected one lineitem scan and a GPU window')
                     rows = frame._jdf.collect()
@@ -274,6 +275,7 @@ def main():
                           'rows': len(rows), 'schema': schema,
                           'sql_sha256': hashlib.sha256(query_sql.encode()).hexdigest(),
                           'reference_sql_sha256': sha(sql_path), 'probe_arm': config['probe_arm'],
+                          'query_arm': query_arm,
                           'semi_join_plan_lines': semi,
                           'validation': validation, 'validation_seconds': validation_seconds,
                           'reader_metrics': reader, 'plan_metrics': node_metrics,

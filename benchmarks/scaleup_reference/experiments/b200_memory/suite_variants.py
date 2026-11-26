@@ -16,9 +16,33 @@
 import re
 
 
+def selected_arm(query, arm):
+    if arm == 'screen':
+        return {4: 'preaggregate', 5: 'row-propagation', 13: 'preaggregate',
+                17: 'window-average'}.get(query, 'baseline')
+    return arm
+
+
 def transform(query, original, arm):
+    arm = selected_arm(query, arm)
     if arm == 'baseline':
         return original
+    if arm == 'window-average' and query == 17:
+        return """
+WITH marked AS (
+    SELECT l_partkey, l_quantity, l_extendedprice,
+           0.2 * avg(l_quantity) OVER (PARTITION BY l_partkey) AS probe_limit
+    FROM lineitem
+    WHERE l_partkey IN (
+        SELECT /*+ BROADCAST */ p_partkey FROM part
+        WHERE p_brand = 'Brand#23' AND p_container = 'MED BOX'
+          AND p_partkey IS NOT NULL)
+)
+SELECT sum(l_extendedprice) / 7.0 AS avg_yearly
+FROM marked JOIN part ON p_partkey = l_partkey
+WHERE p_brand = 'Brand#23' AND p_container = 'MED BOX'
+  AND l_quantity < probe_limit
+"""
     if arm == 'prefilter' and query in (18,20):
         column = 'l_orderkey' if query == 18 else 'p_partkey'
         result,count = re.subn(r'(\bselect\s+)(' + column + r'\b)',
@@ -216,6 +240,15 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
             (1,100.,0.,date(1996,1,2)),(1,100.,0.,date(1996,2,2)),
             (2,150.,0.,date(1996,1,2)),(None,50.,0.,date(1996,1,2)),
             (2,999.,0.,date(1996,5,1)),(2,None,0.,date(1996,1,2))])}
+    cases[17] = {
+        'part': ('p_partkey long, p_brand string, p_container string', [
+            (1,'Brand#23','MED BOX'),(1,'Brand#23','MED BOX'),
+            (1,'Other','MED BOX'),(2,'Brand#23','MED BOX'),
+            (3,'Other','MED BOX'),(None,'Brand#23','MED BOX')]),
+        'lineitem': ('l_partkey long, l_quantity double, l_extendedprice double', [
+            (1,1.,7.),(1,19.,70.),(1,None,700.),(1,0.,None),
+            (2,2.,14.),(2,18.,140.),(2,None,1400.),
+            (3,0.,7000.),(3,100.,70000.),(None,0.,700000.)])}
     graph_tables = {
         'customer': ('c_custkey long, c_nationkey int', [(1,1),(1,1),(2,2),(3,None)]),
         'orders': ('o_orderkey long, o_custkey long, o_orderdate date', [
@@ -235,7 +268,7 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
     previous = spark.conf.get('spark.rapids.sql.enabled', 'true')
     try:
         for query,tables in cases.items():
-            if query not in requested:
+            if query not in requested or selected_arm(query, arm) in ('baseline', 'prefilter'):
                 continue
             original=(suite/'inputs/aws48x/sql'/f'q{query}.sql').read_text()
             for empty in ((False,True,'null-max') if query==15 else (False,True)):

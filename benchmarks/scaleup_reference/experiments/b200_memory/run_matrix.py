@@ -46,6 +46,7 @@ def main():
     parser.add_argument('--gpus', default='0,1,2,3')
     parser.add_argument('--execution-profile', default='reference',
                         choices=['reference', 'partitions128'])
+    parser.add_argument('--combined-execution-profile', choices=['reference', 'partitions128'])
     args = parser.parse_args()
     work = Path(args.work).resolve()
     gpu_indices = [int(i) for i in args.gpus.split(',')]
@@ -63,6 +64,7 @@ def main():
              'source_revision': subprocess.check_output(
                  ['git', '-C', str(SUITE), 'rev-parse', 'HEAD'], text=True).strip()}
     state['execution_profile'] = args.execution_profile
+    state['combined_execution_profile'] = args.combined_execution_profile
     matrix_root = work / 'results' / (args.label or ('reference' if args.reference_only else args.budget))
     output = matrix_root / 'matrix.json'
     if output.exists():
@@ -92,8 +94,6 @@ def main():
     config['dataset_contract'] = {'parquet_files': len(dataset_files),
                                   'parquet_bytes': sum(p.stat().st_size for p in dataset_files)}
     config['spark_conf']['spark.executor.instances']='4'
-    if args.execution_profile == 'partitions128':
-        config['spark_conf']['spark.sql.shuffle.partitions'] = '128'
     config['execution_profile'] = args.execution_profile
     config.update(suite_audit=args.suite_audit, prefix_reference=args.prefix_reference, iterations=args.iterations,
                   query_timeout_seconds=args.query_timeout)
@@ -119,9 +119,14 @@ def main():
             run = matrix_root / f'{args.label or args.budget}-{index}-{arm}'
             app = run / 'applications/suite'
             app.mkdir(parents=True)
-            current = dict(config, probe_arm=arm)
+            selected_profile = (args.combined_execution_profile if arm == 'combined' and
+                                args.combined_execution_profile else args.execution_profile)
+            current = dict(config, probe_arm=arm, spark_conf=dict(config['spark_conf']),
+                           execution_profile=selected_profile)
+            if selected_profile == 'partitions128':
+                current['spark_conf']['spark.sql.shuffle.partitions'] = '128'
             write(run / 'config.json', current)
-            profile = dict(config['spark_conf'])
+            profile = dict(current['spark_conf'])
             scratch = Path(deployment['scratch_root']) / run.name
             for name in ['events', 'driver', 'java-tmp']:
                 (scratch / name).mkdir(parents=True, exist_ok=True)
@@ -147,7 +152,8 @@ def main():
                 **config['query_overrides'].get(str(q), {})) for q in config['queries']})
             properties = app / 'spark-defaults.conf'
             properties.write_text(''.join(f'{k}={v}\n' for k, v in sorted(profile.items())))
-            record = {'arm': arm, 'run': str(run), 'status': 'starting'}
+            record = {'arm': arm, 'run': str(run), 'status': 'starting',
+                      'execution_profile': selected_profile}
             state['arms'].append(record)
             write(output, state)
             service_state = services.start(run, current, host, 19077, 19080, 'suite')

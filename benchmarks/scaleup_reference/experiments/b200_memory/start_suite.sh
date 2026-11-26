@@ -21,6 +21,7 @@ readonly arms=${4:-baseline}
 readonly mode=${5:-measure}
 readonly gpus=${6:-0,1,2,3}
 readonly execution_profile=${7:-reference}
+readonly combined_execution_profile=${8:-}
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly evidence="$work/evidence/$label"
 mkdir "$evidence"
@@ -43,6 +44,9 @@ trap finish EXIT
 extra=()
 if [ "$mode" = prefix ]; then extra=(--prefix-reference --iterations 1); fi
 if [ "$mode" = pilot ]; then extra=(--iterations 1); fi
+if [ -n "$combined_execution_profile" ]; then
+    extra+=(--combined-execution-profile "$combined_execution_profile")
+fi
 python3 "$here/run_matrix.py" "${extra[@]}" --work "$work" --label "$label" --suite-audit \
     --queries "$queries" --order "$arms" --gpus "$gpus" --query-timeout 600 \
     --execution-profile "$execution_profile"

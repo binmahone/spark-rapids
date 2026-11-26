@@ -22,10 +22,13 @@ INT32_MAX = 2**31 - 1
 
 def inspect(spark, folder, columns):
     from py4j.protocol import Py4JJavaError
+    from pyspark.errors.exceptions.captured import IllegalArgumentException as CapturedArgumentError
     try:
         result = spark._jvm.com.nvidia.spark.rapids.benchmark.ParquetDomainInspector.inspect(
             str(folder), list(columns))
         return json.loads(str(result))
+    except CapturedArgumentError as error:
+        raise ValueError(str(error)) from error
     except Py4JJavaError as error:
         if error.java_exception.getClass().getName() == 'java.lang.IllegalArgumentException':
             raise ValueError(str(error.java_exception)) from error

@@ -35,6 +35,7 @@ from common import SUITE, TABLES, apply_query_settings, read, sha, write
 from b200_validation import Validator
 from suite_validation import SuiteValidator
 from suite_variants import transform, check_semantics, selected_arm
+from next_variants import planner_overrides
 
 
 def metrics(plan):
@@ -140,7 +141,13 @@ def main():
             if not any('BroadcastHashJoin' in line and 'LeftSemi' in line
                        for line in planned.splitlines()):
                 raise AssertionError(f'Q{planned_query}: hint did not reach a broadcast semi join')
-        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','preaggregate-broadcast','preaggregate-prefilter','preaggregate-prefilter-reuse','prefilter-broadcast','row-propagation','row-propagation-reuse','aggregate-reuse','window-average','aggregate-total-reuse','screen','screen-extra','combined'):
+        if any(selected_arm(q, config['probe_arm']) == 'compact-supplier' for q in queries):
+            from integer_domains import require_unchanged
+            proof = require_unchanged(config['work'], config['dataset'], {'lineitem':['l_suppkey']})
+            write(app/'integer-domain-proof.json', {'sha256':sha(Path(config['work'])/'evidence/integer-domains.json'),
+                'lineitem':proof['tables']['lineitem']['columns']['l_suppkey']})
+        if config.get('suite_audit') and any(selected_arm(q, config['probe_arm']) not in
+                                            ('baseline','prefilter') for q in queries):
             checks = check_semantics(spark, SUITE, queries, config['probe_arm'])
             write(app / 'rewrite-counterexamples.json', checks)
         test = spark.range(10000).selectExpr('sum(id * id + 3) AS total')
@@ -157,10 +164,15 @@ def main():
             prefilter_key = 'spark.rapids.sql.optimizer.aggregatePrefilter.enabled'
             planner_configuration = {prefilter_key: 'false' if query_arm ==
                 'preaggregate-prefilter-reuse' else query_profile[prefilter_key]}
+            for key in ('spark.rapids.sql.optimizer.joinReorder.enabled',
+                        'spark.rapids.sql.optimizer.joinGraphReorder.enabled'):
+                planner_configuration[key] = query_profile[key]
+            planner_configuration.update(planner_overrides(query_arm))
             for key, value in planner_configuration.items():
                 spark.conf.set(key, value)
                 if spark.conf.get(key) != value:
                     raise AssertionError('Per-query planner setting differs')
+            write(app/f'q{query}-planner-configuration.json',planner_configuration)
             scan_configuration = {}
             if not args.reference_only:
                 scan_configuration = apply_query_settings(spark, query_profile)
@@ -236,6 +248,43 @@ def main():
                     if config.get('suite_audit') and query_arm == 'aggregate-total-reuse':
                         if not re.search(r'Gpu\w*Window', preflight) or preflight.count('GpuFileGpuScan parquet spark_catalog.default.partsupp[')!=1:
                             raise AssertionError('Expected one partsupp scan and a GPU window')
+                    if query_arm in ('revenue-first','profit-first','country-flags','eligible-customer-join','compact-supplier'):
+                        pending, nodes = [execution.executedPlan()], []
+                        while pending:
+                            node = pending.pop()
+                            nodes.append(node)
+                            children = node.children()
+                            pending.extend(children.apply(i) for i in range(children.size()))
+                        outputs = [str(n.output().toString()) for n in nodes
+                                   if str(n.nodeName())=='GpuColumnarExchange']
+                        if query_arm == 'revenue-first' and not any('__line_revenue' in x and
+                                'l_extendedprice' not in x and 'l_discount' not in x for x in outputs):
+                            raise AssertionError('Revenue projection did not narrow shuffle payload')
+                        if query_arm == 'profit-first':
+                            if preflight.count('GpuFileGpuScan parquet spark_catalog.default.part[')!=1 or 'ReusedExchange' not in preflight:
+                                raise AssertionError('Profit candidate lost the shared green-part build')
+                            if not any('amount' in x and 'l_orderkey' in x and 'l_quantity' not in x
+                                       and 'l_extendedprice' not in x for x in outputs):
+                                raise AssertionError('Profit did not reach the order-key shuffle')
+                        if query_arm == 'country-flags' and not any(('s_fr' in x or 'c_fr' in x)
+                                and ('l_orderkey' in x or 'o_orderkey' in x) and 'n_name' not in x for x in outputs):
+                            raise AssertionError('Country flags did not narrow the order-key shuffle')
+                        if query_arm == 'eligible-customer-join':
+                            if preflight.count('GpuFileGpuScan parquet spark_catalog.default.customer[')!=1:
+                                raise AssertionError('Expected one customer scan')
+                            if not any('BroadcastHashJoin' in x and 'Inner' in x and 'c_custkey' in x
+                                       and 'o_custkey' in x for x in preflight.splitlines()):
+                                raise AssertionError('Eligible-customer broadcast join is absent')
+                        if query_arm == 'compact-supplier':
+                            compact = False
+                            for node in nodes:
+                                if str(node.nodeName())!='GpuHashAggregate':continue
+                                for i in range(node.output().size()):
+                                    attr=node.output().apply(i)
+                                    if str(attr.name()).startswith('__rapids_corragg_exists_min'):
+                                        compact = str(attr.dataType().simpleString())=='int'
+                            if not compact or preflight.count('GpuFileGpuScan parquet spark_catalog.default.lineitem[')!=1:
+                                raise AssertionError('Expected one lineitem scan and INT32 counted-existence state')
                     rows = frame._jdf.collect()
                     elapsed = time.perf_counter() - started
                     ended_unix_ns = time.time_ns()

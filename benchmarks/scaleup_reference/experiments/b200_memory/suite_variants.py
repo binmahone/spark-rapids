@@ -331,6 +331,34 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
         'partsupp': ('ps_partkey long, ps_suppkey long, ps_supplycost double', [(1,1,2.),(1,1,2.),(2,2,3.),(3,1,4.),(None,1,5.)])}
     cases[5] = {k:v for k,v in graph_tables.items() if k not in ('part','partsupp')}
     cases[9] = {k:v for k,v in graph_tables.items() if k not in ('customer','region')}
+    cases[7] = {k:v for k,v in graph_tables.items() if k not in ('part','partsupp','region')}
+    cases[7]['nation'] = ('n_nationkey int, n_name string', [
+        (1,'FRANCE'),(1,'FRANCE'),(1,'GERMANY'),(2,'GERMANY'),(None,'FRANCE')])
+    cases[7]['lineitem'] = ('l_orderkey long, l_suppkey long, l_extendedprice double, '
+                           'l_discount double, l_shipdate date', [
+        (11,1,10.,0.,date(1995,2,1)),(11,2,20.,.5,date(1996,2,1)),
+        (12,1,30.,0.,date(1995,2,1)),(13,2,40.,0.,date(1997,2,1)),
+        (14,1,None,0.,date(1995,2,1)),(11,1,10.,None,None)])
+    cases[21] = {
+        'supplier': ('s_suppkey long, s_name string, s_nationkey int', [
+            (-(2**31),'A',1),(-(2**31),'A',1),(2**31-1,'B',1),(3,None,1),(None,'N',1)]),
+        'nation': ('n_nationkey int, n_name string', [
+            (1,'SAUDI ARABIA'),(1,'SAUDI ARABIA'),(2,'OTHER'),(None,'SAUDI ARABIA')]),
+        'orders': ('o_orderkey long, o_orderstatus string', [
+            (11,'F'),(11,'F'),(12,'F'),(13,'F'),(14,'F'),(15,'F'),(16,'P'),(None,'F')]),
+        'lineitem': ('l_orderkey long, l_suppkey long, l_commitdate date, l_receiptdate date', [
+            (11,-(2**31),date(1995,1,1),date(1995,1,2)),
+            (11,-(2**31),date(1995,1,1),date(1995,1,2)),
+            (11,2**31-1,date(1995,1,2),date(1995,1,1)),
+            (12,-(2**31),date(1995,1,1),date(1995,1,2)),
+            (12,2**31-1,date(1995,1,1),date(1995,1,2)),
+            (13,-(2**31),date(1995,1,1),date(1995,1,2)),
+            (14,-(2**31),date(1995,1,1),date(1995,1,2)),
+            (14,2**31-1,date(1995,1,1),None),
+            (15,-(2**31),date(1995,1,1),date(1995,1,2)),
+            (15,None,date(1995,1,1),date(1995,1,2)),
+            (16,-(2**31),date(1995,1,1),date(1995,1,2)),
+            (16,2**31-1,date(1995,1,2),date(1995,1,1))])}
     cases[8] = {k:v for k,v in graph_tables.items() if k != 'partsupp'}
     cases[8]['orders'] = ('o_orderkey long, o_custkey long, o_orderdate date', [
         (11,1,date(1995,2,1)),(11,1,date(1995,2,1)),(12,2,date(1995,2,1)),
@@ -345,12 +373,18 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
     previous = spark.conf.get('spark.rapids.sql.enabled', 'true')
     prefilter_key = 'spark.rapids.sql.optimizer.aggregatePrefilter.enabled'
     previous_prefilter = spark.conf.get(prefilter_key, 'true')
+    from next_variants import planner_overrides
+    planner_keys = ('spark.rapids.sql.optimizer.joinReorder.enabled',
+                    'spark.rapids.sql.optimizer.joinGraphReorder.enabled')
+    previous_planner = {key: spark.conf.get(key, 'true') for key in planner_keys}
     try:
         for query,tables in cases.items():
             if query not in requested or selected_arm(query, arm) in ('baseline', 'prefilter'):
                 continue
             spark.conf.set(prefilter_key, 'false' if selected_arm(query, arm) ==
                            'preaggregate-prefilter-reuse' else previous_prefilter)
+            for key,value in dict(previous_planner, **planner_overrides(selected_arm(query, arm))).items():
+                spark.conf.set(key,value)
             original=(suite/'inputs/aws48x/sql'/f'q{query}.sql').read_text()
             for empty in ((False,True,'null-max') if query==15 else (False,True)):
                 for table,(schema,rows) in tables.items():
@@ -386,6 +420,7 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
     finally:
         spark.conf.set('spark.rapids.sql.enabled',previous)
         spark.conf.set(prefilter_key,previous_prefilter)
+        for key,value in previous_planner.items():spark.conf.set(key,value)
         for table in set(t for tables in cases.values() for t in tables):
             spark.catalog.dropTempView('__probe_'+table)
     return results

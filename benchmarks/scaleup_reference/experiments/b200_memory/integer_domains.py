@@ -1,3 +1,17 @@
+# Copyright (c) 2026, NVIDIA CORPORATION.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Prove lossless integer narrowing from every row group's physical INT64 statistics."""
 import json
 from pathlib import Path
@@ -7,41 +21,16 @@ INT32_MAX = 2**31 - 1
 
 
 def inspect(spark, folder, columns):
-    jvm = spark._jvm
-    files = sorted(Path(folder).glob('*.parquet'))
-    if not files:
-        raise ValueError('No Parquet files for integer-domain proof')
-    bounds = {c: {'minimum': None, 'maximum': None, 'row_groups': 0} for c in columns}
-    inventory = []
-    for path in files:
-        stat = path.stat()
-        footer = jvm.org.apache.parquet.hadoop.ParquetFileReader.readFooter(
-            spark.sparkContext._jsc.hadoopConfiguration(), jvm.org.apache.hadoop.fs.Path(str(path)))
-        for block in footer.getBlocks():
-            found = set()
-            for chunk in block.getColumns():
-                name = str(chunk.getPath().toDotString())
-                if name not in bounds:
-                    continue
-                found.add(name)
-                if str(chunk.getPrimitiveType().getPrimitiveTypeName()) != 'INT64':
-                    raise ValueError('Narrowing requires a physical INT64 column: ' + name)
-                stats = chunk.getStatistics()
-                value = bounds[name]
-                value['row_groups'] += 1
-                if stats.isNumNullsSet() and stats.getNumNulls() == block.getRowCount():
-                    continue
-                if not stats.hasNonNullValue():
-                    raise ValueError('Missing integer bounds: ' + str(path) + ':' + name)
-                low, high = int(stats.genericGetMin()), int(stats.genericGetMax())
-                if not INT32_MIN <= low <= high <= INT32_MAX:
-                    raise ValueError('Integer domain exceeds INT32: ' + str((name, low, high)))
-                value['minimum'] = low if value['minimum'] is None else min(value['minimum'], low)
-                value['maximum'] = high if value['maximum'] is None else max(value['maximum'], high)
-            if found != set(columns):
-                raise ValueError('Missing columns in row-group metadata')
-        inventory.append({'path': str(path), 'size': stat.st_size, 'mtime_ns': stat.st_mtime_ns})
-    return {'columns': bounds, 'files': inventory}
+    from py4j.protocol import Py4JJavaError
+    try:
+        result = spark._jvm.com.nvidia.spark.rapids.benchmark.ParquetDomainInspector.inspect(
+            str(folder), list(columns))
+        return json.loads(str(result))
+    except Py4JJavaError as error:
+        if error.java_exception.getClass().getName() == 'java.lang.IllegalArgumentException':
+            raise ValueError(str(error.java_exception)) from error
+        raise
+
 
 
 def require_unchanged(work, dataset, required):
@@ -83,7 +72,7 @@ def main():
                 ('overflow', [(INT32_MAX+1,)], False),
                 ('underflow', [(INT32_MIN-1,)], False)]:
             path = tests/name
-            spark.createDataFrame(rows, 'key long').coalesce(1).write.parquet(str(path))
+            spark.createDataFrame(rows, 'key long').coalesce(1).write.mode('overwrite').parquet(str(path))
             try:
                 inspect(spark, path, ['key'])
             except ValueError:

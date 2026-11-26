@@ -17,6 +17,9 @@ import re
 
 
 def selected_arm(query, arm):
+    if arm == 'next-screen':
+        return {5: 'revenue-first', 7: 'country-flags', 8: 'eligible-customer-join',
+                9: 'profit-first', 21: 'compact-supplier'}.get(query, 'baseline')
     if arm == 'screen-extra':
         return {8: 'row-propagation', 11: 'aggregate-total-reuse'}.get(query, 'baseline')
     if arm == 'combined':
@@ -32,6 +35,9 @@ def selected_arm(query, arm):
 
 def transform(query, original, arm):
     arm = selected_arm(query, arm)
+    if arm in ('revenue-first','country-flags','eligible-customer-join','profit-first','compact-supplier'):
+        from next_variants import transform_next
+        return transform_next(query, original, arm)
     if arm == 'baseline':
         return original
     if arm == 'preaggregate-prefilter-reuse' and query == 18:

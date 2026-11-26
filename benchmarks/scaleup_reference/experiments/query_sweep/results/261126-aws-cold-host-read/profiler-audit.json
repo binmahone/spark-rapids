@@ -1,0 +1,158 @@
+{
+  "records": [
+    {
+      "pid": 614745,
+      "start_time": "2494471",
+      "live": false
+    },
+    {
+      "pid": 614751,
+      "start_time": "2494487",
+      "live": false
+    },
+    {
+      "pid": 614752,
+      "start_time": "2494487",
+      "live": false
+    },
+    {
+      "pid": 614753,
+      "start_time": "2494487",
+      "live": false
+    },
+    {
+      "pid": 614754,
+      "start_time": "2494487",
+      "live": false
+    },
+    {
+      "pid": 614755,
+      "start_time": "2494487",
+      "live": false
+    },
+    {
+      "pid": 643792,
+      "start_time": "2560027",
+      "live": false
+    },
+    {
+      "pid": 643798,
+      "start_time": "2560045",
+      "live": false
+    },
+    {
+      "pid": 643799,
+      "start_time": "2560045",
+      "live": false
+    },
+    {
+      "pid": 643800,
+      "start_time": "2560045",
+      "live": false
+    },
+    {
+      "pid": 643801,
+      "start_time": "2560045",
+      "live": false
+    },
+    {
+      "pid": 643802,
+      "start_time": "2560045",
+      "live": false
+    },
+    {
+      "pid": 624193,
+      "start_time": "2513814",
+      "live": false
+    },
+    {
+      "pid": 624199,
+      "start_time": "2513832",
+      "live": false
+    },
+    {
+      "pid": 624200,
+      "start_time": "2513832",
+      "live": false
+    },
+    {
+      "pid": 624201,
+      "start_time": "2513832",
+      "live": false
+    },
+    {
+      "pid": 624202,
+      "start_time": "2513832",
+      "live": false
+    },
+    {
+      "pid": 624203,
+      "start_time": "2513832",
+      "live": false
+    },
+    {
+      "pid": 634046,
+      "start_time": "2539809",
+      "live": false
+    },
+    {
+      "pid": 634052,
+      "start_time": "2539826",
+      "live": false
+    },
+    {
+      "pid": 634053,
+      "start_time": "2539826",
+      "live": false
+    },
+    {
+      "pid": 634054,
+      "start_time": "2539826",
+      "live": false
+    },
+    {
+      "pid": 634055,
+      "start_time": "2539826",
+      "live": false
+    },
+    {
+      "pid": 634056,
+      "start_time": "2539826",
+      "live": false
+    },
+    {
+      "pid": 653137,
+      "start_time": "2579500",
+      "live": false
+    },
+    {
+      "pid": 653143,
+      "start_time": "2579517",
+      "live": false
+    },
+    {
+      "pid": 653144,
+      "start_time": "2579517",
+      "live": false
+    },
+    {
+      "pid": 653145,
+      "start_time": "2579517",
+      "live": false
+    },
+    {
+      "pid": 653146,
+      "start_time": "2579517",
+      "live": false
+    },
+    {
+      "pid": 653147,
+      "start_time": "2579517",
+      "live": false
+    }
+  ],
+  "source_revision": "4ba40bb49f3ff92a6c8f1f6a7b9f92cbf0143c2a",
+  "all_stopped": true,
+  "watermark_scale_factor": 10,
+  "retention": "Explicit user release only"
+}

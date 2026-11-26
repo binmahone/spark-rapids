@@ -1,0 +1,96 @@
+{
+  "scope": "Q9/Q13 pilot; no complete-suite score and no production default change",
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "validated_actions": 20,
+  "phases_in_execution_order": [
+    "A0",
+    "B1",
+    "B2",
+    "A3",
+    "B3"
+  ],
+  "variant_boundary": "A0/A3 are the original reader without LD_PRELOAD. B1 requires a wholly absent request; B2/B3 route large absent spans of mixed requests using the same native artifact. B1 and B2 are distinct implementations, not repetitions.",
+  "fixed": [
+    "32 native threads per executor",
+    "engine and JNI",
+    "SQL",
+    "query overrides",
+    "data",
+    "result validation",
+    "cleanup"
+  ],
+  "limits": [
+    "No page-cache flush. Physical read volumes and cache residency differ across applications.",
+    "mincore is a residency snapshot, not a reservation. This prototype assumes immutable input files.",
+    "All adapter inspection, alignment, syscall and copy costs are included in query time.",
+    "Two v2 applications and two original controls are a bounded pilot, not full-suite qualification.",
+    "This is an LD_PRELOAD native experiment, not an integrated or production-qualified JNI change.",
+    "Q9 branch scheduling differs despite normalized-plan equality. In A3 the 73.60 GB scan branch starts late; the large first-action timing difference is not isolated reader evidence."
+  ],
+  "setup_index": "../261126-aws-speed-of-light",
+  "selected_queries_index": "../261126-aws-critical-queries",
+  "entrypoint": "../../start_cold_host_read.sh",
+  "native_source": "../../cold_host_read.cpp",
+  "build_entrypoint": "../../build_cold_host_read.sh",
+  "runtime": {
+    "A0": {
+      "source_revision": "5219de95a7b5c488eeb9da83bf4c5060a2335ab3",
+      "adapter_sha256": "4401dbdc830e6b86648a15b4b4eecc277746dc1f755a67f3bc19dbfe97d4ed84",
+      "adapter_source_revision": "5219de95a7b5c488eeb9da83bf4c5060a2335ab3",
+      "mode": "original"
+    },
+    "B1": {
+      "source_revision": "a39af8c1d578547879fd578024f3163298d89c19",
+      "adapter_sha256": "4401dbdc830e6b86648a15b4b4eecc277746dc1f755a67f3bc19dbfe97d4ed84",
+      "adapter_source_revision": "5219de95a7b5c488eeb9da83bf4c5060a2335ab3",
+      "mode": "cold-direct"
+    },
+    "B2": {
+      "source_revision": "cb64be4bf15342b4c5e65065990dcf7fdeaf688e",
+      "adapter_sha256": "b9f8be83ebca8cbbae869d781460cf9bbb788b1e5eedcbe30643d058c2d1001d",
+      "adapter_source_revision": "cb64be4bf15342b4c5e65065990dcf7fdeaf688e",
+      "mode": "cold-direct"
+    },
+    "A3": {
+      "source_revision": "33d79a973c515f7cdea34951c0c99a0611497f29",
+      "adapter_sha256": "b9f8be83ebca8cbbae869d781460cf9bbb788b1e5eedcbe30643d058c2d1001d",
+      "adapter_source_revision": "cb64be4bf15342b4c5e65065990dcf7fdeaf688e",
+      "mode": "original"
+    },
+    "B3": {
+      "source_revision": "4ba40bb49f3ff92a6c8f1f6a7b9f92cbf0143c2a",
+      "adapter_sha256": "b9f8be83ebca8cbbae869d781460cf9bbb788b1e5eedcbe30643d058c2d1001d",
+      "adapter_source_revision": "cb64be4bf15342b4c5e65065990dcf7fdeaf688e",
+      "mode": "cold-direct"
+    }
+  },
+  "seconds": {
+    "A0": {
+      "sql": 124.28553696100425,
+      "sql_plus_cleanup": 129.01678017500672,
+      "second_actions_sql_plus_cleanup": 58.13803275000464
+    },
+    "B1": {
+      "sql": 121.52511009199952,
+      "sql_plus_cleanup": 125.31366123100088,
+      "second_actions_sql_plus_cleanup": 53.770826277002925
+    },
+    "B2": {
+      "sql": 105.65565309999874,
+      "sql_plus_cleanup": 109.13548011600142,
+      "second_actions_sql_plus_cleanup": 51.54535525700339
+    },
+    "A3": {
+      "sql": 126.43961823299469,
+      "sql_plus_cleanup": 131.27601156599485,
+      "second_actions_sql_plus_cleanup": 55.056293470996025
+    },
+    "B3": {
+      "sql": 105.8557091640032,
+      "sql_plus_cleanup": 108.88545392400192,
+      "second_actions_sql_plus_cleanup": 52.59269696800038
+    }
+  },
+  "retention": "User authorized terminating only this session-owned instances after investigation and evidence retention; termination receipts are separate."
+}

@@ -21,7 +21,7 @@ if archive.exists():
     raise RuntimeError('Evidence archive exists; use a new snapshot name')
 manifest = []
 paths = {}
-for name in ['baseline', 'screen', 'confirmation', 'followups']:
+for name in ['baseline', 'screen', 'confirmation', 'followups', 'ceiling']:
     for path in (work / name).rglob('*'):
         if path.is_file() and not path.is_symlink():
             paths[path] = str(path.relative_to(work))

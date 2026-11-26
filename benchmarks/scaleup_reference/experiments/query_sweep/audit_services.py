@@ -12,10 +12,12 @@ import services
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--work', required=True)
+parser.add_argument('--completion-state', default='confirmation/state.json')
+parser.add_argument('--completion-exit', default='evidence/confirmation.exit')
 args = parser.parse_args()
 work = Path(args.work).resolve()
-assert (work / 'evidence/confirmation.exit').read_text().strip() == '0'
-assert read(work / 'confirmation/state.json')['status'] == 'completed'
+assert (work / args.completion_exit).read_text().strip() == '0'
+assert read(work / args.completion_state)['status'] == 'completed'
 states = []
 for root in [work / 'baseline', work / 'screen']:
     states.extend(root.glob('**/driver-service.json'))

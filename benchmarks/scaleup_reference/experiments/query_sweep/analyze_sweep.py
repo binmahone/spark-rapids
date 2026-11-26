@@ -14,6 +14,24 @@ sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
 from common import read, write
 
 
+def gpu_accumulator(name, value):
+    if name in ('gpuRetryCount', 'gpuSplitAndRetryCount'):
+        return name, int(value)
+    if name in ('gpuSpillToHostBytes', 'gpuSpillToDiskBytes'):
+        match = re.search(r'\((\d+) bytes\)', str(value))
+        if not match:
+            raise ValueError('Unrecognized GPU byte accumulator: ' + str(value))
+        return name, int(match[1])
+    if name in ('gpuSpillToHostTime', 'gpuSpillToDiskTime', 'gpuReadSpillFromHostTime',
+                'gpuReadSpillFromDiskTime', 'gpuRetryBlockTime', 'gpuRetryComputationTime'):
+        match = re.fullmatch(r'(\d+):(\d+):(\d+)\.(\d{3})', str(value))
+        if not match:
+            raise ValueError('Unrecognized GPU time accumulator: ' + str(value))
+        hours, minutes, seconds, millis = map(int, match.groups())
+        return name + '_task_sum_millis', ((hours * 60 + minutes) * 60 + seconds) * 1000 + millis
+    return None
+
+
 def task_metrics(events):
     stages = defaultdict(set)
     groups = {}
@@ -61,6 +79,10 @@ def task_metrics(events):
                         key = labels.get(accumulator.get('Name'))
                         if key and 'Update' in accumulator:
                             target[key] += int(accumulator['Update'])
+                        if 'Update' in accumulator:
+                            gpu = gpu_accumulator(accumulator.get('Name'), accumulator['Update'])
+                            if gpu:
+                                target[gpu[0]] += gpu[1]
                     target['task_attempts'] += 1
     result = defaultdict(Counter)
     for stage, metric in counters.items():
@@ -158,7 +180,7 @@ def main():
         'comparisons': comparisons,
         'limits': ['Second consecutive action; no OS cache flush',
                    'Full-result validation uses retained GPU references',
-                   'Task memory-spill counters do not measure spill latency',
+                   'GPU spill/retry times sum task-local durations rounded to milliseconds in the event log; they are not wall time',
                    'Candidate selection requires isolated repetition before a combined suite']}
     write(work / 'evidence/sweep-analysis.json', report)
     for item in comparisons:

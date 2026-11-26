@@ -30,7 +30,11 @@ source = root/'evidence'/('sol-' + args.label + '.json')
 data = json.loads(source.read_text())
 assert all(m['status'] == 'completed' for m in data['matrices'])
 assert args.control != args.candidate
-assert {r['probe_arm'] for r in data['rows']} == {args.control, args.candidate}
+available_arms = {r['probe_arm'] for r in data['rows']}
+assert {args.control,args.candidate} <= available_arms
+source_execution_count = len(data['rows'])
+data['rows'] = [r for r in data['rows'] if r['probe_arm'] in (args.control,args.candidate)]
+data['applications'] = [a for a in data['applications'] if a['probe_arm'] in (args.control,args.candidate)]
 assert len({tuple(r['gpu_indices']) for r in data['rows']}) == 1
 assert len({a['engine_sha256'] for a in data['applications']}) == 1
 assert len({a['dataset'] for a in data['applications']}) == 1
@@ -57,6 +61,14 @@ changed_conf = {key: [configurations[args.control].get(key), configurations[args
                 if configurations[args.control].get(key) != configurations[args.candidate].get(key)}
 assert set(changed_conf) <= {'spark.sql.shuffle.partitions'}, changed_conf
 query_planner_changes = {}
+for query in range(1,23):
+    selected = {arm:[r for r in data['rows'] if r['query']==query and r['probe_arm']==arm]
+                for arm in (args.control,args.candidate)}
+    assert all(len(rows)==2 for rows in selected.values())
+    before = selected[args.control][0].get('planner_configuration',{})
+    after = selected[args.candidate][0].get('planner_configuration',{})
+    query_planner_changes[str(query)] = {key:[before.get(key),after.get(key)]
+        for key in set(before)|set(after) if before.get(key)!=after.get(key)}
 if {args.control,args.candidate} == {'combined','no-runtime-bloom'}:
     for query in range(1,23):
         selected = {arm:[r for r in data['rows'] if r['query']==query and r['probe_arm']==arm]
@@ -72,7 +84,7 @@ if {args.control,args.candidate} == {'combined','no-runtime-bloom'}:
         assert all('bloom_filter_agg' not in r['plan_text'] for r in selected['no-runtime-bloom'])
         query_planner_changes[str(query)] = {'spark.sql.optimizer.runtime.bloomFilter.enabled':['true','false']}
 for row in data['rows']:
-    if row['probe_arm'] not in ('combined','no-runtime-bloom'):
+    if row['probe_arm'] not in ('combined','no-runtime-bloom','frontier-combined'):
         continue
     query = row['query']
     if query == 3:
@@ -136,6 +148,8 @@ report = {'classification': 'Complete measured four-GPU comparison: '+args.contr
     'application_identity_configuration': identity_configuration,
     'configuration_normalization': 'Validate app IDs, ports and times; normalize only the recorded application scratch directory; preserve and compare every JVM option.',
     'query_execution_count': len(data['rows']), 'all_existing_reference_comparisons_passed': True,
+    'source_execution_count':source_execution_count,
+    'excluded_comparison_arms':sorted(available_arms-{args.control,args.candidate}),
     'arms': arms, 'observed_time_reduction_fraction': reductions}
 output = root/'evidence'/('comparison-' + args.label + '.json')
 output.write_text(json.dumps(report, indent=2)+'\n')

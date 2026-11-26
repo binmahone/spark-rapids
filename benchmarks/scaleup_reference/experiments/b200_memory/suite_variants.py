@@ -17,6 +17,9 @@ import re
 
 
 def selected_arm(query, arm):
+    if arm == 'frontier-combined':
+        return {7:'country-flags-ordered',12:'priority-flag',21:'compact-counted-state'}.get(
+            query, selected_arm(query,'combined'))
     if arm == 'narrow-filter-screen':
         return {5: 'eligible-orders-broadcast', 12: 'priority-flag', 14: 'promo-flag-revenue',
                 20: 'supplier-prefilter'}.get(query, 'baseline')

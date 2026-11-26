@@ -125,11 +125,11 @@ ORDER BY o_orderpriority
     if arm == 'preaggregate' and query == 18:
         return """
 WITH line_quantity AS (
-    SELECT l_orderkey, sum(l_quantity) AS sum_quantity
+    SELECT l_orderkey, sum(l_quantity) AS l_quantity
     FROM lineitem GROUP BY l_orderkey HAVING sum(l_quantity) > 300
 )
 SELECT /*+ BROADCAST(line_quantity) */ c_name, c_custkey, o_orderkey,
-       o_orderdate, o_totalprice, sum(sum_quantity) AS `sum(l_quantity)`
+       o_orderdate, o_totalprice, sum(l_quantity)
 FROM customer JOIN orders ON c_custkey = o_custkey
 JOIN line_quantity ON o_orderkey = l_orderkey
 GROUP BY c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice

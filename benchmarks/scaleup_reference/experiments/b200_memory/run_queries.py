@@ -250,7 +250,8 @@ def main():
                         raise AssertionError('Expected native host reads did not execute')
                 write(str(prefix) + '.measurement.json', {'sql_seconds':elapsed,
                     'started_unix_ns':started_unix_ns,'ended_unix_ns':ended_unix_ns,
-                    'reader_metrics':reader,'plan_metrics':node_metrics})
+                    'reader_metrics':reader,'plan_metrics':node_metrics,
+                    'schema':frame.schema.jsonValue()})
                 schema = frame.schema.jsonValue()
                 reference = str(Path(config['deployment']['scratch_root']) / run.name / 'q11-reference')
                 validation_started = time.perf_counter()

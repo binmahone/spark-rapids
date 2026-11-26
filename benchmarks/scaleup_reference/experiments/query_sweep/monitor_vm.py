@@ -11,10 +11,12 @@ import time
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--work', required=True)
 parser.add_argument('--thread-id', required=True)
+parser.add_argument('--controller', default='ceiling/controller.json')
+parser.add_argument('--output', default='evidence/ceiling-vm-monitor.jsonl')
 args = parser.parse_args()
 work = Path(args.work)
 assert json.loads((work / 'evidence/owner.json').read_text())['thread_id'] == args.thread_id
-controller = json.loads((work / 'ceiling/controller.json').read_text())
+controller = json.loads((work / args.controller).read_text())
 
 
 def start_time(pid):
@@ -30,7 +32,8 @@ def active():
 
 
 assert active(), 'The recorded controller has already exited'
-output = work / 'evidence/ceiling-vm-monitor.jsonl'
+output = work / args.output
+output.parent.mkdir(parents=True, exist_ok=True)
 assert not output.exists()
 settings = ['/proc/sys/vm/zone_reclaim_mode', '/proc/sys/vm/min_free_kbytes',
     '/proc/sys/vm/watermark_scale_factor', '/proc/sys/vm/watermark_boost_factor',
@@ -39,7 +42,7 @@ receipt = {'pid': os.getpid(), 'start_time': start_time(os.getpid()), 'thread_id
     'controller': controller, 'source_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
     'settings': {path: Path(path).read_text().strip() for path in settings},
     'policy': 'Read-only one-second sampler; exits when the owned controller exits'}
-(work / 'evidence/ceiling-vm-monitor-owner.json').write_text(json.dumps(receipt, indent=2) + '\n')
+output.with_name(output.stem + '-owner.json').write_text(json.dumps(receipt, indent=2) + '\n')
 running = True
 
 
@@ -64,6 +67,8 @@ with output.open('x', buffering=1) as stream:
                     values[key] = int(parts[3])
             nodes[path.parent.name] = values
         stream.write(json.dumps({'time_unix_ns': time.time_ns(), 'vmstat': vm,
-                                 'node_memory_kib': nodes}, separators=(',', ':')) + '\n')
+                                 'node_memory_kib': nodes,
+                                 'watermark_scale_factor': int(Path('/proc/sys/vm/watermark_scale_factor').read_text())},
+                                separators=(',', ':')) + '\n')
         time.sleep(1)
-(work / 'evidence/ceiling-vm-monitor.exit').write_text('0\n')
+output.with_suffix('.exit').write_text('0\n')

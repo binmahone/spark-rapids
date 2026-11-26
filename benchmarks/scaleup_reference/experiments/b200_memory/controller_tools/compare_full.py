@@ -32,6 +32,11 @@ assert len({tuple(r['gpu_indices']) for r in data['rows']}) == 1
 assert len({a['engine_sha256'] for a in data['applications']}) == 1
 assert len({a['dataset'] for a in data['applications']}) == 1
 assert len({json.dumps(a['dataset_contract'],sort_keys=True) for a in data['applications']}) == 1
+configurations = {a['probe_arm']: a['effective_conf'] for a in data['applications']}
+changed_conf = {key: [configurations['baseline'].get(key), configurations['combined'].get(key)]
+                for key in set(configurations['baseline']) | set(configurations['combined'])
+                if configurations['baseline'].get(key) != configurations['combined'].get(key)}
+assert set(changed_conf) <= {'spark.sql.shuffle.partitions'}, changed_conf
 queries = list(range(1, 23))
 arms = {}
 for arm in ('baseline', 'combined'):
@@ -72,6 +77,7 @@ report = {'classification': 'Complete measured four-GPU baseline versus combined
     'dataset':data['applications'][0]['dataset'],
     'dataset_contract':data['applications'][0]['dataset_contract'],
     'applications':data['applications'],
+    'effective_configuration_changes': changed_conf,
     'query_execution_count': len(data['rows']), 'all_existing_reference_comparisons_passed': True,
     'arms': arms, 'observed_time_reduction_fraction': reductions}
 output = root/'evidence'/('comparison-' + args.label + '.json')

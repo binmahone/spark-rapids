@@ -30,17 +30,20 @@ ulimit -n 65536
 ulimit -c 0
 export JAVA_HOME="$work/jdk17"
 export PYSPARK_PYTHON=/usr/bin/python3
+monitor_pid=''
+finish() {
+    code=$?
+    if [ -n "$monitor_pid" ]; then
+        kill -TERM "$monitor_pid" 2>/dev/null || true
+        wait "$monitor_pid" || true
+    fi
+    printf '%s\n' "$code" > "$evidence/controller.exit"
+}
+trap finish EXIT
 python3 "$here/capture_host.py" "$work" "$gpus"
 cp "$work/evidence/host-prerequisites.json" "$evidence/host-prerequisites.json"
 python3 "$here/monitor_host.py" --work "$work" --gpus "$gpus" --output "$evidence/host-monitor.jsonl" &
 monitor_pid=$!
-finish() {
-    code=$?
-    kill -TERM "$monitor_pid" 2>/dev/null || true
-    wait "$monitor_pid" || true
-    printf '%s\n' "$code" > "$evidence/controller.exit"
-}
-trap finish EXIT
 extra=()
 if [ "$mode" = prefix ]; then extra=(--prefix-reference --iterations 1); fi
 if [ "$mode" = pilot ]; then extra=(--iterations 1); fi

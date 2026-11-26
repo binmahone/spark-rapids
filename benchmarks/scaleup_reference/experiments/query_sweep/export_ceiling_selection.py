@@ -75,6 +75,8 @@ def main():
         'final_best_sql_sum_seconds': score(final['samples'], 'sql_seconds'),
         'final_best_total_sum_seconds': score(final['samples'], 'sql_plus_cleanup_seconds'),
         'decisions': {phase: value['decisions'] for phase, value in phases.items()},
+        'excluded_probes': {phase: value['excluded_probes'] for phase, value in phases.items()
+                            if 'excluded_probes' in value},
         'reader_cap_probe': tuned['reader_cap_probe'],
         'groups': [compact_samples(group) for phase in phases.values() for group in phase['groups']],
         'limits': ['No physical disk cache flush; each fresh application runs two actions per query',
@@ -82,6 +84,13 @@ def main():
                    'The combined score is measured, not a sum of independent candidate bests',
                    'SQL rewrites and per-query settings are experimental selections, not a general optimizer implementation',
                    'No claim that native kernels, reader architecture or every possible configuration has reached its physical limit']}
+    audit_path = work / 'evidence/resource-log-audit.json'
+    if audit_path.exists():
+        audit = read(audit_path)
+        evidence['completed_log_resource_observations'] = [
+            {key: group[key] for key in ('run', 'status', 'files_checked', 'counts')}
+            for group in audit['groups']]
+        evidence['limits'].append('Shutdown resource errors, when recorded in the log audit, remain unresolved')
     assert evidence['final_best_sql_sum_seconds'] == chosen['combined_best_sql_sum_seconds']
     assert evidence['final_best_total_sum_seconds'] == chosen['combined_best_total_sum_seconds']
     write(output / 'selected-cases.json', selection)

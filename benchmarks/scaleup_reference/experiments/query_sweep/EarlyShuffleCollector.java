@@ -29,6 +29,7 @@ import java.util.Set;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.plans.physical.HashPartitioning;
 import org.apache.spark.sql.execution.QueryExecution;
 import org.apache.spark.sql.execution.SparkPlan;
 import scala.Function1;
@@ -66,7 +67,7 @@ public final class EarlyShuffleCollector {
     }
     boolean exchange = plan.nodeName().equals("GpuColumnarExchange");
     if (exchange && !descendantExchange &&
-        plan.outputPartitioning().toString().startsWith("gpuhashpartitioning(") &&
+        plan.outputPartitioning() instanceof HashPartitioning &&
         seen.add(plan)) {
       leaves.add(plan);
     }

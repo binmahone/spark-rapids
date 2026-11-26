@@ -34,6 +34,8 @@ def verify(spark, app):
             for mode in (False, True):
                 frame = spark.sql(sql)
                 receipt = app / f'collector-test-{index}-{mode}.json'
+                receipt.with_suffix('.plan.txt').write_text(
+                    str(frame._jdf.queryExecution().executedPlan()))
                 rows = collector.collect(frame._jdf, mode, str(receipt))
                 assert list(digest.compute(rows))[2:4] == expected
                 evidence = json.loads(receipt.read_text())

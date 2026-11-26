@@ -39,7 +39,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', required=True)
     p.add_argument('--thread-id', required=True)
-    p.add_argument('--phase', choices=['A0', 'A0-retry', 'B1', 'B2', 'A3'], required=True)
+    p.add_argument('--phase', choices=['A0', 'A0-retry', 'A0-verified', 'B1', 'B2', 'A3'], required=True)
     a = p.parse_args()
     work = Path(a.work).resolve()
     owner = read(work / 'evidence/owner.json')

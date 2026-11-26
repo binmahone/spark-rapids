@@ -20,9 +20,9 @@ def selected_arm(query, arm):
     if arm == 'screen-extra':
         return {8: 'row-propagation', 11: 'aggregate-total-reuse'}.get(query, 'baseline')
     if arm == 'combined':
-        return {3: 'preaggregate', 4: 'preaggregate', 9: 'row-propagation-reuse', 10: 'preaggregate',
+        return {3: 'preaggregate-broadcast', 4: 'preaggregate', 9: 'row-propagation-reuse', 10: 'preaggregate',
                 15: 'aggregate-reuse', 17: 'window-average',
-                18: 'prefilter', 20: 'prefilter'}.get(query, 'baseline')
+                18: 'prefilter-broadcast', 20: 'prefilter'}.get(query, 'baseline')
     if arm == 'screen':
         return {4: 'preaggregate', 5: 'row-propagation', 13: 'preaggregate',
                 17: 'window-average'}.get(query, 'baseline')

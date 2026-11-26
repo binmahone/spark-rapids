@@ -76,7 +76,9 @@ def check_branch(query, candidate, plan):
     if candidate.name == 'prefilter_partsupp_reuse':
         scans = [line for line in plan.splitlines() if 'Scan' in line and
                  'spark_catalog.default.part[' in line]
-        if len(scans) != 1 or 'ReusedExchange' not in plan:
+        semi = any('Gpu' in line and 'BroadcastHashJoin' in line and 'LeftSemi' in line
+                   and 'ps_partkey' in line for line in plan.splitlines())
+        if len(scans) != 1 or 'ReusedExchange' not in plan or not semi:
             raise MechanismNotReached('Selective part-key broadcast was not shared')
     if candidate.name in ('preaggregate_line_revenue', 'preaggregate_customer_revenue'):
         key = 'l_orderkey' if query == 3 else 'o_custkey'

@@ -27,6 +27,7 @@ p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('labels',nargs='*',default=['all22-baseline'])
 p.add_argument('--analyze',action='store_true')
 p.add_argument('--recent',type=int,default=0)
+p.add_argument('--retained-root',type=Path)
 a=p.parse_args()
 program=r'''
 from pathlib import Path
@@ -128,13 +129,15 @@ for label in LABELS:
   report.setdefault('applications',[]).append({'path':str(app),'status':d['status'],'error':d.get('error'),'last_log_lines':(app/'driver.log').read_text(errors='replace').splitlines()[-3:]})
 report['root_free_bytes']=os.statvfs(w).f_bavail*os.statvfs(w).f_frsize
 print(json.dumps(report))
-'''.replace('REMOTE',repr(owner['remote'])).replace('LABELS',repr(a.labels)).replace('ANALYZE',repr(a.analyze))
+'''.replace('REMOTE',repr(str(a.retained_root.resolve()) if a.retained_root else owner['remote'])).replace('LABELS',repr(a.labels)).replace('ANALYZE',repr(a.analyze))
 ssh=['ssh','-F','/home/nvidia/mahone_gluten/cluster_ssh_config','-o','BatchMode=yes','-o','ConnectTimeout=8','mahonem@10.34.1.4','python3 -']
-r=subprocess.run(ssh,input=program,text=True,capture_output=True,timeout=120)
+r=subprocess.run(['python3','-'] if a.retained_root else ssh,input=program,text=True,capture_output=True,timeout=120)
 if r.returncode:raise RuntimeError(r.stderr.strip())
 d=json.loads(r.stdout)
 if a.analyze:
- path=ROOT/'evidence'/('suite-'+ '-'.join(a.labels)+'.json')
+ d['evidence_source']='retained local archive' if a.retained_root else 'B200 retained runtime files'
+ prefix='recounted-suite-' if a.retained_root else 'suite-'
+ path=ROOT/'evidence'/(prefix+ '-'.join(a.labels)+'.json')
  path.write_text(json.dumps(d,indent=2)+'\n')
 for matrix in d['matrices']:print(matrix['status'],matrix.get('error'),[(x['arm'],x['status']) for x in matrix['arms']])
 for row in (d['rows'][-a.recent:] if a.recent else d['rows']):

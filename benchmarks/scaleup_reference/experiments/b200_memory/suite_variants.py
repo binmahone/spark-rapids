@@ -27,6 +27,12 @@ def transform(query, original, arm):
     arm = selected_arm(query, arm)
     if arm == 'baseline':
         return original
+    if arm == 'prefilter-broadcast' and query == 18:
+        value = transform(query, original, 'prefilter')
+        result, count = re.subn(r'(\bselect\s+)', r'\1/*+ BROADCAST(orders) */ ', value,
+                                count=1, flags=re.I)
+        assert count == 1
+        return result
     if arm == 'preaggregate-broadcast' and query == 3:
         value = transform(query, original, 'preaggregate')
         before = 'SELECT l_orderkey, sum(revenue) AS revenue'

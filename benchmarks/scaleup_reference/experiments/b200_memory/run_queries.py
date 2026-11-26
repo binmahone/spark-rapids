@@ -140,7 +140,7 @@ def main():
             if not any('BroadcastHashJoin' in line and 'LeftSemi' in line
                        for line in planned.splitlines()):
                 raise AssertionError(f'Q{planned_query}: hint did not reach a broadcast semi join')
-        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','preaggregate-broadcast','preaggregate-prefilter','row-propagation','row-propagation-reuse','aggregate-reuse','window-average','screen'):
+        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','preaggregate-broadcast','preaggregate-prefilter','prefilter-broadcast','row-propagation','row-propagation-reuse','aggregate-reuse','window-average','screen'):
             checks = check_semantics(spark, SUITE, queries, config['probe_arm'])
             write(app / 'rewrite-counterexamples.json', checks)
         test = spark.range(10000).selectExpr('sum(id * id + 3) AS total')

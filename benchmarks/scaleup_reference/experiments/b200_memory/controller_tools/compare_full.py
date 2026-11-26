@@ -23,11 +23,14 @@ import statistics
 root = Path(os.environ['B200_PROBE_ROOT']).resolve()
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('label')
+parser.add_argument('--control', default='baseline')
+parser.add_argument('--candidate', default='combined')
 args = parser.parse_args()
 source = root/'evidence'/('sol-' + args.label + '.json')
 data = json.loads(source.read_text())
 assert all(m['status'] == 'completed' for m in data['matrices'])
-assert {r['probe_arm'] for r in data['rows']} == {'baseline', 'combined'}
+assert args.control != args.candidate
+assert {r['probe_arm'] for r in data['rows']} == {args.control, args.candidate}
 assert len({tuple(r['gpu_indices']) for r in data['rows']}) == 1
 assert len({a['engine_sha256'] for a in data['applications']}) == 1
 assert len({a['dataset'] for a in data['applications']}) == 1
@@ -49,12 +52,27 @@ for application in data['applications']:
         key: value.replace(marker, '/scratch/<application>/')
         for key, value in conf.items() if key not in identity_keys}
     identity_configuration[application['probe_arm']] = {key: conf[key] for key in identity_keys}
-changed_conf = {key: [configurations['baseline'].get(key), configurations['combined'].get(key)]
-                for key in set(configurations['baseline']) | set(configurations['combined'])
-                if configurations['baseline'].get(key) != configurations['combined'].get(key)}
+changed_conf = {key: [configurations[args.control].get(key), configurations[args.candidate].get(key)]
+                for key in set(configurations[args.control]) | set(configurations[args.candidate])
+                if configurations[args.control].get(key) != configurations[args.candidate].get(key)}
 assert set(changed_conf) <= {'spark.sql.shuffle.partitions'}, changed_conf
+query_planner_changes = {}
+if {args.control,args.candidate} == {'combined','no-runtime-bloom'}:
+    for query in range(1,23):
+        selected = {arm:[r for r in data['rows'] if r['query']==query and r['probe_arm']==arm]
+                    for arm in ('combined','no-runtime-bloom')}
+        assert all(len(rows)==2 for rows in selected.values())
+        assert len({r['sql_sha256'] for rows in selected.values() for r in rows})==1
+        before = selected['combined'][0]['planner_configuration']
+        after = selected['no-runtime-bloom'][0]['planner_configuration']
+        assert {key for key in set(before)|set(after) if before.get(key)!=after.get(key)} == {
+            'spark.sql.optimizer.runtime.bloomFilter.enabled'}
+        assert before['spark.sql.optimizer.runtime.bloomFilter.enabled']=='true'
+        assert after['spark.sql.optimizer.runtime.bloomFilter.enabled']=='false'
+        assert all('bloom_filter_agg' not in r['plan_text'] for r in selected['no-runtime-bloom'])
+        query_planner_changes[str(query)] = {'spark.sql.optimizer.runtime.bloomFilter.enabled':['true','false']}
 for row in data['rows']:
-    if row['probe_arm'] != 'combined':
+    if row['probe_arm'] not in ('combined','no-runtime-bloom'):
         continue
     query = row['query']
     if query == 3:
@@ -75,7 +93,7 @@ for row in data['rows']:
                    for line in row['plan_text'].splitlines())
 queries = list(range(1, 23))
 arms = {}
-for arm in ('baseline', 'combined'):
+for arm in (args.control, args.candidate):
     rows = [r for r in data['rows'] if r['probe_arm'] == arm]
     assert len({r['application_id'] for r in rows}) == 1
     assert len(rows) == 44 and {r['query'] for r in rows} == set(queries)
@@ -102,9 +120,9 @@ for arm in ('baseline', 'combined'):
         'sum_first_pass_sql_seconds': sum(q['sql_seconds'][0] for q in by_query.values()),
         'sum_second_pass_sql_seconds': sum(q['sql_seconds'][1] for q in by_query.values()),
         'sum_query_median_sql_seconds': sum(statistics.median(q['sql_seconds']) for q in by_query.values())}
-base = arms['baseline']; candidate = arms['combined']
+base = arms[args.control]; candidate = arms[args.candidate]
 reductions = {key: 1 - candidate[key]/base[key] for key in base if key.startswith('sum_')}
-report = {'classification': 'Complete measured four-GPU baseline versus combined SQL prototype',
+report = {'classification': 'Complete measured four-GPU comparison: '+args.control+' versus '+args.candidate,
     'absolute_hardware_speed_of_light_established': False,
     'healthy_node_performance_qualified': False,
     'limits': data['limits'], 'source_evidence': str(source), 'matrices': data['matrices'],
@@ -114,6 +132,7 @@ report = {'classification': 'Complete measured four-GPU baseline versus combined
     'dataset_contract':data['applications'][0]['dataset_contract'],
     'applications':data['applications'],
     'effective_configuration_changes': changed_conf,
+    'query_planner_configuration_changes': query_planner_changes,
     'application_identity_configuration': identity_configuration,
     'configuration_normalization': 'Validate app IDs, ports and times; normalize only the recorded application scratch directory; preserve and compare every JVM option.',
     'query_execution_count': len(data['rows']), 'all_existing_reference_comparisons_passed': True,

@@ -19,7 +19,11 @@ from pathlib import Path
 ROOT=Path(os.environ['B200_PROBE_ROOT']).resolve()
 owner=json.loads((ROOT/'evidence/owner.json').read_text())
 assert owner['thread_id']==os.environ['CODEX_THREAD_ID']
-p=argparse.ArgumentParser(description=__doc__);p.add_argument('--labels',nargs='+',default=['trial-q9-0356','trial-preagg-0356','trial-q15-retry-0356','trial-q9-reuse-0356','trial-q9-reuse-control-0356']);a=p.parse_args()
+p=argparse.ArgumentParser(description=__doc__);p.add_argument('--labels',nargs='+',default=['trial-q9-0356','trial-preagg-0356','trial-q15-retry-0356','trial-q9-reuse-0356','trial-q9-reuse-control-0356'])
+p.add_argument('--gpus',default='0,3,5,6');p.add_argument('--output',default='time-trial-audit.json');a=p.parse_args()
+gpu_indices=[int(v) for v in a.gpus.split(',')]
+assert len(set(gpu_indices))==4 and set(gpu_indices)<=set(range(8))
+assert Path(a.output).name==a.output and a.output.endswith('.json')
 program=r'''
 import collections,hashlib,json,os,re,subprocess,sys
 from pathlib import Path
@@ -36,7 +40,7 @@ for label in labels:
   assert 'spark.rapids.memory.gpu.allocSize' not in d['effective_conf']
   assert len({x['uuid'] for x in d['gpu_assignments']})==4
   assert all(s['validation']['status'] in ('passed','reference-generated') for s in d['samples'])
-  config=json.loads((run/'config.json').read_text());assert config['gpu_indices']==[0,3,5,6]
+  config=json.loads((run/'config.json').read_text());assert config['gpu_indices']==EXPECTED_GPUS
   if (app/'rewrite-counterexamples.json').exists():mini_checks.extend(json.loads((app/'rewrite-counterexamples.json').read_text()))
   if d['status']=='completed':assert len(d['samples'])==len(config['queries'])*config['iterations']
   apps.append({'label':label,'application_id':d['application_id'],'status':d['status'],'error':d.get('error'),'retained_samples':len(d['samples'])})
@@ -78,22 +82,22 @@ for proc in Path('/proc').iterdir():
 assert not orphans,orphans
 print(json.dumps({'retained_startup_failure':json.loads((w/'evidence/trial-q15-startup-hang.json').read_text()),
  'remaining_owned_prefix_processes':orphans,'query_execution_status':'core_trials_completed',
- 'performance_qualified':False,'timing_limit':'Matched GPU0/3/5/6 cohort; GPU0 thermal throttling; no healthy-node speedup qualification',
+ 'performance_qualified':False,'timing_limit':'Matched four-GPU cohort; GPU0 thermal throttling; no healthy-node speedup qualification',
  'applications':apps,'task_end_reasons':dict(reasons),'remaining_recorded_service_processes':remaining,
  'cleanup_acknowledgements':len(receipts),'maximum_rmm_after_cleanup_bytes':max(r['rmm_after'] for r in receipts),
  'runtime_error_log_findings':errors,'shutdown_buffer_leak_reports':shutdown,
  'shutdown_cleanup_implementation_qualified':not shutdown,
  'small_cpu_and_gpu_counterexamples_passed':len(mini_checks),'independent_sf10k_cpu_reference':False,
  'dataset':{'path':'/raid/knataraj/datasets/tpch/sf10k_v2_float','parquet_files':len(files),'parquet_bytes':sum(p.stat().st_size for p in files)},
- 'gpu_indices':[0,3,5,6],'extra_rmm_alloc_size_limit':False,
+ 'gpu_indices':EXPECTED_GPUS,'extra_rmm_alloc_size_limit':False,
  'gpu_processes_after':subprocess.check_output(['nvidia-smi','--query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory','--format=csv,noheader'],text=True),
  'root_free_bytes':os.statvfs(w).f_bavail*os.statvfs(w).f_frsize,
  'engine_sha256':hashlib.sha256((w/'artifacts/cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar').read_bytes()).hexdigest()}))
-'''.replace('REMOTE',repr(owner['remote'])).replace('TRIAL_LABELS',repr(a.labels))
+'''.replace('REMOTE',repr(owner['remote'])).replace('TRIAL_LABELS',repr(a.labels)).replace('EXPECTED_GPUS',repr(gpu_indices))
 ssh=['ssh','-F','/home/nvidia/mahone_gluten/cluster_ssh_config','-o','BatchMode=yes','-o','ConnectTimeout=8','mahonem@10.34.1.4','python3 -']
 r=subprocess.run(ssh,input=program,text=True,capture_output=True,timeout=120)
 if r.returncode:raise RuntimeError(r.stderr)
 d=json.loads(r.stdout)
-(ROOT/'evidence/time-trial-audit.json').write_text(json.dumps(d,indent=2)+'\n')
+(ROOT/'evidence'/a.output).write_text(json.dumps(d,indent=2)+'\n')
 print(json.dumps({k:v for k,v in d.items() if k not in ['shutdown_buffer_leak_reports','runtime_error_log_findings']},indent=2))
 print('runtime_error_findings',len(d['runtime_error_log_findings']),'shutdown_findings',len(d['shutdown_buffer_leak_reports']))

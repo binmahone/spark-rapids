@@ -136,6 +136,8 @@ if r.returncode:raise RuntimeError(r.stderr.strip())
 d=json.loads(r.stdout)
 if a.analyze:
  d['evidence_source']='retained local archive' if a.retained_root else 'B200 retained runtime files'
+ if a.retained_root:
+  d['analysis_filesystem_free_bytes']=d.pop('root_free_bytes')
  prefix='recounted-suite-' if a.retained_root else 'suite-'
  path=ROOT/'evidence'/(prefix+ '-'.join(a.labels)+'.json')
  path.write_text(json.dumps(d,indent=2)+'\n')
@@ -144,4 +146,4 @@ for row in (d['rows'][-a.recent:] if a.recent else d['rows']):
  m=row['task_metrics'];print(row['arm'],row['query'],row['iteration'],round(row['sql_seconds'],3),row['validation']['status'],
    {k:round(m.get(k,0)/1e9,3) for k in ('shuffle_write_bytes','memory_spill_bytes','disk_spill_bytes')} if a.analyze else '')
 for app in d.get('applications',[]):print(app['status'],app['error'],app['last_log_lines'][-1:])
-print('root_free_GiB',round(d['root_free_bytes']/2**30,2))
+print('analysis_filesystem_free_GiB' if a.retained_root else 'root_free_GiB',round(d.get('root_free_bytes',d.get('analysis_filesystem_free_bytes',0))/2**30,2))

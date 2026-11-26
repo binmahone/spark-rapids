@@ -17,6 +17,8 @@ import re
 
 
 def selected_arm(query, arm):
+    if arm == 'screen-extra':
+        return {8: 'row-propagation', 11: 'aggregate-total-reuse'}.get(query, 'baseline')
     if arm == 'combined':
         return {3: 'preaggregate', 4: 'preaggregate', 9: 'row-propagation-reuse', 10: 'preaggregate',
                 15: 'aggregate-reuse', 17: 'window-average',
@@ -31,6 +33,30 @@ def transform(query, original, arm):
     arm = selected_arm(query, arm)
     if arm == 'baseline':
         return original
+    if arm == 'aggregate-total-reuse' and query == 11:
+        return """
+WITH part_values AS (
+    SELECT ps_partkey, sum(ps_supplycost * ps_availqty) AS value
+    FROM partsupp JOIN supplier ON ps_suppkey = s_suppkey
+    JOIN nation ON s_nationkey = n_nationkey
+    WHERE n_name = 'GERMANY'
+    GROUP BY ps_partkey
+), marked AS (
+    SELECT ps_partkey, value, sum(value) OVER () AS total_value FROM part_values
+)
+SELECT ps_partkey, value FROM marked
+WHERE value > total_value * 0.00000001
+ORDER BY value DESC
+"""
+    if arm == 'row-propagation' and query == 8:
+        replaced, count = re.subn(r'\borders\b', 'filtered_orders', original, flags=re.I)
+        assert count == 1
+        return """WITH filtered_orders AS (
+    SELECT o.* FROM orders o WHERE o_custkey IN (
+        SELECT /*+ BROADCAST */ c_custkey FROM customer WHERE c_nationkey IN (
+            SELECT n_nationkey FROM nation JOIN region ON n_regionkey = r_regionkey
+            WHERE r_name = 'AMERICA')))
+""" + replaced
     if arm == 'prefilter-broadcast' and query == 18:
         value = transform(query, original, 'prefilter')
         result, count = re.subn(r'(\bselect\s+)', r'\1/*+ BROADCAST(orders) */ ', value,
@@ -275,6 +301,12 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
             (1,1.,7.),(1,19.,70.),(1,None,700.),(1,0.,None),
             (2,2.,14.),(2,18.,140.),(2,None,1400.),
             (3,0.,7000.),(3,100.,70000.),(None,0.,700000.)])}
+    cases[11] = {
+        'partsupp': ('ps_partkey long, ps_suppkey long, ps_supplycost double, ps_availqty long', [
+            (1,1,2.,2),(1,1,3.,3),(2,2,100.,1),(None,1,1024.,1),
+            (3,1,None,1),(4,1,2.,None),(5,None,2.,2),(6,4,2.,2)]),
+        'supplier': ('s_suppkey long, s_nationkey int', [(1,1),(1,1),(2,2),(None,1)]),
+        'nation': ('n_nationkey int, n_name string', [(1,'GERMANY'),(1,'GERMANY'),(2,'OTHER'),(None,'GERMANY')])}
     graph_tables = {
         'customer': ('c_custkey long, c_nationkey int', [(1,1),(1,1),(2,2),(3,None)]),
         'orders': ('o_orderkey long, o_custkey long, o_orderdate date', [
@@ -290,6 +322,16 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
         'partsupp': ('ps_partkey long, ps_suppkey long, ps_supplycost double', [(1,1,2.),(1,1,2.),(2,2,3.),(3,1,4.),(None,1,5.)])}
     cases[5] = {k:v for k,v in graph_tables.items() if k not in ('part','partsupp')}
     cases[9] = {k:v for k,v in graph_tables.items() if k not in ('customer','region')}
+    cases[8] = {k:v for k,v in graph_tables.items() if k != 'partsupp'}
+    cases[8]['orders'] = ('o_orderkey long, o_custkey long, o_orderdate date', [
+        (11,1,date(1995,2,1)),(11,1,date(1995,2,1)),(12,2,date(1995,2,1)),
+        (13,1,date(1996,1,1)),(14,3,date(1997,1,1))])
+    cases[8]['region'] = ('r_regionkey int, r_name string', [(1,'AMERICA'),(1,'AMERICA'),(2,'OTHER')])
+    cases[8]['nation'] = ('n_nationkey int, n_name string, n_regionkey int', [
+        (1,'BRAZIL',1),(1,'BRAZIL',1),(2,'OTHER',2),(None,'N',1)])
+    cases[8]['part'] = ('p_partkey long, p_type string', [
+        (1,'ECONOMY ANODIZED STEEL'),(1,'ECONOMY ANODIZED STEEL'),
+        (2,'OTHER'),(3,'ECONOMY ANODIZED STEEL'),(None,'ECONOMY ANODIZED STEEL')])
     results=[]
     previous = spark.conf.get('spark.rapids.sql.enabled', 'true')
     try:

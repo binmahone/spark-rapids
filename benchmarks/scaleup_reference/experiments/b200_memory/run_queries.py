@@ -140,7 +140,7 @@ def main():
             if not any('BroadcastHashJoin' in line and 'LeftSemi' in line
                        for line in planned.splitlines()):
                 raise AssertionError(f'Q{planned_query}: hint did not reach a broadcast semi join')
-        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','preaggregate-broadcast','preaggregate-prefilter','prefilter-broadcast','row-propagation','row-propagation-reuse','aggregate-reuse','window-average','screen','combined'):
+        if config.get('suite_audit') and config['probe_arm'] in ('preaggregate','preaggregate-broadcast','preaggregate-prefilter','prefilter-broadcast','row-propagation','row-propagation-reuse','aggregate-reuse','window-average','aggregate-total-reuse','screen','screen-extra','combined'):
             checks = check_semantics(spark, SUITE, queries, config['probe_arm'])
             write(app / 'rewrite-counterexamples.json', checks)
         test = spark.range(10000).selectExpr('sum(id * id + 3) AS total')
@@ -226,6 +226,9 @@ def main():
                     if config.get('suite_audit') and query_arm in ('aggregate-reuse','window-average'):
                         if not re.search(r'Gpu\w*Window', preflight) or preflight.count('GpuFileGpuScan parquet spark_catalog.default.lineitem[')!=1:
                             raise AssertionError('Expected one lineitem scan and a GPU window')
+                    if config.get('suite_audit') and query_arm == 'aggregate-total-reuse':
+                        if not re.search(r'Gpu\w*Window', preflight) or preflight.count('GpuFileGpuScan parquet spark_catalog.default.partsupp[')!=1:
+                            raise AssertionError('Expected one partsupp scan and a GPU window')
                     rows = frame._jdf.collect()
                     elapsed = time.perf_counter() - started
                     ended_unix_ns = time.time_ns()

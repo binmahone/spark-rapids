@@ -139,11 +139,15 @@ def main():
                 ('shuffle128', {'spark.sql.shuffle.partitions': '128'}),
                 ('shuffle64', {'spark.sql.shuffle.partitions': '64'}),
                 ('operator512', {'spark.rapids.sql.batchSizeBytes': '536870912'}),
-                ('reader512', {'spark.rapids.sql.reader.batchSizeBytes': '536870912'})]
+                ('reader512', {'spark.rapids.sql.reader.batchSizeBytes': '536870912'}),
+                ('scan4g', {'spark.sql.files.maxPartitionBytes': '4g'})]
             winners = {}
             for name, overrides in settings:
                 samples = run('screen-' + name, [selected[q] for q in ORDER], overrides)
                 for q in ORDER:
+                    # The established Q13 scan override takes precedence over a global scan setting.
+                    if q == 13 and name == 'scan4g':
+                        continue
                     candidate = totals(samples, q)[0]
                     baseline = totals(baseline_samples, q)[0]
                     if candidate < baseline * .95 and candidate < winners.get(q, {}).get('time', float('inf')):

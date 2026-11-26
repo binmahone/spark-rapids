@@ -121,7 +121,11 @@ def main():
         report['key_type'] = 'bigint' if a.phase.startswith('A') else 'int'
         key_columns = {'lineitem': ['l_partkey', 'l_suppkey'], 'part': ['p_partkey'],
                        'partsupp': ['ps_partkey', 'ps_suppkey'], 'supplier': ['s_suppkey']}
-        view_casts = {'9': {table: {key: report['key_type'] for key in keys}
+        report['narrowed_columns'] = [key for keys in key_columns.values() for key in keys
+                                      if report['key_type'] == 'int' and
+                                      (a.phase == 'B1' or key.endswith('suppkey'))]
+        view_casts = {'9': {table: {key: 'int' if key in report['narrowed_columns'] else 'bigint'
+                                  for key in keys}
                            for table, keys in key_columns.items()}}
         path, result = launch_group(work, 'narrow-keys-' + a.phase, 0,
                                     [controls[q] for q in queries], {report['tuning_key']: '32'}, view_casts=view_casts, domain_proof=work / 'narrow-keys/oracle.json')

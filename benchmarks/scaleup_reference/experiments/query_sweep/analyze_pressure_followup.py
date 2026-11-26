@@ -50,8 +50,12 @@ def main():
     for group in state['groups']:
         data = summarize(work, Path(group['run']))
         assert data['status'] == 'completed'
+        original = read(Path(group['run']) / 'applications/suite/result.json')
+        original_samples = {(s['query'], s['iteration']): s for s in original['samples']}
         rows = []
         for sample in data['samples']:
+            raw = original_samples[(sample['query'], sample['iteration'])]
+            scans = [node for node in raw['plan_metrics'] if node['node'].startswith('GpuScan')]
             begin, end = [sample['execution_window_ms'][key] * 1_000_000 for key in ('start', 'end')]
             h = host[bisect_left(host_times, begin):bisect_right(host_times, end)]
             v = vm[bisect_left(vm_times, begin):bisect_right(vm_times, end)]
@@ -72,6 +76,9 @@ def main():
             row = {key: sample[key] for key in ('query', 'iteration', 'sql_seconds', 'cleanup_seconds',
                 'sql_plus_cleanup_seconds', 'task_metrics', 'reader_metrics', 'validation', 'execution_window_ms')}
             row.update(arm=group['arm'], index=group['index'], run=data['run'],
+                scan_plan_metrics=scans,
+                summed_scan_buffer_seconds=sum(s['metrics'].get('bufferTime', 0) for s in scans) / 1e9,
+                summed_scan_gpu_decode_seconds=sum(s['metrics'].get('gpuDecodeTime', 0) for s in scans) / 1e9,
                 watermark_scale_factor=group['watermark_scale_factor'], pressure=pressure,
                 allocation=allocation, allocstall_count=sum(value for key, value in allocation.items() if key.startswith('allocstall')),
                 physical_read_bytes=sum(after[pid]['io'].get('read_bytes', 0) - before[pid]['io'].get('read_bytes', 0)

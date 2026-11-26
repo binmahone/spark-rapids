@@ -29,6 +29,7 @@ SUITE = HERE.parents[1]
 sys.path.insert(0, str(SUITE / 'scripts'))
 from common import load_config, read, sha, write
 import b200_services as services
+from disk_guard import allocated_bytes
 
 
 def main():
@@ -177,8 +178,7 @@ def main():
                     if os.statvfs(scratch).f_bavail * os.statvfs(scratch).f_frsize < 256 * 2**30:
                         raise RuntimeError('NVMe free-space guard reached')
                     if time.monotonic() >= next_size_check:
-                        usage = int(subprocess.check_output(
-                            ['du', '-sx', '--block-size=1', str(work / 'scratch')], text=True).split()[0])
+                        usage = allocated_bytes(work / 'scratch')
                         if usage > 32 * 2**30:
                             raise RuntimeError('Owned scratch directory exceeded 32 GiB')
                         next_size_check = time.monotonic() + 5

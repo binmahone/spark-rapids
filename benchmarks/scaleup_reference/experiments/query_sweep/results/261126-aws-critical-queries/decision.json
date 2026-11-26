@@ -1,0 +1,169 @@
+{
+  "accepted_queries": [
+    8,
+    21
+  ],
+  "rejected_queries": [
+    9
+  ],
+  "confirmation_group_labels": {
+    "A0/A3": "Retained original SQL and per-query settings",
+    "B1/B2": "Candidate SQL with its explicit settings",
+    "W0/W1": "Q21 explicit SQL with BIGINT extrema, before and after the original/candidate comparison"
+  },
+  "confirmation_gate": "For second actions, worst candidate SQL plus cleanup must be at least 3 percent below the best control in original-candidate-candidate-original order",
+  "measurements": [
+    {
+      "query": 8,
+      "control_second_totals": [
+        31.056478587997844,
+        31.071563138000784
+      ],
+      "candidate_second_totals": [
+        27.0473788470008,
+        27.164648695001233
+      ],
+      "accepted": true
+    },
+    {
+      "query": 9,
+      "control_second_totals": [
+        41.369295051001245,
+        41.15431181200256
+      ],
+      "candidate_second_totals": [
+        40.36967433600148,
+        40.36142996900162
+      ],
+      "accepted": false
+    },
+    {
+      "query": 21,
+      "control_second_totals": [
+        25.576559275003092,
+        25.967363633000787
+      ],
+      "candidate_second_totals": [
+        21.233444614998007,
+        21.996466665998014
+      ],
+      "accepted": true
+    }
+  ],
+  "q21_width_comparison": [
+    {
+      "label": "W0",
+      "sql_seconds": 24.373922593000316,
+      "sql_plus_cleanup_seconds": 25.162489226000616,
+      "physical_read_bytes": 0,
+      "native_read_bytes": 718199717687,
+      "total_shuffle_bytes": 468269747485,
+      "largest_exchange": {
+        "plan_metric_index": 38,
+        "node": "GpuColumnarExchange",
+        "metrics": {
+          "dataSize": 723783481728,
+          "numOutputBatches": 144384,
+          "numOutputRows": 15000000000,
+          "numPartitions": 256,
+          "opTimeNewShuffleRead": 98753010852,
+          "opTimeNewShuffleWrite": 260267683475,
+          "shuffleBytesWritten": 426080407913,
+          "shuffleRecordsWritten": 15000000000
+        }
+      }
+    },
+    {
+      "label": "B1",
+      "sql_seconds": 20.747927109998272,
+      "sql_plus_cleanup_seconds": 21.233444614998007,
+      "physical_read_bytes": 0,
+      "native_read_bytes": 718199717687,
+      "total_shuffle_bytes": 394453404389,
+      "largest_exchange": {
+        "plan_metric_index": 38,
+        "node": "GpuColumnarExchange",
+        "metrics": {
+          "dataSize": 483784587904,
+          "numOutputBatches": 144384,
+          "numOutputRows": 15000000000,
+          "numPartitions": 256,
+          "opTimeNewShuffleRead": 101798441421,
+          "opTimeNewShuffleWrite": 182536418739,
+          "shuffleBytesWritten": 353534220400,
+          "shuffleRecordsWritten": 15000000000
+        }
+      }
+    },
+    {
+      "label": "B2",
+      "sql_seconds": 20.71619703000033,
+      "sql_plus_cleanup_seconds": 21.996466665998014,
+      "physical_read_bytes": 0,
+      "native_read_bytes": 718199717687,
+      "total_shuffle_bytes": 394442752266,
+      "largest_exchange": {
+        "plan_metric_index": 38,
+        "node": "GpuColumnarExchange",
+        "metrics": {
+          "dataSize": 483784587904,
+          "numOutputBatches": 144384,
+          "numOutputRows": 15000000000,
+          "numPartitions": 256,
+          "opTimeNewShuffleRead": 86345599517,
+          "opTimeNewShuffleWrite": 183452910555,
+          "shuffleBytesWritten": 353527754152,
+          "shuffleRecordsWritten": 15000000000
+        }
+      }
+    },
+    {
+      "label": "W1",
+      "sql_seconds": 24.35241332300211,
+      "sql_plus_cleanup_seconds": 25.193445947003056,
+      "physical_read_bytes": 0,
+      "native_read_bytes": 718199717687,
+      "total_shuffle_bytes": 468270400253,
+      "largest_exchange": {
+        "plan_metric_index": 38,
+        "node": "GpuColumnarExchange",
+        "metrics": {
+          "dataSize": 723783481728,
+          "numOutputBatches": 144384,
+          "numOutputRows": 15000000000,
+          "numPartitions": 256,
+          "opTimeNewShuffleRead": 101096808572,
+          "opTimeNewShuffleWrite": 264550793065,
+          "shuffleBytesWritten": 426077300786,
+          "shuffleRecordsWritten": 15000000000
+        }
+      }
+    }
+  ],
+  "q21_scope": "Four supplier extrema narrow from BIGINT to INT; order key and count remain BIGINT. Dataset footer proof and unchanged-file guard are required.",
+  "range_proof_timing": "The one-time CPU oracle and footer-range proof are setup work outside SQL timing. The file-inventory guard runs once before the two Q21 actions and is also outside their SQL timers. These setup costs are not separately timed; no single-use end-to-end speedup is claimed.",
+  "q8_scope": "Combined join-order, broadcast-placement and Boolean-payload prototype; no single-component speedup is inferred.",
+  "q9_decision": "Current reorder does not pass the predeclared gate against normal controls. Slow screening controls are not used as improvement evidence.",
+  "prototype_status": "Explicit SQL experiment, not a general production optimizer rule or an official main Daily Trend score",
+  "validation_actions": 84,
+  "suite_tail_observation": {
+    "query": 13,
+    "iteration": 2,
+    "same_normalized_plan": true,
+    "normalized_plan_sha256": "03c60c557edcce8a0d60f66000cff39602334e04793d58e9e6e476df578ec295",
+    "same_native_read_bytes": 459802640408,
+    "previous": {
+      "sql_seconds": 11.192589336998935,
+      "physical_read_bytes": 12197433344,
+      "memory_full_seconds": 0.010574
+    },
+    "current": {
+      "sql_seconds": 21.872279990002426,
+      "physical_read_bytes": 283571576832,
+      "memory_full_seconds": 6.672732,
+      "scan_buffer_task_sum_seconds": 442.987900998
+    },
+    "interpretation": "Same logical work with substantially different observed disk reads and memory pressure. Correlation is not proof that either new query rewrite caused the slow sample.",
+    "score_policy": "The full-suite score retains this measured sample. No substitution with the earlier faster query time."
+  }
+}

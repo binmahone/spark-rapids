@@ -1,0 +1,20 @@
+{
+  "pid": 518289,
+  "start_time": "1957437",
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "controller": {
+    "pid": 518282,
+    "owner_uid": 1000,
+    "start_time": "1957420"
+  },
+  "source_sha256": "785ca2c1239c9b6b276a27460c766d64bcbeb59c66c7e3c8f2503cb44bdc6f9f",
+  "settings": {
+    "/proc/sys/vm/zone_reclaim_mode": "0",
+    "/proc/sys/vm/min_free_kbytes": "183173",
+    "/proc/sys/vm/watermark_scale_factor": "10",
+    "/proc/sys/vm/watermark_boost_factor": "15000",
+    "/sys/kernel/mm/transparent_hugepage/enabled": "always [madvise] never",
+    "/sys/kernel/mm/transparent_hugepage/defrag": "always defer defer+madvise [madvise] never"
+  },
+  "policy": "Read-only one-second sampler; exits when the owned controller exits"
+}

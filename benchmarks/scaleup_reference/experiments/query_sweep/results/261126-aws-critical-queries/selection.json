@@ -1,0 +1,9 @@
+{
+  "queries": [
+    8,
+    21
+  ],
+  "confirmed": true,
+  "baseline_selection_sha256": "775d8c44027b5252d906c03ef87b303f113f17388647c851eb40dd6cc5776341",
+  "decision_source": "confirm-analysis.json"
+}

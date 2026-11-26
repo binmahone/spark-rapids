@@ -1,0 +1,10 @@
+{
+  "status": "completed",
+  "phase": "oracle",
+  "groups": [],
+  "baseline_selection_sha256": "775d8c44027b5252d906c03ef87b303f113f17388647c851eb40dd6cc5776341",
+  "source_revision": "933baf11e9dfbd4313ac9660c01bc2bfb558f240",
+  "cache_policy": "No cache flush, two actions per query per fresh application",
+  "instance_policy": "Retain until explicit user release",
+  "monitor_exit_codes": []
+}

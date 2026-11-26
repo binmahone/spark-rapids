@@ -1,0 +1,2147 @@
+{
+  "status": "passed",
+  "checks": [
+    {
+      "query": 9,
+      "case": "critical_supply_before_fact",
+      "mode": "duplicates-null",
+      "passed": true
+    },
+    {
+      "query": 8,
+      "case": "critical_region_orders_flags",
+      "mode": "duplicates-null",
+      "passed": true
+    },
+    {
+      "query": 21,
+      "case": "critical_witness_int32",
+      "mode": "duplicates-null",
+      "passed": true
+    },
+    {
+      "query": 21,
+      "case": "critical_witness_wide",
+      "mode": "duplicates-null",
+      "passed": true
+    },
+    {
+      "query": 9,
+      "case": "critical_supply_before_fact",
+      "mode": "empty-lineitem",
+      "passed": true
+    },
+    {
+      "query": 8,
+      "case": "critical_region_orders_flags",
+      "mode": "empty-lineitem",
+      "passed": true
+    },
+    {
+      "query": 21,
+      "case": "critical_witness_int32",
+      "mode": "empty-lineitem",
+      "passed": true
+    },
+    {
+      "query": 21,
+      "case": "critical_witness_wide",
+      "mode": "empty-lineitem",
+      "passed": true
+    },
+    {
+      "query": 9,
+      "case": "critical_supply_before_fact",
+      "mode": "signed-decimals",
+      "passed": true
+    },
+    {
+      "query": 8,
+      "case": "critical_region_orders_flags",
+      "mode": "signed-decimals",
+      "passed": true
+    },
+    {
+      "query": 21,
+      "case": "critical_witness_int32",
+      "mode": "signed-decimals",
+      "passed": true
+    },
+    {
+      "query": 21,
+      "case": "critical_witness_wide",
+      "mode": "signed-decimals",
+      "passed": true
+    }
+  ],
+  "mutations": [
+    {
+      "query": 9,
+      "detected": true
+    },
+    {
+      "query": 8,
+      "detected": true
+    },
+    {
+      "query": 21,
+      "mutation": "Bypass int32 domain guard",
+      "detected": true
+    }
+  ],
+  "dataset_bounds": {
+    "status": "passed",
+    "dataset": "/opt/dlami/nvme/daily-trend-hardened/dataset",
+    "files": [
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.1.parquet",
+        "bytes": 9352394076,
+        "mtime_ns": 1791962277000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.10.parquet",
+        "bytes": 9352170953,
+        "mtime_ns": 1791961969000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.100.parquet",
+        "bytes": 9352189351,
+        "mtime_ns": 1791962031000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.101.parquet",
+        "bytes": 9351017649,
+        "mtime_ns": 1791960364000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.102.parquet",
+        "bytes": 9351507800,
+        "mtime_ns": 1791961007000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.103.parquet",
+        "bytes": 9351798989,
+        "mtime_ns": 1791961432000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.104.parquet",
+        "bytes": 9351435215,
+        "mtime_ns": 1791960850000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.105.parquet",
+        "bytes": 9351387636,
+        "mtime_ns": 1791960823000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.106.parquet",
+        "bytes": 9351778106,
+        "mtime_ns": 1791961421000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.107.parquet",
+        "bytes": 9352858037,
+        "mtime_ns": 1791962617000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.108.parquet",
+        "bytes": 9351116123,
+        "mtime_ns": 1791960508000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.109.parquet",
+        "bytes": 9352497069,
+        "mtime_ns": 1791962368000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.11.parquet",
+        "bytes": 9351880702,
+        "mtime_ns": 1791961554000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.110.parquet",
+        "bytes": 9351845741,
+        "mtime_ns": 1791961516000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.111.parquet",
+        "bytes": 9352271904,
+        "mtime_ns": 1791962145000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.112.parquet",
+        "bytes": 9352191547,
+        "mtime_ns": 1791962059000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.113.parquet",
+        "bytes": 9352400093,
+        "mtime_ns": 1791962309000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.114.parquet",
+        "bytes": 9350887083,
+        "mtime_ns": 1791960265000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.115.parquet",
+        "bytes": 9351648996,
+        "mtime_ns": 1791961254000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.116.parquet",
+        "bytes": 9351780326,
+        "mtime_ns": 1791961424000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.117.parquet",
+        "bytes": 9351240026,
+        "mtime_ns": 1791960590000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.118.parquet",
+        "bytes": 9351056502,
+        "mtime_ns": 1791960439000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.119.parquet",
+        "bytes": 9351911889,
+        "mtime_ns": 1791961628000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.12.parquet",
+        "bytes": 9351644275,
+        "mtime_ns": 1791961235000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.120.parquet",
+        "bytes": 9352046900,
+        "mtime_ns": 1791961838000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.121.parquet",
+        "bytes": 9352033000,
+        "mtime_ns": 1791961795000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.122.parquet",
+        "bytes": 9351648547,
+        "mtime_ns": 1791961253000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.123.parquet",
+        "bytes": 9352802402,
+        "mtime_ns": 1791962600000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.124.parquet",
+        "bytes": 9351909549,
+        "mtime_ns": 1791961579000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.125.parquet",
+        "bytes": 9350610698,
+        "mtime_ns": 1791960178000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.126.parquet",
+        "bytes": 9351653489,
+        "mtime_ns": 1791961260000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.127.parquet",
+        "bytes": 9351356077,
+        "mtime_ns": 1791960801000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.128.parquet",
+        "bytes": 9351642464,
+        "mtime_ns": 1791961192000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.129.parquet",
+        "bytes": 9351536792,
+        "mtime_ns": 1791961061000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.13.parquet",
+        "bytes": 9352815638,
+        "mtime_ns": 1791962605000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.130.parquet",
+        "bytes": 9350828128,
+        "mtime_ns": 1791960231000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.131.parquet",
+        "bytes": 9351267516,
+        "mtime_ns": 1791960632000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.132.parquet",
+        "bytes": 9351411519,
+        "mtime_ns": 1791960842000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.133.parquet",
+        "bytes": 9352447290,
+        "mtime_ns": 1791962319000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.134.parquet",
+        "bytes": 9351510148,
+        "mtime_ns": 1791961011000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.135.parquet",
+        "bytes": 9352343921,
+        "mtime_ns": 1791962229000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.136.parquet",
+        "bytes": 9352448040,
+        "mtime_ns": 1791962340000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.137.parquet",
+        "bytes": 9351561772,
+        "mtime_ns": 1791961083000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.138.parquet",
+        "bytes": 9350912607,
+        "mtime_ns": 1791960278000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.139.parquet",
+        "bytes": 9351572563,
+        "mtime_ns": 1791961086000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.14.parquet",
+        "bytes": 9351857694,
+        "mtime_ns": 1791961522000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.140.parquet",
+        "bytes": 9351321396,
+        "mtime_ns": 1791960723000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.141.parquet",
+        "bytes": 9352085417,
+        "mtime_ns": 1791961886000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.142.parquet",
+        "bytes": 9351345515,
+        "mtime_ns": 1791960744000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.143.parquet",
+        "bytes": 9352031759,
+        "mtime_ns": 1791961788000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.144.parquet",
+        "bytes": 9352327087,
+        "mtime_ns": 1791962197000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.145.parquet",
+        "bytes": 9351595322,
+        "mtime_ns": 1791961110000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.146.parquet",
+        "bytes": 9352194855,
+        "mtime_ns": 1791962092000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.147.parquet",
+        "bytes": 9351693003,
+        "mtime_ns": 1791961361000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.148.parquet",
+        "bytes": 9352563631,
+        "mtime_ns": 1791962456000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.149.parquet",
+        "bytes": 9352541418,
+        "mtime_ns": 1791962407000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.15.parquet",
+        "bytes": 9350963516,
+        "mtime_ns": 1791960325000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.150.parquet",
+        "bytes": 9352047891,
+        "mtime_ns": 1791961849000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.151.parquet",
+        "bytes": 9350827321,
+        "mtime_ns": 1791960229000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.152.parquet",
+        "bytes": 9351643774,
+        "mtime_ns": 1791961208000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.153.parquet",
+        "bytes": 9350962918,
+        "mtime_ns": 1791960322000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.154.parquet",
+        "bytes": 9351661194,
+        "mtime_ns": 1791961299000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.155.parquet",
+        "bytes": 9351421333,
+        "mtime_ns": 1791960844000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.156.parquet",
+        "bytes": 9352342445,
+        "mtime_ns": 1791962227000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.157.parquet",
+        "bytes": 9351841870,
+        "mtime_ns": 1791961513000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.158.parquet",
+        "bytes": 9352197407,
+        "mtime_ns": 1791962097000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.159.parquet",
+        "bytes": 9351804546,
+        "mtime_ns": 1791961451000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.16.parquet",
+        "bytes": 9351668830,
+        "mtime_ns": 1791961304000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.160.parquet",
+        "bytes": 9352211327,
+        "mtime_ns": 1791962097000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.161.parquet",
+        "bytes": 9351460565,
+        "mtime_ns": 1791960933000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.162.parquet",
+        "bytes": 9350710787,
+        "mtime_ns": 1791960205000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.163.parquet",
+        "bytes": 9352309823,
+        "mtime_ns": 1791962190000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.164.parquet",
+        "bytes": 9351051588,
+        "mtime_ns": 1791960437000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.165.parquet",
+        "bytes": 9351621049,
+        "mtime_ns": 1791961134000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.166.parquet",
+        "bytes": 9351117034,
+        "mtime_ns": 1791960528000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.167.parquet",
+        "bytes": 9351147319,
+        "mtime_ns": 1791960543000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.168.parquet",
+        "bytes": 9351084354,
+        "mtime_ns": 1791960464000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.169.parquet",
+        "bytes": 9352583479,
+        "mtime_ns": 1791962483000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.17.parquet",
+        "bytes": 9351627050,
+        "mtime_ns": 1791961160000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.170.parquet",
+        "bytes": 9351751280,
+        "mtime_ns": 1791961403000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.171.parquet",
+        "bytes": 9351744967,
+        "mtime_ns": 1791961393000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.172.parquet",
+        "bytes": 9352094384,
+        "mtime_ns": 1791961901000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.173.parquet",
+        "bytes": 9352482835,
+        "mtime_ns": 1791962367000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.174.parquet",
+        "bytes": 9351329420,
+        "mtime_ns": 1791960724000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.175.parquet",
+        "bytes": 9351369917,
+        "mtime_ns": 1791960809000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.176.parquet",
+        "bytes": 9351531566,
+        "mtime_ns": 1791961038000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.177.parquet",
+        "bytes": 9351782640,
+        "mtime_ns": 1791961425000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.178.parquet",
+        "bytes": 9350626817,
+        "mtime_ns": 1791960179000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.179.parquet",
+        "bytes": 9351677980,
+        "mtime_ns": 1791961329000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.18.parquet",
+        "bytes": 9351441860,
+        "mtime_ns": 1791960863000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.180.parquet",
+        "bytes": 9352609997,
+        "mtime_ns": 1791962526000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.181.parquet",
+        "bytes": 9351729634,
+        "mtime_ns": 1791961378000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.182.parquet",
+        "bytes": 9351967276,
+        "mtime_ns": 1791961691000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.183.parquet",
+        "bytes": 9351985410,
+        "mtime_ns": 1791961709000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.184.parquet",
+        "bytes": 9351985628,
+        "mtime_ns": 1791961719000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.185.parquet",
+        "bytes": 9352692005,
+        "mtime_ns": 1791962558000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.186.parquet",
+        "bytes": 9352061724,
+        "mtime_ns": 1791961851000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.187.parquet",
+        "bytes": 9351806741,
+        "mtime_ns": 1791961455000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.188.parquet",
+        "bytes": 9350906421,
+        "mtime_ns": 1791960271000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.189.parquet",
+        "bytes": 9352045149,
+        "mtime_ns": 1791961838000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.19.parquet",
+        "bytes": 9351472378,
+        "mtime_ns": 1791960949000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.190.parquet",
+        "bytes": 9351113572,
+        "mtime_ns": 1791960489000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.191.parquet",
+        "bytes": 9350838431,
+        "mtime_ns": 1791960237000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.192.parquet",
+        "bytes": 9351979370,
+        "mtime_ns": 1791961692000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.193.parquet",
+        "bytes": 9352637163,
+        "mtime_ns": 1791962546000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.194.parquet",
+        "bytes": 9351874055,
+        "mtime_ns": 1791961545000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.195.parquet",
+        "bytes": 9352095233,
+        "mtime_ns": 1791961901000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.196.parquet",
+        "bytes": 9351462163,
+        "mtime_ns": 1791960939000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.197.parquet",
+        "bytes": 9352007030,
+        "mtime_ns": 1791961765000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.198.parquet",
+        "bytes": 9351429769,
+        "mtime_ns": 1791960849000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.199.parquet",
+        "bytes": 9351072816,
+        "mtime_ns": 1791960459000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.2.parquet",
+        "bytes": 9351988942,
+        "mtime_ns": 1791961721000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.20.parquet",
+        "bytes": 9350899516,
+        "mtime_ns": 1791960269000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.200.parquet",
+        "bytes": 9352134702,
+        "mtime_ns": 1791961954000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.201.parquet",
+        "bytes": 9351134595,
+        "mtime_ns": 1791960537000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.202.parquet",
+        "bytes": 9351910890,
+        "mtime_ns": 1791961590000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.203.parquet",
+        "bytes": 9350887153,
+        "mtime_ns": 1791960267000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.204.parquet",
+        "bytes": 9350862994,
+        "mtime_ns": 1791960247000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.205.parquet",
+        "bytes": 9351489404,
+        "mtime_ns": 1791960994000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.206.parquet",
+        "bytes": 9352471377,
+        "mtime_ns": 1791962358000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.207.parquet",
+        "bytes": 9351721181,
+        "mtime_ns": 1791961369000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.208.parquet",
+        "bytes": 9352475071,
+        "mtime_ns": 1791962359000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.209.parquet",
+        "bytes": 9351450339,
+        "mtime_ns": 1791960902000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.21.parquet",
+        "bytes": 9351119202,
+        "mtime_ns": 1791960529000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.210.parquet",
+        "bytes": 9351945279,
+        "mtime_ns": 1791961667000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.211.parquet",
+        "bytes": 9351211669,
+        "mtime_ns": 1791960564000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.212.parquet",
+        "bytes": 9351657283,
+        "mtime_ns": 1791961284000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.213.parquet",
+        "bytes": 9351420263,
+        "mtime_ns": 1791960844000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.214.parquet",
+        "bytes": 9351655045,
+        "mtime_ns": 1791961272000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.215.parquet",
+        "bytes": 9351222713,
+        "mtime_ns": 1791960584000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.216.parquet",
+        "bytes": 9352111901,
+        "mtime_ns": 1791961938000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.217.parquet",
+        "bytes": 9352585332,
+        "mtime_ns": 1791962487000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.218.parquet",
+        "bytes": 9351264206,
+        "mtime_ns": 1791960604000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.219.parquet",
+        "bytes": 9352454645,
+        "mtime_ns": 1791962356000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.22.parquet",
+        "bytes": 9351599030,
+        "mtime_ns": 1791961118000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.220.parquet",
+        "bytes": 9351585740,
+        "mtime_ns": 1791961102000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.221.parquet",
+        "bytes": 9352276244,
+        "mtime_ns": 1791962146000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.222.parquet",
+        "bytes": 9352287536,
+        "mtime_ns": 1791962160000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.223.parquet",
+        "bytes": 9352293181,
+        "mtime_ns": 1791962165000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.224.parquet",
+        "bytes": 9350864013,
+        "mtime_ns": 1791960249000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.225.parquet",
+        "bytes": 9351545307,
+        "mtime_ns": 1791961067000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.226.parquet",
+        "bytes": 9351643667,
+        "mtime_ns": 1791961200000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.227.parquet",
+        "bytes": 9351671533,
+        "mtime_ns": 1791961320000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.228.parquet",
+        "bytes": 9350727612,
+        "mtime_ns": 1791960212000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.229.parquet",
+        "bytes": 9352137561,
+        "mtime_ns": 1791961961000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.23.parquet",
+        "bytes": 9352560610,
+        "mtime_ns": 1791962435000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.230.parquet",
+        "bytes": 9352109687,
+        "mtime_ns": 1791961906000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.231.parquet",
+        "bytes": 9352034757,
+        "mtime_ns": 1791961801000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.232.parquet",
+        "bytes": 9351671352,
+        "mtime_ns": 1791961316000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.233.parquet",
+        "bytes": 9352699713,
+        "mtime_ns": 1791962563000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.234.parquet",
+        "bytes": 9351621378,
+        "mtime_ns": 1791961144000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.235.parquet",
+        "bytes": 9350769506,
+        "mtime_ns": 1791960228000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.236.parquet",
+        "bytes": 9351952487,
+        "mtime_ns": 1791961679000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.237.parquet",
+        "bytes": 9351372515,
+        "mtime_ns": 1791960822000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.238.parquet",
+        "bytes": 9351254656,
+        "mtime_ns": 1791960591000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.239.parquet",
+        "bytes": 9351706168,
+        "mtime_ns": 1791961366000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.24.parquet",
+        "bytes": 9351379914,
+        "mtime_ns": 1791960822000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.240.parquet",
+        "bytes": 9351013365,
+        "mtime_ns": 1791960362000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.241.parquet",
+        "bytes": 9351039773,
+        "mtime_ns": 1791960431000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.242.parquet",
+        "bytes": 9351579144,
+        "mtime_ns": 1791961101000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.243.parquet",
+        "bytes": 9352328253,
+        "mtime_ns": 1791962206000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.244.parquet",
+        "bytes": 9351331849,
+        "mtime_ns": 1791960729000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.245.parquet",
+        "bytes": 9352438980,
+        "mtime_ns": 1791962314000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.246.parquet",
+        "bytes": 9352713699,
+        "mtime_ns": 1791962568000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.247.parquet",
+        "bytes": 9351221469,
+        "mtime_ns": 1791960580000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.248.parquet",
+        "bytes": 9351077027,
+        "mtime_ns": 1791960462000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.249.parquet",
+        "bytes": 9351452267,
+        "mtime_ns": 1791960902000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.25.parquet",
+        "bytes": 9352251894,
+        "mtime_ns": 1791962108000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.250.parquet",
+        "bytes": 9351371747,
+        "mtime_ns": 1791960814000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.251.parquet",
+        "bytes": 9351722801,
+        "mtime_ns": 1791961377000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.252.parquet",
+        "bytes": 9351475549,
+        "mtime_ns": 1791960988000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.253.parquet",
+        "bytes": 9352174703,
+        "mtime_ns": 1791961971000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.254.parquet",
+        "bytes": 9352317717,
+        "mtime_ns": 1791962195000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.255.parquet",
+        "bytes": 9351522175,
+        "mtime_ns": 1791961018000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.256.parquet",
+        "bytes": 9354363103,
+        "mtime_ns": 1791962621000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.26.parquet",
+        "bytes": 9352501761,
+        "mtime_ns": 1791962369000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.27.parquet",
+        "bytes": 9351502865,
+        "mtime_ns": 1791960996000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.28.parquet",
+        "bytes": 9350847887,
+        "mtime_ns": 1791960238000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.29.parquet",
+        "bytes": 9351673537,
+        "mtime_ns": 1791961326000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.3.parquet",
+        "bytes": 9352573284,
+        "mtime_ns": 1791962465000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.30.parquet",
+        "bytes": 9351181706,
+        "mtime_ns": 1791960563000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.31.parquet",
+        "bytes": 9351907782,
+        "mtime_ns": 1791961558000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.32.parquet",
+        "bytes": 9351236085,
+        "mtime_ns": 1791960586000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.33.parquet",
+        "bytes": 9352192319,
+        "mtime_ns": 1791962088000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.34.parquet",
+        "bytes": 9352453311,
+        "mtime_ns": 1791962346000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.35.parquet",
+        "bytes": 9351507615,
+        "mtime_ns": 1791961001000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.36.parquet",
+        "bytes": 9352042524,
+        "mtime_ns": 1791961817000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.37.parquet",
+        "bytes": 9351666001,
+        "mtime_ns": 1791961304000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.38.parquet",
+        "bytes": 9352715458,
+        "mtime_ns": 1791962573000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.39.parquet",
+        "bytes": 9352398174,
+        "mtime_ns": 1791962297000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.4.parquet",
+        "bytes": 9351018101,
+        "mtime_ns": 1791960409000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.40.parquet",
+        "bytes": 9352306717,
+        "mtime_ns": 1791962178000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.41.parquet",
+        "bytes": 9350745891,
+        "mtime_ns": 1791960214000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.42.parquet",
+        "bytes": 9351737645,
+        "mtime_ns": 1791961388000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.43.parquet",
+        "bytes": 9351353199,
+        "mtime_ns": 1791960767000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.44.parquet",
+        "bytes": 9351631376,
+        "mtime_ns": 1791961165000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.45.parquet",
+        "bytes": 9351313583,
+        "mtime_ns": 1791960675000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.46.parquet",
+        "bytes": 9352191462,
+        "mtime_ns": 1791962055000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.47.parquet",
+        "bytes": 9351991716,
+        "mtime_ns": 1791961741000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.48.parquet",
+        "bytes": 9351915585,
+        "mtime_ns": 1791961632000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.49.parquet",
+        "bytes": 9352002832,
+        "mtime_ns": 1791961745000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.5.parquet",
+        "bytes": 9351354733,
+        "mtime_ns": 1791960786000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.50.parquet",
+        "bytes": 9352218548,
+        "mtime_ns": 1791962100000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.51.parquet",
+        "bytes": 9351734259,
+        "mtime_ns": 1791961384000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.52.parquet",
+        "bytes": 9350508760,
+        "mtime_ns": 1791960173000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.53.parquet",
+        "bytes": 9352388534,
+        "mtime_ns": 1791962267000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.54.parquet",
+        "bytes": 9351012195,
+        "mtime_ns": 1791960327000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.55.parquet",
+        "bytes": 9351400308,
+        "mtime_ns": 1791960840000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.56.parquet",
+        "bytes": 9351339835,
+        "mtime_ns": 1791960736000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.57.parquet",
+        "bytes": 9351308945,
+        "mtime_ns": 1791960641000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.58.parquet",
+        "bytes": 9351110349,
+        "mtime_ns": 1791960478000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.59.parquet",
+        "bytes": 9352636822,
+        "mtime_ns": 1791962545000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.6.parquet",
+        "bytes": 9352025564,
+        "mtime_ns": 1791961771000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.60.parquet",
+        "bytes": 9352034813,
+        "mtime_ns": 1791961816000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.61.parquet",
+        "bytes": 9351400192,
+        "mtime_ns": 1791960827000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.62.parquet",
+        "bytes": 9352260356,
+        "mtime_ns": 1791962110000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.63.parquet",
+        "bytes": 9352548542,
+        "mtime_ns": 1791962423000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.64.parquet",
+        "bytes": 9351342996,
+        "mtime_ns": 1791960737000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.65.parquet",
+        "bytes": 9351286318,
+        "mtime_ns": 1791960639000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.66.parquet",
+        "bytes": 9351536572,
+        "mtime_ns": 1791961045000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.67.parquet",
+        "bytes": 9351601097,
+        "mtime_ns": 1791961122000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.68.parquet",
+        "bytes": 9350706032,
+        "mtime_ns": 1791960201000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.69.parquet",
+        "bytes": 9351800923,
+        "mtime_ns": 1791961433000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.7.parquet",
+        "bytes": 9351094685,
+        "mtime_ns": 1791960470000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.70.parquet",
+        "bytes": 9352801912,
+        "mtime_ns": 1791962573000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.71.parquet",
+        "bytes": 9351315440,
+        "mtime_ns": 1791960690000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.72.parquet",
+        "bytes": 9351979827,
+        "mtime_ns": 1791961703000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.73.parquet",
+        "bytes": 9351918916,
+        "mtime_ns": 1791961643000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.74.parquet",
+        "bytes": 9352184035,
+        "mtime_ns": 1791962018000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.75.parquet",
+        "bytes": 9352448257,
+        "mtime_ns": 1791962342000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.76.parquet",
+        "bytes": 9352379769,
+        "mtime_ns": 1791962266000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.77.parquet",
+        "bytes": 9351989429,
+        "mtime_ns": 1791961730000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.78.parquet",
+        "bytes": 9350869072,
+        "mtime_ns": 1791960261000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.79.parquet",
+        "bytes": 9352190009,
+        "mtime_ns": 1791962050000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.8.parquet",
+        "bytes": 9350750791,
+        "mtime_ns": 1791960214000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.80.parquet",
+        "bytes": 9351168417,
+        "mtime_ns": 1791960548000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.81.parquet",
+        "bytes": 9350694791,
+        "mtime_ns": 1791960181000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.82.parquet",
+        "bytes": 9352224470,
+        "mtime_ns": 1791962102000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.83.parquet",
+        "bytes": 9352621594,
+        "mtime_ns": 1791962537000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.84.parquet",
+        "bytes": 9351638487,
+        "mtime_ns": 1791961166000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.85.parquet",
+        "bytes": 9352454371,
+        "mtime_ns": 1791962356000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.86.parquet",
+        "bytes": 9351449693,
+        "mtime_ns": 1791960875000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.87.parquet",
+        "bytes": 9352217489,
+        "mtime_ns": 1791962099000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.88.parquet",
+        "bytes": 9351173538,
+        "mtime_ns": 1791960563000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.89.parquet",
+        "bytes": 9351389071,
+        "mtime_ns": 1791960824000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.9.parquet",
+        "bytes": 9352029801,
+        "mtime_ns": 1791961777000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.90.parquet",
+        "bytes": 9351823371,
+        "mtime_ns": 1791961513000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.91.parquet",
+        "bytes": 9351348746,
+        "mtime_ns": 1791960748000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.92.parquet",
+        "bytes": 9351864380,
+        "mtime_ns": 1791961543000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.93.parquet",
+        "bytes": 9350711102,
+        "mtime_ns": 1791960208000000000,
+        "row_groups": 112,
+        "min": 2,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.94.parquet",
+        "bytes": 9350914403,
+        "mtime_ns": 1791960299000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.95.parquet",
+        "bytes": 9351528180,
+        "mtime_ns": 1791961025000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 99999999
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.96.parquet",
+        "bytes": 9352647496,
+        "mtime_ns": 1791962556000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.97.parquet",
+        "bytes": 9351551687,
+        "mtime_ns": 1791961081000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.98.parquet",
+        "bytes": 9352587365,
+        "mtime_ns": 1791962490000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      },
+      {
+        "path": "/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.99.parquet",
+        "bytes": 9351593436,
+        "mtime_ns": 1791961109000000000,
+        "row_groups": 112,
+        "min": 1,
+        "max": 100000000
+      }
+    ],
+    "contract": "Every non-null l_suppkey fits signed int32 according to all parquet row-group bounds; reject changed files"
+  }
+}

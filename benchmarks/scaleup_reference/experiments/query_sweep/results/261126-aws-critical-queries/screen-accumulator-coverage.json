@@ -1,0 +1,92 @@
+{
+  "scope": "All finished tasks in the two closed screening applications, including setup actions",
+  "groups": [
+    {
+      "run": "critical-screen-control-0",
+      "tasks": 16700,
+      "tasks_with_gpu_time": 14902,
+      "gpu_names": {
+        "gpuSemaphoreWait": 15438,
+        "gpuMaxConcurrentGpuTasks": 14635,
+        "gpuMaxDeviceMemoryBytes": 7409,
+        "gpuTime": 14902,
+        "gpuMaxPageableMemoryBytes": 5365,
+        "gpuMaxTaskFootprint": 14902,
+        "gpuMaxHostMemoryBytes": 7409,
+        "gpuMaxPinnedMemoryBytes": 7409,
+        "gpuOnGpuTasksWaitingGPUAvgCount": 1654,
+        "gpuOnGpuTasksWaitingGPUMaxCount": 81
+      },
+      "spill_records": [
+        {
+          "ID": 8,
+          "Name": "internal.metrics.memoryBytesSpilled",
+          "Update": 0,
+          "Value": 0,
+          "Internal": true,
+          "Count Failed Values": true
+        },
+        {
+          "ID": 9,
+          "Name": "internal.metrics.diskBytesSpilled",
+          "Update": 0,
+          "Value": 0,
+          "Internal": true,
+          "Count Failed Values": true
+        },
+        {
+          "ID": 8,
+          "Name": "internal.metrics.memoryBytesSpilled",
+          "Update": 0,
+          "Value": 0,
+          "Internal": true,
+          "Count Failed Values": true
+        }
+      ]
+    },
+    {
+      "run": "critical-screen-candidate0-0",
+      "tasks": 16056,
+      "tasks_with_gpu_time": 14517,
+      "gpu_names": {
+        "gpuMaxDeviceMemoryBytes": 6994,
+        "gpuTime": 14517,
+        "gpuMaxPageableMemoryBytes": 5290,
+        "gpuMaxTaskFootprint": 14517,
+        "gpuSemaphoreWait": 14794,
+        "gpuMaxHostMemoryBytes": 6994,
+        "gpuMaxPinnedMemoryBytes": 6994,
+        "gpuMaxConcurrentGpuTasks": 14022,
+        "gpuOnGpuTasksWaitingGPUAvgCount": 1736,
+        "gpuOnGpuTasksWaitingGPUMaxCount": 132
+      },
+      "spill_records": [
+        {
+          "ID": 8,
+          "Name": "internal.metrics.memoryBytesSpilled",
+          "Update": 0,
+          "Value": 0,
+          "Internal": true,
+          "Count Failed Values": true
+        },
+        {
+          "ID": 9,
+          "Name": "internal.metrics.diskBytesSpilled",
+          "Update": 0,
+          "Value": 0,
+          "Internal": true,
+          "Count Failed Values": true
+        },
+        {
+          "ID": 8,
+          "Name": "internal.metrics.memoryBytesSpilled",
+          "Update": 0,
+          "Value": 0,
+          "Internal": true,
+          "Count Failed Values": true
+        }
+      ]
+    }
+  ],
+  "interpretation": "GPU task accumulators are present; no nonzero GPU spill accumulator was emitted in these applications. Spark task spill bytes are zero."
+}

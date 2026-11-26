@@ -1,0 +1,46 @@
+{
+  "generated_beijing": "2026-11-26T20:33:01.243223+08:00",
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "repository": "https://github.com/binmahone/spark-rapids",
+  "source_revision_before_snapshot": "6a5395cd6443d2128d08fd74b111fd8930641645",
+  "entrypoint": "benchmarks/scaleup_reference/experiments/query_sweep/start_critical.sh",
+  "arguments": [
+    "<prepared-host-work-directory>",
+    "<owner-thread-id>",
+    "<oracle|screen|confirm|suite>"
+  ],
+  "runtime_revisions_by_phase": {
+    "suite-state": "6a5395cd6443d2128d08fd74b111fd8930641645",
+    "oracle-state": "933baf11e9dfbd4313ac9660c01bc2bfb558f240",
+    "confirm-state": "b77214a08f479b8aad796b160ae3ade44bb8e49a",
+    "screen-state": "933baf11e9dfbd4313ac9660c01bc2bfb558f240"
+  },
+  "baseline_selection_source_commit": "5c8129e5496723c316f6f29eba92e231f058605b",
+  "baseline_selection_source_path": "benchmarks/scaleup_reference/experiments/query_sweep/results/261126-aws-speed-of-light/selected-cases-before-q11.json",
+  "baseline_selection_sha256": "775d8c44027b5252d906c03ef87b303f113f17388647c851eb40dd6cc5776341",
+  "baseline_selection_destination": "<prepared-host-work-directory>/exports/validated-261126/selected-cases-before-q11.json",
+  "engine_manifest_path": "benchmarks/scaleup_reference/experiments/query_sweep/results/261126-aws-speed-of-light/engine-manifest.json",
+  "host_prerequisites_path": "benchmarks/scaleup_reference/experiments/query_sweep/results/261126-aws-speed-of-light/host-prerequisites.json",
+  "reproduction_boundary": "Owned prepared AWS host required. This is an incremental experiment entrypoint, not a clean-host bootstrap. Dataset and frozen engine come from the prior evidence index; ownership, oracle and completed-phase receipts must be present.",
+  "measurement_policy": "Two sequential actions per query in each fresh application, no cache flush. Per-query best-of-two suite sums are measured in one actual combined run, not stitched from different candidates.",
+  "validation_boundary": "Full-scale results match the retained GPU references. Separate CPU adversarial fixtures check schema, decimal/null/duplicate/empty semantics and detect deliberate mutations; no independent full-SF10K CPU run is claimed.",
+  "causal_boundary": "Q8 changes join order, broadcast placement and supplier payload together. Q9 also changes the join order. Q21 has an additional identical-SQL wide-state control around ABBA; compare it separately from the original optimizer-produced plan.",
+  "raw_archive": {
+    "archive": "/home/nvidia/mahone_gluten/wild_spark_rapids/261126_aws_speed_of_light/evidence/raw/critical-complete.tar.gz",
+    "bytes": 268949762,
+    "sha256": "3077c245b2fdc718e4ad25a855de153167cf570018b266484fceba34b0987815",
+    "analysis_source_revision": "6a5395cd6443d2128d08fd74b111fd8930641645",
+    "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+    "instance_id": "i-0d4c92eab5df57fb8",
+    "verified": true,
+    "transfer": "Eight immutable SSH ranges, verified full SHA-256",
+    "retention": "Retain until explicit user release"
+  },
+  "validated_actions": 84,
+  "selected_queries": [
+    8,
+    21
+  ],
+  "retention": "Retain AWS instance until explicit user release"
+}

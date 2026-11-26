@@ -1,0 +1,11 @@
+{
+  "archive": "/home/nvidia/mahone_gluten/wild_spark_rapids/261126_aws_speed_of_light/evidence/raw/critical-complete.tar.gz",
+  "bytes": 268949762,
+  "sha256": "3077c245b2fdc718e4ad25a855de153167cf570018b266484fceba34b0987815",
+  "analysis_source_revision": "6a5395cd6443d2128d08fd74b111fd8930641645",
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "verified": true,
+  "transfer": "Eight immutable SSH ranges, verified full SHA-256",
+  "retention": "Retain until explicit user release"
+}

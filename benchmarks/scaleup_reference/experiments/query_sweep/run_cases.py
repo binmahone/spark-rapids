@@ -270,6 +270,17 @@ def main():
             scan_configuration = {}
             if not args.reference_only:
                 scan_configuration = apply_query_settings(spark, query_profile)
+            if config.get('key_domain_proof'):
+                proof_config = config['key_domain_proof']
+                assert sha(Path(proof_config['path'])) == proof_config['sha256']
+                proof = read(proof_config['path'])
+                assert proof['status'] == 'passed' and proof['dataset_bounds']['dataset'] == config['dataset']
+                records = proof['dataset_bounds']['files']
+                tables = {r['table'] for r in records}
+                assert {str(p) for t in tables for p in Path(config['dataset']).joinpath(t).rglob('*.parquet')} == {r['path'] for r in records}
+                for record in records:
+                    stat = Path(record['path']).stat()
+                    assert (stat.st_size, stat.st_mtime_ns) == (record['bytes'], record['mtime_ns'])
             for table, casts in config['view_overrides'].get(str(query), {}).items():
                 base = spark.table(table)
                 base.select(*[base[f.name].cast(casts[f.name]).alias(f.name) if f.name in casts else

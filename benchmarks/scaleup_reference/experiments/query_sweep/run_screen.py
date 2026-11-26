@@ -17,7 +17,8 @@ import services
 from variants import ORDER, catalog, extra_cases, targeted
 
 
-def launch_group(work, phase, index, cases, global_conf, collector=None):
+def launch_group(work, phase, index, cases, global_conf, collector=None,
+                 view_casts=None, domain_proof=None):
     deployment = read(work / 'evidence/deployment.json')
     config = load_config('aws48x', work / 'evidence/deployment.json')
     config['spark_conf'].update(global_conf)
@@ -42,6 +43,12 @@ def launch_group(work, phase, index, cases, global_conf, collector=None):
             SUITE / 'scripts/catalog_statistics.py', SUITE / 'scripts/validation.py']},
         classification='Unqualified screening, not a Daily Trend score')
     helper = None
+    if view_casts is not None:
+        assert domain_proof is not None
+        proof = read(domain_proof)
+        assert proof['status'] == 'passed' and proof['dataset_bounds']['dataset'] == config['dataset']
+        config['view_overrides'].update(view_casts)
+        config['key_domain_proof'] = {'path': str(domain_proof), 'sha256': sha(domain_proof)}
     if collector is not None:
         assert collector in ('original', 'early-leaves')
         helper = work / 'artifacts/early-shuffle/early-shuffle.jar'

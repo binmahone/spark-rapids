@@ -1,0 +1,47 @@
+{
+  "generated_beijing": "2026-11-26T19:24:02.099838+08:00",
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "repository": "https://github.com/binmahone/spark-rapids",
+  "runtime_source_revision": "4e65f13ef66feae8fcf4c5cd1f081e885ce58252",
+  "analysis_source_revision": "c5b5f571f085c15f37c5dd36d0c4c9dbfc2bcbbc",
+  "classification": "Controlled single-host measurements; no general kernel tuning recommendation",
+  "queries": [
+    9,
+    10,
+    11,
+    12,
+    13,
+    18
+  ],
+  "entrypoint": "benchmarks/scaleup_reference/experiments/query_sweep/start_pressure_followup.sh",
+  "arguments": [
+    "<prepared-host-work-directory>",
+    "<owner-thread-id>",
+    "screen"
+  ],
+  "selection_source_commit": "5c8129e5496723c316f6f29eba92e231f058605b",
+  "selection_source_path": "benchmarks/scaleup_reference/experiments/query_sweep/results/261126-aws-speed-of-light/selected-cases-before-q11.json",
+  "selection_sha256": "775d8c44027b5252d906c03ef87b303f113f17388647c851eb40dd6cc5776341",
+  "required_selection_destination": "<prepared-host-work-directory>/exports/validated-261126/selected-cases-before-q11.json",
+  "engine_manifest_path": "benchmarks/scaleup_reference/experiments/query_sweep/results/261126-aws-speed-of-light/engine-manifest.json",
+  "host_prerequisites_path": "benchmarks/scaleup_reference/experiments/query_sweep/results/261126-aws-speed-of-light/host-prerequisites.json",
+  "reproduction_boundary": "Owned prepared AWS host required; setup, dataset and pinned artifact dependencies remain those of the preceding speed-of-light evidence. Runner guards require its completed-phase ownership receipts.",
+  "single_variable": "vm.watermark_scale_factor: 10, 100, 100, 10; restored to 10",
+  "configuration": "Frozen engine, SQL selection, per-query settings, validation and cleanup held constant",
+  "sampling": "Persistent NVML and host/VM counters at one-second intervals; no cache flush",
+  "result_interpretation": "Six-query subset when mode=screen; do not label it a full TPC-H suite score",
+  "retention": "AWS host retained until explicit user release; no permanent sysctl configuration written",
+  "raw_evidence": {
+    "archive": "/home/nvidia/mahone_gluten/wild_spark_rapids/261126_aws_speed_of_light/evidence/raw/pressure-screen-complete.tar.gz",
+    "bytes": 155495317,
+    "sha256": "8466e6b2f49208f9eba1c4b50eaa82bffb9769ae4cb4bdb85c44b6d2f956a8fe",
+    "analysis_source_revision": "c5b5f571f085c15f37c5dd36d0c4c9dbfc2bcbbc",
+    "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+    "instance_id": "i-0d4c92eab5df57fb8",
+    "verified": true,
+    "transfer": "Verified prefix plus eight concurrent SSH byte ranges; complete archive SHA-256 verified",
+    "retention": "Retain until explicit user release"
+  },
+  "source_revision_before_snapshot": "c5b5f571f085c15f37c5dd36d0c4c9dbfc2bcbbc"
+}

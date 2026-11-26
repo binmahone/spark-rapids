@@ -1,0 +1,24 @@
+{
+  "candidate_adopted": false,
+  "full_suite_launched": false,
+  "screening_gate_passed": false,
+  "decision": "Retain the original kernel setting and preceding full-suite reference; this subset does not establish a new suite score",
+  "timing_interpretation": "Both all-action totals and second-action totals overlap across conditions; faster second actions also occur after returning to the control",
+  "causal_limit": "Different physical cache states remain despite fixed logical plans, SQL, read bytes and query profiles. This experiment does not establish that the candidate causes a regression or that host-memory optimization is ineffective.",
+  "gpu_spill_counter_values": {
+    "gpuSpillToHostBytes": [
+      0
+    ],
+    "gpuSpillToDiskBytes": [
+      0
+    ]
+  },
+  "foreground_compaction_stall_counter_values": [
+    0
+  ],
+  "background_compaction": "Present in slow and fast samples; occurrence alone is not a root-cause diagnosis",
+  "shadow_metadata_reclaim": "workingset_nodereclaim increases in the B1 Q10/Q12 first actions; retained as a correlation requiring runtime stacks or an isolated test before causal attribution",
+  "investment_decision": "Do not expand this kernel knob into a parameter sweep. Prioritize measured reductions in scan/join/aggregate work; retain host allocation and cache behavior as a separate stability investigation.",
+  "measurement_limit": "PSI full time is a host stall signal within sampled query windows, not independently additive query time. Scan operator durations are task sums.",
+  "resource_audit": "Shutdown logs still contain CUDA buffer leak messages in both conditions; the final process audit found no retained Spark or GPU compute processes. No leak-free claim is made."
+}

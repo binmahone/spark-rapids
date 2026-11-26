@@ -6,7 +6,9 @@ readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly out="$work/artifacts/cold-host-read"
 mkdir -p "$out" "$scratch"
 exec > >(tee "$out/build-and-tests.log") 2>&1
-g++ -std=c++17 -O2 -Wall -Wextra -Werror -fPIC -shared "$here/cold_host_read.cpp" -ldl -o "$out/libcold_host_read.so"
+readonly stat_header=/usr/src/linux-aws-6.8-headers-6.8.0-1066/include/uapi/linux/stat.h
+test -f "$stat_header"
+g++ -std=c++17 -O2 -Wall -Wextra -Werror -include "$stat_header" -fPIC -shared "$here/cold_host_read.cpp" -ldl -o "$out/libcold_host_read.so"
 g++ -std=c++17 -O2 -Wall -Wextra -Werror -fPIC -shared "$here/cold_host_read_fault.cpp" -ldl -o "$out/libcold_host_read_fault.so"
 for test in buffered cold-direct error short; do
   mkdir "$scratch/$test" "$out/$test"
@@ -25,5 +27,6 @@ for test in buffered cold-direct error short; do
       python3 "$here/test_cold_host_read.py" --root "$scratch/$test" "${flags[@]}" > "$out/$test/result.json"
 done
 sha256sum "$out/libcold_host_read.so" "$here/cold_host_read.cpp" > "$out/sha256.txt"
+sha256sum "$stat_header" >> "$out/sha256.txt"
 git -C "$here" rev-parse HEAD > "$out/source-revision.txt"
 printf '%s\n' 'Native adapter and all four byte-parity/fallback test processes passed'

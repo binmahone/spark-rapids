@@ -21,6 +21,7 @@ def selected_arm(query, arm):
         return {8: 'row-propagation', 11: 'aggregate-total-reuse'}.get(query, 'baseline')
     if arm == 'combined':
         return {3: 'preaggregate-broadcast', 4: 'preaggregate', 9: 'row-propagation-reuse', 10: 'preaggregate',
+                11: 'aggregate-total-reuse',
                 15: 'aggregate-reuse', 17: 'window-average',
                 18: 'prefilter-broadcast', 20: 'prefilter'}.get(query, 'baseline')
     if arm == 'screen':

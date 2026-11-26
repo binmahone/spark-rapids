@@ -162,6 +162,12 @@ def main():
         from monitor_cold_host_read import snapshot
         observed_native = snapshot(stats)
         if report['read_mode'] == 'cold-direct':
+            executor_pids = {str(pid) for pid in observed}
+            report['non_executor_native_counters'] = {
+                pid: value for pid, value in observed_native.items() if pid not in executor_pids}
+            assert all(v['eligible'] == 0 for v in report['non_executor_native_counters'].values())
+            observed_native = {pid: value for pid, value in observed_native.items()
+                               if pid in executor_pids}
             assert len(observed_native) == 8, observed_native
             assert all(v['eligible'] > 0 for v in observed_native.values()), observed_native
             assert sum(v['direct'] for v in observed_native.values()) > 0, observed_native

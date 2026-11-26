@@ -8,10 +8,12 @@ import re
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--work', required=True)
+parser.add_argument('--pattern', default='ceiling-*')
+parser.add_argument('--output', default='evidence/resource-log-audit.json')
 args = parser.parse_args()
 work = Path(args.work).resolve()
 groups = []
-for group in sorted((work / 'screen').glob('ceiling-*')):
+for group in sorted((work / 'screen').glob(args.pattern)):
     result_path = group / 'applications/suite/result.json'
     if not result_path.exists():
         continue
@@ -44,7 +46,8 @@ report = {'classification': 'Observed completed-log messages, not an allocation 
     'limits': ['A successful result check does not establish leak-free shutdown',
                'OOM/retry keyword matches are not necessarily fatal failures',
                'Process exit and retained GPU allocations require the separate lifecycle audit']}
-output = work / 'evidence/resource-log-audit.json'
+output = work / args.output
+output.parent.mkdir(parents=True, exist_ok=True)
 output.write_text(json.dumps(report, indent=2) + '\n')
 for group in groups:
     print(group['run'], group['counts'])

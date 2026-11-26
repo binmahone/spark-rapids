@@ -295,5 +295,6 @@ def catalog(include_followups=False):
         if candidate:
             result.append(candidate)
     from ceiling_variants import cases, refinements, q11_total_reuse
+    from critical_variants import cases as critical_cases
     return result + extra_cases() + (followup_cases() + cases() + refinements() +
-                                    [q11_total_reuse()] if include_followups else [])
+                                    [q11_total_reuse()] + critical_cases() if include_followups else [])

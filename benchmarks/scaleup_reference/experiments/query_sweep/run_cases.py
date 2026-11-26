@@ -67,6 +67,22 @@ def choose_case(query, config):
 
 
 def check_branch(query, candidate, plan):
+    if candidate.name.startswith('critical_witness_'):
+        scans = [line for line in plan.splitlines() if 'Scan' in line and
+                 'spark_catalog.default.lineitem[' in line]
+        if len(scans) != 1 or 'GpuHashAggregate' not in plan:
+            raise MechanismNotReached('The complete single-scan witness aggregate is absent')
+        if candidate.name == 'critical_witness_int32' and not re.search(
+                r'(?i)cast\(l_suppkey#\d+L? as int\)', plan):
+            raise MechanismNotReached('Supplier-key narrowing is absent')
+    if candidate.name == 'critical_region_orders_flags':
+        if 'probe_brazil' not in plan or not any('BroadcastHashJoin' in line and
+                'o_custkey' in line for line in plan.splitlines()):
+            raise MechanismNotReached('Region-customer broadcast or Boolean supplier payload is absent')
+    if candidate.name == 'critical_supply_before_fact':
+        if not any('HashJoin' in line and 'ps_suppkey' in line and 's_suppkey' in line
+                   for line in plan.splitlines()):
+            raise MechanismNotReached('Supplier to partsupp join is absent')
     if candidate.name == 'single_scan_partsupp_total':
         scans = [line for line in plan.splitlines() if 'Scan' in line and
                  'spark_catalog.default.partsupp[' in line]
@@ -223,6 +239,14 @@ def main():
         reset_keys = sorted({key for overrides in config['case_overrides'].values() for key in overrides})
         for query in queries:
             candidate = choose_case(query, config)
+            if candidate.name == 'critical_witness_int32':
+                proof = read(run.parents[1] / 'critical/oracle.json')
+                assert proof['status'] == 'passed' and proof['dataset_bounds']['dataset'] == config['dataset']
+                records = proof['dataset_bounds']['files']
+                assert {str(p) for p in Path(config['dataset']).joinpath('lineitem').rglob('*.parquet')} == {r['path'] for r in records}
+                for record in records:
+                    stat = Path(record['path']).stat()
+                    assert (stat.st_size, stat.st_mtime_ns) == (record['bytes'], record['mtime_ns'])
             state.update(active_query=query, active_variant=candidate.name)
             write(app / 'result.json', state)
             query_profile = profiles[str(query)]

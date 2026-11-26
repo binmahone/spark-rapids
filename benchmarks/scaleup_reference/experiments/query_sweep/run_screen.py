@@ -37,6 +37,7 @@ def launch_group(work, phase, index, cases, global_conf):
         experiment_source_sha256={str(p.relative_to(SUITE)): sha(p) for p in [
             HERE / 'run_screen.py', HERE / 'run_cases.py', HERE / 'run_ceiling.py',
             HERE / 'variants.py', HERE / 'ceiling_variants.py',
+            HERE / 'critical_variants.py', HERE / 'critical_oracle.py',
             SUITE / 'scripts/common.py', SUITE / 'scripts/services.py',
             SUITE / 'scripts/catalog_statistics.py', SUITE / 'scripts/validation.py']},
         classification='Unqualified screening, not a Daily Trend score')

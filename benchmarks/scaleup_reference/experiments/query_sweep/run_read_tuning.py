@@ -39,7 +39,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', required=True)
     p.add_argument('--thread-id', required=True)
-    p.add_argument('--phase', choices=['A0', 'B1', 'B2', 'A3', 'suite'], required=True)
+    p.add_argument('--phase', choices=['A0', 'B1', 'B2', 'A3', 'C1', 'suite'], required=True)
     a = p.parse_args()
     work = Path(a.work).resolve()
     owner = read(work / 'evidence/owner.json')
@@ -57,7 +57,7 @@ def main():
               'source_revision': subprocess.check_output(['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
               'classification': 'Controlled single-variable tuning; no kernel profiling',
               'tuning_key': 'spark.rapids.sql.reader.kvikio.numThreads',
-              'kvikio_threads': 32 if a.phase.startswith('A') else 8,
+              'kvikio_threads': 32 if a.phase.startswith('A') else (16 if a.phase == 'C1' else 8),
               'cache_policy': 'No cache flush; two actions per query',
               'instance_policy': 'Retain until explicit user release'}
     write(directory / 'controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),

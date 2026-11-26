@@ -86,5 +86,24 @@ report = {'complete_ABBA': complete, 'groups': rows, 'queries': per_query,
           'limits': ['No OS cache flush; examine first-action physical reads and reclaim separately',
                      'Actual initialized native thread pools are verified for all eight executors',
                      'Thread counts differ only at fresh-executor startup; frozen SQL, data, JARs and per-query overrides are preserved']}
+middle = directory / 'C1/analysis.json'
+if middle.exists():
+    probe = read(middle)
+    assert probe['pool_verified'] and probe['kvikio_threads'] == 16
+    total = sum(s['sql_plus_cleanup_seconds'] for s in probe['samples'] if s['iteration'] == 2)
+    comparison = []
+    for q in queries:
+        before = next(s for s in phases['A3']['samples'] if s['query'] == q and s['iteration'] == 2)
+        after = next(s for s in probe['samples'] if s['query'] == q and s['iteration'] == 2)
+        assert before['normalized_plan_sha256'] == after['normalized_plan_sha256']
+        comparison.append({'query': q, 'control_sql_seconds': before['sql_seconds'],
+            'candidate_sql_seconds': after['sql_seconds'],
+            'control_total_seconds': before['sql_plus_cleanup_seconds'],
+            'candidate_total_seconds': after['sql_plus_cleanup_seconds']})
+    report['thread16_probe'] = {'second_total_seconds': total,
+        'control_A3_second_total_seconds': by_name['A3']['second_total_seconds'],
+        'eligible_for_repetition': total <= .97 * by_name['A3']['second_total_seconds'] and all(
+            r['candidate_total_seconds'] <= 1.05 * r['control_total_seconds'] for r in comparison),
+        'queries': comparison, 'scope': 'Single screening probe; not an accepted configuration'}
 write(directory / 'decision.json', report)
 print(json.dumps({k: v for k, v in report.items() if k != 'queries'}, indent=2))

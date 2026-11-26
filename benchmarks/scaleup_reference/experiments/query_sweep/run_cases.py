@@ -30,6 +30,7 @@ from pyspark.sql import SparkSession
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 from variants import Variant, catalog, original, targeted
+from ceiling_variants import prepare_frame
 
 from catalog_statistics import register_tables
 from common import SUITE, TABLES, apply_query_settings, read, sha, write
@@ -66,6 +67,23 @@ def choose_case(query, config):
 
 
 def check_branch(query, candidate, plan):
+    if candidate.name == 'single_scan_quantity_state':
+        scans = [line for line in plan.splitlines() if 'Scan' in line and
+                 'spark_catalog.default.lineitem[' in line]
+        if len(scans) != 1 or not any('Gpu' in line and 'BroadcastHashJoin' in line and
+                'l_orderkey' in line for line in plan.splitlines()):
+            raise MechanismNotReached('Single-scan grouped quantity broadcast is absent')
+    if candidate.name == 'prefilter_partsupp_reuse':
+        scans = [line for line in plan.splitlines() if 'Scan' in line and
+                 'spark_catalog.default.part[' in line]
+        if len(scans) != 1 or 'ReusedExchange' not in plan:
+            raise MechanismNotReached('Selective part-key broadcast was not shared')
+    if candidate.name in ('preaggregate_line_revenue', 'preaggregate_customer_revenue'):
+        key = 'l_orderkey' if query == 3 else 'o_custkey'
+        if not any('GpuHashAggregate' in line and 'sum(' in line and
+                   re.search(r'keys=\[' + key + r'#[0-9]+L?\]', line)
+                   for line in plan.splitlines()):
+            raise MechanismNotReached('The narrow-key revenue aggregate is absent')
     if candidate.name == 'reuse_revenue_exchange':
         scans = [line for line in plan.splitlines() if 'Scan' in line and
                  'spark_catalog.default.lineitem[' in line]
@@ -225,7 +243,7 @@ def main():
                 hard.start()
                 try:
                     started = time.perf_counter()
-                    frame = spark.sql(candidate.sql)
+                    frame = prepare_frame(spark, candidate)
                     execution = frame._jdf.queryExecution()
                     preflight = str(execution.executedPlan().toString())
                     (app / (token + '.preflight.txt')).write_text(preflight)

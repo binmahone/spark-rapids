@@ -138,16 +138,31 @@ def main():
                     case = (Variant(int(q), 'baseline', original(int(q)), 'Unchanged reference SQL')
                             if spec['name'] == 'baseline' else available[(int(q), spec['name'])])
                     selected[int(q)] = replace(case, overrides=spec['overrides'])
-                candidate = replace(q11_total_reuse(), overrides=selected[11].overrides)
+                candidates = [replace(q11_total_reuse(), overrides=selected[11].overrides),
+                    replace(selected[21], overrides={**selected[21].overrides,
+                        'spark.sql.shuffle.partitions': '128',
+                        'spark.rapids.sql.batchSizeBytes': '4294967296'})]
                 a, b = [], []
                 for index, arm in enumerate('ABBA'):
-                    samples = run('post-' + arm + str(index), [selected[11] if arm == 'A' else candidate])
+                    values = [selected[c.query] for c in candidates] if arm == 'A' else candidates
+                    samples = run('post-' + arm + str(index), values)
                     (a if arm == 'A' else b).extend(samples)
-                d = decision(11, a, b)
-                d.update(variant=candidate.name, baseline_variant=selected[11].name)
-                report['decisions'].append(d)
-                if d['accepted']:
-                    selected[11] = candidate
+                for candidate in candidates:
+                    d = decision(candidate.query, a, b)
+                    d.update(variant=candidate.name, baseline_variant=selected[candidate.query].name,
+                             overrides=candidate.overrides)
+                    if candidate.query == 21:
+                        d['probe_scope'] = ('A bounded joint setting: 128 shuffle partitions and a 4 GiB '
+                            'operator batch, following observed internal repartitioning at 128/2 GiB')
+                        d['aggregate_tasks_repartitioned'] = {
+                            arm: [sum(n['metrics'].get('numTasksRepartitioned', 0)
+                                for n in s['plan_metrics'] if n['node'] == 'GpuHashAggregate')
+                                for s in samples if s['query'] == 21 and s['iteration'] == 2]
+                            for arm, samples in [('control', a), ('candidate', b)]}
+                    report['decisions'].append(d)
+                    if d['accepted']:
+                        selected[candidate.query] = candidate
+                if any(d['accepted'] for d in report['decisions']):
                     combined = run('post-final-suite', [selected[q] for q in ORDER])
                     report['combined_best_sql_sum_seconds'] = sum(min(s['sql_seconds'] for s in combined
                         if s['query'] == q) for q in ORDER)

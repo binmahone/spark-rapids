@@ -7,6 +7,8 @@ from pathlib import Path
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--work', required=True)
+parser.add_argument('--disk-device', required=True,
+                    help='Verified Linux diskstats device backing the dataset mount, such as dm-0')
 args = parser.parse_args()
 work = Path(args.work)
 analysis = json.loads((work / 'evidence/sweep-analysis.json').read_text())
@@ -29,7 +31,8 @@ for group in analysis['groups']:
         before = {item['pid']: item for item in first['executors']}
         after = {item['pid']: item for item in last['executors']}
         common = before.keys() & after.keys()
-        md = [name for name in first['diskstats'] if name.startswith('md') and name in last['diskstats']]
+        device = args.disk_device
+        assert device in first['diskstats'] and device in last['diskstats'], device
         gpus = [gpu for record in selected for gpu in record['gpus']]
         busy = [gpu for gpu in gpus if gpu.get('util_gpu', 0) >= 50]
         delta = {key: last['vmstat'][key] - first['vmstat'][key] for key in first['vmstat']}
@@ -40,8 +43,8 @@ for group in analysis['groups']:
             'executor_pids_covered': sorted(common),
             'executor_physical_read_bytes': sum(after[pid]['io'].get('read_bytes', 0) -
                 before[pid]['io'].get('read_bytes', 0) for pid in common),
-            'whole_host_md_devices': md,
-            'whole_host_md_read_bytes': sum((last['diskstats'][name][2] - first['diskstats'][name][2]) * 512 for name in md),
+            'dataset_block_device': device,
+            'whole_device_read_bytes': (last['diskstats'][device][2] - first['diskstats'][device][2]) * 512,
             'vmstat_delta': delta,
             'min_mem_available_kib': min(record['memory_kib']['MemAvailable'] for record in selected),
             'gpu_max_temperature_c': max(gpu['temperature_c'] for gpu in gpus),

@@ -18,7 +18,7 @@ import re
 
 def selected_arm(query, arm):
     if arm == 'combined':
-        return {3: 'preaggregate', 9: 'row-propagation-reuse', 10: 'preaggregate',
+        return {3: 'preaggregate', 4: 'preaggregate', 9: 'row-propagation-reuse', 10: 'preaggregate',
                 15: 'aggregate-reuse', 17: 'window-average',
                 18: 'prefilter', 20: 'prefilter'}.get(query, 'baseline')
     if arm == 'screen':

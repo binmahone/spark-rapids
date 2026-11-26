@@ -8,7 +8,9 @@ mkdir -p "$out" "$scratch"
 exec > >(tee "$out/build-and-tests.log") 2>&1
 readonly stat_header=/usr/src/linux-aws-6.8-headers-6.8.0-1066/include/uapi/linux/stat.h
 test -f "$stat_header"
-g++ -std=c++17 -O2 -Wall -Wextra -Werror -include "$stat_header" -fPIC -shared "$here/cold_host_read.cpp" -ldl -o "$out/libcold_host_read.so"
+mkdir -p "$out/include/linux"
+cp "$stat_header" "$out/include/linux/stat.h"
+g++ -std=c++17 -O2 -Wall -Wextra -Werror -I "$out/include" -fPIC -shared "$here/cold_host_read.cpp" -ldl -o "$out/libcold_host_read.so"
 g++ -std=c++17 -O2 -Wall -Wextra -Werror -fPIC -shared "$here/cold_host_read_fault.cpp" -ldl -o "$out/libcold_host_read_fault.so"
 for test in buffered cold-direct error short; do
   mkdir "$scratch/$test" "$out/$test"

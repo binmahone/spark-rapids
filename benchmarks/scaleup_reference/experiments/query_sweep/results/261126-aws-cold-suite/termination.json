@@ -1,0 +1,124 @@
+{
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "region": "us-west-2",
+  "final_state": "terminated",
+  "verified_time_beijing": "2026-11-26T23:31:22.205588+08:00",
+  "source_revision_preserved_before_termination": "46f4a836df6c15878f77086c873487cfe87a702e",
+  "instance_creation_provenance": {
+    "successful_direct_result": true,
+    "rollout_thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+    "direct_tool_calls": [
+      {
+        "line": 16658,
+        "call_id": "call_77420921c14e4157994e5894ed59273b",
+        "timestamp": "2026-11-26T06:44:42.468Z"
+      },
+      {
+        "line": 16660,
+        "call_id": "call_77420921c14e4157994e5894ed59273b",
+        "timestamp": "2026-11-26T06:44:43.630Z"
+      },
+      {
+        "line": 16665,
+        "call_id": "call_d100bfa81ced4e57aa493da9338c2664",
+        "timestamp": "2026-11-26T06:45:53.938Z"
+      },
+      {
+        "line": 16668,
+        "call_id": "call_d100bfa81ced4e57aa493da9338c2664",
+        "timestamp": "2026-11-26T06:45:53.996Z"
+      }
+    ]
+  },
+  "termination_method": "force with skip OS shutdown",
+  "force_termination": {
+    "instance_id": "i-0d4c92eab5df57fb8",
+    "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+    "time_utc": "2026-11-26T15:28:54.989797+00:00",
+    "previous_state": "shutting-down",
+    "reason": "Ordinary termination remained shutting-down after the bounded polling interval. All retained data was copied, checksummed and pushed before the initial termination; all benchmark services had exited.",
+    "official_method": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-terminate-methods.html",
+    "force": true,
+    "skip_os_shutdown": true,
+    "response": {
+      "TerminatingInstances": [
+        {
+          "InstanceId": "i-0d4c92eab5df57fb8",
+          "CurrentState": {
+            "Code": 32,
+            "Name": "shutting-down"
+          },
+          "PreviousState": {
+            "Code": 32,
+            "Name": "shutting-down"
+          }
+        }
+      ]
+    }
+  },
+  "authorization": "User requested release of instances created by this session after useful experiments finish",
+  "remaining_owned_instances_in_region": [],
+  "remaining_owned_ebs_volumes_in_region": [],
+  "spot_requests": [
+    {
+      "id": "sir-cgigii5j",
+      "state": "active",
+      "type": "one-time",
+      "status": "fulfilled"
+    }
+  ],
+  "access_resources": {
+    "security_group_id": "sg-0eb8d7d3a3782c324",
+    "key_name": "scaleup-reference-01a20622-0ca",
+    "reason": "Allocation reused these access resources; release scope is the instance and its DeleteOnTermination disk"
+  },
+  "raw_archives_verified_before_termination": [
+    {
+      "archive": "ceiling-261126-complete.tar.gz",
+      "bytes": 1631331065,
+      "sha256": "1178c04648d72069770a1babd98d2a34226c95c54cd6f8b5ed8e5c7c8d7e9665"
+    },
+    {
+      "archive": "early-shuffle-complete.tar.gz",
+      "bytes": 33966353,
+      "sha256": "66ad066913bbc0ef3512039af833a7d8b2fdc8b93525371be0275f7e256bbb2d"
+    },
+    {
+      "archive": "cold-suite-complete.tar.gz",
+      "bytes": 342508910,
+      "sha256": "f43d16c735421951895dd0135cdf5a8c6fcfa9267f38ade9eef7654f24bd95d8"
+    },
+    {
+      "archive": "read-tuning-complete.tar.gz",
+      "bytes": 163520517,
+      "sha256": "47bac73b512d1bae37007cbaf4595f71097b44c18aa1c1f1ebb5cfce059849e2"
+    },
+    {
+      "archive": "bottleneck-complete.tar.gz",
+      "bytes": 98589953,
+      "sha256": "80c37afa6c6baeba81bdd6e3bd47e3854fcd9894834227eb91a1d45f7c889ee9"
+    },
+    {
+      "archive": "pressure-screen-complete.tar.gz",
+      "bytes": 155495317,
+      "sha256": "8466e6b2f49208f9eba1c4b50eaa82bffb9769ae4cb4bdb85c44b6d2f956a8fe"
+    },
+    {
+      "archive": "narrow-keys-complete.tar.gz",
+      "bytes": 22297913,
+      "sha256": "d38927b4a4fa0d123e1037d46ce0b6e43873e6c8e6d21d4eb788865e06111ae9"
+    },
+    {
+      "archive": "critical-complete.tar.gz",
+      "bytes": 268949762,
+      "sha256": "3077c245b2fdc718e4ad25a855de153167cf570018b266484fceba34b0987815"
+    },
+    {
+      "archive": "cold-host-read-complete.tar.gz",
+      "bytes": 80014234,
+      "sha256": "dbc00253d9b4a6702e9e0c42e59d03bb49ae383d5fa27ba95e6b3928b45679a9"
+    }
+  ],
+  "local_full_receipt_sha256": "222df133b57f64d4ade2cae2a0a19698d88e7f8cf9737c0eecd2bc512d788cb0"
+}

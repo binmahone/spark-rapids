@@ -282,9 +282,11 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
                         sql=re.sub(r'\b'+table+r'\b','__probe_'+table,sql,flags=re.I)
                     return sql
                 spark.conf.set('spark.rapids.sql.enabled','false')
-                reference=Counter(tuple(row) for row in spark.sql(renamed(original)).collect())
-                cpu=Counter(tuple(row) for row in spark.sql(renamed(transform(query,original,arm))).collect())
-                if reference != cpu:
+                reference_frame=spark.sql(renamed(original))
+                reference=Counter(tuple(row) for row in reference_frame.collect())
+                cpu_frame=spark.sql(renamed(transform(query,original,arm)))
+                cpu=Counter(tuple(row) for row in cpu_frame.collect())
+                if reference != cpu or reference_frame.schema != cpu_frame.schema:
                     raise AssertionError(f'Q{query}: CPU counterexample failed')
                 if not require_gpu:
                     results.append({'query':query,'empty':empty,'status':'passed',
@@ -295,7 +297,7 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
                 frame=spark.sql(renamed(transform(query,original,arm)))
                 gpu=Counter(tuple(row) for row in frame.collect())
                 plan=str(frame._jdf.queryExecution().executedPlan().toString())
-                if reference != gpu or 'GpuHashAggregate' not in plan:
+                if reference != gpu or reference_frame.schema != frame.schema or 'GpuHashAggregate' not in plan:
                     raise AssertionError(f'Q{query}: GPU counterexample failed or aggregate did not run on GPU')
                 results.append({'query':query,'empty':empty,'status':'passed',
                                 'reference':'CPU original SQL', 'cpu_rewrite_equal':True,

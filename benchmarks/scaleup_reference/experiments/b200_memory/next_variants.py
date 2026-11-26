@@ -17,6 +17,11 @@ import re
 
 
 def planner_overrides(arm):
+    if arm == 'compact-counted-dimension':
+        return {'spark.rapids.sql.optimizer.aggregatePrefilter.enabled':'false',
+                'spark.rapids.sql.optimizer.joinReorder.enabled':'false',
+                'spark.rapids.sql.optimizer.joinGraphReorder.enabled':'false',
+                'spark.sql.optimizer.runtime.bloomFilter.enabled':'false'}
     if arm == 'no-runtime-bloom':
         return {'spark.sql.optimizer.runtime.bloomFilter.enabled': 'false'}
     if arm in ('country-flags-ordered', 'country-flags-ordered-driver'):
@@ -34,6 +39,21 @@ def planner_overrides(arm):
 
 
 def transform_next(query, original, arm):
+    if query == 21 and arm == 'compact-counted-dimension':
+        value = transform_next(query, original, 'compact-counted-state')
+        before = ')\nSELECT s_name, coalesce(sum(__state_late_count), cast(0 AS bigint)) AS numwait'
+        after = '''), selected_suppliers AS (
+    SELECT s_suppkey, s_name FROM supplier
+    JOIN nation ON s_nationkey = n_nationkey WHERE n_name = 'SAUDI ARABIA'
+)
+SELECT /*+ BROADCAST(selected_suppliers) */ s_name,
+       coalesce(sum(__state_late_count), cast(0 AS bigint)) AS numwait'''
+        assert value.count(before) == 1
+        value = value.replace(before,after)
+        value = value.replace('FROM order_state JOIN supplier ON',
+                              'FROM order_state JOIN selected_suppliers ON')
+        value = value.replace('JOIN nation ON s_nationkey = n_nationkey\n','')
+        return value.replace(" AND n_name = 'SAUDI ARABIA'",'')
     if query == 5 and arm == 'eligible-orders-distinct-dimension':
         value = transform_next(query, original, 'eligible-orders-broadcast')
         before = '''    SELECT c_custkey, c_nationkey FROM customer

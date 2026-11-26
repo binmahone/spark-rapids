@@ -141,7 +141,8 @@ def main():
             if not any('BroadcastHashJoin' in line and 'LeftSemi' in line
                        for line in planned.splitlines()):
                 raise AssertionError(f'Q{planned_query}: hint did not reach a broadcast semi join')
-        if any(selected_arm(q, config['probe_arm']) in ('compact-supplier','compact-counted-state') for q in queries):
+        if any(selected_arm(q, config['probe_arm']) in ('compact-supplier','compact-counted-state',
+                                                       'compact-counted-dimension') for q in queries):
             from integer_domains import require_unchanged
             proof = require_unchanged(config['work'], config['dataset'], {'lineitem':['l_suppkey']})
             write(app/'integer-domain-proof.json', {'sha256':sha(Path(config['work'])/'evidence/integer-domains.json'),
@@ -257,7 +258,8 @@ def main():
                                      'compact-supplier','counted-wide','compact-counted-state',
                                      'priority-flag','promo-flag-revenue','supplier-prefilter',
                                      'eligible-orders-broadcast','country-flags-ordered',
-                                     'country-flags-ordered-driver','eligible-orders-distinct-dimension'):
+                                     'country-flags-ordered-driver','eligible-orders-distinct-dimension',
+                                     'compact-counted-dimension'):
                         pending, nodes = [execution.executedPlan()], []
                         while pending:
                             node = pending.pop()
@@ -327,7 +329,12 @@ def main():
                             if not any('BroadcastHashJoin' in x and 'Inner' in x and 'c_custkey' in x
                                        and 'o_custkey' in x for x in preflight.splitlines()):
                                 raise AssertionError('Eligible-customer broadcast join is absent')
-                        if query_arm in ('compact-supplier','counted-wide','compact-counted-state'):
+                        if query_arm == 'compact-counted-dimension' and not any(
+                                'GpuDriverlessBroadcastHashJoin' in x and 's_suppkey' in x
+                                and '__state_late_min' in x for x in preflight.splitlines()):
+                            raise AssertionError('Filtered supplier dimension did not reach the native join')
+                        if query_arm in ('compact-supplier','counted-wide','compact-counted-state',
+                                         'compact-counted-dimension'):
                             compact = False
                             for node in nodes:
                                 if str(node.nodeName())!='GpuHashAggregate':continue

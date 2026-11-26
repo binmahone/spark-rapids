@@ -222,7 +222,7 @@ def main():
               'source_revision': state['source_revision'], 'perf_monotonic_to_unix_offset_ns': offset,
               'limits': ['Profiling overhead is not isolated; timings are diagnostic',
                          'Kernel CPU samples include idle; nonidle and executor counts are separate',
-                         'Reclaim stacks sample every 257 events per CPU; counts are not exact event totals',
+                         'The requested reclaim sample period was 257, but this kernel emitted approximately one record per allocstall; never multiply trace counts by 257',
                          'GPM percentages and throughput are half-second interval observations',
                          'Whole-query averages do not establish a critical-stage hardware ceiling',
                          'CPU memory-controller counters are unavailable in the exposed PMUs']}

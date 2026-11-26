@@ -25,9 +25,10 @@ from common import read, sha, write
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work', required=True)
+p.add_argument('--area', choices=['cold-host-read', 'cold-suite'], default='cold-host-read')
 a = p.parse_args()
 work = Path(a.work).resolve()
-directory = work / 'cold-host-read'
+directory = work / a.area
 states = sorted(directory.glob('*/state.json'))
 assert len(states) >= 2 and (directory / 'A0/state.json').exists() and (directory / 'B1/state.json').exists()
 lifecycle = read(directory / 'lifecycle-audit.json')
@@ -54,7 +55,7 @@ for state_path in states:
         write(analysis_path, analysis)
 write(directory / 'profiler-audit.json', {'records': profile_audit, 'source_revision': revision,
     'all_stopped': True, 'watermark_scale_factor': 10, 'retention': 'Explicit user release only'})
-archive = work / 'evidence/cold-host-read-complete.tar.gz'
+archive = work / 'evidence' / (a.area + '-complete.tar.gz')
 assert not archive.exists()
 paths = {path: str(path.relative_to(work)) for path in directory.rglob('*')
          if path.is_file() and not path.is_symlink()}
@@ -62,10 +63,10 @@ for state_path in states:
     state = read(state_path)
     phase = state['phase']
     assert state['status'] == 'completed'
-    assert (work / 'evidence' / ('cold-host-read-' + phase + '.exit')).read_text().strip() == '0'
+    assert (work / 'evidence' / (a.area + '-' + phase + '.exit')).read_text().strip() == '0'
     for group in state['groups']:
         run = Path(group['run'])
-        assert run.parent == work / 'screen' and run.name.startswith('cold-host-read-')
+        assert run.parent == work / 'screen' and run.name.startswith(a.area + '-')
         for path in run.rglob('*'):
             if path.is_file() and not path.is_symlink():
                 paths[path] = str(path.relative_to(work))
@@ -77,7 +78,7 @@ for state_path in states:
                     path.name in ('stdout', 'stderr') or path.suffix == '.log'):
                 paths[path] = str(Path('scratch') / run.name / path.relative_to(scratch))
     for suffix in ('.log', '.exit'):
-        path = work / 'evidence' / ('cold-host-read-' + phase + suffix)
+        path = work / 'evidence' / (a.area + '-' + phase + suffix)
         paths[path] = str(path.relative_to(work))
 for name in ('owner.json', 'deployment.json', 'host-prerequisites.json'):
     path = work / 'evidence' / name
@@ -92,7 +93,7 @@ with tarfile.open(archive, 'w:gz', compresslevel=1) as target:
         target.add(path, arcname=name, recursive=False)
         assert path.stat().st_mtime_ns == stat.st_mtime_ns and path.stat().st_size == stat.st_size
         manifest.append({'name': name, 'bytes': stat.st_size})
-write(work / 'evidence/cold-host-read-complete-manifest.json', {
+write(work / 'evidence' / (a.area + '-complete-manifest.json'), {
     'archive': archive.name, 'bytes': archive.stat().st_size, 'sha256': sha(archive), 'files': manifest,
     'instance_policy': 'Retain until explicit user release'})
 print(archive, archive.stat().st_size, sha(archive))

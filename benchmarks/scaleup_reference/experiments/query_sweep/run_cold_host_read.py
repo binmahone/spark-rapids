@@ -40,6 +40,7 @@ def main():
     p.add_argument('--work', required=True)
     p.add_argument('--thread-id', required=True)
     p.add_argument('--phase', choices=['A0', 'B1', 'B2', 'A3', 'B3'], required=True)
+    p.add_argument('--scope', choices=['pilot', 'suite'], default='pilot')
     a = p.parse_args()
     work = Path(a.work).resolve()
     owner = read(work / 'evidence/owner.json')
@@ -50,7 +51,8 @@ def main():
     for port in (19077, 19080):
         with socket.socket() as s:
             assert s.connect_ex((socket.gethostbyname(socket.gethostname()), port)) != 0
-    directory = work / 'cold-host-read' / a.phase
+    area = 'cold-host-read' if a.scope == 'pilot' else 'cold-suite'
+    directory = work / area / a.phase
     directory.mkdir(parents=True, exist_ok=False)
     report = {'status': 'running', 'phase': a.phase, 'groups': [], 'profilers': [],
               'thread_id': a.thread_id, 'instance_id': owner['instance_id'],
@@ -59,7 +61,8 @@ def main():
               'tuning_key': 'spark.rapids.sql.reader.kvikio.numThreads',
               'kvikio_threads': 32,
               'cache_policy': 'No cache flush; two actions per query',
-              'instance_policy': 'Retain until explicit user release'}
+              'instance_policy': 'Release session-created instance after useful investigations and evidence retention',
+              'scope': a.scope}
     adapter = work / 'artifacts/cold-host-read-v2/libcold_host_read.so'
     for test in ('buffered', 'cold-direct', 'error', 'short'):
         assert read(adapter.parent / test / 'result.json')['status'] == 'passed'
@@ -127,12 +130,12 @@ def main():
         for case in candidates():
             if case.query in choice['queries'] and case.name != 'critical_witness_wide':
                 controls[case.query] = replace(case, overrides={**controls[case.query].overrides, **case.overrides})
-        queries = [9, 13]
+        queries = [9, 13] if a.scope == 'pilot' else list(ORDER)
         report['queries'] = queries
         report['start_unix_ns'] = time.time_ns()
         report['start_monotonic_ns'] = time.monotonic_ns()
         write(directory / 'state.json', report)
-        path, result = launch_group(work, 'cold-host-read-' + a.phase, 0,
+        path, result = launch_group(work, area + '-' + a.phase, 0,
                                     [controls[q] for q in queries], overrides)
         report['groups'].append({'run': str(path), 'status': result['status'],
                                  'samples': result['samples'], 'error': result.get('error'),

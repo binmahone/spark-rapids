@@ -147,12 +147,13 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', required=True)
     p.add_argument('--phase', choices=['A0', 'B1', 'B2', 'A3', 'B3'], required=True)
+    p.add_argument('--area', choices=['cold-host-read', 'cold-suite'], default='cold-host-read')
     a = p.parse_args()
     work = Path(a.work)
-    directory = work / 'cold-host-read' / a.phase
+    directory = work / a.area / a.phase
     state = read(directory / 'state.json')
     assert state['status'] == 'completed' and state['gpm_restored']
-    assert (work / 'evidence' / ('cold-host-read-' + a.phase + '.exit')).read_text().strip() == '0'
+    assert (work / 'evidence' / (a.area + '-' + a.phase + '.exit')).read_text().strip() == '0'
     controller = read(directory / 'controller.json')
     proc = Path('/proc') / str(controller['pid']) / 'stat'
     assert not proc.exists() or proc.read_text().split(') ', 1)[1].split()[19] != str(controller['start_time'])
@@ -171,6 +172,14 @@ def main():
         token = f"q{s['query']}-iteration{s['iteration']}"
         windows.append((token, begin, end))
         h = host[bisect_left(times, begin):bisect_right(times, end)]
+        if a.area == 'cold-suite':
+            v_short = [r for r in vm if begin <= r['time_unix_ns'] <= end]
+            g_short = [r for r in gpm if begin <= r['start_unix_ns'] and r['end_unix_ns'] <= end]
+            if min(len(h), len(v_short), len(g_short)) < 2:
+                s['sampling_status'] = {'status': 'insufficient query-window samples',
+                                        'host': len(h), 'vm': len(v_short), 'gpm': len(g_short)}
+                s['stages'] = stages[token]
+                continue
         assert len(h) >= 2
         before, after = h[0], h[-1]
         s['host_sampled_seconds'] = (after['time_unix_ns'] - before['time_unix_ns']) / 1e9
@@ -232,9 +241,10 @@ def main():
                          'CPU memory-controller counters are unavailable in the exposed PMUs']}
     write(directory / 'analysis.json', result)
     print(json.dumps([{'q':s['query'],'iteration':s['iteration'],'sql':s['sql_seconds'],
-                      'read_gb':s['disk_read_bytes'].get('dm-0', 0)/1e9,
-                      'allocstall':sum(v for k,v in s['vm_deltas'].items() if k.startswith('allocstall')),
-                      'gpu':s['gpm_all_gpu_mean']} for s in data['samples']], indent=2))
+                      'read_gb':s['disk_read_bytes'].get('dm-0', 0)/1e9 if 'disk_read_bytes' in s else None,
+                      'allocstall':sum(v for k,v in s['vm_deltas'].items() if k.startswith('allocstall')) if 'vm_deltas' in s else None,
+                      'gpu':s.get('gpm_all_gpu_mean'),
+                      'sampling_status':s.get('sampling_status')} for s in data['samples']], indent=2))
 
 
 if __name__ == '__main__':

@@ -240,7 +240,10 @@ def main():
             boundary.begin(sc._jsc.sc(), 'collector-self-test')
             try:
                 verify(spark, app)
-            finally:
+            except BaseException as error:
+                write(app / 'collector-self-test-failure.json', {'error': repr(error)})
+                raise
+            else:
                 boundary.finish(sc._jsc.sc(), 'collector-self-test', executors, slots)
             state['collector_self_test'] = read(app / 'collector-self-test.json')
         startup.cancel()

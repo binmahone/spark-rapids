@@ -8,7 +8,10 @@ def verify(spark, app):
     digest = spark._jvm.com.nvidia.spark.rapids.benchmark.ResultDigest
     keys = ['spark.rapids.sql.enabled', 'spark.sql.shuffle.partitions',
             'spark.sql.autoBroadcastJoinThreshold']
-    saved = {key: spark.conf.get(key) for key in keys}
+    saved = {}
+    for key in keys:
+        value = spark._jsparkSession.conf().getOption(key)
+        saved[key] = value.get() if value.isDefined() else None
     statements = [
         '''SELECT /*+ SHUFFLE_HASH(a,b) */ a.k, SUM(a.v*b.v) AS amount, COUNT(*) AS n
            FROM (SELECT CASE WHEN id % 7=0 THEN NULL ELSE id % 23 END k,
@@ -44,7 +47,10 @@ def verify(spark, app):
                                 'submissions': len(evidence['submissions']), 'passed': True})
     finally:
         for key, value in saved.items():
-            spark.conf.set(key, value)
+            if value is None:
+                spark.conf.unset(key)
+            else:
+                spark.conf.set(key, value)
     (app / 'collector-self-test.json').write_text(json.dumps({
         'status': 'passed', 'checks': records,
         'coverage': 'CPU/original/helper parity; null and duplicate join keys; decimals; nested rows; empty output; actual leaf submissions'}, indent=2) + '\n')

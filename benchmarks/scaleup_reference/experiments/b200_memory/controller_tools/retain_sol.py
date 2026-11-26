@@ -59,7 +59,8 @@ for label in LABELS:
                (p.name in ('stdout','stderr','gpu-inventory.json') or p.suffix=='.log'))
 for name in ['evidence/owner.json','evidence/deployment.json','evidence/catalog-statistics.json',
              'artifacts/manifest.json','evidence/gds-wiring-NativeFileRangeReader.txt',
-             'evidence/gds-wiring-HybridScanRangeReader.txt']:
+             'evidence/gds-wiring-HybridScanRangeReader.txt',
+             'evidence/integer-domains.json','evidence/integer-domain-audit.log']:
  if (w/name).exists():files.add(w/name)
 files.update(p for p in (w/'evidence/suite-references').rglob('*') if p.is_file())
 target=w/(NAME+'.tar.gz');assert not target.exists()

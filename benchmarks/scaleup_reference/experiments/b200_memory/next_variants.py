@@ -17,6 +17,8 @@ import re
 
 
 def planner_overrides(arm):
+    if arm in ('counted-wide', 'compact-counted-state'):
+        return {'spark.rapids.sql.optimizer.aggregatePrefilter.enabled': 'false'}
     if arm in ('profit-first', 'eligible-customer-join'):
         return {'spark.rapids.sql.optimizer.joinReorder.enabled': 'false',
                 'spark.rapids.sql.optimizer.joinGraphReorder.enabled': 'false'}
@@ -24,6 +26,26 @@ def planner_overrides(arm):
 
 
 def transform_next(query, original, arm):
+    if query == 21 and arm in ('counted-wide', 'compact-counted-state'):
+        supplier = 'CAST(l_suppkey AS INT)' if arm == 'compact-counted-state' else 'l_suppkey'
+        return f"""
+WITH typed_line AS (
+    SELECT l_orderkey, {supplier} AS __supplier, l_commitdate, l_receiptdate FROM lineitem
+), order_state AS (
+    SELECT l_orderkey, min(__supplier) AS __state_all_min, max(__supplier) AS __state_all_max,
+           min(CASE WHEN l_receiptdate > l_commitdate THEN __supplier END) AS __state_late_min,
+           max(CASE WHEN l_receiptdate > l_commitdate THEN __supplier END) AS __state_late_max,
+           count(CASE WHEN l_receiptdate > l_commitdate THEN __supplier END) AS __state_late_count
+    FROM typed_line GROUP BY l_orderkey
+)
+SELECT s_name, coalesce(sum(__state_late_count), cast(0 AS bigint)) AS numwait
+FROM order_state JOIN supplier ON s_suppkey = __state_late_min
+JOIN orders ON o_orderkey = l_orderkey
+JOIN nation ON s_nationkey = n_nationkey
+WHERE __state_all_min <> __state_all_max AND __state_late_min = __state_late_max
+  AND o_orderstatus = 'F' AND n_name = 'SAUDI ARABIA'
+GROUP BY s_name ORDER BY numwait DESC, s_name LIMIT 100
+"""
     if query == 5 and arm == 'revenue-first':
         value, count = re.subn(r'l_extendedprice\s*\*\s*\(\s*1\s*-\s*l_discount\s*\)',
                                '__line_revenue', original, flags=re.I)

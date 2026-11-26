@@ -35,7 +35,8 @@ def selected_arm(query, arm):
 
 def transform(query, original, arm):
     arm = selected_arm(query, arm)
-    if arm in ('revenue-first','country-flags','eligible-customer-join','profit-first','compact-supplier'):
+    if arm in ('revenue-first','country-flags','eligible-customer-join','profit-first','compact-supplier',
+               'counted-wide','compact-counted-state'):
         from next_variants import transform_next
         return transform_next(query, original, arm)
     if arm == 'baseline':

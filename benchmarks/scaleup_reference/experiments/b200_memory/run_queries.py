@@ -141,7 +141,7 @@ def main():
             if not any('BroadcastHashJoin' in line and 'LeftSemi' in line
                        for line in planned.splitlines()):
                 raise AssertionError(f'Q{planned_query}: hint did not reach a broadcast semi join')
-        if any(selected_arm(q, config['probe_arm']) == 'compact-supplier' for q in queries):
+        if any(selected_arm(q, config['probe_arm']) in ('compact-supplier','compact-counted-state') for q in queries):
             from integer_domains import require_unchanged
             proof = require_unchanged(config['work'], config['dataset'], {'lineitem':['l_suppkey']})
             write(app/'integer-domain-proof.json', {'sha256':sha(Path(config['work'])/'evidence/integer-domains.json'),
@@ -248,7 +248,8 @@ def main():
                     if config.get('suite_audit') and query_arm == 'aggregate-total-reuse':
                         if not re.search(r'Gpu\w*Window', preflight) or preflight.count('GpuFileGpuScan parquet spark_catalog.default.partsupp[')!=1:
                             raise AssertionError('Expected one partsupp scan and a GPU window')
-                    if query_arm in ('revenue-first','profit-first','country-flags','eligible-customer-join','compact-supplier'):
+                    if query_arm in ('revenue-first','profit-first','country-flags','eligible-customer-join',
+                                     'compact-supplier','counted-wide','compact-counted-state'):
                         pending, nodes = [execution.executedPlan()], []
                         while pending:
                             node = pending.pop()
@@ -275,16 +276,17 @@ def main():
                             if not any('BroadcastHashJoin' in x and 'Inner' in x and 'c_custkey' in x
                                        and 'o_custkey' in x for x in preflight.splitlines()):
                                 raise AssertionError('Eligible-customer broadcast join is absent')
-                        if query_arm == 'compact-supplier':
+                        if query_arm in ('compact-supplier','counted-wide','compact-counted-state'):
                             compact = False
                             for node in nodes:
                                 if str(node.nodeName())!='GpuHashAggregate':continue
                                 for i in range(node.output().size()):
                                     attr=node.output().apply(i)
-                                    if str(attr.name()).startswith('__rapids_corragg_exists_min'):
-                                        compact = str(attr.dataType().simpleString())=='int'
+                                    if str(attr.name()).startswith(('__rapids_corragg_exists_min','__state_all_min')):
+                                        expected = 'bigint' if query_arm=='counted-wide' else 'int'
+                                        compact = str(attr.dataType().simpleString())==expected
                             if not compact or preflight.count('GpuFileGpuScan parquet spark_catalog.default.lineitem[')!=1:
-                                raise AssertionError('Expected one lineitem scan and INT32 counted-existence state')
+                                raise AssertionError('Expected one lineitem scan and the declared integer state type')
                     rows = frame._jdf.collect()
                     elapsed = time.perf_counter() - started
                     ended_unix_ns = time.time_ns()

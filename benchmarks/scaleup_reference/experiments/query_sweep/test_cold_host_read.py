@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import struct
+import threading
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--root', required=True)
@@ -29,12 +30,28 @@ lib.pread64.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_size_t, ctypes.c
 lib.pread64.restype = ctypes.c_ssize_t
 lib.pread.argtypes = lib.pread64.argtypes
 lib.pread.restype = ctypes.c_ssize_t
+lib.mmap.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int,
+                    ctypes.c_int, ctypes.c_int, ctypes.c_longlong]
+lib.mmap.restype = ctypes.c_void_p
+lib.mincore.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p]
+lib.munmap.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
 stats = Path(os.environ['SCALEUP_COLD_READ_STATS']) / (str(os.getpid()) + '.bin')
 names = ['eligible', 'buffered', 'direct', 'direct_bytes', 'cold', 'resident',
          'mixed', 'inspect_fail', 'direct_fail', 'request_bytes', 'mixed_direct']
 
 def counters():
     return dict(zip(names, struct.unpack('=11Q', stats.read_bytes())))
+
+def resident_pages(offset, length):
+    assert offset % 4096 == 0
+    mapping = lib.mmap(None, length, 0, 1, fd, offset)
+    assert mapping != ctypes.c_void_p(-1).value
+    values = (ctypes.c_ubyte * ((length + 4095) // 4096))()
+    try:
+        assert lib.mincore(mapping, length, values) == 0
+        return sum(v & 1 for v in values)
+    finally:
+        assert lib.munmap(mapping, length) == 0
 
 def read(offset, size, symbol='pread64', handle=fd):
     assert lib.prctl(15, ctypes.c_char_p(b'kvikio-0'), 0, 0, 0) == 0
@@ -54,10 +71,12 @@ try:
     # Eviction is limited to this test fixture; benchmark files are never flushed.
     os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
     before = counters()
+    assert resident_pages(0, 3 * 1024 * 1024) == 0
     read(17, 2 * 1024 * 1024 + 31)
     after_cold = counters()
     if a.expect_direct:
         assert after_cold['direct'] > before['direct'], after_cold
+        assert resident_pages(0, 3 * 1024 * 1024) == 0
     if a.expect_fallback:
         assert after_cold['direct_fail'] > before['direct_fail'], after_cold
         assert after_cold['direct'] == 0, after_cold
@@ -76,9 +95,18 @@ try:
         assert after_mixed['mixed'] > after_hot['mixed'], after_mixed
         assert after_mixed['mixed_direct'] > after_hot['mixed_direct'], after_mixed
     os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+    os.lseek(fd, 22 * 1024 * 1024, os.SEEK_SET)
+    os.read(fd, 8192)
+    read(20 * 1024 * 1024 + 17, 6 * 1024 * 1024 + 31)
+    if a.expect_direct:
+        assert counters()['mixed_direct'] > after_mixed['mixed_direct']
+    os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+    barrier = threading.Barrier(32)
+    def concurrent_read(i):
+        barrier.wait(timeout=30)
+        read((i + 2) * 2 * 1024 * 1024 + 3, 1024 * 1024 + 127)
     with concurrent.futures.ThreadPoolExecutor(max_workers=32) as pool:
-        list(pool.map(lambda i: read((i + 2) * 2 * 1024 * 1024 + 3,
-                                     1024 * 1024 + 127), range(32)))
+        list(pool.map(concurrent_read, range(32)))
     for offset, size in [(0, 0), (7, 511), (4095, 8193),
                          (len(data) - 2 * 1024 * 1024, 2 * 1024 * 1024),
                          (len(data) - 100, 2 * 1024 * 1024),
@@ -86,7 +114,8 @@ try:
         read(offset, size)
     read(0, 1024 * 1024, handle=-1)
     print(json.dumps({'status': 'passed', 'pid': os.getpid(), 'counters': counters(),
-                      'checks': ['cold', 'hot', 'mixed', '32 concurrent readers',
+                      'checks': ['cold', 'hot', 'mixed', 'multiple cold spans', '32 concurrent reader threads',
+                                 'residency check on cold-direct arm',
                                  'unaligned offsets and destination', 'both pread symbols',
                                  'zero length', 'small range', 'EOF', 'bad fd', 'buffer guards']}, indent=2))
 finally:

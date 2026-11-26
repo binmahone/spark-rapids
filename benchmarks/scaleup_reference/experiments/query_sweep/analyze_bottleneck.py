@@ -15,7 +15,7 @@
 """Correlate closed query windows with sampled kernel stacks and GPM counters."""
 import argparse
 from bisect import bisect_left, bisect_right
-from collections import Counter
+from collections import Counter, defaultdict
 import hashlib
 import json
 from pathlib import Path
@@ -23,6 +23,7 @@ import re
 import statistics
 import subprocess
 import sys
+from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
@@ -100,6 +101,48 @@ def perf_summary(path, windows, executor_pids, offset_ns):
     return summaries
 
 
+def stage_windows(run):
+    profile = read(run / 'applications/suite/profile.json')
+    root = Path(urlparse(profile['spark.eventLog.dir']).path)
+    executions, roots, tasks = {}, defaultdict(set), defaultdict(list)
+    for path in root.iterdir():
+        if not path.is_file() or path.name.startswith('.'):
+            continue
+        assert not path.name.endswith('.inprogress'), 'Only closed event logs are eligible'
+        for line in path.open():
+            e = json.loads(line)
+            kind = e.get('Event', '')
+            if kind.endswith('SparkListenerSQLExecutionStart'):
+                if re.fullmatch(r'q\d+-iteration\d+', e.get('description', '')):
+                    executions[str(e['executionId'])] = e['description']
+            elif kind == 'SparkListenerJobStart':
+                execution = (e.get('Properties') or {}).get('spark.sql.execution.root.id')
+                if execution is not None:
+                    for stage in e['Stage IDs']:
+                        roots[stage].add(str(execution))
+            elif kind == 'SparkListenerTaskEnd':
+                info, metrics = e['Task Info'], e.get('Task Metrics') or {}
+                tasks[e['Stage ID']].append({
+                    'start': info['Launch Time'], 'end': info['Finish Time'],
+                    'failed': bool(info.get('Failed') or info.get('Killed')),
+                    'input_bytes': (metrics.get('Input Metrics') or {}).get('Bytes Read', 0),
+                    'shuffle_write_bytes': (metrics.get('Shuffle Write Metrics') or {}).get('Shuffle Bytes Written', 0)})
+    result = defaultdict(list)
+    for stage, values in tasks.items():
+        tokens = {executions[x] for x in roots[stage] if x in executions}
+        if not tokens:
+            continue
+        assert len(tokens) == 1
+        begin, end = min(v['start'] for v in values), max(v['end'] for v in values)
+        result[next(iter(tokens))].append({'stage': stage, 'start_ms': begin, 'end_ms': end,
+            'span_seconds': (end - begin) / 1000, 'tasks': len(values),
+            'task_seconds': distribution([(v['end'] - v['start']) / 1000 for v in values]),
+            'failed_or_killed': sum(v['failed'] for v in values),
+            'input_bytes': sum(v['input_bytes'] for v in values),
+            'shuffle_write_bytes': sum(v['shuffle_write_bytes'] for v in values)})
+    return result
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', required=True)
@@ -119,6 +162,7 @@ def main():
     data = summarize(work, Path(state['groups'][0]['run']))
     raw = read(Path(state['groups'][0]['run']) / 'applications/suite/result.json')
     original = {(s['query'], s['iteration']): s for s in raw['samples']}
+    stages = stage_windows(Path(state['groups'][0]['run']))
     windows = []
     for s in data['samples']:
         s['normalized_plan_sha256'] = hashlib.sha256(s.pop('normalized_plan').encode()).hexdigest()
@@ -154,6 +198,15 @@ def main():
         s['gpm_by_gpu'] = [{name: distribution([r['gpus'][i][name] for r in g if r['gpus'][i][name] is not None])
                             for name in metrics} for i in range(8)]
         s['gpm_all_gpu_mean'] = {name: statistics.mean(gpu[name]['mean'] for gpu in s['gpm_by_gpu']) for name in metrics}
+        s['stages'] = stages[token]
+        for stage in s['stages']:
+            stage_rows = [r for r in gpm if stage['start_ms'] * 10**6 <= r['start_unix_ns']
+                          and r['end_unix_ns'] <= stage['end_ms'] * 10**6]
+            stage['gpm_samples'] = len(stage_rows)
+            if stage_rows:
+                stage['gpm_by_gpu'] = [{name: distribution([r['gpus'][i][name] for r in stage_rows
+                                            if r['gpus'][i][name] is not None]) for name in metrics}
+                                      for i in range(8)]
         s['gpm_link_states'] = sorted({(gpu['pcie_generation'], gpu['pcie_width']) for r in g for gpu in r['gpus']})
         nodes = original[(s['query'], s['iteration'])]['plan_metrics']
         scans = [n for n in nodes if n['node'].startswith('GpuScan')]

@@ -38,7 +38,7 @@ revision = subprocess.check_output(['git', '-C', str(HERE), 'rev-parse', 'HEAD']
 profile_audit = []
 for state_path in states:
     state = read(state_path)
-    assert state['status'] == 'completed' and state['gpm_restored']
+    assert state['status'] in ('completed', 'failed') and state['gpm_restored']
     for record in [read(state_path.parent / 'controller.json'), *state['profilers']]:
         path = Path('/proc') / str(record['pid']) / 'stat'
         live = path.exists() and path.read_text().split(') ', 1)[1].split()[19] == str(record['start_time'])
@@ -61,8 +61,9 @@ paths = {path: str(path.relative_to(work)) for path in directory.rglob('*')
 for state_path in states:
     state = read(state_path)
     phase = state['phase']
-    assert state['status'] == 'completed'
-    assert (work / 'evidence' / ('early-shuffle-' + phase + '.exit')).read_text().strip() == '0'
+    assert state['status'] in ('completed', 'failed')
+    exit_code = int((work / 'evidence' / ('early-shuffle-' + phase + '.exit')).read_text())
+    assert (exit_code == 0) == (state['status'] == 'completed')
     for group in state['groups']:
         run = Path(group['run'])
         assert run.parent == work / 'screen' and run.name.startswith('early-shuffle-')

@@ -25,10 +25,13 @@ owner = json.loads((root/'evidence/owner.json').read_text())
 assert owner['thread_id'] == os.environ['CODEX_THREAD_ID']
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('label')
+parser.add_argument('--source', help='Read this combined evidence set and select the named label')
 args = parser.parse_args()
-source = root/'evidence'/('sol-'+args.label+'.json')
+source = root/'evidence'/('sol-'+(args.source or args.label)+'.json')
 data = json.loads(source.read_text())
 assert all(m['status']=='completed' for m in data['matrices'])
+data['rows'] = [r for r in data['rows'] if r['label']==args.label]
+assert data['rows'], 'No completed samples for the requested label'
 assert all(r['validation']['status']=='passed' for r in data['rows'])
 program = r'''
 import bisect,json,os

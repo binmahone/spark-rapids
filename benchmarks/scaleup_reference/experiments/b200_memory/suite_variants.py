@@ -43,7 +43,7 @@ def transform(query, original, arm):
     if arm in ('revenue-first','country-flags','eligible-customer-join','profit-first','compact-supplier',
                'counted-wide','compact-counted-state','priority-flag','promo-flag-revenue',
                'supplier-prefilter','eligible-orders-broadcast','country-flags-ordered',
-               'country-flags-ordered-driver'):
+               'country-flags-ordered-driver','eligible-orders-distinct-dimension'):
         from next_variants import transform_next
         return transform_next(query, original, arm)
     if arm == 'baseline':

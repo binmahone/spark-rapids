@@ -256,7 +256,7 @@ def main():
                                      'compact-supplier','counted-wide','compact-counted-state',
                                      'priority-flag','promo-flag-revenue','supplier-prefilter',
                                      'eligible-orders-broadcast','country-flags-ordered',
-                                     'country-flags-ordered-driver'):
+                                     'country-flags-ordered-driver','eligible-orders-distinct-dimension'):
                         pending, nodes = [execution.executedPlan()], []
                         while pending:
                             node = pending.pop()
@@ -279,7 +279,7 @@ def main():
                                     query_arm.endswith('-driver') and
                                     'GpuDriverlessBroadcastHashJoin' in preflight):
                                 raise AssertionError('Declared broadcast implementation was not selected')
-                        if query_arm == 'eligible-orders-broadcast':
+                        if query_arm in ('eligible-orders-broadcast','eligible-orders-distinct-dimension'):
                             if not any('BroadcastHashJoin' in x and 'l_orderkey' in x and
                                        'o_orderkey' in x for x in preflight.splitlines()):
                                 raise AssertionError('Eligible orders did not reach a broadcast fact join')
@@ -287,6 +287,11 @@ def main():
                                    'l_orderkey' in str(n.output().toString()) for n in nodes
                                    if str(n.nodeName())=='GpuColumnarExchange'):
                                 raise AssertionError('Lineitem order keys are still shuffled')
+                            if query_arm == 'eligible-orders-distinct-dimension' and not all(
+                                    any('GpuDriverlessBroadcastHashJoin' in x and left in x and right in x
+                                        for x in preflight.splitlines()) for left,right in
+                                    (('l_orderkey','o_orderkey'),('o_custkey','c_custkey'))):
+                                raise AssertionError('Distinct-dimension estimates still reject native customer/order builds')
                         if query_arm == 'priority-flag' and not any('__high' in x and
                                 'o_orderkey' in x and 'o_orderpriority' not in x for x in outputs):
                             raise AssertionError('Priority flag did not reach the order-key exchange')

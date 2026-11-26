@@ -26,13 +26,27 @@ def planner_overrides(arm):
                     'false' if arm.endswith('-driver') else 'true'}
     if arm in ('counted-wide', 'compact-counted-state'):
         return {'spark.rapids.sql.optimizer.aggregatePrefilter.enabled': 'false'}
-    if arm in ('profit-first', 'eligible-customer-join', 'eligible-orders-broadcast'):
+    if arm in ('profit-first', 'eligible-customer-join', 'eligible-orders-broadcast',
+               'eligible-orders-distinct-dimension'):
         return {'spark.rapids.sql.optimizer.joinReorder.enabled': 'false',
                 'spark.rapids.sql.optimizer.joinGraphReorder.enabled': 'false'}
     return {}
 
 
 def transform_next(query, original, arm):
+    if query == 5 and arm == 'eligible-orders-distinct-dimension':
+        value = transform_next(query, original, 'eligible-orders-broadcast')
+        before = '''    SELECT c_custkey, c_nationkey FROM customer
+    WHERE c_nationkey IN (
+        SELECT n_nationkey FROM nation JOIN region ON n_regionkey = r_regionkey
+        WHERE r_name = 'ASIA')'''
+        after = '''    SELECT c_custkey, c_nationkey FROM customer
+    JOIN (
+        SELECT DISTINCT n_nationkey AS __eligible_nation FROM nation
+        JOIN region ON n_regionkey = r_regionkey WHERE r_name = 'ASIA'
+    ) selected_nations ON c_nationkey = __eligible_nation'''
+        assert value.count(before) == 1
+        return value.replace(before,after)
     if query == 7 and arm in ('country-flags-ordered', 'country-flags-ordered-driver'):
         value = transform_next(query, original, 'country-flags')
         before = '), shipping AS ('

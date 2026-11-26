@@ -30,6 +30,18 @@ directory = Path(a.work) / 'read-tuning'
 phases = {name: read(directory / name / 'analysis.json') for name in ['A0', 'B1', 'B2', 'A3']
           if (directory / name / 'analysis.json').exists()}
 assert {'A0', 'B1'} <= phases.keys()
+reference_config = None
+for name in phases:
+    state = read(directory / name / 'state.json')
+    config = read(Path(state['groups'][0]['run']) / 'config.json')
+    invariant = {key: config[key] for key in ['spark_conf', 'case_variants', 'case_overrides',
+                                             'engine_sha256', 'tools', 'dataset', 'queries',
+                                             'experiment_source_sha256']}
+    assert int(invariant['spark_conf'].pop('spark.rapids.sql.reader.kvikio.numThreads')) == state['kvikio_threads']
+    if reference_config is None:
+        reference_config = invariant
+    else:
+        assert invariant == reference_config, 'An additional behavior-bearing setting changed'
 queries = [9, 10, 11, 12, 13]
 rows = []
 for name, phase in phases.items():
@@ -65,6 +77,7 @@ separated = max(r['second_total_seconds'] for r in candidates) <= .97 * min(r['s
 regression_guard = all(row['second_action_median_change_fraction'] <= .05 for row in per_query if row['query'] in (9, 12, 13))
 report = {'complete_ABBA': complete, 'groups': rows, 'queries': per_query,
           'normalized_plans_match': plans_match,
+          'only_configuration_change_is_kvikio_thread_count': True,
           'initial_second_action_regression_above_20_percent': by_name['B1']['second_total_seconds'] > 1.20 * by_name['A0']['second_total_seconds'],
           'worst_candidate_second_total_3_percent_below_best_control': separated,
           'critical_query_second_action_regression_below_5_percent': regression_guard,

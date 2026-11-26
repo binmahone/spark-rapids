@@ -44,6 +44,14 @@ for state_path in states:
         live = path.exists() and path.read_text().split(') ', 1)[1].split()[19] == str(record['start_time'])
         profile_audit.append({'pid': record['pid'], 'start_time': record['start_time'], 'live': live})
         assert not live
+    analysis_path = state_path.parent / 'analysis.json'
+    if analysis_path.exists():
+        analysis = read(analysis_path)
+        assert not analysis['perf'], 'This experiment does not collect kernel profiles'
+        analysis['limits'] = [value for value in analysis['limits']
+                              if not value.startswith(('Kernel CPU samples', 'The requested reclaim'))]
+        analysis['finalizer_revision'] = revision
+        write(analysis_path, analysis)
 write(directory / 'profiler-audit.json', {'records': profile_audit, 'source_revision': revision,
     'all_stopped': True, 'watermark_scale_factor': 10, 'retention': 'Explicit user release only'})
 archive = work / 'evidence/read-tuning-complete.tar.gz'

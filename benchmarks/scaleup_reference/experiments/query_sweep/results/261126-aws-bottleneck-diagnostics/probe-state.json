@@ -1,0 +1,120 @@
+{
+  "status": "completed",
+  "phase": "probe",
+  "groups": [],
+  "profilers": [
+    {
+      "name": "host",
+      "pid": 538480,
+      "start_time": "2160023",
+      "command": [
+        "/usr/bin/python3",
+        "/home/ubuntu/aws-speed-of-light-261126/source/benchmarks/scaleup_reference/experiments/runtime_prefilter/monitor_host.py",
+        "--work",
+        "/home/ubuntu/aws-speed-of-light-261126",
+        "--output",
+        "/home/ubuntu/aws-speed-of-light-261126/bottleneck/probe/host.jsonl"
+      ],
+      "privileged": false,
+      "exit_code": 0
+    },
+    {
+      "name": "vm",
+      "pid": 538481,
+      "start_time": "2160023",
+      "command": [
+        "/usr/bin/python3",
+        "/home/ubuntu/aws-speed-of-light-261126/source/benchmarks/scaleup_reference/experiments/query_sweep/monitor_vm.py",
+        "--work",
+        "/home/ubuntu/aws-speed-of-light-261126",
+        "--thread-id",
+        "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+        "--controller",
+        "/home/ubuntu/aws-speed-of-light-261126/bottleneck/probe/controller.json",
+        "--output",
+        "/home/ubuntu/aws-speed-of-light-261126/bottleneck/probe/vm.jsonl"
+      ],
+      "privileged": false,
+      "exit_code": 0
+    },
+    {
+      "name": "gpm",
+      "pid": 538482,
+      "start_time": "2160023",
+      "command": [
+        "sudo",
+        "-n",
+        "/usr/bin/python3",
+        "/home/ubuntu/aws-speed-of-light-261126/source/benchmarks/scaleup_reference/experiments/query_sweep/monitor_gpm.py",
+        "--directory",
+        "/home/ubuntu/aws-speed-of-light-261126/bottleneck/probe"
+      ],
+      "privileged": true,
+      "exit_code": 0
+    },
+    {
+      "name": "cpu",
+      "pid": 538486,
+      "start_time": "2160123",
+      "command": [
+        "sudo",
+        "-n",
+        "perf",
+        "record",
+        "-a",
+        "-e",
+        "cpu-clock:k",
+        "-F",
+        "49",
+        "-g",
+        "--call-graph",
+        "fp",
+        "--clockid",
+        "mono",
+        "-o",
+        "/home/ubuntu/aws-speed-of-light-261126/bottleneck/probe/cpu.data",
+        "--",
+        "sleep",
+        "900"
+      ],
+      "privileged": true,
+      "exit_code": -15
+    },
+    {
+      "name": "reclaim",
+      "pid": 538487,
+      "start_time": "2160123",
+      "command": [
+        "sudo",
+        "-n",
+        "perf",
+        "record",
+        "-a",
+        "-e",
+        "vmscan:mm_vmscan_direct_reclaim_begin",
+        "-c",
+        "257",
+        "-g",
+        "--call-graph",
+        "fp",
+        "--clockid",
+        "mono",
+        "-o",
+        "/home/ubuntu/aws-speed-of-light-261126/bottleneck/probe/reclaim.data",
+        "--",
+        "sleep",
+        "900"
+      ],
+      "privileged": true,
+      "exit_code": -15
+    }
+  ],
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "source_revision": "bd66725ebb4f6a709dc0ea135d832ba847e9c78f",
+  "classification": "Diagnostic with profiling overhead; not a benchmark score",
+  "cache_policy": "No cache flush; two actions per query",
+  "instance_policy": "Retain until explicit user release",
+  "end_unix_ns": 1795697418800839824,
+  "gpm_restored": true
+}

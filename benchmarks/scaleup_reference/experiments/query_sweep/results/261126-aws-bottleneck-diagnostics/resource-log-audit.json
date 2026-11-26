@@ -1,0 +1,226 @@
+{
+  "classification": "Observed completed-log messages, not an allocation root-cause diagnosis",
+  "groups": [
+    {
+      "run": "screen/bottleneck-hot-0",
+      "status": "completed",
+      "files_checked": 26,
+      "log_bytes_checked": 34318177,
+      "counts": {
+        "cuda_buffer_leak": 16,
+        "cuda_buffer_leak_after_shutdown_request": 16
+      },
+      "observations": [
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-0/work/app-20261126125706-0000/0/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 7fa4d2000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-0/work/app-20261126125706-0000/0/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 7fa4c2000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-1/work/app-20261126125706-0000/6/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 72e68a000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-1/work/app-20261126125706-0000/6/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 72e680000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-2/work/app-20261126125706-0000/2/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 74b8ca000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-2/work/app-20261126125706-0000/2/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 74b8c0000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-3/work/app-20261126125706-0000/4/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 71cd4e000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-3/work/app-20261126125706-0000/4/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 71cd3e000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-4/work/app-20261126125706-0000/3/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 788bd6000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-4/work/app-20261126125706-0000/3/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 788bcc000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-5/work/app-20261126125706-0000/5/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 7fc1de000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-5/work/app-20261126125706-0000/5/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 7fc1d4000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-6/work/app-20261126125706-0000/7/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 73ba5e000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-6/work/app-20261126125706-0000/7/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 73ba54000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-7/work/app-20261126125706-0000/1/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 71f84a000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-hot-0/suite/worker-7/work/app-20261126125706-0000/1/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:59:38 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 71f840000000)"
+        }
+      ]
+    },
+    {
+      "run": "screen/bottleneck-pressure-0",
+      "status": "completed",
+      "files_checked": 26,
+      "log_bytes_checked": 60736932,
+      "counts": {
+        "cuda_buffer_leak": 16,
+        "cuda_buffer_leak_after_shutdown_request": 16
+      },
+      "observations": [
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-0/work/app-20261126125040-0000/0/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 78d89e000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-0/work/app-20261126125040-0000/0/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 78d894000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-1/work/app-20261126125040-0000/6/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 719afa000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-1/work/app-20261126125040-0000/6/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 719af0000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-2/work/app-20261126125040-0000/3/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 725ed2000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-2/work/app-20261126125040-0000/3/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 725ec8000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-3/work/app-20261126125040-0000/5/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 7e1ede000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-3/work/app-20261126125040-0000/5/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 7e1ed4000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-4/work/app-20261126125040-0000/4/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 7e7f12000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-4/work/app-20261126125040-0000/4/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 7e7f08000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-5/work/app-20261126125040-0000/7/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 72f862000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-5/work/app-20261126125040-0000/7/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 72f858000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-6/work/app-20261126125040-0000/1/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 7c813a000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-6/work/app-20261126125040-0000/1/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 7c8130000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-7/work/app-20261126125040-0000/2/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 70 786ce2000000)"
+        },
+        {
+          "file": "/opt/dlami/nvme/aws-filter-probe-261125/bottleneck-pressure-0/suite/worker-7/work/app-20261126125040-0000/2/stderr",
+          "kind": "cuda_buffer_leak",
+          "after_shutdown_request_in_same_log": true,
+          "line": "26/11/26 12:54:52 ERROR CudaMemoryBuffer: A CUDA BUFFER WAS LEAKED (ID: 71 786cd8000000)"
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "A successful result check does not establish leak-free shutdown",
+    "OOM/retry keyword matches are not necessarily fatal failures",
+    "Process exit and retained GPU allocations require the separate lifecycle audit"
+  ]
+}

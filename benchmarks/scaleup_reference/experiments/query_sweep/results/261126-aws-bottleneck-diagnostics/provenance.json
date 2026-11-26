@@ -1,0 +1,22 @@
+{
+  "classification": "Diagnostic measurements, not a new benchmark score",
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "entrypoint": "benchmarks/scaleup_reference/experiments/query_sweep/start_bottleneck.sh",
+  "phases": [
+    "probe",
+    "pressure",
+    "hot"
+  ],
+  "runtime_revisions": {
+    "probe": "bd66725ebb4f6a709dc0ea135d832ba847e9c78f",
+    "pressure": "bd66725ebb4f6a709dc0ea135d832ba847e9c78f",
+    "hot": "aeb5075445bab3e3cad4011aca929e685e215700"
+  },
+  "required_environment": "Previously prepared dedicated AWS host with frozen decimal SF10K dataset, engine artifacts, selected-cases-before-q11.json and critical oracle/selection receipts. This incremental diagnostic entrypoint is not a clean-host bootstrap.",
+  "frozen_setup_index": "../261126-aws-speed-of-light",
+  "selected_query_index": "../261126-aws-critical-queries",
+  "measurement_boundary": "14 validated actions. Pressure sequence records kernel CPU stacks, reclaim tracepoints, host/VM counters and GPM. Hot sequence records host/VM/GPM without kernel profiling. No cache flush. Profiling overhead is not an isolated variable.",
+  "hardware_boundary": "GPU GPM counters and stage timing are observed. CPU memory bandwidth, shared PCIe/UPI link saturation and matched-access-pattern storage bandwidth ceilings are not measured.",
+  "retention": "AWS instance retained until explicit user release"
+}

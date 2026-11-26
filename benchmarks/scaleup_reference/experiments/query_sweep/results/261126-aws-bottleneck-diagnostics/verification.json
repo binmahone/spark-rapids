@@ -1,0 +1,11 @@
+{
+  "archive": "/home/nvidia/mahone_gluten/wild_spark_rapids/261126_aws_speed_of_light/evidence/raw/bottleneck-complete.tar.gz",
+  "bytes": 98589953,
+  "sha256": "80c37afa6c6baeba81bdd6e3bd47e3854fcd9894834227eb91a1d45f7c889ee9",
+  "analysis_source_revision": "c4026b999f196a79d9363d0d8e056949b8343280",
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "verified": true,
+  "transfer": "Eight immutable SSH ranges, verified full SHA-256",
+  "retention": "Retain until explicit user release"
+}

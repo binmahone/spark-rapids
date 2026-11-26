@@ -1,0 +1,8 @@
+{
+  "state_files": 80,
+  "process_groups": 400,
+  "live_recorded_groups": [],
+  "gpu_compute_processes": [],
+  "scope": "Recorded experiment Java process groups; no instance release operation",
+  "instance_policy": "Retain until explicit user release"
+}

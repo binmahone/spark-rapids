@@ -15,6 +15,7 @@
 """Measure SQL and execution-granularity improvements over the retained experimental suite."""
 import argparse
 from dataclasses import replace
+from datetime import datetime, timezone
 import hashlib
 import os
 from pathlib import Path
@@ -58,21 +59,49 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', required=True)
     parser.add_argument('--phase', choices=['sql', 'tune'], required=True)
+    parser.add_argument('--resume', action='store_true', help='Resume a failed phase without discarding its evidence')
     args = parser.parse_args()
     work = Path(args.work).resolve()
     output = work / 'ceiling' / (args.phase + '.json')
-    if output.exists():
+    if output.exists() and not args.resume:
         raise RuntimeError('Phase evidence exists; use a separately named work directory for a rerun')
     report = {'status': 'running', 'classification': 'Experimental bounded performance search',
               'source_revision': subprocess.check_output(['git', '-C', str(HERE), 'rev-parse', 'HEAD'],
                                                          text=True).strip(),
               'cache_policy': 'No cache flush; two complete actions per query per fresh application',
               'groups': [], 'decisions': [], 'instance_policy': 'Explicit user release only'}
+    if args.resume:
+        previous = read(output)
+        if previous['status'] != 'failed':
+            raise RuntimeError('Only a failed, stopped phase can be resumed')
+        stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+        write(output.with_name(output.stem + '-failed-' + stamp + '.json'), previous)
+        report['groups'] = previous['groups']
     write(output, report)
     write(work / 'ceiling/controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),
                                            'start_time': services.start_time(os.getpid())})
     def run(label, values, conf=None):
-        location, result = launch_group(work, 'ceiling-' + label, 0, values, conf or {})
+        conf = conf or {}
+        expected_conf = read(HERE.parents[1] / 'configs/aws48x.json')['spark_conf']
+        expected_conf.update(conf)
+        expected_variants = {str(c.query): c.name for c in values}
+        expected_overrides = {str(c.query): c.overrides for c in values}
+        for group in reversed(report['groups']):
+            if group['label'] != label or group['status'] != 'completed':
+                continue
+            config = read(Path(group['run']) / 'config.json')
+            fingerprints = {c.query: hashlib.sha256(c.sql.encode()).hexdigest() for c in values}
+            if (config['spark_conf'] == expected_conf and config['case_variants'] == expected_variants
+                    and config['case_overrides'] == expected_overrides
+                    and len(group['samples']) == 2 * len(values)
+                    and all(s['sql_sha256'] == fingerprints[s['query']]
+                            and s['validation']['status'] == 'passed' for s in group['samples'])):
+                return group['samples']
+        prefix = 'ceiling-' + label
+        indices = [int(p.name.rsplit('-', 1)[1]) for p in (work / 'screen').glob(prefix + '-*')
+                   if p.name.rsplit('-', 1)[1].isdigit()]
+        index = max(indices, default=-1) + 1
+        location, result = launch_group(work, prefix, index, values, conf)
         report['groups'].append({'label': label, 'run': str(location),
                                 'status': result['status'], 'samples': result['samples'],
                                 'error': result.get('error'), 'active_query': result.get('active_query')})

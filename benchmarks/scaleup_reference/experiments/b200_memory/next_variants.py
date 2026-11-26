@@ -17,6 +17,8 @@ import re
 
 
 def planner_overrides(arm):
+    if arm == 'no-runtime-bloom':
+        return {'spark.sql.optimizer.runtime.bloomFilter.enabled': 'false'}
     if arm in ('country-flags-ordered', 'country-flags-ordered-driver'):
         return {'spark.rapids.sql.optimizer.joinReorder.enabled': 'false',
                 'spark.rapids.sql.optimizer.joinGraphReorder.enabled': 'false',

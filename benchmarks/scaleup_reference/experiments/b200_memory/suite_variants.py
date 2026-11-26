@@ -38,6 +38,8 @@ def selected_arm(query, arm):
 
 def transform(query, original, arm):
     arm = selected_arm(query, arm)
+    if arm == 'no-runtime-bloom':
+        return transform(query, original, 'combined')
     if arm in ('revenue-first','country-flags','eligible-customer-join','profit-first','compact-supplier',
                'counted-wide','compact-counted-state','priority-flag','promo-flag-revenue',
                'supplier-prefilter','eligible-orders-broadcast','country-flags-ordered',
@@ -421,7 +423,8 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
     from next_variants import planner_overrides
     planner_keys = ('spark.rapids.sql.optimizer.joinReorder.enabled',
                     'spark.rapids.sql.optimizer.joinGraphReorder.enabled',
-                    'spark.rapids.sql.driverlessBroadcast.enabled')
+                    'spark.rapids.sql.driverlessBroadcast.enabled',
+                    'spark.sql.optimizer.runtime.bloomFilter.enabled')
     previous_planner = {key: spark.conf.get(key, 'true') for key in planner_keys}
     try:
         for query,tables in cases.items():

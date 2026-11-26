@@ -166,7 +166,8 @@ def main():
                 'preaggregate-prefilter-reuse' else query_profile[prefilter_key]}
             for key in ('spark.rapids.sql.optimizer.joinReorder.enabled',
                         'spark.rapids.sql.optimizer.joinGraphReorder.enabled',
-                        'spark.rapids.sql.driverlessBroadcast.enabled'):
+                        'spark.rapids.sql.driverlessBroadcast.enabled',
+                        'spark.sql.optimizer.runtime.bloomFilter.enabled'):
                 planner_configuration[key] = query_profile[key]
             planner_configuration.update(planner_overrides(query_arm))
             for key, value in planner_configuration.items():
@@ -220,6 +221,8 @@ def main():
                     execution = frame._jdf.queryExecution()
                     preflight = str(execution.executedPlan().toString())
                     (app / (token + '.preflight.txt')).write_text(preflight)
+                    if query_arm == 'no-runtime-bloom' and 'bloom_filter_agg' in preflight:
+                        raise AssertionError('Runtime Bloom aggregation is still present')
                     Path(str(app / token) + '.cost.txt').write_text(str(
                         spark._jvm.PythonSQLUtils.explainString(execution, 'cost')))
                     semi = [line for line in preflight.splitlines() if 'LeftSemi' in line]

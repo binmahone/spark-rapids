@@ -1,0 +1,36 @@
+{
+  "classification": "Source-derived reachability audit, not a 4 GiB GPU measurement",
+  "query": 21,
+  "engine_source_revision": "68d906668dcaf51ce436a897e4326b8fd14fc002",
+  "source_path": "sql-plugin/src/main/scala/com/nvidia/spark/rapids/GpuAggregateExec.scala",
+  "source_sha256": "fb071c5764b8abae6a810395522ddf90d2211693f1b4159eb5800314b48b9eda",
+  "runtime_plan": "screen/ceiling-screen-shuffle128-0/applications/suite/q21-iteration2.executed.txt",
+  "path": [
+    "RapidsConf.gpuTargetBatchSizeBytes",
+    "GpuHashAggregateExec.configuredTargetBatchSize",
+    "GpuMergeAggregateIterator.computeTargetMergeBatchSize",
+    "AggregateUtils.computeTargetBatchSize",
+    "Math.min(inputRowSize * maxRows, Int.MaxValue)"
+  ],
+  "states": [
+    {
+      "configured_batch_bytes": 2147483648,
+      "input_state_row_bytes": 48,
+      "output_state_row_bytes": 48,
+      "hash_table_row_bytes": 16,
+      "source_derived_merge_target_bytes": 2147483647
+    },
+    {
+      "configured_batch_bytes": 4294967296,
+      "input_state_row_bytes": 48,
+      "output_state_row_bytes": 48,
+      "hash_table_row_bytes": 16,
+      "source_derived_merge_target_bytes": 2147483647
+    }
+  ],
+  "action": "Do not run the 4 GiB batch probe as a test of raising the merge threshold",
+  "limits": [
+    "No general safety claim about removing the byte cap",
+    "Other operators may change with 4 GiB; their performance effect has not been measured"
+  ]
+}

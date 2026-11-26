@@ -1,0 +1,68 @@
+{
+  "status": "passed",
+  "checks": [
+    {
+      "query": 3,
+      "variant": "preaggregate_broadcast_customer",
+      "fixture": "duplicates-null",
+      "rows": 10,
+      "status": "passed"
+    },
+    {
+      "query": 18,
+      "variant": "single_scan_filtered_orders",
+      "fixture": "duplicates-null",
+      "rows": 14,
+      "status": "passed"
+    },
+    {
+      "query": 3,
+      "variant": "preaggregate_broadcast_customer",
+      "fixture": "empty-lineitem",
+      "rows": 0,
+      "status": "passed"
+    },
+    {
+      "query": 18,
+      "variant": "single_scan_filtered_orders",
+      "fixture": "empty-lineitem",
+      "rows": 0,
+      "status": "passed"
+    },
+    {
+      "query": 3,
+      "variant": "preaggregate_broadcast_customer",
+      "fixture": "large-signed-decimals",
+      "rows": 10,
+      "status": "passed"
+    },
+    {
+      "query": 18,
+      "variant": "single_scan_filtered_orders",
+      "fixture": "large-signed-decimals",
+      "rows": 14,
+      "status": "passed"
+    }
+  ],
+  "mutations": [
+    {
+      "query": 3,
+      "mutation": "Discard duplicate join multiplicities with MAX",
+      "detected": true
+    },
+    {
+      "query": 18,
+      "mutation": "Discard duplicate join multiplicities with MAX",
+      "detected": true
+    }
+  ],
+  "scope": "CPU semantic counterexamples; full-scale GPU qualification remains required",
+  "source_revision": "0767a167bd52615cbf9a635a6ce64aba91d63afa",
+  "source_sha256": {
+    "ceiling_oracle.py": "d0f151cf4070dfe3f36dd4fcccd5135a7ac8f9d826d63b9da26ac8c6c12753a0",
+    "ceiling_variants.py": "4b46bb523165c3c58e3cd972101847d877ffa8620ea54efe915c730c457ae3ed",
+    "toy_oracle.py": "1af33e614b8d32e55d4880dcacc1183fc8556ae45d2475e578eecac50e16d6ff",
+    "variants.py": "58305cc2d749690944df2bf1391e3ac19eb32382e35ad6fcf282cf67d705089c"
+  },
+  "spark_version": "3.5.3"
+}

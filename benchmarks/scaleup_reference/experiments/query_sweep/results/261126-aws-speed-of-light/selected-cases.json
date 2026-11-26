@@ -1,0 +1,153 @@
+{
+  "platform": "aws48x",
+  "classification": "Validated bounded experimental selection; not an absolute hardware bound or Daily Trend main score",
+  "engine_sha256": "c267dafd65ae85b558d8c8df03a94c0947cbe42b79a1e29ddeaa63bfcadb8cce",
+  "tools_sha256": "4d28e4919d16b6a607092f91db1e271afe837100550251976c330ee25a1a2b90",
+  "query_order": [
+    3,
+    1,
+    2,
+    4,
+    5,
+    6,
+    9,
+    7,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22
+  ],
+  "candidates": [
+    {
+      "query": 3,
+      "variant": "preaggregate_line_revenue"
+    },
+    {
+      "query": 4,
+      "variant": "deduplicate_existence_keys"
+    },
+    {
+      "query": 5,
+      "variant": "early_customer_region"
+    },
+    {
+      "query": 9,
+      "variant": "prefilter_partsupp_reuse"
+    },
+    {
+      "query": 10,
+      "variant": "preaggregate_customer_revenue"
+    },
+    {
+      "query": 11,
+      "variant": "single_scan_partsupp_total"
+    },
+    {
+      "query": 15,
+      "variant": "reuse_revenue_with_window"
+    },
+    {
+      "query": 17,
+      "variant": "single_scan_average_window"
+    },
+    {
+      "query": 18,
+      "variant": "single_scan_filtered_orders"
+    },
+    {
+      "query": 20,
+      "variant": "broadcast_membership_keys"
+    }
+  ],
+  "sql_sha256_by_query": {
+    "3": "8bfa71b647528e5a024d2bbc10633835141e158a2429a50e9459c43f881e72b5",
+    "1": "b19fe0c93c0fea32928a812e045aa5d00cdee47d81de4e699c554e77dc18bae7",
+    "2": "3b9c4c479ca156a0137b18e32aa00d0aa8654766743f412b48e949b62c4a99a1",
+    "4": "a13263c43af8ef5e17af971d048ca479fcbe12bbe7b22ea054956fba1ee870e1",
+    "5": "dd8c8090da2f620328d14c81df74c506b2de1a8b516cb5d188c44686ccc7eb99",
+    "6": "0786e07769c121c533939c27470005fe32936efbf053570f15e3cbb2a5c48b93",
+    "9": "1517912c0fb51c00d606af54f7aaf8e6f220e24efee9cb07ba097d4db2127c97",
+    "7": "31c03e09a7a5d375361018c18e5ff6cd1622cff12c43a4403190fd20be4d0bb8",
+    "8": "adabd4d80babfd2c35f0de9a256f0a4af52d3242ca09a7c276bb04bb1fec1042",
+    "10": "7f34764b3d6aa4d253c79c0dd9dce58d00cd43f9ca959508f4197cccb2b8da86",
+    "11": "a08acce9b3fe4663dd1db652d0b89608e25fccc1cad1d82dd8efdba3785e13fb",
+    "12": "f3d79186aa23ae7f3b6eadc5741580ff7ac617b845edcc4874510bc0ecee91bd",
+    "13": "001ab2482318e4b190f7d2e33da38b8dac35325aebf4ff784241dd5faa77f4f1",
+    "14": "415d0c392c24bd9c80c964b535ed5e045140e5cb23fac8793a39fe22a5b4eb60",
+    "15": "20e5825e0cb7c17285e1109e8672e98eb1649ea807261a6ef1f4e747feaece90",
+    "16": "df6c02b7102c46f7e247a827272ddc11d2c45f9377b1db4b79468e5fd8c07cd9",
+    "17": "ccf6855e25bb5e1635ec3aed6a5c76a30404e6c3c568bbdb9437abcb6dc8ea0f",
+    "18": "0d997463005d774698544e8e7a2975a01f3740270579e19788718c1d5554bbb4",
+    "19": "1311a6b563bb86b8e341f14a85a2849805065e2ee141645c65af1491bb611454",
+    "20": "4f386551ae032ea84be5e0ed276c91d2e61ebe897b581ed7c1d2d2d54c296dfd",
+    "21": "6c64de3af8977d0b6a54e96b5008ea898d4dcfa450d4b18847eae9f080a6aa16",
+    "22": "443608474a6b322d2e705bcb05a3a7669ec8d975f2aa1f0df88791343f534022"
+  },
+  "dataset_path": "/opt/dlami/nvme/daily-trend-hardened/dataset",
+  "dataset_source": "s3://mahonem-wild-sf10k-261012-503960270539-usw2/TPC-H-sf10k-decimal/",
+  "dataset_contract": {
+    "parquet_files": 1538,
+    "parquet_bytes": 3712454195832
+  },
+  "common_configuration": "benchmarks/scaleup_reference/configs/aws48x.json",
+  "host_preparation": "benchmarks/scaleup_reference/experiments/runtime_prefilter/prepare.sh",
+  "runtime_overrides_by_query": {
+    "2": {
+      "spark.sql.shuffle.partitions": "64"
+    },
+    "5": {
+      "spark.sql.shuffle.partitions": "64"
+    },
+    "7": {
+      "spark.sql.shuffle.partitions": "128"
+    },
+    "8": {
+      "spark.sql.shuffle.partitions": "64"
+    },
+    "12": {
+      "spark.sql.shuffle.partitions": "64"
+    },
+    "13": {
+      "spark.rapids.sql.batchSizeBytes": "536870912"
+    },
+    "15": {
+      "spark.sql.shuffle.partitions": "64"
+    },
+    "16": {
+      "spark.sql.shuffle.partitions": "64"
+    },
+    "17": {
+      "spark.sql.shuffle.partitions": "64"
+    },
+    "20": {
+      "spark.sql.shuffle.partitions": "64"
+    },
+    "21": {
+      "spark.sql.files.maxPartitionBytes": "4g"
+    },
+    "22": {
+      "spark.sql.shuffle.partitions": "64"
+    }
+  },
+  "common_configuration_sha256": "cc30c136e1688597f67eb7d93de746f0fbe7d8378544eb07bf347b33ed47f0f4",
+  "tested_source_revisions": {
+    "sql": "e7f31d080d1859788a49d9783c8f5b7af6e9cf3d",
+    "refine": "8a91f24afce90fed17069e37fa3aadce26f3e479",
+    "tune": "acdedc05b8089d31ef384e7202b0dd2a6aefed9d",
+    "post": "5fa9ee9f689f7d078d261c42f551745d4e6a7b61"
+  },
+  "result_group": "/home/ubuntu/aws-speed-of-light-261126/screen/ceiling-post-final-suite-0",
+  "result_application_ids": [
+    "app-20261126102248-0000"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "mount": "/opt/dlami/nvme",
+  "source": "/dev/mapper/vg.01-lv_ephemeral",
+  "verification_command": "readlink -f /dev/mapper/vg.01-lv_ephemeral",
+  "observed_device": "/dev/dm-0",
+  "diskstats_device": "dm-0",
+  "correction": "The first host-correlation output selected no md devices; its zero md-read counter is not a physical I/O measurement. Executor read_bytes and vmstat counters remain valid."
+}

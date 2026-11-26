@@ -1,0 +1,49 @@
+{
+  "status": "passed",
+  "checks": [
+    {
+      "query": 11,
+      "variant": "single_scan_partsupp_total",
+      "fixture": "duplicates-null",
+      "rows": 6,
+      "status": "passed"
+    },
+    {
+      "query": 11,
+      "variant": "single_scan_partsupp_total",
+      "fixture": "empty-partsupp",
+      "rows": 0,
+      "status": "passed"
+    },
+    {
+      "query": 11,
+      "variant": "single_scan_partsupp_total",
+      "fixture": "large-signed-decimals",
+      "rows": 6,
+      "status": "passed"
+    },
+    {
+      "query": 11,
+      "variant": "single_scan_partsupp_total",
+      "fixture": "threshold-tie",
+      "rows": 2,
+      "status": "passed"
+    }
+  ],
+  "mutations": [
+    {
+      "query": 11,
+      "mutation": "Use MAX instead of the shared total SUM at a threshold tie",
+      "detected": true
+    }
+  ],
+  "scope": "CPU semantic counterexamples; full-scale GPU qualification remains required",
+  "source_revision": "e306deed827c5c53765a35f6e2515dfc070ac471",
+  "source_sha256": {
+    "ceiling_oracle.py": "d31c8e982e294fb3c49d93c7e6512495b764c27c9477b26b555712810218778a",
+    "ceiling_variants.py": "7c6940395681ae7fa73ecfb0de15031b68f1d10dc85a7763eefca1570b27dff9",
+    "toy_oracle.py": "1af33e614b8d32e55d4880dcacc1183fc8556ae45d2475e578eecac50e16d6ff",
+    "variants.py": "0aa436fa761527cf3b17ebcd4462248ced51c0c7ebfcdc70c7b7e83c42871df6"
+  },
+  "spark_version": "3.5.3"
+}

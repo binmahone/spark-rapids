@@ -1,0 +1,57 @@
+{
+  "source_session": "01a21183-bc74-7a30-be37-7b3b0d57c292",
+  "source_session_name": "test_umb_b200_scaleup",
+  "prior_aws_sql_score_seconds": 373.35653165799886,
+  "prior_aws_total_score_seconds": 394.42498541200075,
+  "scope": "New same-platform measurements required; B200 float timings are not AWS decimal predictions",
+  "evidence": [
+    {
+      "local_reference": "/home/nvidia/mahone_gluten/wild_spark_rapids/261125_b200_filter_probe/evidence/time-trial-comparison.json",
+      "sha256": "e7a08681576b24c2dbd8f1807c44e9ed659954c2e7f3f531753a961ff5e63c71"
+    },
+    {
+      "local_reference": "/home/nvidia/mahone_gluten/wild_spark_rapids/261125_b200_filter_probe/evidence/time-trial-audit.json",
+      "sha256": "95b367f4eb7a81f1723d0d8209a62816e0854d096f7e3654ad285b28deb52cb1"
+    },
+    {
+      "local_reference": "/home/nvidia/mahone_gluten/wild_spark_rapids/261125_aws_filter_probe/evidence/sweep-confirmation-result.json",
+      "sha256": "728ae67e9a991c5e2d1340297cffaf0fb660ff55bc8afac68898c9ba426d9db1"
+    },
+    {
+      "local_reference": "/home/nvidia/mahone_gluten/wild_spark_rapids/261125_aws_filter_probe/evidence/reproduction-selection.json",
+      "sha256": "9061708e3684e583f00ea1d162279cbc1949f873eb47206a9595ecc1307275f9"
+    },
+    {
+      "local_reference": "/home/nvidia/mahone_gluten/wild_spark_rapids/261125_b200_filter_probe/evidence/sol-sol-screen-0346.json",
+      "sha256": "a5e9d7314e2e1e1ed5e7958ecba8feef9743f1ff6ccf08788dd486e5656684f3"
+    },
+    {
+      "local_reference": "/home/nvidia/mahone_gluten/wild_spark_rapids/261125_b200_filter_probe/evidence/sol-sol-q3-broadcast-0346.json",
+      "sha256": "0ce06ecae2d8074bd9fd21ce2d4d437d87e1b1e73eb91aa509120e89a9c3ada6"
+    },
+    {
+      "local_reference": "/home/nvidia/mahone_gluten/wild_spark_rapids/261125_b200_filter_probe/evidence/sol-sol-q18-placement-0346-sol-q18-reuse-0346.json",
+      "sha256": "4102c19d42a2b8da418bfa2729061f00a880a0f83ba2f7ae0a2d1c4dc29b1738"
+    },
+    {
+      "local_reference": "/home/nvidia/mahone_gluten/wild_spark_rapids/261125_b200_filter_probe/evidence/sol-sol-q18-orders-broadcast-0346.json",
+      "sha256": "bd4bc1f237ffe4aecbecd5e9ebf6d65fa62f0031684e6e7bb822f9f654079ed3"
+    },
+    {
+      "local_reference": "/home/nvidia/mahone_gluten/wild_spark_rapids/261125_b200_filter_probe/evidence/sol-sol-extra-0346.json",
+      "sha256": "34a54adb9f6ebe045d403e8770ffcf587d6727f1a5b10d9816ff16b21dca6642"
+    },
+    {
+      "local_reference": "/home/nvidia/mahone_gluten/wild_spark_rapids/261125_b200_filter_probe/evidence/sol-sol-p128-0346.json",
+      "sha256": "2b9897aaa4009b23b4ec8ec24c1a3f130353da1bd4d064b32ffe171587fb6841"
+    },
+    {
+      "local_reference": "/home/nvidia/mahone_gluten/wild_spark_rapids/261125_b200_filter_probe/evidence/comparison-sol-full-0346.json",
+      "sha256": "6751a7d62e4c509223b02181dd2d0f365866200e90af1b6b36c44fd139537f46"
+    },
+    {
+      "local_reference": "/home/nvidia/mahone_gluten/wild_spark_rapids/261125_b200_filter_probe/evidence/diagnostics-sol-full-0346.json",
+      "sha256": "77467b8f205c8ed3bf0c9d605d3ddd6279096a7d76e2612b92820da76e9e7685"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "generated_beijing": "2026-11-26T18:42:21.490635+08:00",
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "classification": "Validated bounded experimental selection; not an absolute hardware bound or Daily Trend main score",
+  "baseline": "Previously selected seven SQL rewrites, rerun on the same AWS host with the same frozen engine",
+  "repository": "https://github.com/binmahone/spark-rapids",
+  "export_source_revision": "5fa9ee9f689f7d078d261c42f551745d4e6a7b61",
+  "entrypoint": "benchmarks/scaleup_reference/experiments/query_sweep/start_selected_suite.sh",
+  "invocation_arguments": [
+    "<prepared-host-work-directory>",
+    "<unique-run-name>",
+    "<checkout>/benchmarks/scaleup_reference/experiments/query_sweep/results/261126-aws-speed-of-light/selected-cases.json"
+  ],
+  "host_preparation": "benchmarks/scaleup_reference/experiments/runtime_prefilter/prepare.sh",
+  "external_prerequisites": [
+    "Access to the dataset S3 source recorded in selected-cases.json",
+    "The pinned engine and tools JARs identified in engine-manifest.json; prepare.sh supports their retained S3 source",
+    "Host driver, P2P, UCX, NVMe and NUMA prerequisites in host-prerequisites.json and the preparation scripts"
+  ],
+  "raw_archive": {
+    "name": "ceiling-261126-complete.tar.gz",
+    "bytes": 1631331065,
+    "sha256": "1178c04648d72069770a1babd98d2a34226c95c54cd6f8b5ed8e5c7c8d7e9665",
+    "local_only_path": "/home/nvidia/mahone_gluten/wild_spark_rapids/261126_aws_speed_of_light/evidence/raw/ceiling-261126-complete.tar.gz",
+    "scope": "Raw logs and event data are locally retained for deeper investigation; compact measurements are included here"
+  },
+  "verification": {
+    "selected_runner": "All SQL fingerprints and override contracts verified without starting a separate extra suite",
+    "actual_execution": "Measured final full suite uses the same launch_group and run_cases execution path",
+    "services": "Owned Spark process groups and GPU compute processes were empty at the final lifecycle audit"
+  },
+  "retention": "AWS instance retained until explicit user release",
+  "alternative_selection": {
+    "file": "fastest-observed-cases.json",
+    "measured_group": "/home/ubuntu/aws-speed-of-light-261126/screen/ceiling-screen-shuffle128-0",
+    "scope": "Reproduces the fastest observed complete screening configuration; it has not passed the final per-query ABBA selection gate"
+  },
+  "selection_before_q11": {
+    "file": "selected-cases-before-q11.json",
+    "measured_group": "/home/ubuntu/aws-speed-of-light-261126/screen/ceiling-final-suite-0",
+    "scope": "Retains the earlier complete combination; the Q11 rewrite passed its isolated gate but the subsequent full-suite score was slower"
+  },
+  "suggested_next_comparison_baseline": {
+    "file": "selected-cases-before-q11.json",
+    "reason": "Use the earlier combination as the comparison baseline until the full-suite long tails and possible cross-query effects are isolated; this does not reject the measured Q11 single-query benefit"
+  }
+}

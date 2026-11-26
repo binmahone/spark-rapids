@@ -1,0 +1,115 @@
+{
+  "status": "passed",
+  "checks": [
+    {
+      "query": 3,
+      "variant": "preaggregate_line_revenue",
+      "fixture": "duplicates-null",
+      "rows": 10,
+      "status": "passed"
+    },
+    {
+      "query": 9,
+      "variant": "prefilter_partsupp_reuse",
+      "fixture": "duplicates-null",
+      "rows": 26,
+      "status": "passed"
+    },
+    {
+      "query": 10,
+      "variant": "preaggregate_customer_revenue",
+      "fixture": "duplicates-null",
+      "rows": 7,
+      "status": "passed"
+    },
+    {
+      "query": 18,
+      "variant": "single_scan_quantity_state",
+      "fixture": "duplicates-null",
+      "rows": 14,
+      "status": "passed"
+    },
+    {
+      "query": 3,
+      "variant": "preaggregate_line_revenue",
+      "fixture": "empty-lineitem",
+      "rows": 0,
+      "status": "passed"
+    },
+    {
+      "query": 9,
+      "variant": "prefilter_partsupp_reuse",
+      "fixture": "empty-lineitem",
+      "rows": 0,
+      "status": "passed"
+    },
+    {
+      "query": 10,
+      "variant": "preaggregate_customer_revenue",
+      "fixture": "empty-lineitem",
+      "rows": 0,
+      "status": "passed"
+    },
+    {
+      "query": 18,
+      "variant": "single_scan_quantity_state",
+      "fixture": "empty-lineitem",
+      "rows": 0,
+      "status": "passed"
+    },
+    {
+      "query": 3,
+      "variant": "preaggregate_line_revenue",
+      "fixture": "large-signed-decimals",
+      "rows": 10,
+      "status": "passed"
+    },
+    {
+      "query": 9,
+      "variant": "prefilter_partsupp_reuse",
+      "fixture": "large-signed-decimals",
+      "rows": 26,
+      "status": "passed"
+    },
+    {
+      "query": 10,
+      "variant": "preaggregate_customer_revenue",
+      "fixture": "large-signed-decimals",
+      "rows": 7,
+      "status": "passed"
+    },
+    {
+      "query": 18,
+      "variant": "single_scan_quantity_state",
+      "fixture": "large-signed-decimals",
+      "rows": 14,
+      "status": "passed"
+    }
+  ],
+  "mutations": [
+    {
+      "query": 3,
+      "mutation": "Discard duplicate join multiplicities with MAX",
+      "detected": true
+    },
+    {
+      "query": 10,
+      "mutation": "Discard duplicate join multiplicities with MAX",
+      "detected": true
+    },
+    {
+      "query": 18,
+      "mutation": "Discard duplicate join multiplicities with MAX",
+      "detected": true
+    }
+  ],
+  "scope": "CPU semantic counterexamples; full-scale GPU qualification remains required",
+  "source_revision": "a82b7480ffa228fadf324e1111cac15314339be5",
+  "source_sha256": {
+    "ceiling_oracle.py": "80e8488e64c13a2895c64ae855a685bf3653fd55e9e874dd12e142f3c23a4faa",
+    "ceiling_variants.py": "f15b04eae677f42f24e4bfb136296460e84817dd9d253f35b90bb0b4b423dade",
+    "toy_oracle.py": "1af33e614b8d32e55d4880dcacc1183fc8556ae45d2475e578eecac50e16d6ff",
+    "variants.py": "1569e03a409744af3e729690e27510e3a9ff2a9bc80c403e4bdb94349ebb8540"
+  },
+  "spark_version": "3.5.3"
+}

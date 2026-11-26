@@ -1,0 +1,11 @@
+{
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "policy": "Host retained until explicit user release",
+  "exports": {
+    "execution-metrics.json": "035933645e8a9d6bcd6ebab6c2a5b12f3ec72ab4c198f3c0599be1a42eda01de",
+    "measurements.json": "13f62c7639ec33c4fe0b03a6ea804e132ad63679c8c2c96ca1e2150a1872132c",
+    "per-query.csv": "35829b78afd8ca1ce069619071db9ef72630ae89c63b783fbe6a3c2f03416797",
+    "selected-cases.json": "6448ae0b5408ab8195cbe80d5d3ffdae4cb4ee2a858f8a8487302a5d55f39a31"
+  }
+}

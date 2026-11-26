@@ -1,0 +1,951 @@
+{
+  "classification": "Screening runtime effect audit; timing qualification is separate",
+  "source_sha256": "b9cd7fa5b032a5810225bd70156ecb611501d26f8b7b96abbe1028f892870017",
+  "candidates": [
+    {
+      "query": 3,
+      "setting": "shuffle128",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 1,
+      "setting": "shuffle64",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            512
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 2,
+      "setting": "shuffle64",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 5,
+      "setting": "shuffle64",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            512
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 6,
+      "setting": "shuffle128",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ]
+        ]
+      ],
+      "path_changed": false
+    },
+    {
+      "query": 9,
+      "setting": "shuffle128",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            512
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 7,
+      "setting": "shuffle128",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            512
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            128
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 10,
+      "setting": "shuffle64",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 13,
+      "setting": "operator512",
+      "observed_signatures": [
+        [
+          [
+            "GpuCoalesceBatches",
+            10
+          ],
+          [
+            "GpuCoalesceBatches",
+            20
+          ],
+          [
+            "GpuCoalesceBatches",
+            256
+          ],
+          [
+            "GpuCoalesceBatches",
+            768
+          ],
+          [
+            "GpuCoalesceBatches",
+            256
+          ]
+        ],
+        [
+          [
+            "GpuCoalesceBatches",
+            10
+          ],
+          [
+            "GpuCoalesceBatches",
+            20
+          ],
+          [
+            "GpuCoalesceBatches",
+            512
+          ],
+          [
+            "GpuCoalesceBatches",
+            768
+          ],
+          [
+            "GpuCoalesceBatches",
+            256
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 14,
+      "setting": "shuffle64",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 16,
+      "setting": "shuffle64",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            512
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 17,
+      "setting": "shuffle64",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 20,
+      "setting": "shuffle64",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            512
+          ],
+          [
+            "GpuColumnarExchange",
+            512
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 8,
+      "setting": "shuffle64",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            512
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 12,
+      "setting": "shuffle64",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            512
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 15,
+      "setting": "shuffle64",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ],
+          [
+            "GpuColumnarExchange",
+            8
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 18,
+      "setting": "shuffle64",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            1
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 22,
+      "setting": "shuffle64",
+      "control_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            256
+          ],
+          [
+            "GpuColumnarExchange",
+            512
+          ]
+        ]
+      ],
+      "candidate_exchange_partition_metrics": [
+        [
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            64
+          ],
+          [
+            "GpuColumnarExchange",
+            128
+          ]
+        ]
+      ],
+      "path_changed": true
+    },
+    {
+      "query": 21,
+      "setting": "scan4g",
+      "observed_signatures": [
+        2049,
+        1281
+      ],
+      "path_changed": true
+    }
+  ]
+}

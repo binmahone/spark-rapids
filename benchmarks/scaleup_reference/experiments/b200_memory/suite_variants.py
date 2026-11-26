@@ -40,7 +40,8 @@ def transform(query, original, arm):
     arm = selected_arm(query, arm)
     if arm in ('revenue-first','country-flags','eligible-customer-join','profit-first','compact-supplier',
                'counted-wide','compact-counted-state','priority-flag','promo-flag-revenue',
-               'supplier-prefilter','eligible-orders-broadcast'):
+               'supplier-prefilter','eligible-orders-broadcast','country-flags-ordered',
+               'country-flags-ordered-driver'):
         from next_variants import transform_next
         return transform_next(query, original, arm)
     if arm == 'baseline':
@@ -419,7 +420,8 @@ def check_semantics(spark, suite, requested, arm, require_gpu=True):
     previous_prefilter = spark.conf.get(prefilter_key, 'true')
     from next_variants import planner_overrides
     planner_keys = ('spark.rapids.sql.optimizer.joinReorder.enabled',
-                    'spark.rapids.sql.optimizer.joinGraphReorder.enabled')
+                    'spark.rapids.sql.optimizer.joinGraphReorder.enabled',
+                    'spark.rapids.sql.driverlessBroadcast.enabled')
     previous_planner = {key: spark.conf.get(key, 'true') for key in planner_keys}
     try:
         for query,tables in cases.items():

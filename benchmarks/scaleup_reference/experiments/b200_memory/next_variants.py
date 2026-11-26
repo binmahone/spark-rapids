@@ -17,6 +17,11 @@ import re
 
 
 def planner_overrides(arm):
+    if arm in ('country-flags-ordered', 'country-flags-ordered-driver'):
+        return {'spark.rapids.sql.optimizer.joinReorder.enabled': 'false',
+                'spark.rapids.sql.optimizer.joinGraphReorder.enabled': 'false',
+                'spark.rapids.sql.driverlessBroadcast.enabled':
+                    'false' if arm.endswith('-driver') else 'true'}
     if arm in ('counted-wide', 'compact-counted-state'):
         return {'spark.rapids.sql.optimizer.aggregatePrefilter.enabled': 'false'}
     if arm in ('profit-first', 'eligible-customer-join', 'eligible-orders-broadcast'):
@@ -26,6 +31,18 @@ def planner_overrides(arm):
 
 
 def transform_next(query, original, arm):
+    if query == 7 and arm in ('country-flags-ordered', 'country-flags-ordered-driver'):
+        value = transform_next(query, original, 'country-flags')
+        before = '), shipping AS ('
+        assert value.count(before) == 1
+        value = value.replace(before, '''), eligible_orders AS (
+    SELECT /*+ BROADCAST(c_country) */ o_orderkey, c_fr
+    FROM orders JOIN c_country ON c_custkey = o_custkey
+), shipping AS (''')
+        before = '''    JOIN orders ON o_orderkey = l_orderkey
+    JOIN c_country ON c_custkey = o_custkey'''
+        assert value.count(before) == 1
+        return value.replace(before, '    JOIN eligible_orders ON o_orderkey = l_orderkey')
     if query == 5 and arm == 'eligible-orders-broadcast':
         return """
 WITH eligible_customers AS (

@@ -165,7 +165,8 @@ def main():
             planner_configuration = {prefilter_key: 'false' if query_arm ==
                 'preaggregate-prefilter-reuse' else query_profile[prefilter_key]}
             for key in ('spark.rapids.sql.optimizer.joinReorder.enabled',
-                        'spark.rapids.sql.optimizer.joinGraphReorder.enabled'):
+                        'spark.rapids.sql.optimizer.joinGraphReorder.enabled',
+                        'spark.rapids.sql.driverlessBroadcast.enabled'):
                 planner_configuration[key] = query_profile[key]
             planner_configuration.update(planner_overrides(query_arm))
             for key, value in planner_configuration.items():
@@ -251,7 +252,8 @@ def main():
                     if query_arm in ('revenue-first','profit-first','country-flags','eligible-customer-join',
                                      'compact-supplier','counted-wide','compact-counted-state',
                                      'priority-flag','promo-flag-revenue','supplier-prefilter',
-                                     'eligible-orders-broadcast'):
+                                     'eligible-orders-broadcast','country-flags-ordered',
+                                     'country-flags-ordered-driver'):
                         pending, nodes = [execution.executedPlan()], []
                         while pending:
                             node = pending.pop()
@@ -260,6 +262,20 @@ def main():
                             pending.extend(children.apply(i) for i in range(children.size()))
                         outputs = [str(n.output().toString()) for n in nodes
                                    if str(n.nodeName())=='GpuColumnarExchange']
+                        if query_arm in ('country-flags-ordered','country-flags-ordered-driver'):
+                            if not any('BroadcastHashJoin' in x and 'o_custkey' in x and
+                                       'c_custkey' in x for x in preflight.splitlines()):
+                                raise AssertionError('Customer filter is absent before the order-key shuffle')
+                            if not any('o_orderkey' in x and 'c_fr' in x and
+                                       'o_custkey' not in x for x in outputs):
+                                raise AssertionError('Filtered-order flags did not reach the shuffle')
+                            native = any('GpuDriverlessBroadcastHashJoin' in x and
+                                         'o_custkey' in x and 'c_custkey' in x
+                                         for x in preflight.splitlines())
+                            if native == query_arm.endswith('-driver') or (
+                                    query_arm.endswith('-driver') and
+                                    'GpuDriverlessBroadcastHashJoin' in preflight):
+                                raise AssertionError('Declared broadcast implementation was not selected')
                         if query_arm == 'eligible-orders-broadcast':
                             if not any('BroadcastHashJoin' in x and 'l_orderkey' in x and
                                        'o_orderkey' in x for x in preflight.splitlines()):

@@ -1,0 +1,5196 @@
+{
+  "status": "completed",
+  "phase": "B1",
+  "groups": [
+    {
+      "run": "/home/ubuntu/aws-speed-of-light-261126/screen/read-tuning-B1-0",
+      "status": "completed",
+      "samples": [
+        {
+          "query": 9,
+          "iteration": 1,
+          "sql_seconds": 43.46419839100054,
+          "application_id": "app-20261126131045-0000",
+          "spark_session_identity": 737839306,
+          "rows": 175,
+          "schema": {
+            "type": "struct",
+            "fields": [
+              {
+                "name": "nation",
+                "type": "string",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "o_year",
+                "type": "integer",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "sum_profit",
+                "type": "decimal(38,4)",
+                "nullable": true,
+                "metadata": {}
+              }
+            ]
+          },
+          "sql_sha256": "1517912c0fb51c00d606af54f7aaf8e6f220e24efee9cb07ba097d4db2127c97",
+          "reference_sql_sha256": "17c1568d99fe5e1aa3612559892a14a2fb33d3a9ffe4f68b25f58f93aca1aec3",
+          "variant": "prefilter_partsupp_reuse",
+          "purpose": "Align null rejection so the selective part-key broadcast can be shared",
+          "case_conf": {
+            "spark.rapids.sql.batchSizeBytes": "2147483648",
+            "spark.sql.shuffle.partitions": "256"
+          },
+          "validation": {
+            "status": "passed",
+            "method": "complete ordered rows"
+          },
+          "validation_seconds": 0.04254429399952642,
+          "reader_metrics": {
+            "hybridScanSplits": 2561,
+            "hybridScanDeviceBytesRead": 0,
+            "hybridScanNativeHostBytesRead": 1433905350757,
+            "hybridScanGdsFallbackFiles": 0,
+            "hybridScanGpuBusyHostBytesRead": 0
+          },
+          "plan_metrics": [
+            {
+              "node": "GpuColumnarToRow",
+              "metrics": {
+                "opTimeNew": 0,
+                "streamTime": 633969696
+              }
+            },
+            {
+              "node": "GpuSort",
+              "metrics": {
+                "opTimeNew": 273671257,
+                "sortTime": 194620347
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 175,
+                "opTimeNew": 84979515
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 56000,
+                "fetchWaitTime": 72,
+                "localBlocksFetched": 0,
+                "localBytesRead": 767,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 23100,
+                "numOutputRows": 175,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 271195046,
+                "opTimeNewShuffleWrite": 629703706,
+                "partitionSize": 12308,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 175,
+                "remoteBlocksFetched": 162,
+                "remoteBytesRead": 11011,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 11778,
+                "shuffleRecordsWritten": 175,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 264,
+                "numOutputRows": 350,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 1265555271
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 264,
+                "opTimeNew": 5569656361
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 12976128,
+                "fetchWaitTime": 1368,
+                "localBlocksFetched": 0,
+                "localBytesRead": 1671902,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 44800,
+                "numPartitions": 512,
+                "opTimeNewShuffleRead": 3881492468,
+                "opTimeNewShuffleWrite": 3584108946,
+                "partitionSize": 13973782,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 89600,
+                "remoteBlocksFetched": 59139,
+                "remoteBytesRead": 11665176,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 6668539,
+                "shuffleRecordsWritten": 44800,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 44800,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 8002909764
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 13529889357
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 135601842
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 121418877
+              }
+            },
+            {
+              "node": "GpuDriverlessBroadcastHashJoin",
+              "metrics": {
+                "executorBuildCacheHits": 248,
+                "executorBuilds": 8,
+                "numOutputBatches": 256,
+                "numOutputRows": 3260820563,
+                "opTimeNew": 30124382423
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 1908039680,
+                "fetchWaitTime": 781,
+                "localBlocksFetched": 0,
+                "localBytesRead": 1101190282,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 100000000,
+                "numPartitions": 8,
+                "opTimeNewShuffleRead": 3417765998,
+                "opTimeNewShuffleWrite": 2401080751,
+                "partitionSize": 9452619776,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 800000000,
+                "remoteBlocksFetched": 1792,
+                "remoteBytesRead": 7708331974,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 1101190282,
+                "shuffleRecordsWritten": 100000000,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 76781315
+              }
+            },
+            {
+              "node": "GpuDriverlessBroadcastHashJoin",
+              "metrics": {
+                "executorBuildCacheHits": 248,
+                "executorBuilds": 8,
+                "numOutputBatches": 256,
+                "numOutputRows": 100000000,
+                "opTimeNew": 402850568
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 576,
+                "fetchWaitTime": 281,
+                "localBlocksFetched": 0,
+                "localBytesRead": 425,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 1,
+                "numOutputRows": 25,
+                "numPartitions": 8,
+                "opTimeNewShuffleRead": 2756164361,
+                "opTimeNewShuffleWrite": 1414390,
+                "partitionSize": 3560,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 200,
+                "remoteBlocksFetched": 7,
+                "remoteBytesRead": 2975,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 425,
+                "shuffleRecordsWritten": 25,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 1,
+                "opTimeNew": 464483
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 1,
+                "numOutputRows": 25,
+                "opTimeNew": 514039
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.nation",
+              "metrics": {
+                "bufferTime": 38361360,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 2670,
+                "gpuDecodeTime": 1946756,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 473,
+                "hybridScanNativeHostBytesRead": 473,
+                "hybridScanSplits": 1,
+                "metadataTime": 0,
+                "numFiles": 1,
+                "numOutputBatches": 1,
+                "numOutputRows": 25,
+                "opTimeNew": 188900978,
+                "rowGroupsFetched": 1,
+                "scanTime": 188797296
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 31942678
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 100000000,
+                "opTimeNew": 108951757
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.supplier",
+              "metrics": {
+                "bufferTime": 265120690,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 8127418695,
+                "gpuDecodeTime": 2413710235,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 532063985,
+                "hybridScanNativeHostBytesRead": 532063985,
+                "hybridScanSplits": 256,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 100000000,
+                "opTimeNew": 3545959583,
+                "rowGroupsFetched": 256,
+                "scanTime": 3536884017
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 4454673291
+              }
+            },
+            {
+              "node": "GpuShuffledSymmetricHashJoin",
+              "metrics": {
+                "buildDataSize": 10434832128,
+                "buildTime": 32137933041,
+                "numOutputBatches": 256,
+                "numOutputRows": 3260820563,
+                "opTimeNew": 4176601188
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 7286862877
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 143487244800,
+                "fetchWaitTime": 46592,
+                "localBlocksFetched": 0,
+                "localBytesRead": 10193581875,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 3260820563,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 46828547086,
+                "opTimeNewShuffleWrite": 44737116529,
+                "partitionSize": 87618748416,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 3260820563,
+                "remoteBlocksFetched": 57347,
+                "remoteBytesRead": 71390135505,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 81583717380,
+                "shuffleRecordsWritten": 3260820563,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 1850021570
+              }
+            },
+            {
+              "node": "GpuShuffledSymmetricHashJoin",
+              "metrics": {
+                "buildDataSize": 156519387024,
+                "buildTime": 43227509776,
+                "numOutputBatches": 256,
+                "numOutputRows": 3260820563,
+                "opTimeNew": 7437782146
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 25947716079
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 156568969344,
+                "fetchWaitTime": 15809,
+                "localBlocksFetched": 0,
+                "localBytesRead": 11083359943,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 294912,
+                "numOutputRows": 3260820563,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 17027711786,
+                "opTimeNewShuffleWrite": 68515780857,
+                "partitionSize": 91590454492,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 3260820563,
+                "remoteBlocksFetched": 258046,
+                "remoteBytesRead": 77582519146,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 88665879089,
+                "shuffleRecordsWritten": 3260820563,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 1126392376
+              }
+            },
+            {
+              "node": "GpuBroadcastHashJoin",
+              "metrics": {
+                "numOutputBatches": 1152,
+                "numOutputRows": 3260820563,
+                "opTimeNew": 66686028819
+              }
+            },
+            {
+              "node": "ReusedExchange",
+              "metrics": {}
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 1152,
+                "opTimeNew": 662066979
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 1280,
+                "numOutputRows": 59999994267,
+                "opTimeNew": 3636858996
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.lineitem",
+              "metrics": {
+                "bufferTime": 316740074339,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 2394043691819,
+                "gpuDecodeTime": 86428906805,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 1239882252952,
+                "hybridScanNativeHostBytesRead": 1239882252952,
+                "hybridScanSplits": 1280,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 1280,
+                "numOutputRows": 59999994267,
+                "opTimeNew": 435709698830,
+                "rowGroupsFetched": 28672,
+                "scanTime": 435594226039
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 9854953247
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 180005079104,
+                "fetchWaitTime": 27103,
+                "localBlocksFetched": 0,
+                "localBytesRead": 15077685867,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 87552,
+                "numOutputRows": 15000000000,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 39469407385,
+                "opTimeNewShuffleWrite": 61082337360,
+                "partitionSize": 128796709248,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 15000000000,
+                "remoteBlocksFetched": 76608,
+                "remoteBytesRead": 105542563747,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 120620249614,
+                "shuffleRecordsWritten": 15000000000,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 342,
+                "opTimeNew": 93762251
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 512,
+                "numOutputRows": 15000000000,
+                "opTimeNew": 515330522
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.orders",
+              "metrics": {
+                "bufferTime": 5411497414,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 692676391675,
+                "gpuDecodeTime": 19314034489,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 84738091746,
+                "hybridScanNativeHostBytesRead": 84738091746,
+                "hybridScanSplits": 512,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 512,
+                "numOutputRows": 15000000000,
+                "opTimeNew": 34729742468,
+                "rowGroupsFetched": 8448,
+                "scanTime": 34711088000
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 5009423472
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 10608839040,
+                "fetchWaitTime": 24901,
+                "localBlocksFetched": 0,
+                "localBytesRead": 778406674,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 434784672,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 27073052957,
+                "opTimeNewShuffleWrite": 12001566467,
+                "partitionSize": 6675527484,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 434784672,
+                "remoteBlocksFetched": 57357,
+                "remoteBytesRead": 5459688225,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 6238094899,
+                "shuffleRecordsWritten": 434784672,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuBroadcastHashJoin",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 434784672,
+                "opTimeNew": 6662520986
+              }
+            },
+            {
+              "node": "GpuBroadcastExchange",
+              "metrics": {
+                "broadcastTime": 1854424172,
+                "buildTime": 534583982,
+                "collectTime": 1939826432,
+                "dataSize": 869569344,
+                "driverlessBuildBytes": 0,
+                "driverlessStageFallbacks": 0,
+                "driverlessStageTime": 0,
+                "numOutputBatches": 1,
+                "numOutputRows": 108696168,
+                "opTimeNew": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 368957725
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 323547475
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 108696168,
+                "opTimeNew": 1227141456
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.part",
+              "metrics": {
+                "bufferTime": 12496907378,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 63185660594,
+                "gpuDecodeTime": 6317886191,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 35160160992,
+                "hybridScanNativeHostBytesRead": 35160160992,
+                "hybridScanSplits": 256,
+                "metadataTime": 4,
+                "numFiles": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 2000000000,
+                "opTimeNew": 30706397191,
+                "rowGroupsFetched": 1280,
+                "scanTime": 30656991333
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 37305727
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 8000000000,
+                "opTimeNew": 504942955
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.partsupp",
+              "metrics": {
+                "bufferTime": 12456364855,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 428859646795,
+                "gpuDecodeTime": 9388693926,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 73592780609,
+                "hybridScanNativeHostBytesRead": 73592780609,
+                "hybridScanSplits": 256,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 8000000000,
+                "opTimeNew": 26733211882,
+                "rowGroupsFetched": 8448,
+                "scanTime": 26721100199
+              }
+            }
+          ],
+          "scan_configuration": {
+            "spark.sql.files.maxPartitionBytes": "2g",
+            "spark.sql.files.maxPartitionNum": "4096"
+          },
+          "cleanup_seconds": 1.2821559219992196,
+          "sql_plus_cleanup_seconds": 44.746354312999756
+        },
+        {
+          "query": 9,
+          "iteration": 2,
+          "sql_seconds": 38.62600222999754,
+          "application_id": "app-20261126131045-0000",
+          "spark_session_identity": 737839306,
+          "rows": 175,
+          "schema": {
+            "type": "struct",
+            "fields": [
+              {
+                "name": "nation",
+                "type": "string",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "o_year",
+                "type": "integer",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "sum_profit",
+                "type": "decimal(38,4)",
+                "nullable": true,
+                "metadata": {}
+              }
+            ]
+          },
+          "sql_sha256": "1517912c0fb51c00d606af54f7aaf8e6f220e24efee9cb07ba097d4db2127c97",
+          "reference_sql_sha256": "17c1568d99fe5e1aa3612559892a14a2fb33d3a9ffe4f68b25f58f93aca1aec3",
+          "variant": "prefilter_partsupp_reuse",
+          "purpose": "Align null rejection so the selective part-key broadcast can be shared",
+          "case_conf": {
+            "spark.rapids.sql.batchSizeBytes": "2147483648",
+            "spark.sql.shuffle.partitions": "256"
+          },
+          "validation": {
+            "status": "passed",
+            "method": "complete ordered rows"
+          },
+          "validation_seconds": 0.04275808900274569,
+          "reader_metrics": {
+            "hybridScanSplits": 2561,
+            "hybridScanDeviceBytesRead": 0,
+            "hybridScanNativeHostBytesRead": 1433905350757,
+            "hybridScanGdsFallbackFiles": 0,
+            "hybridScanGpuBusyHostBytesRead": 0
+          },
+          "plan_metrics": [
+            {
+              "node": "GpuColumnarToRow",
+              "metrics": {
+                "opTimeNew": 0,
+                "streamTime": 343441096
+              }
+            },
+            {
+              "node": "GpuSort",
+              "metrics": {
+                "opTimeNew": 106846062,
+                "sortTime": 74467459
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 175,
+                "opTimeNew": 90833530
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 56000,
+                "fetchWaitTime": 91,
+                "localBlocksFetched": 0,
+                "localBytesRead": 1600,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 23100,
+                "numOutputRows": 175,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 142048228,
+                "opTimeNewShuffleWrite": 352061602,
+                "partitionSize": 12308,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 175,
+                "remoteBlocksFetched": 151,
+                "remoteBytesRead": 10178,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 11778,
+                "shuffleRecordsWritten": 175,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 264,
+                "numOutputRows": 350,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 969083152
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 264,
+                "opTimeNew": 5101229591
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 12976128,
+                "fetchWaitTime": 1345,
+                "localBlocksFetched": 0,
+                "localBytesRead": 1699489,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 44800,
+                "numPartitions": 512,
+                "opTimeNewShuffleRead": 3003036477,
+                "opTimeNewShuffleWrite": 3095731448,
+                "partitionSize": 14224998,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 89600,
+                "remoteBlocksFetched": 59141,
+                "remoteBytesRead": 11874425,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 6786957,
+                "shuffleRecordsWritten": 44800,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 44800,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 3729583796
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 10847178058
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 95906458
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 122451834
+              }
+            },
+            {
+              "node": "GpuDriverlessBroadcastHashJoin",
+              "metrics": {
+                "executorBuildCacheHits": 248,
+                "executorBuilds": 8,
+                "numOutputBatches": 256,
+                "numOutputRows": 3260820563,
+                "opTimeNew": 26924383500
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 1908039680,
+                "fetchWaitTime": 779,
+                "localBlocksFetched": 0,
+                "localBytesRead": 1101189835,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 100000000,
+                "numPartitions": 8,
+                "opTimeNewShuffleRead": 4095366591,
+                "opTimeNewShuffleWrite": 2419987313,
+                "partitionSize": 9452619776,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 800000000,
+                "remoteBlocksFetched": 1792,
+                "remoteBytesRead": 7708328845,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 1101189835,
+                "shuffleRecordsWritten": 100000000,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 63388241
+              }
+            },
+            {
+              "node": "GpuDriverlessBroadcastHashJoin",
+              "metrics": {
+                "executorBuildCacheHits": 248,
+                "executorBuilds": 8,
+                "numOutputBatches": 256,
+                "numOutputRows": 100000000,
+                "opTimeNew": 275099224
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 576,
+                "fetchWaitTime": 103,
+                "localBlocksFetched": 0,
+                "localBytesRead": 427,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 1,
+                "numOutputRows": 25,
+                "numPartitions": 8,
+                "opTimeNewShuffleRead": 1533939119,
+                "opTimeNewShuffleWrite": 1041022,
+                "partitionSize": 3560,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 200,
+                "remoteBlocksFetched": 7,
+                "remoteBytesRead": 2989,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 427,
+                "shuffleRecordsWritten": 25,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 1,
+                "opTimeNew": 146748
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 1,
+                "numOutputRows": 25,
+                "opTimeNew": 1214045
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.nation",
+              "metrics": {
+                "bufferTime": 328733,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 2670,
+                "gpuDecodeTime": 14496311,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 473,
+                "hybridScanNativeHostBytesRead": 473,
+                "hybridScanSplits": 1,
+                "metadataTime": 0,
+                "numFiles": 1,
+                "numOutputBatches": 1,
+                "numOutputRows": 25,
+                "opTimeNew": 34548909,
+                "rowGroupsFetched": 1,
+                "scanTime": 34525612
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 22002042
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 100000000,
+                "opTimeNew": 129975508
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.supplier",
+              "metrics": {
+                "bufferTime": 207578384,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 8127418695,
+                "gpuDecodeTime": 2350374782,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 532063985,
+                "hybridScanNativeHostBytesRead": 532063985,
+                "hybridScanSplits": 256,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 100000000,
+                "opTimeNew": 3257410132,
+                "rowGroupsFetched": 256,
+                "scanTime": 3251724962
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 4356482277
+              }
+            },
+            {
+              "node": "GpuShuffledSymmetricHashJoin",
+              "metrics": {
+                "buildDataSize": 10434832128,
+                "buildTime": 30587360438,
+                "numOutputBatches": 256,
+                "numOutputRows": 3260820563,
+                "opTimeNew": 3495577661
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 7195681353
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 143487244800,
+                "fetchWaitTime": 45151,
+                "localBlocksFetched": 0,
+                "localBytesRead": 10190692915,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 3260820563,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 45384479932,
+                "opTimeNewShuffleWrite": 44586521028,
+                "partitionSize": 87618748416,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 3260820563,
+                "remoteBlocksFetched": 57350,
+                "remoteBytesRead": 71393945106,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 81584638021,
+                "shuffleRecordsWritten": 3260820563,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 1840633320
+              }
+            },
+            {
+              "node": "GpuShuffledSymmetricHashJoin",
+              "metrics": {
+                "buildDataSize": 156519387024,
+                "buildTime": 49627539996,
+                "numOutputBatches": 256,
+                "numOutputRows": 3260820563,
+                "opTimeNew": 7102232564
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 24732368716
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 156568969344,
+                "fetchWaitTime": 23734,
+                "localBlocksFetched": 0,
+                "localBytesRead": 11069874054,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 294912,
+                "numOutputRows": 3260820563,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 24691743804,
+                "opTimeNewShuffleWrite": 71825949158,
+                "partitionSize": 91589879984,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 3260820563,
+                "remoteBlocksFetched": 258095,
+                "remoteBytesRead": 77595563793,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 88665437847,
+                "shuffleRecordsWritten": 3260820563,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 1309256178
+              }
+            },
+            {
+              "node": "GpuBroadcastHashJoin",
+              "metrics": {
+                "numOutputBatches": 1152,
+                "numOutputRows": 3260820563,
+                "opTimeNew": 64759800696
+              }
+            },
+            {
+              "node": "ReusedExchange",
+              "metrics": {}
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 1152,
+                "opTimeNew": 288597183
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 1280,
+                "numOutputRows": 59999994267,
+                "opTimeNew": 3899939265
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.lineitem",
+              "metrics": {
+                "bufferTime": 302809756398,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 2394043691819,
+                "gpuDecodeTime": 97488506257,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 1239882252952,
+                "hybridScanNativeHostBytesRead": 1239882252952,
+                "hybridScanSplits": 1280,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 1280,
+                "numOutputRows": 59999994267,
+                "opTimeNew": 430644034230,
+                "rowGroupsFetched": 28672,
+                "scanTime": 430579113000
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 9205065430
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 180005079104,
+                "fetchWaitTime": 28462,
+                "localBlocksFetched": 0,
+                "localBytesRead": 15078729191,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 87552,
+                "numOutputRows": 15000000000,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 37450658339,
+                "opTimeNewShuffleWrite": 61991086345,
+                "partitionSize": 128734933728,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 15000000000,
+                "remoteBlocksFetched": 76607,
+                "remoteBytesRead": 105543812911,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 120622542102,
+                "shuffleRecordsWritten": 15000000000,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 342,
+                "opTimeNew": 56914219
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 512,
+                "numOutputRows": 15000000000,
+                "opTimeNew": 276385050
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.orders",
+              "metrics": {
+                "bufferTime": 5224948456,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 692676391675,
+                "gpuDecodeTime": 19729789332,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 84738091746,
+                "hybridScanNativeHostBytesRead": 84738091746,
+                "hybridScanSplits": 512,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 512,
+                "numOutputRows": 15000000000,
+                "opTimeNew": 33931735418,
+                "rowGroupsFetched": 8448,
+                "scanTime": 33919221614
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 4950871830
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 10608839040,
+                "fetchWaitTime": 23247,
+                "localBlocksFetched": 0,
+                "localBytesRead": 779311240,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 434784672,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 25546891585,
+                "opTimeNewShuffleWrite": 11059439205,
+                "partitionSize": 6676000254,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 434784672,
+                "remoteBlocksFetched": 57349,
+                "remoteBytesRead": 5460420758,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 6239731998,
+                "shuffleRecordsWritten": 434784672,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuBroadcastHashJoin",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 434784672,
+                "opTimeNew": 6385366688
+              }
+            },
+            {
+              "node": "GpuBroadcastExchange",
+              "metrics": {
+                "broadcastTime": 1792812464,
+                "buildTime": 429244697,
+                "collectTime": 810782450,
+                "dataSize": 869569344,
+                "driverlessBuildBytes": 0,
+                "driverlessStageFallbacks": 0,
+                "driverlessStageTime": 0,
+                "numOutputBatches": 1,
+                "numOutputRows": 108696168,
+                "opTimeNew": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 72389555
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 63090868
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 108696168,
+                "opTimeNew": 655889340
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.part",
+              "metrics": {
+                "bufferTime": 5609252405,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 63185660594,
+                "gpuDecodeTime": 6607121459,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 35160160992,
+                "hybridScanNativeHostBytesRead": 35160160992,
+                "hybridScanSplits": 256,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 2000000000,
+                "opTimeNew": 14301550361,
+                "rowGroupsFetched": 1280,
+                "scanTime": 14287281172
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 31821909
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 8000000000,
+                "opTimeNew": 416669672
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.partsupp",
+              "metrics": {
+                "bufferTime": 11185224694,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 428859646795,
+                "gpuDecodeTime": 9474286299,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 73592780609,
+                "hybridScanNativeHostBytesRead": 73592780609,
+                "hybridScanSplits": 256,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 8000000000,
+                "opTimeNew": 25482075085,
+                "rowGroupsFetched": 8448,
+                "scanTime": 25472513152
+              }
+            }
+          ],
+          "scan_configuration": {
+            "spark.sql.files.maxPartitionBytes": "2g",
+            "spark.sql.files.maxPartitionNum": "4096"
+          },
+          "cleanup_seconds": 1.1985087920002115,
+          "sql_plus_cleanup_seconds": 39.82451102199775
+        },
+        {
+          "query": 10,
+          "iteration": 1,
+          "sql_seconds": 19.881608940999286,
+          "application_id": "app-20261126131045-0000",
+          "spark_session_identity": 737839306,
+          "rows": 20,
+          "schema": {
+            "type": "struct",
+            "fields": [
+              {
+                "name": "c_custkey",
+                "type": "long",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "c_name",
+                "type": "string",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "revenue",
+                "type": "decimal(38,4)",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "c_acctbal",
+                "type": "decimal(15,2)",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "n_name",
+                "type": "string",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "c_address",
+                "type": "string",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "c_phone",
+                "type": "string",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "c_comment",
+                "type": "string",
+                "nullable": true,
+                "metadata": {}
+              }
+            ]
+          },
+          "sql_sha256": "7f34764b3d6aa4d253c79c0dd9dce58d00cd43f9ca959508f4197cccb2b8da86",
+          "reference_sql_sha256": "35a658f5484335134a647a0502a0b24cb24d9d4201dab00dfcff15831ee92244",
+          "variant": "preaggregate_customer_revenue",
+          "purpose": "Aggregate fact revenue before attaching customer string payloads",
+          "case_conf": {
+            "spark.rapids.sql.batchSizeBytes": "2147483648",
+            "spark.sql.shuffle.partitions": "256"
+          },
+          "validation": {
+            "status": "passed",
+            "method": "complete ordered rows"
+          },
+          "validation_seconds": 0.011179078999703052,
+          "reader_metrics": {
+            "hybridScanSplits": 2049,
+            "hybridScanDeviceBytesRead": 0,
+            "hybridScanNativeHostBytesRead": 777467392304,
+            "hybridScanGdsFallbackFiles": 0,
+            "hybridScanGpuBusyHostBytesRead": 0
+          },
+          "plan_metrics": [
+            {
+              "node": "GpuColumnarToRow",
+              "metrics": {
+                "opTimeNew": 0,
+                "streamTime": 36961674
+              }
+            },
+            {
+              "node": "GpuTopN",
+              "metrics": {
+                "numOutputBatches": 1,
+                "numOutputRows": 20,
+                "opTimeNew": 2747825
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 1,
+                "opTimeNew": 31257413
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 1217728,
+                "fetchWaitTime": 3,
+                "localBlocksFetched": 0,
+                "localBytesRead": 134564,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 5120,
+                "numPartitions": 1,
+                "opTimeNewShuffleRead": 2647720,
+                "opTimeNewShuffleWrite": 444649965,
+                "partitionSize": 850905,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 5120,
+                "remoteBlocksFetched": 213,
+                "remoteBytesRead": 677643,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 812207,
+                "shuffleRecordsWritten": 5120,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuTopN",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 5120,
+                "opTimeNew": 1502435952
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 68342151,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 2042946040
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 19108074111
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 13087361600,
+                "fetchWaitTime": 4425,
+                "localBlocksFetched": 0,
+                "localBytesRead": 994700226,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 68342151,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 6932447109,
+                "opTimeNewShuffleWrite": 8998888944,
+                "partitionSize": 8289043339,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 68342151,
+                "remoteBlocksFetched": 57305,
+                "remoteBytesRead": 6925571204,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 7920271430,
+                "shuffleRecordsWritten": 68342151,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 68342151,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 256,
+                "opTimeNew": 2485734334
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 270062160
+              }
+            },
+            {
+              "node": "GpuDriverlessBroadcastHashJoin",
+              "metrics": {
+                "executorBuildCacheHits": 248,
+                "executorBuilds": 8,
+                "numOutputBatches": 256,
+                "numOutputRows": 68342151,
+                "opTimeNew": 1412097191
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 576,
+                "fetchWaitTime": 3,
+                "localBlocksFetched": 0,
+                "localBytesRead": 429,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 1,
+                "numOutputRows": 25,
+                "numPartitions": 8,
+                "opTimeNewShuffleRead": 178216878,
+                "opTimeNewShuffleWrite": 831925,
+                "partitionSize": 3560,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 200,
+                "remoteBlocksFetched": 7,
+                "remoteBytesRead": 3003,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 429,
+                "shuffleRecordsWritten": 25,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 1,
+                "opTimeNew": 147941
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 1,
+                "numOutputRows": 25,
+                "opTimeNew": 266515
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.nation",
+              "metrics": {
+                "bufferTime": 549001,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 2670,
+                "gpuDecodeTime": 3814201,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 473,
+                "hybridScanNativeHostBytesRead": 473,
+                "hybridScanSplits": 1,
+                "metadataTime": 0,
+                "numFiles": 1,
+                "numOutputBatches": 1,
+                "numOutputRows": 25,
+                "opTimeNew": 17564768,
+                "rowGroupsFetched": 1,
+                "scanTime": 17521165
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 248929413
+              }
+            },
+            {
+              "node": "GpuDriverlessBroadcastHashJoin",
+              "metrics": {
+                "executorBuildCacheHits": 248,
+                "executorBuilds": 8,
+                "numOutputBatches": 256,
+                "numOutputRows": 68342151,
+                "opTimeNew": 8937430258
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 200957880
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 1500000000,
+                "opTimeNew": 396011541
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.customer",
+              "metrics": {
+                "bufferTime": 64643831463,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 125561382357,
+                "gpuDecodeTime": 12549267187,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 124951952312,
+                "hybridScanNativeHostBytesRead": 124951952312,
+                "hybridScanSplits": 256,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 1500000000,
+                "opTimeNew": 79362746522,
+                "rowGroupsFetched": 2048,
+                "scanTime": 79353362771
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 1648773504,
+                "fetchWaitTime": 373,
+                "localBlocksFetched": 0,
+                "localBytesRead": 837941757,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 68342151,
+                "numPartitions": 8,
+                "opTimeNewShuffleRead": 3996073528,
+                "opTimeNewShuffleWrite": 2812052316,
+                "partitionSize": 7101892608,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 546737208,
+                "remoteBlocksFetched": 1792,
+                "remoteBytesRead": 5865592299,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 837941757,
+                "shuffleRecordsWritten": 68342151,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 68342151,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 998205365
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 3832012339
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 12222267072,
+                "fetchWaitTime": 1965,
+                "localBlocksFetched": 0,
+                "localBytesRead": 748748239,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 486155002,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 3745570346,
+                "opTimeNewShuffleWrite": 8363230055,
+                "partitionSize": 6244453944,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 486155002,
+                "remoteBlocksFetched": 57412,
+                "remoteBytesRead": 5292778627,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 6041526866,
+                "shuffleRecordsWritten": 486155002,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 486155002,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 5995750851
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 226156171
+              }
+            },
+            {
+              "node": "GpuShuffledSymmetricHashJoin",
+              "metrics": {
+                "buildDataSize": 9177073664,
+                "buildTime": 17481085106,
+                "numOutputBatches": 256,
+                "numOutputRows": 1147178282,
+                "opTimeNew": 1461029538
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 56672589490
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 355384676352,
+                "fetchWaitTime": 24397,
+                "localBlocksFetched": 0,
+                "localBytesRead": 21285786147,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 294912,
+                "numOutputRows": 14806661056,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 25216281226,
+                "opTimeNewShuffleWrite": 88029519919,
+                "partitionSize": 177489593660,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 14806661056,
+                "remoteBlocksFetched": 257935,
+                "remoteBytesRead": 148476555279,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 169762341426,
+                "shuffleRecordsWritten": 14806661056,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 354762376
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 1152,
+                "opTimeNew": 592356766
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 1280,
+                "numOutputRows": 14806661056,
+                "opTimeNew": 4095442843
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.lineitem",
+              "metrics": {
+                "bufferTime": 61166278282,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 2394043691819,
+                "gpuDecodeTime": 59676754336,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 474237001714,
+                "hybridScanNativeHostBytesRead": 474237001714,
+                "hybridScanSplits": 1280,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 1280,
+                "numOutputRows": 14806661056,
+                "opTimeNew": 150265724944,
+                "rowGroupsFetched": 28672,
+                "scanTime": 150215486024
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 5475008808
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 9181960704,
+                "fetchWaitTime": 2465,
+                "localBlocksFetched": 0,
+                "localBytesRead": 815677187,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 87552,
+                "numOutputRows": 573567104,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 11925833267,
+                "opTimeNewShuffleWrite": 8767005447,
+                "partitionSize": 6781479383,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 573567104,
+                "remoteBlocksFetched": 76627,
+                "remoteBytesRead": 5718504835,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 6534182022,
+                "shuffleRecordsWritten": 573567104,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 101346786
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 342,
+                "opTimeNew": 105347586
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 512,
+                "numOutputRows": 573567104,
+                "opTimeNew": 996048651
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.orders",
+              "metrics": {
+                "bufferTime": 49045297638,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 692676391675,
+                "gpuDecodeTime": 15446627248,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 178278437805,
+                "hybridScanNativeHostBytesRead": 178278437805,
+                "hybridScanSplits": 512,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 512,
+                "numOutputRows": 573567104,
+                "opTimeNew": 70336078722,
+                "rowGroupsFetched": 8448,
+                "scanTime": 70311766374
+              }
+            }
+          ],
+          "scan_configuration": {
+            "spark.sql.files.maxPartitionBytes": "2g",
+            "spark.sql.files.maxPartitionNum": "4096"
+          },
+          "cleanup_seconds": 1.4841763059994264,
+          "sql_plus_cleanup_seconds": 21.365785246998712
+        },
+        {
+          "query": 10,
+          "iteration": 2,
+          "sql_seconds": 18.666625597998063,
+          "application_id": "app-20261126131045-0000",
+          "spark_session_identity": 737839306,
+          "rows": 20,
+          "schema": {
+            "type": "struct",
+            "fields": [
+              {
+                "name": "c_custkey",
+                "type": "long",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "c_name",
+                "type": "string",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "revenue",
+                "type": "decimal(38,4)",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "c_acctbal",
+                "type": "decimal(15,2)",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "n_name",
+                "type": "string",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "c_address",
+                "type": "string",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "c_phone",
+                "type": "string",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "c_comment",
+                "type": "string",
+                "nullable": true,
+                "metadata": {}
+              }
+            ]
+          },
+          "sql_sha256": "7f34764b3d6aa4d253c79c0dd9dce58d00cd43f9ca959508f4197cccb2b8da86",
+          "reference_sql_sha256": "35a658f5484335134a647a0502a0b24cb24d9d4201dab00dfcff15831ee92244",
+          "variant": "preaggregate_customer_revenue",
+          "purpose": "Aggregate fact revenue before attaching customer string payloads",
+          "case_conf": {
+            "spark.rapids.sql.batchSizeBytes": "2147483648",
+            "spark.sql.shuffle.partitions": "256"
+          },
+          "validation": {
+            "status": "passed",
+            "method": "complete ordered rows"
+          },
+          "validation_seconds": 0.011264959000982344,
+          "reader_metrics": {
+            "hybridScanSplits": 2049,
+            "hybridScanDeviceBytesRead": 0,
+            "hybridScanNativeHostBytesRead": 777467392304,
+            "hybridScanGdsFallbackFiles": 0,
+            "hybridScanGpuBusyHostBytesRead": 0
+          },
+          "plan_metrics": [
+            {
+              "node": "GpuColumnarToRow",
+              "metrics": {
+                "opTimeNew": 0,
+                "streamTime": 41549762
+              }
+            },
+            {
+              "node": "GpuTopN",
+              "metrics": {
+                "numOutputBatches": 1,
+                "numOutputRows": 20,
+                "opTimeNew": 2942985
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 1,
+                "opTimeNew": 35819477
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 1217728,
+                "fetchWaitTime": 2,
+                "localBlocksFetched": 0,
+                "localBytesRead": 131861,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 5120,
+                "numPartitions": 1,
+                "opTimeNewShuffleRead": 2423799,
+                "opTimeNewShuffleWrite": 436076302,
+                "partitionSize": 855390,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 5120,
+                "remoteBlocksFetched": 215,
+                "remoteBytesRead": 687032,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 818893,
+                "shuffleRecordsWritten": 5120,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuTopN",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 5120,
+                "opTimeNew": 1149481489
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 68342151,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 1916555873
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 18904199918
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 13087361600,
+                "fetchWaitTime": 1236,
+                "localBlocksFetched": 0,
+                "localBytesRead": 1003862221,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 68342151,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 3907899508,
+                "opTimeNewShuffleWrite": 12763954149,
+                "partitionSize": 8287380801,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 68342151,
+                "remoteBlocksFetched": 57225,
+                "remoteBytesRead": 6916082764,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 7919944985,
+                "shuffleRecordsWritten": 68342151,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 68342151,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 256,
+                "opTimeNew": 2882239625
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 218725913
+              }
+            },
+            {
+              "node": "GpuDriverlessBroadcastHashJoin",
+              "metrics": {
+                "executorBuildCacheHits": 248,
+                "executorBuilds": 8,
+                "numOutputBatches": 256,
+                "numOutputRows": 68342151,
+                "opTimeNew": 1270637793
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 576,
+                "fetchWaitTime": 0,
+                "localBlocksFetched": 0,
+                "localBytesRead": 431,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 1,
+                "numOutputRows": 25,
+                "numPartitions": 8,
+                "opTimeNewShuffleRead": 138616535,
+                "opTimeNewShuffleWrite": 1170375,
+                "partitionSize": 3560,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 200,
+                "remoteBlocksFetched": 7,
+                "remoteBytesRead": 3017,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 431,
+                "shuffleRecordsWritten": 25,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 1,
+                "opTimeNew": 336938
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 1,
+                "numOutputRows": 25,
+                "opTimeNew": 223125
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.nation",
+              "metrics": {
+                "bufferTime": 1048217,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 2670,
+                "gpuDecodeTime": 2589422,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 473,
+                "hybridScanNativeHostBytesRead": 473,
+                "hybridScanSplits": 1,
+                "metadataTime": 0,
+                "numFiles": 1,
+                "numOutputBatches": 1,
+                "numOutputRows": 25,
+                "opTimeNew": 27295141,
+                "rowGroupsFetched": 1,
+                "scanTime": 27264522
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 194373490
+              }
+            },
+            {
+              "node": "GpuDriverlessBroadcastHashJoin",
+              "metrics": {
+                "executorBuildCacheHits": 248,
+                "executorBuilds": 8,
+                "numOutputBatches": 256,
+                "numOutputRows": 68342151,
+                "opTimeNew": 9189146298
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 162631322
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 1500000000,
+                "opTimeNew": 390570285
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.customer",
+              "metrics": {
+                "bufferTime": 19468500226,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 125561382357,
+                "gpuDecodeTime": 17226159024,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 124951952312,
+                "hybridScanNativeHostBytesRead": 124951952312,
+                "hybridScanSplits": 256,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 1500000000,
+                "opTimeNew": 39261839660,
+                "rowGroupsFetched": 2048,
+                "scanTime": 39253798236
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 1648773504,
+                "fetchWaitTime": 369,
+                "localBlocksFetched": 0,
+                "localBytesRead": 837988170,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 68342151,
+                "numPartitions": 8,
+                "opTimeNewShuffleRead": 4594789372,
+                "opTimeNewShuffleWrite": 2825202841,
+                "partitionSize": 7101892608,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 546737208,
+                "remoteBlocksFetched": 1792,
+                "remoteBytesRead": 5865917190,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 837988170,
+                "shuffleRecordsWritten": 68342151,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 68342151,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 920974556
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 3546520901
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 12222267072,
+                "fetchWaitTime": 2180,
+                "localBlocksFetched": 0,
+                "localBytesRead": 755307567,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 486155002,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 3871061611,
+                "opTimeNewShuffleWrite": 8045701323,
+                "partitionSize": 6244046064,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 486155002,
+                "remoteBlocksFetched": 57343,
+                "remoteBytesRead": 5286028959,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 6041336526,
+                "shuffleRecordsWritten": 486155002,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 486155002,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 5204906663
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 197795118
+              }
+            },
+            {
+              "node": "GpuShuffledSymmetricHashJoin",
+              "metrics": {
+                "buildDataSize": 9177073664,
+                "buildTime": 16244998931,
+                "numOutputBatches": 256,
+                "numOutputRows": 1147178282,
+                "opTimeNew": 1328493966
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 62138473498
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 355384676352,
+                "fetchWaitTime": 26705,
+                "localBlocksFetched": 0,
+                "localBytesRead": 20932638043,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 294912,
+                "numOutputRows": 14806661056,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 27555742181,
+                "opTimeNewShuffleWrite": 91573134168,
+                "partitionSize": 177487450460,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 14806661056,
+                "remoteBlocksFetched": 258554,
+                "remoteBytesRead": 148824227996,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 169756866039,
+                "shuffleRecordsWritten": 14806661056,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 320163543
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 1152,
+                "opTimeNew": 542608611
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 1280,
+                "numOutputRows": 14806661056,
+                "opTimeNew": 3552103552
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.lineitem",
+              "metrics": {
+                "bufferTime": 61281527924,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 2394043691819,
+                "gpuDecodeTime": 60264687030,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 474237001714,
+                "hybridScanNativeHostBytesRead": 474237001714,
+                "hybridScanSplits": 1280,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 1280,
+                "numOutputRows": 14806661056,
+                "opTimeNew": 151604978723,
+                "rowGroupsFetched": 28672,
+                "scanTime": 151557738422
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 5447461980
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 9181960704,
+                "fetchWaitTime": 2521,
+                "localBlocksFetched": 0,
+                "localBytesRead": 799750786,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 87552,
+                "numOutputRows": 573567104,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 10735112097,
+                "opTimeNewShuffleWrite": 8675130794,
+                "partitionSize": 6781424879,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 573567104,
+                "remoteBlocksFetched": 76824,
+                "remoteBytesRead": 5734803768,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 6534554554,
+                "shuffleRecordsWritten": 573567104,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 79675337
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 342,
+                "opTimeNew": 93123284
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 512,
+                "numOutputRows": 573567104,
+                "opTimeNew": 901590067
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.orders",
+              "metrics": {
+                "bufferTime": 48951938613,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 692676391675,
+                "gpuDecodeTime": 14411403690,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 178278437805,
+                "hybridScanNativeHostBytesRead": 178278437805,
+                "hybridScanSplits": 512,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 512,
+                "numOutputRows": 573567104,
+                "opTimeNew": 67825421716,
+                "rowGroupsFetched": 8448,
+                "scanTime": 67806679245
+              }
+            }
+          ],
+          "scan_configuration": {
+            "spark.sql.files.maxPartitionBytes": "2g",
+            "spark.sql.files.maxPartitionNum": "4096"
+          },
+          "cleanup_seconds": 1.3089075150019198,
+          "sql_plus_cleanup_seconds": 19.975533112999983
+        },
+        {
+          "query": 11,
+          "iteration": 1,
+          "sql_seconds": 7.652891413999896,
+          "application_id": "app-20261126131045-0000",
+          "spark_session_identity": 737839306,
+          "rows": 9365098,
+          "schema": {
+            "type": "struct",
+            "fields": [
+              {
+                "name": "ps_partkey",
+                "type": "long",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "value",
+                "type": "decimal(36,2)",
+                "nullable": true,
+                "metadata": {}
+              }
+            ]
+          },
+          "sql_sha256": "37e8cda73f7649f57160d96f7f4c57da91f885f73666fa34e8dc6ceb04dc83d2",
+          "reference_sql_sha256": "37e8cda73f7649f57160d96f7f4c57da91f885f73666fa34e8dc6ceb04dc83d2",
+          "variant": "baseline",
+          "purpose": "Unchanged SQL configuration control",
+          "case_conf": {
+            "spark.rapids.sql.batchSizeBytes": "2147483648",
+            "spark.sql.shuffle.partitions": "256"
+          },
+          "validation": {
+            "status": "passed",
+            "method": "complete multiset fingerprints"
+          },
+          "validation_seconds": 0.00023200299983727746,
+          "reader_metrics": {
+            "hybridScanSplits": 513,
+            "hybridScanDeviceBytesRead": 0,
+            "hybridScanNativeHostBytesRead": 88490831874,
+            "hybridScanGdsFallbackFiles": 0,
+            "hybridScanGpuBusyHostBytesRead": 0
+          },
+          "plan_metrics": [
+            {
+              "node": "GpuColumnarToRow",
+              "metrics": {
+                "opTimeNew": 0,
+                "streamTime": 5458319168
+              }
+            },
+            {
+              "node": "GpuSort",
+              "metrics": {
+                "opTimeNew": 173167531,
+                "sortTime": 92500128
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 3196858615
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 232349184,
+                "fetchWaitTime": 1578,
+                "localBlocksFetched": 0,
+                "localBytesRead": 15489329,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 9365098,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 2082828496,
+                "opTimeNewShuffleWrite": 3732742713,
+                "partitionSize": 129735415,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 9365098,
+                "remoteBlocksFetched": 57323,
+                "remoteBytesRead": 108124262,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 123613591,
+                "shuffleRecordsWritten": 9365098,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 512,
+                "opTimeNew": 55772800
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 512,
+                "numOutputRows": 18730196,
+                "opTimeNew": 1248541732
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 512,
+                "numOutputRows": 602546160,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 1767363928
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 512,
+                "opTimeNew": 7134805764
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 7576850688,
+                "fetchWaitTime": 2120,
+                "localBlocksFetched": 0,
+                "localBytesRead": 857856796,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 301273080,
+                "numPartitions": 512,
+                "opTimeNewShuffleRead": 4629665918,
+                "opTimeNewShuffleWrite": 5691217353,
+                "partitionSize": 7150151648,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 602546160,
+                "remoteBlocksFetched": 114635,
+                "remoteBytesRead": 5982351622,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 3420104209,
+                "shuffleRecordsWritten": 301273080,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 301273080,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 2081129247
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 22949165
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 24146913
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 68060898
+              }
+            },
+            {
+              "node": "GpuDriverlessBroadcastHashJoin",
+              "metrics": {
+                "executorBuildCacheHits": 248,
+                "executorBuilds": 8,
+                "numOutputBatches": 256,
+                "numOutputRows": 319949840,
+                "opTimeNew": 591671382
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 32002240,
+                "fetchWaitTime": 16,
+                "localBlocksFetched": 0,
+                "localBytesRead": 16394138,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 3999373,
+                "numPartitions": 8,
+                "opTimeNewShuffleRead": 4147937585,
+                "opTimeNewShuffleWrite": 2062189444,
+                "partitionSize": 141585568,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 31994984,
+                "remoteBlocksFetched": 1792,
+                "remoteBytesRead": 114758966,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 16394138,
+                "shuffleRecordsWritten": 3999373,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 30675720
+              }
+            },
+            {
+              "node": "GpuDriverlessBroadcastHashJoin",
+              "metrics": {
+                "executorBuildCacheHits": 256,
+                "executorBuilds": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 3999373,
+                "opTimeNew": 141751714
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 64,
+                "fetchWaitTime": 103,
+                "localBlocksFetched": 0,
+                "localBytesRead": 38,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 1,
+                "numOutputRows": 1,
+                "numPartitions": 8,
+                "opTimeNewShuffleRead": 2987517174,
+                "opTimeNewShuffleWrite": 742936,
+                "partitionSize": 328,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 8,
+                "remoteBlocksFetched": 7,
+                "remoteBytesRead": 266,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 38,
+                "shuffleRecordsWritten": 1,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 147845
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 1,
+                "opTimeNew": 147051
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 1,
+                "numOutputRows": 1,
+                "opTimeNew": 651042
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.nation",
+              "metrics": {
+                "bufferTime": 637359,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 2670,
+                "gpuDecodeTime": 2057566,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 473,
+                "hybridScanNativeHostBytesRead": 473,
+                "hybridScanSplits": 1,
+                "metadataTime": 0,
+                "numFiles": 1,
+                "numOutputBatches": 1,
+                "numOutputRows": 1,
+                "opTimeNew": 16980775,
+                "rowGroupsFetched": 1,
+                "scanTime": 16957155
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 19513136
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 100000000,
+                "opTimeNew": 77979479
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.supplier",
+              "metrics": {
+                "bufferTime": 197973824,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 8127418695,
+                "gpuDecodeTime": 2232912203,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 532063985,
+                "hybridScanNativeHostBytesRead": 532063985,
+                "hybridScanSplits": 256,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 100000000,
+                "opTimeNew": 3070405087,
+                "rowGroupsFetched": 256,
+                "scanTime": 3065535706
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 30302117
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 8000000000,
+                "opTimeNew": 136725891
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.partsupp",
+              "metrics": {
+                "bufferTime": 19770560209,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 428859646795,
+                "gpuDecodeTime": 6925376740,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 87958767416,
+                "hybridScanNativeHostBytesRead": 87958767416,
+                "hybridScanSplits": 256,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 8000000000,
+                "opTimeNew": 28342573070,
+                "rowGroupsFetched": 8448,
+                "scanTime": 28334270381
+              }
+            }
+          ],
+          "scan_configuration": {
+            "spark.sql.files.maxPartitionBytes": "2g",
+            "spark.sql.files.maxPartitionNum": "4096"
+          },
+          "cleanup_seconds": 0.032455689997732406,
+          "sql_plus_cleanup_seconds": 7.685347103997628
+        },
+        {
+          "query": 11,
+          "iteration": 2,
+          "sql_seconds": 7.222443481998198,
+          "application_id": "app-20261126131045-0000",
+          "spark_session_identity": 737839306,
+          "rows": 9365098,
+          "schema": {
+            "type": "struct",
+            "fields": [
+              {
+                "name": "ps_partkey",
+                "type": "long",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "value",
+                "type": "decimal(36,2)",
+                "nullable": true,
+                "metadata": {}
+              }
+            ]
+          },
+          "sql_sha256": "37e8cda73f7649f57160d96f7f4c57da91f885f73666fa34e8dc6ceb04dc83d2",
+          "reference_sql_sha256": "37e8cda73f7649f57160d96f7f4c57da91f885f73666fa34e8dc6ceb04dc83d2",
+          "variant": "baseline",
+          "purpose": "Unchanged SQL configuration control",
+          "case_conf": {
+            "spark.rapids.sql.batchSizeBytes": "2147483648",
+            "spark.sql.shuffle.partitions": "256"
+          },
+          "validation": {
+            "status": "passed",
+            "method": "complete multiset fingerprints"
+          },
+          "validation_seconds": 0.00022273099966696464,
+          "reader_metrics": {
+            "hybridScanSplits": 513,
+            "hybridScanDeviceBytesRead": 0,
+            "hybridScanNativeHostBytesRead": 88490831874,
+            "hybridScanGdsFallbackFiles": 0,
+            "hybridScanGpuBusyHostBytesRead": 0
+          },
+          "plan_metrics": [
+            {
+              "node": "GpuColumnarToRow",
+              "metrics": {
+                "opTimeNew": 0,
+                "streamTime": 4203733188
+              }
+            },
+            {
+              "node": "GpuSort",
+              "metrics": {
+                "opTimeNew": 159172821,
+                "sortTime": 84615556
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 2686278477
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 232364224,
+                "fetchWaitTime": 740,
+                "localBlocksFetched": 0,
+                "localBytesRead": 15448986,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 9365098,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 1353414757,
+                "opTimeNewShuffleWrite": 3593958111,
+                "partitionSize": 129681765,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 9365098,
+                "remoteBlocksFetched": 57346,
+                "remoteBytesRead": 108074932,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 123523918,
+                "shuffleRecordsWritten": 9365098,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 512,
+                "opTimeNew": 52828889
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 512,
+                "numOutputRows": 18730196,
+                "opTimeNew": 1160934545
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 512,
+                "numOutputRows": 602546160,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 1692159979
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 512,
+                "opTimeNew": 6795687397
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 7576850688,
+                "fetchWaitTime": 1830,
+                "localBlocksFetched": 0,
+                "localBytesRead": 855235161,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 301273080,
+                "numPartitions": 512,
+                "opTimeNewShuffleRead": 4285522421,
+                "opTimeNewShuffleWrite": 5780115618,
+                "partitionSize": 7150553608,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 602546160,
+                "remoteBlocksFetched": 114683,
+                "remoteBytesRead": 5985447799,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 3420341480,
+                "shuffleRecordsWritten": 301273080,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 301273080,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 1990950191
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 24349338
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 25609466
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 78435045
+              }
+            },
+            {
+              "node": "GpuDriverlessBroadcastHashJoin",
+              "metrics": {
+                "executorBuildCacheHits": 248,
+                "executorBuilds": 8,
+                "numOutputBatches": 256,
+                "numOutputRows": 319949840,
+                "opTimeNew": 624375962
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 32002240,
+                "fetchWaitTime": 18,
+                "localBlocksFetched": 0,
+                "localBytesRead": 16394135,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 3999373,
+                "numPartitions": 8,
+                "opTimeNewShuffleRead": 4405545568,
+                "opTimeNewShuffleWrite": 2052971024,
+                "partitionSize": 141534912,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 31994984,
+                "remoteBlocksFetched": 1792,
+                "remoteBytesRead": 114758945,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 16394135,
+                "shuffleRecordsWritten": 3999373,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 31491576
+              }
+            },
+            {
+              "node": "GpuDriverlessBroadcastHashJoin",
+              "metrics": {
+                "executorBuildCacheHits": 256,
+                "executorBuilds": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 3999373,
+                "opTimeNew": 143562407
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 64,
+                "fetchWaitTime": 29,
+                "localBlocksFetched": 0,
+                "localBytesRead": 38,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 1,
+                "numOutputRows": 1,
+                "numPartitions": 8,
+                "opTimeNewShuffleRead": 2634759011,
+                "opTimeNewShuffleWrite": 772506,
+                "partitionSize": 328,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 8,
+                "remoteBlocksFetched": 7,
+                "remoteBytesRead": 266,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 38,
+                "shuffleRecordsWritten": 1,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 180578
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 1,
+                "opTimeNew": 225898
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 1,
+                "numOutputRows": 1,
+                "opTimeNew": 608413
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.nation",
+              "metrics": {
+                "bufferTime": 650234,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 2670,
+                "gpuDecodeTime": 2126712,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 473,
+                "hybridScanNativeHostBytesRead": 473,
+                "hybridScanSplits": 1,
+                "metadataTime": 0,
+                "numFiles": 1,
+                "numOutputBatches": 1,
+                "numOutputRows": 1,
+                "opTimeNew": 17282601,
+                "rowGroupsFetched": 1,
+                "scanTime": 17254954
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 19656247
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 100000000,
+                "opTimeNew": 81668507
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.supplier",
+              "metrics": {
+                "bufferTime": 199148247,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 8127418695,
+                "gpuDecodeTime": 2242376003,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 532063985,
+                "hybridScanNativeHostBytesRead": 532063985,
+                "hybridScanSplits": 256,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 100000000,
+                "opTimeNew": 3084177703,
+                "rowGroupsFetched": 256,
+                "scanTime": 3079542446
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 33756540
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 256,
+                "numOutputRows": 8000000000,
+                "opTimeNew": 176748320
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.partsupp",
+              "metrics": {
+                "bufferTime": 19470375961,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 428859646795,
+                "gpuDecodeTime": 7101247888,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 87958767416,
+                "hybridScanNativeHostBytesRead": 87958767416,
+                "hybridScanSplits": 256,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 8000000000,
+                "opTimeNew": 28454229581,
+                "rowGroupsFetched": 8448,
+                "scanTime": 28445524867
+              }
+            }
+          ],
+          "scan_configuration": {
+            "spark.sql.files.maxPartitionBytes": "2g",
+            "spark.sql.files.maxPartitionNum": "4096"
+          },
+          "cleanup_seconds": 0.027283704999717884,
+          "sql_plus_cleanup_seconds": 7.249727186997916
+        },
+        {
+          "query": 12,
+          "iteration": 1,
+          "sql_seconds": 25.243701957002486,
+          "application_id": "app-20261126131045-0000",
+          "spark_session_identity": 737839306,
+          "rows": 2,
+          "schema": {
+            "type": "struct",
+            "fields": [
+              {
+                "name": "l_shipmode",
+                "type": "string",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "high_line_count",
+                "type": "long",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "low_line_count",
+                "type": "long",
+                "nullable": true,
+                "metadata": {}
+              }
+            ]
+          },
+          "sql_sha256": "f3d79186aa23ae7f3b6eadc5741580ff7ac617b845edcc4874510bc0ecee91bd",
+          "reference_sql_sha256": "f3d79186aa23ae7f3b6eadc5741580ff7ac617b845edcc4874510bc0ecee91bd",
+          "variant": "baseline",
+          "purpose": "Unchanged SQL configuration control",
+          "case_conf": {
+            "spark.rapids.sql.batchSizeBytes": "2147483648",
+            "spark.sql.shuffle.partitions": "64"
+          },
+          "validation": {
+            "status": "passed",
+            "method": "complete ordered rows"
+          },
+          "validation_seconds": 0.0007201379994512536,
+          "reader_metrics": {
+            "hybridScanSplits": 1792,
+            "hybridScanDeviceBytesRead": 0,
+            "hybridScanNativeHostBytesRead": 473515564005,
+            "hybridScanGdsFallbackFiles": 0,
+            "hybridScanGpuBusyHostBytesRead": 0
+          },
+          "plan_metrics": [
+            {
+              "node": "GpuColumnarToRow",
+              "metrics": {
+                "opTimeNew": 0,
+                "streamTime": 4649199
+              }
+            },
+            {
+              "node": "GpuSort",
+              "metrics": {
+                "opTimeNew": 1643292,
+                "sortTime": 845264
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 2,
+                "opTimeNew": 1054458
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 512,
+                "fetchWaitTime": 1,
+                "localBlocksFetched": 0,
+                "localBytesRead": 0,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 4,
+                "numOutputRows": 2,
+                "numPartitions": 64,
+                "opTimeNewShuffleRead": 1586358,
+                "opTimeNewShuffleWrite": 2878144,
+                "partitionSize": 90,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 2,
+                "remoteBlocksFetched": 2,
+                "remoteBytesRead": 88,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 88,
+                "shuffleRecordsWritten": 2,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 4,
+                "numOutputRows": 4,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 6227470
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 4,
+                "opTimeNew": 15950904
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 32768,
+                "fetchWaitTime": 3,
+                "localBlocksFetched": 0,
+                "localBytesRead": 2096,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 4096,
+                "numOutputRows": 128,
+                "numPartitions": 128,
+                "opTimeNewShuffleRead": 5313196,
+                "opTimeNewShuffleWrite": 143948028,
+                "partitionSize": 18176,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 256,
+                "remoteBlocksFetched": 224,
+                "remoteBytesRead": 14672,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 8384,
+                "shuffleRecordsWritten": 128,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 64,
+                "numOutputRows": 128,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 3031448252
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 723099403
+              }
+            },
+            {
+              "node": "GpuShuffledSymmetricHashJoin",
+              "metrics": {
+                "buildDataSize": 4985801152,
+                "buildTime": 15157879875,
+                "numOutputBatches": 128,
+                "numOutputRows": 311612556,
+                "opTimeNew": 2136492473
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 64,
+                "opTimeNew": 13797355851
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 4992590912,
+                "fetchWaitTime": 1068,
+                "localBlocksFetched": 0,
+                "localBytesRead": 414169637,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 73728,
+                "numOutputRows": 311612556,
+                "numPartitions": 64,
+                "opTimeNewShuffleRead": 1231722035,
+                "opTimeNewShuffleWrite": 11346625705,
+                "partitionSize": 3437430766,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 311612556,
+                "remoteBlocksFetched": 64503,
+                "remoteBytesRead": 2895524130,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 3309693767,
+                "shuffleRecordsWritten": 311612556,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 373991309
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 1152,
+                "opTimeNew": 397665346
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 1280,
+                "numOutputRows": 311612556,
+                "opTimeNew": 3522614335
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.lineitem",
+              "metrics": {
+                "bufferTime": 506223999539,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 2394043691819,
+                "gpuDecodeTime": 30890971873,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 405735525399,
+                "hybridScanNativeHostBytesRead": 405735525399,
+                "hybridScanSplits": 1280,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 1280,
+                "numOutputRows": 2600633657,
+                "opTimeNew": 554296241938,
+                "rowGroupsFetched": 28672,
+                "scanTime": 554247748256
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 128,
+                "opTimeNew": 26501500627
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 306002074048,
+                "fetchWaitTime": 15926,
+                "localBlocksFetched": 0,
+                "localBytesRead": 21010477394,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 21888,
+                "numOutputRows": 15000000000,
+                "numPartitions": 64,
+                "opTimeNewShuffleRead": 46710210861,
+                "opTimeNewShuffleWrite": 78357925360,
+                "partitionSize": 180527708640,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 15000000000,
+                "remoteBlocksFetched": 19152,
+                "remoteBytesRead": 147069589210,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 168080066604,
+                "shuffleRecordsWritten": 15000000000,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 342,
+                "opTimeNew": 281175313
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 512,
+                "numOutputRows": 15000000000,
+                "opTimeNew": 529384342
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.orders",
+              "metrics": {
+                "bufferTime": 7788924629,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 692676391675,
+                "gpuDecodeTime": 21539034745,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 67780038606,
+                "hybridScanNativeHostBytesRead": 67780038606,
+                "hybridScanSplits": 512,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 512,
+                "numOutputRows": 15000000000,
+                "opTimeNew": 38258217078,
+                "rowGroupsFetched": 8448,
+                "scanTime": 38248707805
+              }
+            }
+          ],
+          "scan_configuration": {
+            "spark.sql.files.maxPartitionBytes": "2g",
+            "spark.sql.files.maxPartitionNum": "4096"
+          },
+          "cleanup_seconds": 0.9725706570025068,
+          "sql_plus_cleanup_seconds": 26.216272614004993
+        },
+        {
+          "query": 12,
+          "iteration": 2,
+          "sql_seconds": 15.842418744003226,
+          "application_id": "app-20261126131045-0000",
+          "spark_session_identity": 737839306,
+          "rows": 2,
+          "schema": {
+            "type": "struct",
+            "fields": [
+              {
+                "name": "l_shipmode",
+                "type": "string",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "high_line_count",
+                "type": "long",
+                "nullable": true,
+                "metadata": {}
+              },
+              {
+                "name": "low_line_count",
+                "type": "long",
+                "nullable": true,
+                "metadata": {}
+              }
+            ]
+          },
+          "sql_sha256": "f3d79186aa23ae7f3b6eadc5741580ff7ac617b845edcc4874510bc0ecee91bd",
+          "reference_sql_sha256": "f3d79186aa23ae7f3b6eadc5741580ff7ac617b845edcc4874510bc0ecee91bd",
+          "variant": "baseline",
+          "purpose": "Unchanged SQL configuration control",
+          "case_conf": {
+            "spark.rapids.sql.batchSizeBytes": "2147483648",
+            "spark.sql.shuffle.partitions": "64"
+          },
+          "validation": {
+            "status": "passed",
+            "method": "complete ordered rows"
+          },
+          "validation_seconds": 0.0006156040035421029,
+          "reader_metrics": {
+            "hybridScanSplits": 1792,
+            "hybridScanDeviceBytesRead": 0,
+            "hybridScanNativeHostBytesRead": 473515564005,
+            "hybridScanGdsFallbackFiles": 0,
+            "hybridScanGpuBusyHostBytesRead": 0
+          },
+          "plan_metrics": [
+            {
+              "node": "GpuColumnarToRow",
+              "metrics": {
+                "opTimeNew": 0,
+                "streamTime": 3917691
+              }
+            },
+            {
+              "node": "GpuSort",
+              "metrics": {
+                "opTimeNew": 1712311,
+                "sortTime": 909021
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 2,
+                "opTimeNew": 980234
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 512,
+                "fetchWaitTime": 0,
+                "localBlocksFetched": 0,
+                "localBytesRead": 44,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 4,
+                "numOutputRows": 2,
+                "numPartitions": 64,
+                "opTimeNewShuffleRead": 898403,
+                "opTimeNewShuffleWrite": 2854020,
+                "partitionSize": 90,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 2,
+                "remoteBlocksFetched": 1,
+                "remoteBytesRead": 44,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 88,
+                "shuffleRecordsWritten": 2,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 4,
+                "numOutputRows": 4,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 5817947
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 4,
+                "opTimeNew": 16269859
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 32768,
+                "fetchWaitTime": 4,
+                "localBlocksFetched": 0,
+                "localBytesRead": 1908,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 4096,
+                "numOutputRows": 128,
+                "numPartitions": 128,
+                "opTimeNewShuffleRead": 5483868,
+                "opTimeNewShuffleWrite": 396405966,
+                "partitionSize": 18176,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 256,
+                "remoteBlocksFetched": 224,
+                "remoteBytesRead": 14860,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 8384,
+                "shuffleRecordsWritten": 128,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 64,
+                "numOutputRows": 128,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 1725577893
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 458970250
+              }
+            },
+            {
+              "node": "GpuShuffledSymmetricHashJoin",
+              "metrics": {
+                "buildDataSize": 4985801152,
+                "buildTime": 13434497821,
+                "numOutputBatches": 128,
+                "numOutputRows": 311612556,
+                "opTimeNew": 1944537557
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 64,
+                "opTimeNew": 12304968056
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 4992590912,
+                "fetchWaitTime": 864,
+                "localBlocksFetched": 0,
+                "localBytesRead": 410974432,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 73728,
+                "numOutputRows": 311612556,
+                "numPartitions": 64,
+                "opTimeNewShuffleRead": 1032378349,
+                "opTimeNewShuffleWrite": 12546839634,
+                "partitionSize": 3438239760,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 311612556,
+                "remoteBlocksFetched": 64578,
+                "remoteBytesRead": 2899219661,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 3310194093,
+                "shuffleRecordsWritten": 311612556,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 359795148
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 1152,
+                "opTimeNew": 415736940
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 1280,
+                "numOutputRows": 311612556,
+                "opTimeNew": 3882563948
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.lineitem",
+              "metrics": {
+                "bufferTime": 220906501082,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 2394043691819,
+                "gpuDecodeTime": 33256573014,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 405735525399,
+                "hybridScanNativeHostBytesRead": 405735525399,
+                "hybridScanSplits": 1280,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 1280,
+                "numOutputRows": 2600633657,
+                "opTimeNew": 275375833448,
+                "rowGroupsFetched": 28672,
+                "scanTime": 275333768445
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 128,
+                "opTimeNew": 20338880535
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 306002074048,
+                "fetchWaitTime": 14724,
+                "localBlocksFetched": 0,
+                "localBytesRead": 20993523031,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 21888,
+                "numOutputRows": 15000000000,
+                "numPartitions": 64,
+                "opTimeNewShuffleRead": 39903984880,
+                "opTimeNewShuffleWrite": 78840739688,
+                "partitionSize": 180578530320,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 15000000000,
+                "remoteBlocksFetched": 19154,
+                "remoteBytesRead": 147090368694,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 168083891725,
+                "shuffleRecordsWritten": 15000000000,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 342,
+                "opTimeNew": 317332710
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 512,
+                "numOutputRows": 15000000000,
+                "opTimeNew": 677519714
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.orders",
+              "metrics": {
+                "bufferTime": 5922172302,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 692676391675,
+                "gpuDecodeTime": 19711946440,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 67780038606,
+                "hybridScanNativeHostBytesRead": 67780038606,
+                "hybridScanSplits": 512,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 512,
+                "numOutputRows": 15000000000,
+                "opTimeNew": 34359839143,
+                "rowGroupsFetched": 8448,
+                "scanTime": 34351597606
+              }
+            }
+          ],
+          "scan_configuration": {
+            "spark.sql.files.maxPartitionBytes": "2g",
+            "spark.sql.files.maxPartitionNum": "4096"
+          },
+          "cleanup_seconds": 0.8718960130026971,
+          "sql_plus_cleanup_seconds": 16.714314757005923
+        },
+        {
+          "query": 13,
+          "iteration": 1,
+          "sql_seconds": 21.637449080997612,
+          "application_id": "app-20261126131045-0000",
+          "spark_session_identity": 737839306,
+          "rows": 10,
+          "schema": {
+            "type": "struct",
+            "fields": [
+              {
+                "name": "c_count",
+                "type": "long",
+                "nullable": false,
+                "metadata": {}
+              },
+              {
+                "name": "custdist",
+                "type": "long",
+                "nullable": false,
+                "metadata": {}
+              }
+            ]
+          },
+          "sql_sha256": "001ab2482318e4b190f7d2e33da38b8dac35325aebf4ff784241dd5faa77f4f1",
+          "reference_sql_sha256": "001ab2482318e4b190f7d2e33da38b8dac35325aebf4ff784241dd5faa77f4f1",
+          "variant": "baseline",
+          "purpose": "Unchanged SQL configuration control",
+          "case_conf": {
+            "spark.rapids.sql.batchSizeBytes": "536870912",
+            "spark.sql.shuffle.partitions": "256"
+          },
+          "validation": {
+            "status": "passed",
+            "method": "complete ordered rows"
+          },
+          "validation_seconds": 0.0018368479977652896,
+          "reader_metrics": {
+            "hybridScanSplits": 1024,
+            "hybridScanDeviceBytesRead": 0,
+            "hybridScanNativeHostBytesRead": 459802640408,
+            "hybridScanGdsFallbackFiles": 0,
+            "hybridScanGpuBusyHostBytesRead": 0
+          },
+          "plan_metrics": [
+            {
+              "node": "GpuColumnarToRow",
+              "metrics": {
+                "opTimeNew": 0,
+                "streamTime": 19087773
+              }
+            },
+            {
+              "node": "GpuSort",
+              "metrics": {
+                "opTimeNew": 6218467,
+                "sortTime": 2883223
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 10,
+                "opTimeNew": 4658881
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 1280,
+                "fetchWaitTime": 7,
+                "localBlocksFetched": 0,
+                "localBytesRead": 0,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 100,
+                "numOutputRows": 10,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 6880222,
+                "opTimeNewShuffleWrite": 12502161,
+                "partitionSize": 280,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 10,
+                "remoteBlocksFetched": 10,
+                "remoteBytesRead": 273,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 273,
+                "shuffleRecordsWritten": 10,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 20,
+                "numOutputRows": 20,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 22430737
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 20,
+                "opTimeNew": 155255154
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 327680,
+                "fetchWaitTime": 54,
+                "localBlocksFetched": 0,
+                "localBytesRead": 20670,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 2560,
+                "numPartitions": 512,
+                "opTimeNewShuffleRead": 85495546,
+                "opTimeNewShuffleWrite": 1271336130,
+                "partitionSize": 169796,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 5120,
+                "remoteBlocksFetched": 4481,
+                "remoteBytesRead": 144776,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 82723,
+                "shuffleRecordsWritten": 2560,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 2560,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 1627355792
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 1500000000,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 7858802754
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 1340799447
+              }
+            },
+            {
+              "node": "GpuShuffledAsymmetricHashJoin",
+              "metrics": {
+                "buildDataSize": 12000000000,
+                "buildTime": 0,
+                "numOutputBatches": 1280,
+                "numOutputRows": 15341397098,
+                "opTimeNew": 6594019040
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 512,
+                "opTimeNew": 38040958686
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 237423881984,
+                "fetchWaitTime": 33115,
+                "localBlocksFetched": 0,
+                "localBytesRead": 20265860938,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 196608,
+                "numOutputRows": 14838303273,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 43035098686,
+                "opTimeNewShuffleWrite": 46002065149,
+                "partitionSize": 168951349248,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 14838303273,
+                "remoteBlocksFetched": 171833,
+                "remoteBytesRead": 140762040181,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 161027901119,
+                "shuffleRecordsWritten": 14838303273,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 203968497
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 768,
+                "opTimeNew": 425937649
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 768,
+                "numOutputRows": 14838303273,
+                "opTimeNew": 10645714867
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.orders",
+              "metrics": {
+                "bufferTime": 456870307364,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 692676391675,
+                "gpuDecodeTime": 25673656635,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 453246350809,
+                "hybridScanNativeHostBytesRead": 453246350809,
+                "hybridScanSplits": 768,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 768,
+                "numOutputRows": 15000000000,
+                "opTimeNew": 486497246312,
+                "rowGroupsFetched": 8448,
+                "scanTime": 486468854143
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 4569363355
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 12001838720,
+                "fetchWaitTime": 3388,
+                "localBlocksFetched": 0,
+                "localBytesRead": 873344972,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 1500000000,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 3589972907,
+                "opTimeNewShuffleWrite": 6490386395,
+                "partitionSize": 7351631872,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 1500000000,
+                "remoteBlocksFetched": 57376,
+                "remoteBytesRead": 6142361734,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 7015706706,
+                "shuffleRecordsWritten": 1500000000,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.customer",
+              "metrics": {
+                "bufferTime": 805046371,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 125561382357,
+                "gpuDecodeTime": 3613643628,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 6556289599,
+                "hybridScanNativeHostBytesRead": 6556289599,
+                "hybridScanSplits": 256,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 1500000000,
+                "opTimeNew": 6521284622,
+                "rowGroupsFetched": 2048,
+                "scanTime": 6517462712
+              }
+            }
+          ],
+          "scan_configuration": {
+            "spark.sql.files.maxPartitionBytes": "1g",
+            "spark.sql.files.maxPartitionNum": "8192"
+          },
+          "cleanup_seconds": 1.2258182820005459,
+          "sql_plus_cleanup_seconds": 22.863267362998158
+        },
+        {
+          "query": 13,
+          "iteration": 2,
+          "sql_seconds": 14.393295290999959,
+          "application_id": "app-20261126131045-0000",
+          "spark_session_identity": 737839306,
+          "rows": 10,
+          "schema": {
+            "type": "struct",
+            "fields": [
+              {
+                "name": "c_count",
+                "type": "long",
+                "nullable": false,
+                "metadata": {}
+              },
+              {
+                "name": "custdist",
+                "type": "long",
+                "nullable": false,
+                "metadata": {}
+              }
+            ]
+          },
+          "sql_sha256": "001ab2482318e4b190f7d2e33da38b8dac35325aebf4ff784241dd5faa77f4f1",
+          "reference_sql_sha256": "001ab2482318e4b190f7d2e33da38b8dac35325aebf4ff784241dd5faa77f4f1",
+          "variant": "baseline",
+          "purpose": "Unchanged SQL configuration control",
+          "case_conf": {
+            "spark.rapids.sql.batchSizeBytes": "536870912",
+            "spark.sql.shuffle.partitions": "256"
+          },
+          "validation": {
+            "status": "passed",
+            "method": "complete ordered rows"
+          },
+          "validation_seconds": 0.001799951001885347,
+          "reader_metrics": {
+            "hybridScanSplits": 1024,
+            "hybridScanDeviceBytesRead": 0,
+            "hybridScanNativeHostBytesRead": 459802640408,
+            "hybridScanGdsFallbackFiles": 0,
+            "hybridScanGpuBusyHostBytesRead": 0
+          },
+          "plan_metrics": [
+            {
+              "node": "GpuColumnarToRow",
+              "metrics": {
+                "opTimeNew": 0,
+                "streamTime": 16505206
+              }
+            },
+            {
+              "node": "GpuSort",
+              "metrics": {
+                "opTimeNew": 5180997,
+                "sortTime": 1711209
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 10,
+                "opTimeNew": 4695347
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 1280,
+                "fetchWaitTime": 5,
+                "localBlocksFetched": 0,
+                "localBytesRead": 82,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 100,
+                "numOutputRows": 10,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 5322363,
+                "opTimeNewShuffleWrite": 13748078,
+                "partitionSize": 280,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 10,
+                "remoteBlocksFetched": 7,
+                "remoteBytesRead": 191,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 273,
+                "shuffleRecordsWritten": 10,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 20,
+                "numOutputRows": 20,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 29577851
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 20,
+                "opTimeNew": 165606154
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 327680,
+                "fetchWaitTime": 62,
+                "localBlocksFetched": 0,
+                "localBytesRead": 21017,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 2560,
+                "numPartitions": 512,
+                "opTimeNewShuffleRead": 86874745,
+                "opTimeNewShuffleWrite": 1133215021,
+                "partitionSize": 169616,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 5120,
+                "remoteBlocksFetched": 4473,
+                "remoteBytesRead": 144219,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 82618,
+                "shuffleRecordsWritten": 2560,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 2560,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 1354920512
+              }
+            },
+            {
+              "node": "GpuHashAggregate",
+              "metrics": {
+                "NUM_TASKS_SINGLE_PASS": 0,
+                "numOutputBatches": 256,
+                "numOutputRows": 1500000000,
+                "numTasksRepartitioned": 0,
+                "numTasksSkippedAgg": 0,
+                "opTimeNew": 8107317662
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 1408768778
+              }
+            },
+            {
+              "node": "GpuShuffledAsymmetricHashJoin",
+              "metrics": {
+                "buildDataSize": 12000000000,
+                "buildTime": 0,
+                "numOutputBatches": 1280,
+                "numOutputRows": 15341397098,
+                "opTimeNew": 6478136697
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 512,
+                "opTimeNew": 39528149173
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 237423881984,
+                "fetchWaitTime": 32530,
+                "localBlocksFetched": 0,
+                "localBytesRead": 20163179355,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 196608,
+                "numOutputRows": 14838303273,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 42303563821,
+                "opTimeNewShuffleWrite": 53291220687,
+                "partitionSize": 168951349248,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 14838303273,
+                "remoteBlocksFetched": 172039,
+                "remoteBytesRead": 140858316754,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 161021496109,
+                "shuffleRecordsWritten": 14838303273,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuProject",
+              "metrics": {
+                "opTimeNew": 207362084
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 768,
+                "opTimeNew": 317297052
+              }
+            },
+            {
+              "node": "GpuFilter",
+              "metrics": {
+                "numOutputBatches": 768,
+                "numOutputRows": 14838303273,
+                "opTimeNew": 11793855994
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.orders",
+              "metrics": {
+                "bufferTime": 206278761399,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 692676391675,
+                "gpuDecodeTime": 34290880630,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 453246350809,
+                "hybridScanNativeHostBytesRead": 453246350809,
+                "hybridScanSplits": 768,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 768,
+                "numOutputRows": 15000000000,
+                "opTimeNew": 249384966285,
+                "rowGroupsFetched": 8448,
+                "scanTime": 249356340735
+              }
+            },
+            {
+              "node": "GpuCoalesceBatches",
+              "metrics": {
+                "numOutputBatches": 256,
+                "opTimeNew": 4616960941
+              }
+            },
+            {
+              "node": "GpuColumnarExchange",
+              "metrics": {
+                "corruptMergedBlockChunks": 0,
+                "dataReadSize": 0,
+                "dataSize": 12001838720,
+                "fetchWaitTime": 3517,
+                "localBlocksFetched": 0,
+                "localBytesRead": 877206828,
+                "localMergedBlocksFetched": 0,
+                "localMergedBytesRead": 0,
+                "localMergedChunksFetched": 0,
+                "mergedFetchFallbackCount": 0,
+                "numOutputBatches": 65536,
+                "numOutputRows": 1500000000,
+                "numPartitions": 256,
+                "opTimeNewShuffleRead": 3737963740,
+                "opTimeNewShuffleWrite": 6506996688,
+                "partitionSize": 7351631872,
+                "rapidsShuffleReadTime": 0,
+                "recordsRead": 1500000000,
+                "remoteBlocksFetched": 57340,
+                "remoteBytesRead": 6137665461,
+                "remoteBytesReadToDisk": 0,
+                "remoteMergedBlocksFetched": 0,
+                "remoteMergedBytesRead": 0,
+                "remoteMergedChunksFetched": 0,
+                "remoteMergedReqsDuration": 0,
+                "remoteReqsDuration": 0,
+                "shuffleBytesWritten": 7014872289,
+                "shuffleRecordsWritten": 1500000000,
+                "shuffleWriteTime": 0
+              }
+            },
+            {
+              "node": "GpuScan parquet spark_catalog.default.customer",
+              "metrics": {
+                "bufferTime": 1350065078,
+                "deletionVectorScatterTime": 0,
+                "deletionVectorSize": 0,
+                "filesSize": 125561382357,
+                "gpuDecodeTime": 3591649880,
+                "gpuOutputBatchBytes": 0,
+                "hybridScanBytesRequested": 6556289599,
+                "hybridScanNativeHostBytesRead": 6556289599,
+                "hybridScanSplits": 256,
+                "metadataTime": 0,
+                "numFiles": 256,
+                "numOutputBatches": 256,
+                "numOutputRows": 1500000000,
+                "opTimeNew": 7094210185,
+                "rowGroupsFetched": 2048,
+                "scanTime": 7090517791
+              }
+            }
+          ],
+          "scan_configuration": {
+            "spark.sql.files.maxPartitionBytes": "1g",
+            "spark.sql.files.maxPartitionNum": "8192"
+          },
+          "cleanup_seconds": 1.1740219050007,
+          "sql_plus_cleanup_seconds": 15.567317196000658
+        }
+      ],
+      "error": null,
+      "driver_exit_code": 0
+    }
+  ],
+  "profilers": [
+    {
+      "name": "host",
+      "pid": 570574,
+      "start_time": "2282883",
+      "command": [
+        "/usr/bin/python3",
+        "/home/ubuntu/aws-speed-of-light-261126/source/benchmarks/scaleup_reference/experiments/runtime_prefilter/monitor_host.py",
+        "--work",
+        "/home/ubuntu/aws-speed-of-light-261126",
+        "--output",
+        "/home/ubuntu/aws-speed-of-light-261126/read-tuning/B1/host.jsonl"
+      ],
+      "privileged": false,
+      "exit_code": 0
+    },
+    {
+      "name": "vm",
+      "pid": 570575,
+      "start_time": "2282883",
+      "command": [
+        "/usr/bin/python3",
+        "/home/ubuntu/aws-speed-of-light-261126/source/benchmarks/scaleup_reference/experiments/query_sweep/monitor_vm.py",
+        "--work",
+        "/home/ubuntu/aws-speed-of-light-261126",
+        "--thread-id",
+        "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+        "--controller",
+        "/home/ubuntu/aws-speed-of-light-261126/read-tuning/B1/controller.json",
+        "--output",
+        "/home/ubuntu/aws-speed-of-light-261126/read-tuning/B1/vm.jsonl"
+      ],
+      "privileged": false,
+      "exit_code": 0
+    },
+    {
+      "name": "pool",
+      "pid": 570576,
+      "start_time": "2282883",
+      "command": [
+        "/usr/bin/python3",
+        "/home/ubuntu/aws-speed-of-light-261126/source/benchmarks/scaleup_reference/experiments/query_sweep/monitor_read_pool.py",
+        "--work",
+        "/home/ubuntu/aws-speed-of-light-261126",
+        "--output",
+        "/home/ubuntu/aws-speed-of-light-261126/read-tuning/B1/pool.jsonl"
+      ],
+      "privileged": false,
+      "exit_code": 0
+    },
+    {
+      "name": "gpm",
+      "pid": 570577,
+      "start_time": "2282883",
+      "command": [
+        "sudo",
+        "-n",
+        "/usr/bin/python3",
+        "/home/ubuntu/aws-speed-of-light-261126/source/benchmarks/scaleup_reference/experiments/query_sweep/monitor_gpm.py",
+        "--directory",
+        "/home/ubuntu/aws-speed-of-light-261126/read-tuning/B1"
+      ],
+      "privileged": true,
+      "exit_code": 0
+    }
+  ],
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "source_revision": "73cc43e064925a0d2756ab9be761baf11d1709bc",
+  "classification": "Controlled single-variable tuning; no kernel profiling",
+  "tuning_key": "spark.rapids.sql.reader.kvikio.numThreads",
+  "kvikio_threads": 8,
+  "cache_policy": "No cache flush; two actions per query",
+  "instance_policy": "Retain until explicit user release",
+  "queries": [
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "start_unix_ns": 1795698640146447761,
+  "start_monotonic_ns": 22829838795711,
+  "pool_verification": {
+    "observed_thread_names": {
+      "573025": [
+        "kvikio-0",
+        "kvikio-1",
+        "kvikio-2",
+        "kvikio-3",
+        "kvikio-4",
+        "kvikio-5",
+        "kvikio-6",
+        "kvikio-7"
+      ],
+      "573026": [
+        "kvikio-0",
+        "kvikio-1",
+        "kvikio-2",
+        "kvikio-3",
+        "kvikio-4",
+        "kvikio-5",
+        "kvikio-6",
+        "kvikio-7"
+      ],
+      "573027": [
+        "kvikio-0",
+        "kvikio-1",
+        "kvikio-2",
+        "kvikio-3",
+        "kvikio-4",
+        "kvikio-5",
+        "kvikio-6",
+        "kvikio-7"
+      ],
+      "573028": [
+        "kvikio-0",
+        "kvikio-1",
+        "kvikio-2",
+        "kvikio-3",
+        "kvikio-4",
+        "kvikio-5",
+        "kvikio-6",
+        "kvikio-7"
+      ],
+      "573030": [
+        "kvikio-0",
+        "kvikio-1",
+        "kvikio-2",
+        "kvikio-3",
+        "kvikio-4",
+        "kvikio-5",
+        "kvikio-6",
+        "kvikio-7"
+      ],
+      "573032": [
+        "kvikio-0",
+        "kvikio-1",
+        "kvikio-2",
+        "kvikio-3",
+        "kvikio-4",
+        "kvikio-5",
+        "kvikio-6",
+        "kvikio-7"
+      ],
+      "573035": [
+        "kvikio-0",
+        "kvikio-1",
+        "kvikio-2",
+        "kvikio-3",
+        "kvikio-4",
+        "kvikio-5",
+        "kvikio-6",
+        "kvikio-7"
+      ],
+      "573050": [
+        "kvikio-0",
+        "kvikio-1",
+        "kvikio-2",
+        "kvikio-3",
+        "kvikio-4",
+        "kvikio-5",
+        "kvikio-6",
+        "kvikio-7"
+      ]
+    },
+    "initialization_messages": [
+      {
+        "path": "/opt/dlami/nvme/aws-filter-probe-261125/read-tuning-B1-0/suite/worker-0/work/app-20261126131045-0000/7/stderr",
+        "line": "26/11/26 13:10:54 INFO GpuDeviceManager: KvikIO reads with compatibility mode ON and 8 threads"
+      },
+      {
+        "path": "/opt/dlami/nvme/aws-filter-probe-261125/read-tuning-B1-0/suite/worker-3/work/app-20261126131045-0000/2/stderr",
+        "line": "26/11/26 13:10:54 INFO GpuDeviceManager: KvikIO reads with compatibility mode ON and 8 threads"
+      },
+      {
+        "path": "/opt/dlami/nvme/aws-filter-probe-261125/read-tuning-B1-0/suite/worker-5/work/app-20261126131045-0000/3/stderr",
+        "line": "26/11/26 13:10:54 INFO GpuDeviceManager: KvikIO reads with compatibility mode ON and 8 threads"
+      },
+      {
+        "path": "/opt/dlami/nvme/aws-filter-probe-261125/read-tuning-B1-0/suite/worker-6/work/app-20261126131045-0000/1/stderr",
+        "line": "26/11/26 13:10:54 INFO GpuDeviceManager: KvikIO reads with compatibility mode ON and 8 threads"
+      },
+      {
+        "path": "/opt/dlami/nvme/aws-filter-probe-261125/read-tuning-B1-0/suite/worker-1/work/app-20261126131045-0000/4/stderr",
+        "line": "26/11/26 13:10:54 INFO GpuDeviceManager: KvikIO reads with compatibility mode ON and 8 threads"
+      },
+      {
+        "path": "/opt/dlami/nvme/aws-filter-probe-261125/read-tuning-B1-0/suite/worker-4/work/app-20261126131045-0000/0/stderr",
+        "line": "26/11/26 13:10:54 INFO GpuDeviceManager: KvikIO reads with compatibility mode ON and 8 threads"
+      },
+      {
+        "path": "/opt/dlami/nvme/aws-filter-probe-261125/read-tuning-B1-0/suite/worker-7/work/app-20261126131045-0000/6/stderr",
+        "line": "26/11/26 13:10:54 INFO GpuDeviceManager: KvikIO reads with compatibility mode ON and 8 threads"
+      },
+      {
+        "path": "/opt/dlami/nvme/aws-filter-probe-261125/read-tuning-B1-0/suite/worker-2/work/app-20261126131045-0000/5/stderr",
+        "line": "26/11/26 13:10:54 INFO GpuDeviceManager: KvikIO reads with compatibility mode ON and 8 threads"
+      }
+    ],
+    "passed": true
+  },
+  "end_unix_ns": 1795698904059571336,
+  "gpm_restored": true
+}

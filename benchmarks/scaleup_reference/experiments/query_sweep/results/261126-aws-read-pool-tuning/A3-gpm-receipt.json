@@ -1,0 +1,117 @@
+{
+  "metrics": {
+    "2": "sm_active_percent",
+    "3": "sm_occupancy_percent",
+    "10": "dram_bandwidth_percent",
+    "20": "pcie_tx_mib_per_second",
+    "21": "pcie_rx_mib_per_second"
+  },
+  "devices": [
+    {
+      "index": 0,
+      "uuid": "GPU-2085c52b-fd6d-d430-4166-007252a7d9fe",
+      "supported": 1,
+      "original_streaming": 0,
+      "pcie_max_generation": 5,
+      "pcie_max_width": 16
+    },
+    {
+      "index": 1,
+      "uuid": "GPU-75f86963-01e9-ea1c-02d4-2c70dff5041b",
+      "supported": 1,
+      "original_streaming": 0,
+      "pcie_max_generation": 5,
+      "pcie_max_width": 16
+    },
+    {
+      "index": 2,
+      "uuid": "GPU-e34cc045-432b-21c4-3770-bcbe9d8835a9",
+      "supported": 1,
+      "original_streaming": 0,
+      "pcie_max_generation": 5,
+      "pcie_max_width": 16
+    },
+    {
+      "index": 3,
+      "uuid": "GPU-a893e577-795e-a5f0-6462-b4c8df79044e",
+      "supported": 1,
+      "original_streaming": 0,
+      "pcie_max_generation": 5,
+      "pcie_max_width": 16
+    },
+    {
+      "index": 4,
+      "uuid": "GPU-72376776-ac0a-004f-f764-b8ffe85342d2",
+      "supported": 1,
+      "original_streaming": 0,
+      "pcie_max_generation": 5,
+      "pcie_max_width": 16
+    },
+    {
+      "index": 5,
+      "uuid": "GPU-e8d2b725-85d2-8427-abe3-6d0f8b6870f8",
+      "supported": 1,
+      "original_streaming": 0,
+      "pcie_max_generation": 5,
+      "pcie_max_width": 16
+    },
+    {
+      "index": 6,
+      "uuid": "GPU-74739896-3384-c8ac-001c-a37b5fb413f2",
+      "supported": 1,
+      "original_streaming": 0,
+      "pcie_max_generation": 5,
+      "pcie_max_width": 16
+    },
+    {
+      "index": 7,
+      "uuid": "GPU-f79d626d-97a9-19da-7a68-980ebfec83b8",
+      "supported": 1,
+      "original_streaming": 0,
+      "pcie_max_generation": 5,
+      "pcie_max_width": 16
+    }
+  ],
+  "restoration": [
+    {
+      "index": 0,
+      "streaming": 0,
+      "passed": true
+    },
+    {
+      "index": 1,
+      "streaming": 0,
+      "passed": true
+    },
+    {
+      "index": 2,
+      "streaming": 0,
+      "passed": true
+    },
+    {
+      "index": 3,
+      "streaming": 0,
+      "passed": true
+    },
+    {
+      "index": 4,
+      "streaming": 0,
+      "passed": true
+    },
+    {
+      "index": 5,
+      "streaming": 0,
+      "passed": true
+    },
+    {
+      "index": 6,
+      "streaming": 0,
+      "passed": true
+    },
+    {
+      "index": 7,
+      "streaming": 0,
+      "passed": true
+    }
+  ]
+}

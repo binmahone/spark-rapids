@@ -1,0 +1,2516 @@
+{
+  "archive": "read-tuning-complete.tar.gz",
+  "bytes": 163520517,
+  "sha256": "47bac73b512d1bae37007cbaf4595f71097b44c18aa1c1f1ebb5cfce059849e2",
+  "files": [
+    {
+      "name": "evidence/deployment.json",
+      "bytes": 368
+    },
+    {
+      "name": "evidence/host-prerequisites.json",
+      "bytes": 5862
+    },
+    {
+      "name": "evidence/owner.json",
+      "bytes": 450
+    },
+    {
+      "name": "evidence/read-tuning-A0.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/read-tuning-A0.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/read-tuning-A3.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/read-tuning-A3.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/read-tuning-B1.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/read-tuning-B1.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/read-tuning-B2.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/read-tuning-B2.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/read-tuning-C1.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/read-tuning-C1.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/A0/analysis.json",
+      "bytes": 533448
+    },
+    {
+      "name": "read-tuning/A0/controller.json",
+      "bytes": 68
+    },
+    {
+      "name": "read-tuning/A0/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "read-tuning/A0/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "read-tuning/A0/gpm.jsonl",
+      "bytes": 1179416
+    },
+    {
+      "name": "read-tuning/A0/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/A0/host.jsonl",
+      "bytes": 1527690
+    },
+    {
+      "name": "read-tuning/A0/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/A0/pool.jsonl",
+      "bytes": 442189
+    },
+    {
+      "name": "read-tuning/A0/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/A0/state.json",
+      "bytes": 188556
+    },
+    {
+      "name": "read-tuning/A0/vm-owner.json",
+      "bytes": 748
+    },
+    {
+      "name": "read-tuning/A0/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "read-tuning/A0/vm.jsonl",
+      "bytes": 507111
+    },
+    {
+      "name": "read-tuning/A0/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/A3/analysis.json",
+      "bytes": 533197
+    },
+    {
+      "name": "read-tuning/A3/controller.json",
+      "bytes": 68
+    },
+    {
+      "name": "read-tuning/A3/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "read-tuning/A3/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "read-tuning/A3/gpm.jsonl",
+      "bytes": 1121301
+    },
+    {
+      "name": "read-tuning/A3/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/A3/host.jsonl",
+      "bytes": 1456487
+    },
+    {
+      "name": "read-tuning/A3/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/A3/pool.jsonl",
+      "bytes": 420703
+    },
+    {
+      "name": "read-tuning/A3/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/A3/state.json",
+      "bytes": 188550
+    },
+    {
+      "name": "read-tuning/A3/vm-owner.json",
+      "bytes": 748
+    },
+    {
+      "name": "read-tuning/A3/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "read-tuning/A3/vm.jsonl",
+      "bytes": 483765
+    },
+    {
+      "name": "read-tuning/A3/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/B1/analysis.json",
+      "bytes": 542664
+    },
+    {
+      "name": "read-tuning/B1/controller.json",
+      "bytes": 68
+    },
+    {
+      "name": "read-tuning/B1/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "read-tuning/B1/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "read-tuning/B1/gpm.jsonl",
+      "bytes": 1130555
+    },
+    {
+      "name": "read-tuning/B1/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/B1/host.jsonl",
+      "bytes": 1469601
+    },
+    {
+      "name": "read-tuning/B1/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/B1/pool.jsonl",
+      "bytes": 131699
+    },
+    {
+      "name": "read-tuning/B1/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/B1/state.json",
+      "bytes": 184483
+    },
+    {
+      "name": "read-tuning/B1/vm-owner.json",
+      "bytes": 748
+    },
+    {
+      "name": "read-tuning/B1/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "read-tuning/B1/vm.jsonl",
+      "bytes": 490367
+    },
+    {
+      "name": "read-tuning/B1/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/B2/analysis.json",
+      "bytes": 533448
+    },
+    {
+      "name": "read-tuning/B2/controller.json",
+      "bytes": 68
+    },
+    {
+      "name": "read-tuning/B2/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "read-tuning/B2/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "read-tuning/B2/gpm.jsonl",
+      "bytes": 1093394
+    },
+    {
+      "name": "read-tuning/B2/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/B2/host.jsonl",
+      "bytes": 1410708
+    },
+    {
+      "name": "read-tuning/B2/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/B2/pool.jsonl",
+      "bytes": 126139
+    },
+    {
+      "name": "read-tuning/B2/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/B2/state.json",
+      "bytes": 184478
+    },
+    {
+      "name": "read-tuning/B2/vm-owner.json",
+      "bytes": 748
+    },
+    {
+      "name": "read-tuning/B2/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "read-tuning/B2/vm.jsonl",
+      "bytes": 468650
+    },
+    {
+      "name": "read-tuning/B2/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/C1/analysis.json",
+      "bytes": 542084
+    },
+    {
+      "name": "read-tuning/C1/controller.json",
+      "bytes": 68
+    },
+    {
+      "name": "read-tuning/C1/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "read-tuning/C1/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "read-tuning/C1/gpm.jsonl",
+      "bytes": 1171834
+    },
+    {
+      "name": "read-tuning/C1/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/C1/host.jsonl",
+      "bytes": 1466085
+    },
+    {
+      "name": "read-tuning/C1/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/C1/pool.jsonl",
+      "bytes": 220919
+    },
+    {
+      "name": "read-tuning/C1/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/C1/state.json",
+      "bytes": 185836
+    },
+    {
+      "name": "read-tuning/C1/vm-owner.json",
+      "bytes": 748
+    },
+    {
+      "name": "read-tuning/C1/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "read-tuning/C1/vm.jsonl",
+      "bytes": 507846
+    },
+    {
+      "name": "read-tuning/C1/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "read-tuning/decision.json",
+      "bytes": 21745
+    },
+    {
+      "name": "read-tuning/lifecycle-audit.json",
+      "bytes": 254
+    },
+    {
+      "name": "read-tuning/profiler-audit.json",
+      "bytes": 2312
+    },
+    {
+      "name": "read-tuning/resource-log-audit.json",
+      "bytes": 30049
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/events/app-20261126130544-0000",
+      "bytes": 196447261
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/master.log",
+      "bytes": 4860
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-0/work/app-20261126130544-0000/2/stderr",
+      "bytes": 6521881
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-0/work/app-20261126130544-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-0/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-1/work/app-20261126130544-0000/7/stderr",
+      "bytes": 6445199
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-1/work/app-20261126130544-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-1/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-2/work/app-20261126130544-0000/0/stderr",
+      "bytes": 6475467
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-2/work/app-20261126130544-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-2/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-3/work/app-20261126130544-0000/1/stderr",
+      "bytes": 6407353
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-3/work/app-20261126130544-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-3/worker.log",
+      "bytes": 5802
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-4/work/app-20261126130544-0000/6/stderr",
+      "bytes": 6403734
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-4/work/app-20261126130544-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-4/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-5/work/app-20261126130544-0000/5/stderr",
+      "bytes": 6215911
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-5/work/app-20261126130544-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-5/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-6/work/app-20261126130544-0000/3/stderr",
+      "bytes": 6423466
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-6/work/app-20261126130544-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-6/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-7/work/app-20261126130544-0000/4/stderr",
+      "bytes": 6317330
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-7/work/app-20261126130544-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A0-0/suite/worker-7/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/events/app-20261126132049-0000",
+      "bytes": 201419224
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/master.log",
+      "bytes": 5052
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-0/work/app-20261126132049-0000/1/stderr",
+      "bytes": 6520343
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-0/work/app-20261126132049-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-0/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-1/work/app-20261126132049-0000/4/stderr",
+      "bytes": 6572048
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-1/work/app-20261126132049-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-1/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-2/work/app-20261126132049-0000/7/stderr",
+      "bytes": 6503891
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-2/work/app-20261126132049-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-2/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-3/work/app-20261126132049-0000/6/stderr",
+      "bytes": 6532218
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-3/work/app-20261126132049-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-3/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-4/work/app-20261126132049-0000/2/stderr",
+      "bytes": 6371382
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-4/work/app-20261126132049-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-4/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-5/work/app-20261126132049-0000/3/stderr",
+      "bytes": 6233573
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-5/work/app-20261126132049-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-5/worker.log",
+      "bytes": 6389
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-6/work/app-20261126132049-0000/5/stderr",
+      "bytes": 6227057
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-6/work/app-20261126132049-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-6/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-7/work/app-20261126132049-0000/0/stderr",
+      "bytes": 6250535
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-7/work/app-20261126132049-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-A3-0/suite/worker-7/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/events/app-20261126131045-0000",
+      "bytes": 195996357
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/master.log",
+      "bytes": 5628
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-0/work/app-20261126131045-0000/7/stderr",
+      "bytes": 6608072
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-0/work/app-20261126131045-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-0/worker.log",
+      "bytes": 6389
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-1/work/app-20261126131045-0000/4/stderr",
+      "bytes": 6694910
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-1/work/app-20261126131045-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-1/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-2/work/app-20261126131045-0000/5/stderr",
+      "bytes": 6553969
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-2/work/app-20261126131045-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-2/worker.log",
+      "bytes": 6389
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-3/work/app-20261126131045-0000/2/stderr",
+      "bytes": 6642281
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-3/work/app-20261126131045-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-3/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-4/work/app-20261126131045-0000/0/stderr",
+      "bytes": 6072554
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-4/work/app-20261126131045-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-4/worker.log",
+      "bytes": 6389
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-5/work/app-20261126131045-0000/3/stderr",
+      "bytes": 6017917
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-5/work/app-20261126131045-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-5/worker.log",
+      "bytes": 6389
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-6/work/app-20261126131045-0000/1/stderr",
+      "bytes": 6233661
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-6/work/app-20261126131045-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-6/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-7/work/app-20261126131045-0000/6/stderr",
+      "bytes": 6401364
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-7/work/app-20261126131045-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B1-0/suite/worker-7/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/events/app-20261126131551-0000",
+      "bytes": 196241328
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/master.log",
+      "bytes": 4860
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-0/work/app-20261126131551-0000/5/stderr",
+      "bytes": 6653405
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-0/work/app-20261126131551-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-0/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-1/work/app-20261126131551-0000/7/stderr",
+      "bytes": 6483145
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-1/work/app-20261126131551-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-1/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-2/work/app-20261126131551-0000/0/stderr",
+      "bytes": 6427471
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-2/work/app-20261126131551-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-2/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-3/work/app-20261126131551-0000/2/stderr",
+      "bytes": 6581936
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-3/work/app-20261126131551-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-3/worker.log",
+      "bytes": 5804
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-4/work/app-20261126131551-0000/6/stderr",
+      "bytes": 6121221
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-4/work/app-20261126131551-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-4/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-5/work/app-20261126131551-0000/3/stderr",
+      "bytes": 6285804
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-5/work/app-20261126131551-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-5/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-6/work/app-20261126131551-0000/1/stderr",
+      "bytes": 6383960
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-6/work/app-20261126131551-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-6/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-7/work/app-20261126131551-0000/4/stderr",
+      "bytes": 6286560
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-7/work/app-20261126131551-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-B2-0/suite/worker-7/worker.log",
+      "bytes": 5803
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/events/app-20261126132844-0000",
+      "bytes": 197360211
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/master.log",
+      "bytes": 5628
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-0/work/app-20261126132844-0000/3/stderr",
+      "bytes": 6416232
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-0/work/app-20261126132844-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-0/worker.log",
+      "bytes": 6389
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-1/work/app-20261126132844-0000/2/stderr",
+      "bytes": 6311198
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-1/work/app-20261126132844-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-1/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-2/work/app-20261126132844-0000/4/stderr",
+      "bytes": 6319234
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-2/work/app-20261126132844-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-2/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-3/work/app-20261126132844-0000/6/stderr",
+      "bytes": 6300128
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-3/work/app-20261126132844-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-3/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-4/work/app-20261126132844-0000/1/stderr",
+      "bytes": 6434681
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-4/work/app-20261126132844-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-4/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-5/work/app-20261126132844-0000/5/stderr",
+      "bytes": 6435629
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-5/work/app-20261126132844-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-5/worker.log",
+      "bytes": 6388
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-6/work/app-20261126132844-0000/7/stderr",
+      "bytes": 6430572
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-6/work/app-20261126132844-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-6/worker.log",
+      "bytes": 6389
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-7/work/app-20261126132844-0000/0/stderr",
+      "bytes": 6445104
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-7/work/app-20261126132844-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/read-tuning-C1-0/suite/worker-7/worker.log",
+      "bytes": 6389
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/command.json",
+      "bytes": 811
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/driver-service.json",
+      "bytes": 970
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/driver.log",
+      "bytes": 9474937
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/profile.json",
+      "bytes": 6026
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q10-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q10-iteration1.executed.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q10-iteration1.logical.txt",
+      "bytes": 2777
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q10-iteration1.metrics.json",
+      "bytes": 14234
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q10-iteration1.observed.json",
+      "bytes": 19373
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q10-iteration1.preflight.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q10-iteration1.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q10-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q10-iteration2.executed.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q10-iteration2.logical.txt",
+      "bytes": 2777
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q10-iteration2.metrics.json",
+      "bytes": 14225
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q10-iteration2.observed.json",
+      "bytes": 19365
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q10-iteration2.preflight.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q10-iteration2.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q11-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q11-iteration1.executed.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q11-iteration1.logical.txt",
+      "bytes": 3159
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q11-iteration1.metrics.json",
+      "bytes": 9017
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q11-iteration1.observed.json",
+      "bytes": 10850
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q11-iteration1.preflight.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q11-iteration1.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q11-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q11-iteration2.executed.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q11-iteration2.logical.txt",
+      "bytes": 3159
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q11-iteration2.metrics.json",
+      "bytes": 9017
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q11-iteration2.observed.json",
+      "bytes": 10850
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q11-iteration2.preflight.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q11-iteration2.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q12-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q12-iteration1.executed.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q12-iteration1.logical.txt",
+      "bytes": 1511
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q12-iteration1.metrics.json",
+      "bytes": 7655
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q12-iteration1.observed.json",
+      "bytes": 9082
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q12-iteration1.preflight.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q12-iteration1.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q12-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q12-iteration2.executed.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q12-iteration2.logical.txt",
+      "bytes": 1511
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q12-iteration2.metrics.json",
+      "bytes": 7654
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q12-iteration2.observed.json",
+      "bytes": 9080
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q12-iteration2.preflight.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q12-iteration2.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q13-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q13-iteration1.executed.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q13-iteration1.logical.txt",
+      "bytes": 943
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q13-iteration1.metrics.json",
+      "bytes": 7662
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q13-iteration1.observed.json",
+      "bytes": 9234
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q13-iteration1.preflight.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q13-iteration1.sql",
+      "bytes": 349
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q13-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q13-iteration2.executed.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q13-iteration2.logical.txt",
+      "bytes": 943
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q13-iteration2.metrics.json",
+      "bytes": 7664
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q13-iteration2.observed.json",
+      "bytes": 9236
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q13-iteration2.preflight.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q13-iteration2.sql",
+      "bytes": 349
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q9-iteration1.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q9-iteration1.executed.txt",
+      "bytes": 9226
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q9-iteration1.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q9-iteration1.metrics.json",
+      "bytes": 17830
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q9-iteration1.observed.json",
+      "bytes": 20625
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q9-iteration1.preflight.txt",
+      "bytes": 9226
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q9-iteration1.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q9-iteration2.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q9-iteration2.executed.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q9-iteration2.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q9-iteration2.metrics.json",
+      "bytes": 17824
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q9-iteration2.observed.json",
+      "bytes": 20619
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q9-iteration2.preflight.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/q9-iteration2.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/result.json",
+      "bytes": 194179
+    },
+    {
+      "name": "screen/read-tuning-A0-0/applications/suite/spark-defaults.conf",
+      "bytes": 5207
+    },
+    {
+      "name": "screen/read-tuning-A0-0/config.json",
+      "bytes": 7860
+    },
+    {
+      "name": "screen/read-tuning-A0-0/profiles.json",
+      "bytes": 31205
+    },
+    {
+      "name": "screen/read-tuning-A0-0/services/suite/ip-172-31-21-17.json",
+      "bytes": 4979
+    },
+    {
+      "name": "screen/read-tuning-A0-0/services/suite/ip-172-31-21-17.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/command.json",
+      "bytes": 811
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/driver-service.json",
+      "bytes": 970
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/driver.log",
+      "bytes": 9474344
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/profile.json",
+      "bytes": 6026
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q10-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q10-iteration1.executed.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q10-iteration1.logical.txt",
+      "bytes": 2777
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q10-iteration1.metrics.json",
+      "bytes": 14233
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q10-iteration1.observed.json",
+      "bytes": 19373
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q10-iteration1.preflight.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q10-iteration1.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q10-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q10-iteration2.executed.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q10-iteration2.logical.txt",
+      "bytes": 2777
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q10-iteration2.metrics.json",
+      "bytes": 14226
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q10-iteration2.observed.json",
+      "bytes": 19366
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q10-iteration2.preflight.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q10-iteration2.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q11-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q11-iteration1.executed.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q11-iteration1.logical.txt",
+      "bytes": 3159
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q11-iteration1.metrics.json",
+      "bytes": 9018
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q11-iteration1.observed.json",
+      "bytes": 10851
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q11-iteration1.preflight.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q11-iteration1.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q11-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q11-iteration2.executed.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q11-iteration2.logical.txt",
+      "bytes": 3159
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q11-iteration2.metrics.json",
+      "bytes": 9016
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q11-iteration2.observed.json",
+      "bytes": 10849
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q11-iteration2.preflight.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q11-iteration2.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q12-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q12-iteration1.executed.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q12-iteration1.logical.txt",
+      "bytes": 1511
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q12-iteration1.metrics.json",
+      "bytes": 7656
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q12-iteration1.observed.json",
+      "bytes": 9083
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q12-iteration1.preflight.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q12-iteration1.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q12-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q12-iteration2.executed.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q12-iteration2.logical.txt",
+      "bytes": 1511
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q12-iteration2.metrics.json",
+      "bytes": 7649
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q12-iteration2.observed.json",
+      "bytes": 9075
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q12-iteration2.preflight.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q12-iteration2.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q13-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q13-iteration1.executed.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q13-iteration1.logical.txt",
+      "bytes": 943
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q13-iteration1.metrics.json",
+      "bytes": 7663
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q13-iteration1.observed.json",
+      "bytes": 9235
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q13-iteration1.preflight.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q13-iteration1.sql",
+      "bytes": 349
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q13-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q13-iteration2.executed.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q13-iteration2.logical.txt",
+      "bytes": 943
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q13-iteration2.metrics.json",
+      "bytes": 7661
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q13-iteration2.observed.json",
+      "bytes": 9233
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q13-iteration2.preflight.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q13-iteration2.sql",
+      "bytes": 349
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q9-iteration1.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q9-iteration1.executed.txt",
+      "bytes": 9226
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q9-iteration1.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q9-iteration1.metrics.json",
+      "bytes": 17831
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q9-iteration1.observed.json",
+      "bytes": 20627
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q9-iteration1.preflight.txt",
+      "bytes": 9226
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q9-iteration1.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q9-iteration2.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q9-iteration2.executed.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q9-iteration2.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q9-iteration2.metrics.json",
+      "bytes": 17820
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q9-iteration2.observed.json",
+      "bytes": 20615
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q9-iteration2.preflight.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/q9-iteration2.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/result.json",
+      "bytes": 194173
+    },
+    {
+      "name": "screen/read-tuning-A3-0/applications/suite/spark-defaults.conf",
+      "bytes": 5207
+    },
+    {
+      "name": "screen/read-tuning-A3-0/config.json",
+      "bytes": 7860
+    },
+    {
+      "name": "screen/read-tuning-A3-0/profiles.json",
+      "bytes": 31205
+    },
+    {
+      "name": "screen/read-tuning-A3-0/services/suite/ip-172-31-21-17.json",
+      "bytes": 4979
+    },
+    {
+      "name": "screen/read-tuning-A3-0/services/suite/ip-172-31-21-17.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/command.json",
+      "bytes": 811
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/driver-service.json",
+      "bytes": 970
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/driver.log",
+      "bytes": 9475620
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/profile.json",
+      "bytes": 6025
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q10-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q10-iteration1.executed.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q10-iteration1.logical.txt",
+      "bytes": 2777
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q10-iteration1.metrics.json",
+      "bytes": 14220
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q10-iteration1.observed.json",
+      "bytes": 19360
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q10-iteration1.preflight.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q10-iteration1.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q10-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q10-iteration2.executed.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q10-iteration2.logical.txt",
+      "bytes": 2777
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q10-iteration2.metrics.json",
+      "bytes": 14222
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q10-iteration2.observed.json",
+      "bytes": 19362
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q10-iteration2.preflight.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q10-iteration2.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q11-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q11-iteration1.executed.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q11-iteration1.logical.txt",
+      "bytes": 3159
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q11-iteration1.metrics.json",
+      "bytes": 9016
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q11-iteration1.observed.json",
+      "bytes": 10849
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q11-iteration1.preflight.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q11-iteration1.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q11-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q11-iteration2.executed.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q11-iteration2.logical.txt",
+      "bytes": 3159
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q11-iteration2.metrics.json",
+      "bytes": 9014
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q11-iteration2.observed.json",
+      "bytes": 10847
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q11-iteration2.preflight.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q11-iteration2.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q12-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q12-iteration1.executed.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q12-iteration1.logical.txt",
+      "bytes": 1511
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q12-iteration1.metrics.json",
+      "bytes": 7652
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q12-iteration1.observed.json",
+      "bytes": 9079
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q12-iteration1.preflight.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q12-iteration1.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q12-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q12-iteration2.executed.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q12-iteration2.logical.txt",
+      "bytes": 1511
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q12-iteration2.metrics.json",
+      "bytes": 7650
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q12-iteration2.observed.json",
+      "bytes": 9077
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q12-iteration2.preflight.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q12-iteration2.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q13-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q13-iteration1.executed.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q13-iteration1.logical.txt",
+      "bytes": 943
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q13-iteration1.metrics.json",
+      "bytes": 7661
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q13-iteration1.observed.json",
+      "bytes": 9233
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q13-iteration1.preflight.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q13-iteration1.sql",
+      "bytes": 349
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q13-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q13-iteration2.executed.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q13-iteration2.logical.txt",
+      "bytes": 943
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q13-iteration2.metrics.json",
+      "bytes": 7662
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q13-iteration2.observed.json",
+      "bytes": 9234
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q13-iteration2.preflight.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q13-iteration2.sql",
+      "bytes": 349
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q9-iteration1.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q9-iteration1.executed.txt",
+      "bytes": 9226
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q9-iteration1.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q9-iteration1.metrics.json",
+      "bytes": 17826
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q9-iteration1.observed.json",
+      "bytes": 20621
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q9-iteration1.preflight.txt",
+      "bytes": 9226
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q9-iteration1.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q9-iteration2.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q9-iteration2.executed.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q9-iteration2.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q9-iteration2.metrics.json",
+      "bytes": 17817
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q9-iteration2.observed.json",
+      "bytes": 20612
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q9-iteration2.preflight.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/q9-iteration2.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/result.json",
+      "bytes": 194128
+    },
+    {
+      "name": "screen/read-tuning-B1-0/applications/suite/spark-defaults.conf",
+      "bytes": 5206
+    },
+    {
+      "name": "screen/read-tuning-B1-0/config.json",
+      "bytes": 7859
+    },
+    {
+      "name": "screen/read-tuning-B1-0/profiles.json",
+      "bytes": 31200
+    },
+    {
+      "name": "screen/read-tuning-B1-0/services/suite/ip-172-31-21-17.json",
+      "bytes": 4979
+    },
+    {
+      "name": "screen/read-tuning-B1-0/services/suite/ip-172-31-21-17.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/command.json",
+      "bytes": 811
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/driver-service.json",
+      "bytes": 970
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/driver.log",
+      "bytes": 9487785
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/profile.json",
+      "bytes": 6025
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q10-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q10-iteration1.executed.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q10-iteration1.logical.txt",
+      "bytes": 2777
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q10-iteration1.metrics.json",
+      "bytes": 14220
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q10-iteration1.observed.json",
+      "bytes": 19360
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q10-iteration1.preflight.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q10-iteration1.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q10-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q10-iteration2.executed.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q10-iteration2.logical.txt",
+      "bytes": 2777
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q10-iteration2.metrics.json",
+      "bytes": 14221
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q10-iteration2.observed.json",
+      "bytes": 19360
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q10-iteration2.preflight.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q10-iteration2.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q11-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q11-iteration1.executed.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q11-iteration1.logical.txt",
+      "bytes": 3159
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q11-iteration1.metrics.json",
+      "bytes": 9015
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q11-iteration1.observed.json",
+      "bytes": 10848
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q11-iteration1.preflight.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q11-iteration1.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q11-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q11-iteration2.executed.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q11-iteration2.logical.txt",
+      "bytes": 3159
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q11-iteration2.metrics.json",
+      "bytes": 9015
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q11-iteration2.observed.json",
+      "bytes": 10847
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q11-iteration2.preflight.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q11-iteration2.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q12-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q12-iteration1.executed.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q12-iteration1.logical.txt",
+      "bytes": 1511
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q12-iteration1.metrics.json",
+      "bytes": 7650
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q12-iteration1.observed.json",
+      "bytes": 9076
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q12-iteration1.preflight.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q12-iteration1.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q12-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q12-iteration2.executed.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q12-iteration2.logical.txt",
+      "bytes": 1511
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q12-iteration2.metrics.json",
+      "bytes": 7653
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q12-iteration2.observed.json",
+      "bytes": 9080
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q12-iteration2.preflight.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q12-iteration2.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q13-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q13-iteration1.executed.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q13-iteration1.logical.txt",
+      "bytes": 943
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q13-iteration1.metrics.json",
+      "bytes": 7663
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q13-iteration1.observed.json",
+      "bytes": 9233
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q13-iteration1.preflight.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q13-iteration1.sql",
+      "bytes": 349
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q13-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q13-iteration2.executed.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q13-iteration2.logical.txt",
+      "bytes": 943
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q13-iteration2.metrics.json",
+      "bytes": 7662
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q13-iteration2.observed.json",
+      "bytes": 9234
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q13-iteration2.preflight.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q13-iteration2.sql",
+      "bytes": 349
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q9-iteration1.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q9-iteration1.executed.txt",
+      "bytes": 9226
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q9-iteration1.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q9-iteration1.metrics.json",
+      "bytes": 17828
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q9-iteration1.observed.json",
+      "bytes": 20623
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q9-iteration1.preflight.txt",
+      "bytes": 9226
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q9-iteration1.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q9-iteration2.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q9-iteration2.executed.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q9-iteration2.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q9-iteration2.metrics.json",
+      "bytes": 17815
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q9-iteration2.observed.json",
+      "bytes": 20611
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q9-iteration2.preflight.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/q9-iteration2.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/result.json",
+      "bytes": 194123
+    },
+    {
+      "name": "screen/read-tuning-B2-0/applications/suite/spark-defaults.conf",
+      "bytes": 5206
+    },
+    {
+      "name": "screen/read-tuning-B2-0/config.json",
+      "bytes": 7859
+    },
+    {
+      "name": "screen/read-tuning-B2-0/profiles.json",
+      "bytes": 31200
+    },
+    {
+      "name": "screen/read-tuning-B2-0/services/suite/ip-172-31-21-17.json",
+      "bytes": 4979
+    },
+    {
+      "name": "screen/read-tuning-B2-0/services/suite/ip-172-31-21-17.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/command.json",
+      "bytes": 811
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/driver-service.json",
+      "bytes": 970
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/driver.log",
+      "bytes": 9486155
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/profile.json",
+      "bytes": 6026
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q10-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q10-iteration1.executed.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q10-iteration1.logical.txt",
+      "bytes": 2777
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q10-iteration1.metrics.json",
+      "bytes": 14223
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q10-iteration1.observed.json",
+      "bytes": 19363
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q10-iteration1.preflight.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q10-iteration1.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q10-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q10-iteration2.executed.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q10-iteration2.logical.txt",
+      "bytes": 2777
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q10-iteration2.metrics.json",
+      "bytes": 14227
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q10-iteration2.observed.json",
+      "bytes": 19367
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q10-iteration2.preflight.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q10-iteration2.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q11-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q11-iteration1.executed.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q11-iteration1.logical.txt",
+      "bytes": 3159
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q11-iteration1.metrics.json",
+      "bytes": 9017
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q11-iteration1.observed.json",
+      "bytes": 10848
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q11-iteration1.preflight.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q11-iteration1.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q11-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q11-iteration2.executed.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q11-iteration2.logical.txt",
+      "bytes": 3159
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q11-iteration2.metrics.json",
+      "bytes": 9016
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q11-iteration2.observed.json",
+      "bytes": 10849
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q11-iteration2.preflight.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q11-iteration2.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q12-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q12-iteration1.executed.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q12-iteration1.logical.txt",
+      "bytes": 1511
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q12-iteration1.metrics.json",
+      "bytes": 7651
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q12-iteration1.observed.json",
+      "bytes": 9078
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q12-iteration1.preflight.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q12-iteration1.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q12-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q12-iteration2.executed.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q12-iteration2.logical.txt",
+      "bytes": 1511
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q12-iteration2.metrics.json",
+      "bytes": 7651
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q12-iteration2.observed.json",
+      "bytes": 9078
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q12-iteration2.preflight.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q12-iteration2.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q13-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q13-iteration1.executed.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q13-iteration1.logical.txt",
+      "bytes": 943
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q13-iteration1.metrics.json",
+      "bytes": 7662
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q13-iteration1.observed.json",
+      "bytes": 9233
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q13-iteration1.preflight.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q13-iteration1.sql",
+      "bytes": 349
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q13-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q13-iteration2.executed.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q13-iteration2.logical.txt",
+      "bytes": 943
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q13-iteration2.metrics.json",
+      "bytes": 7662
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q13-iteration2.observed.json",
+      "bytes": 9233
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q13-iteration2.preflight.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q13-iteration2.sql",
+      "bytes": 349
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q9-iteration1.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q9-iteration1.executed.txt",
+      "bytes": 9226
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q9-iteration1.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q9-iteration1.metrics.json",
+      "bytes": 17830
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q9-iteration1.observed.json",
+      "bytes": 20625
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q9-iteration1.preflight.txt",
+      "bytes": 9226
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q9-iteration1.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q9-iteration2.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q9-iteration2.executed.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q9-iteration2.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q9-iteration2.metrics.json",
+      "bytes": 17820
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q9-iteration2.observed.json",
+      "bytes": 20615
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q9-iteration2.preflight.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/q9-iteration2.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/result.json",
+      "bytes": 194146
+    },
+    {
+      "name": "screen/read-tuning-C1-0/applications/suite/spark-defaults.conf",
+      "bytes": 5207
+    },
+    {
+      "name": "screen/read-tuning-C1-0/config.json",
+      "bytes": 7860
+    },
+    {
+      "name": "screen/read-tuning-C1-0/profiles.json",
+      "bytes": 31205
+    },
+    {
+      "name": "screen/read-tuning-C1-0/services/suite/ip-172-31-21-17.json",
+      "bytes": 4979
+    },
+    {
+      "name": "screen/read-tuning-C1-0/services/suite/ip-172-31-21-17.json.stopped.json",
+      "bytes": 62
+    }
+  ],
+  "instance_policy": "Retain until explicit user release"
+}

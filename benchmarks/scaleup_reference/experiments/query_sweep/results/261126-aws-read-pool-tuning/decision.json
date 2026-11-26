@@ -1,0 +1,556 @@
+{
+  "complete_ABBA": true,
+  "groups": [
+    {
+      "phase": "A0",
+      "threads": 32,
+      "second_total_seconds": 105.710803932001,
+      "all_action_total_seconds": 234.01268525399428
+    },
+    {
+      "phase": "B1",
+      "threads": 8,
+      "second_total_seconds": 99.33140327500223,
+      "all_action_total_seconds": 222.20842991600148
+    },
+    {
+      "phase": "B2",
+      "threads": 8,
+      "second_total_seconds": 95.99283648400524,
+      "all_action_total_seconds": 213.01768505101063
+    },
+    {
+      "phase": "A3",
+      "threads": 32,
+      "second_total_seconds": 93.71425298399845,
+      "all_action_total_seconds": 221.66406564099816
+    }
+  ],
+  "queries": [
+    {
+      "query": 9,
+      "phases": {
+        "A0": [
+          {
+            "iteration": 1,
+            "sql_seconds": 44.37287278800068,
+            "sql_plus_cleanup_seconds": 45.24964384299892,
+            "physical_read_bytes": 90303528960,
+            "memory_full_seconds": 1.038469,
+            "allocstall": 21749,
+            "scan_buffer_task_seconds": 170.335847546,
+            "normalized_plan_sha256": "1dc38acb83a62bf150a990e4044e87b9db6ee441acabc7bd13af1acfdc912722"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 40.31285024099998,
+            "sql_plus_cleanup_seconds": 41.360756707999826,
+            "physical_read_bytes": 16082653184,
+            "memory_full_seconds": 0.283045,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 133.55095121,
+            "normalized_plan_sha256": "1dc38acb83a62bf150a990e4044e87b9db6ee441acabc7bd13af1acfdc912722"
+          }
+        ],
+        "B1": [
+          {
+            "iteration": 1,
+            "sql_seconds": 43.46419839100054,
+            "sql_plus_cleanup_seconds": 44.746354312999756,
+            "physical_read_bytes": 93390893056,
+            "memory_full_seconds": 0.197298,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 347.408326036,
+            "normalized_plan_sha256": "1dc38acb83a62bf150a990e4044e87b9db6ee441acabc7bd13af1acfdc912722"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 38.62600222999754,
+            "sql_plus_cleanup_seconds": 39.82451102199775,
+            "physical_read_bytes": 160178176,
+            "memory_full_seconds": 0.008303,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 325.03708907,
+            "normalized_plan_sha256": "1dc38acb83a62bf150a990e4044e87b9db6ee441acabc7bd13af1acfdc912722"
+          }
+        ],
+        "B2": [
+          {
+            "iteration": 1,
+            "sql_seconds": 42.62467576800191,
+            "sql_plus_cleanup_seconds": 43.857314198001404,
+            "physical_read_bytes": 117729398784,
+            "memory_full_seconds": 0.380814,
+            "allocstall": 147,
+            "scan_buffer_task_seconds": 352.740125819,
+            "normalized_plan_sha256": "1dc38acb83a62bf150a990e4044e87b9db6ee441acabc7bd13af1acfdc912722"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 38.804169137001736,
+            "sql_plus_cleanup_seconds": 40.04921395100246,
+            "physical_read_bytes": 95354880,
+            "memory_full_seconds": 0.00036,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 319.616068837,
+            "normalized_plan_sha256": "1dc38acb83a62bf150a990e4044e87b9db6ee441acabc7bd13af1acfdc912722"
+          }
+        ],
+        "A3": [
+          {
+            "iteration": 1,
+            "sql_seconds": 44.766725012999814,
+            "sql_plus_cleanup_seconds": 45.68968812800085,
+            "physical_read_bytes": 75170701312,
+            "memory_full_seconds": 1.173958,
+            "allocstall": 9047,
+            "scan_buffer_task_seconds": 170.048260047,
+            "normalized_plan_sha256": "1dc38acb83a62bf150a990e4044e87b9db6ee441acabc7bd13af1acfdc912722"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 39.92117153000072,
+            "sql_plus_cleanup_seconds": 41.227345854000305,
+            "physical_read_bytes": 34025472,
+            "memory_full_seconds": 0.032082,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 123.641487256,
+            "normalized_plan_sha256": "1dc38acb83a62bf150a990e4044e87b9db6ee441acabc7bd13af1acfdc912722"
+          }
+        ]
+      },
+      "second_action_median_change_fraction": -0.032866448129888926
+    },
+    {
+      "query": 10,
+      "phases": {
+        "A0": [
+          {
+            "iteration": 1,
+            "sql_seconds": 24.24827689599988,
+            "sql_plus_cleanup_seconds": 25.431133359998057,
+            "physical_read_bytes": 132012851200,
+            "memory_full_seconds": 4.146886,
+            "allocstall": 140449,
+            "scan_buffer_task_seconds": 188.253075077,
+            "normalized_plan_sha256": "ddd3a08eab935414f06bbfbdd9d5d7ec1e54d9e87d097d3d2f6ec28802ce9870"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 18.699438641000597,
+            "sql_plus_cleanup_seconds": 20.033843168999738,
+            "physical_read_bytes": 1417826304,
+            "memory_full_seconds": 0.001092,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 56.19021692,
+            "normalized_plan_sha256": "ddd3a08eab935414f06bbfbdd9d5d7ec1e54d9e87d097d3d2f6ec28802ce9870"
+          }
+        ],
+        "B1": [
+          {
+            "iteration": 1,
+            "sql_seconds": 19.881608940999286,
+            "sql_plus_cleanup_seconds": 21.365785246998712,
+            "physical_read_bytes": 46167719936,
+            "memory_full_seconds": 0.581073,
+            "allocstall": 11805,
+            "scan_buffer_task_seconds": 174.855956384,
+            "normalized_plan_sha256": "ddd3a08eab935414f06bbfbdd9d5d7ec1e54d9e87d097d3d2f6ec28802ce9870"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 18.666625597998063,
+            "sql_plus_cleanup_seconds": 19.975533112999983,
+            "physical_read_bytes": 3477397504,
+            "memory_full_seconds": 0.0,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 129.70301498,
+            "normalized_plan_sha256": "ddd3a08eab935414f06bbfbdd9d5d7ec1e54d9e87d097d3d2f6ec28802ce9870"
+          }
+        ],
+        "B2": [
+          {
+            "iteration": 1,
+            "sql_seconds": 22.687787492999632,
+            "sql_plus_cleanup_seconds": 23.770050606999575,
+            "physical_read_bytes": 112373858304,
+            "memory_full_seconds": 1.429301,
+            "allocstall": 49199,
+            "scan_buffer_task_seconds": 270.577571609,
+            "normalized_plan_sha256": "ddd3a08eab935414f06bbfbdd9d5d7ec1e54d9e87d097d3d2f6ec28802ce9870"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 18.42365557100129,
+            "sql_plus_cleanup_seconds": 19.758606093000708,
+            "physical_read_bytes": 23117500416,
+            "memory_full_seconds": 0.077389,
+            "allocstall": 7935,
+            "scan_buffer_task_seconds": 134.192417854,
+            "normalized_plan_sha256": "ddd3a08eab935414f06bbfbdd9d5d7ec1e54d9e87d097d3d2f6ec28802ce9870"
+          }
+        ],
+        "A3": [
+          {
+            "iteration": 1,
+            "sql_seconds": 22.895690354998806,
+            "sql_plus_cleanup_seconds": 24.337093623998953,
+            "physical_read_bytes": 112551731200,
+            "memory_full_seconds": 3.371948,
+            "allocstall": 114192,
+            "scan_buffer_task_seconds": 172.309690132,
+            "normalized_plan_sha256": "ddd3a08eab935414f06bbfbdd9d5d7ec1e54d9e87d097d3d2f6ec28802ce9870"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 18.287159713996516,
+            "sql_plus_cleanup_seconds": 19.82448966499942,
+            "physical_read_bytes": 6261014528,
+            "memory_full_seconds": 1.8e-05,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 59.935545655,
+            "normalized_plan_sha256": "ddd3a08eab935414f06bbfbdd9d5d7ec1e54d9e87d097d3d2f6ec28802ce9870"
+          }
+        ]
+      },
+      "second_action_median_change_fraction": -0.0031158761334977303
+    },
+    {
+      "query": 11,
+      "phases": {
+        "A0": [
+          {
+            "iteration": 1,
+            "sql_seconds": 7.315745887997764,
+            "sql_plus_cleanup_seconds": 7.344419162996928,
+            "physical_read_bytes": 1746399232,
+            "memory_full_seconds": 0.00016,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 10.009330817,
+            "normalized_plan_sha256": "0b358c4b2a70bd1c1d82f446b1f3b34fa441b62d2602cd86c37795149ad91aaf"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 6.895278658001189,
+            "sql_plus_cleanup_seconds": 6.926295116001711,
+            "physical_read_bytes": 4296704,
+            "memory_full_seconds": 1.6e-05,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 8.862919083,
+            "normalized_plan_sha256": "0b358c4b2a70bd1c1d82f446b1f3b34fa441b62d2602cd86c37795149ad91aaf"
+          }
+        ],
+        "B1": [
+          {
+            "iteration": 1,
+            "sql_seconds": 7.652891413999896,
+            "sql_plus_cleanup_seconds": 7.685347103997628,
+            "physical_read_bytes": 628117504,
+            "memory_full_seconds": 1.5e-05,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 19.969171392,
+            "normalized_plan_sha256": "0b358c4b2a70bd1c1d82f446b1f3b34fa441b62d2602cd86c37795149ad91aaf"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 7.222443481998198,
+            "sql_plus_cleanup_seconds": 7.249727186997916,
+            "physical_read_bytes": 1339392,
+            "memory_full_seconds": 0.0,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 19.670174442,
+            "normalized_plan_sha256": "0b358c4b2a70bd1c1d82f446b1f3b34fa441b62d2602cd86c37795149ad91aaf"
+          }
+        ],
+        "B2": [
+          {
+            "iteration": 1,
+            "sql_seconds": 7.444943193000654,
+            "sql_plus_cleanup_seconds": 7.473478398002044,
+            "physical_read_bytes": 408174592,
+            "memory_full_seconds": 0.009162,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 21.075211057,
+            "normalized_plan_sha256": "0b358c4b2a70bd1c1d82f446b1f3b34fa441b62d2602cd86c37795149ad91aaf"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 6.81164846899992,
+            "sql_plus_cleanup_seconds": 6.8384370139974635,
+            "physical_read_bytes": 4460544,
+            "memory_full_seconds": 0.004359,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 19.651652967,
+            "normalized_plan_sha256": "0b358c4b2a70bd1c1d82f446b1f3b34fa441b62d2602cd86c37795149ad91aaf"
+          }
+        ],
+        "A3": [
+          {
+            "iteration": 1,
+            "sql_seconds": 7.072705079001025,
+            "sql_plus_cleanup_seconds": 7.1052900350005075,
+            "physical_read_bytes": 91103232,
+            "memory_full_seconds": 0.008256,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 9.13173693,
+            "normalized_plan_sha256": "0b358c4b2a70bd1c1d82f446b1f3b34fa441b62d2602cd86c37795149ad91aaf"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 6.375703487999999,
+            "sql_plus_cleanup_seconds": 6.402197896000871,
+            "physical_read_bytes": 4468736,
+            "memory_full_seconds": 2.4e-05,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 9.271132232,
+            "normalized_plan_sha256": "0b358c4b2a70bd1c1d82f446b1f3b34fa441b62d2602cd86c37795149ad91aaf"
+          }
+        ]
+      },
+      "second_action_median_change_fraction": 0.05699603010698184
+    },
+    {
+      "query": 12,
+      "phases": {
+        "A0": [
+          {
+            "iteration": 1,
+            "sql_seconds": 28.668394432999776,
+            "sql_plus_cleanup_seconds": 29.745231711000088,
+            "physical_read_bytes": 294879596544,
+            "memory_full_seconds": 8.054334,
+            "allocstall": 297556,
+            "scan_buffer_task_seconds": 582.456744296,
+            "normalized_plan_sha256": "e250a3a498bccfb930c1bc1aba328ca62c932a01b7c2194bc3e1ccf3f57fec1c"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 21.85784006099857,
+            "sql_plus_cleanup_seconds": 22.930935216998478,
+            "physical_read_bytes": 234052788224,
+            "memory_full_seconds": 5.370734,
+            "allocstall": 311740,
+            "scan_buffer_task_seconds": 382.877219726,
+            "normalized_plan_sha256": "e250a3a498bccfb930c1bc1aba328ca62c932a01b7c2194bc3e1ccf3f57fec1c"
+          }
+        ],
+        "B1": [
+          {
+            "iteration": 1,
+            "sql_seconds": 25.243701957002486,
+            "sql_plus_cleanup_seconds": 26.216272614004993,
+            "physical_read_bytes": 302421848064,
+            "memory_full_seconds": 3.332464,
+            "allocstall": 168783,
+            "scan_buffer_task_seconds": 514.012924168,
+            "normalized_plan_sha256": "e250a3a498bccfb930c1bc1aba328ca62c932a01b7c2194bc3e1ccf3f57fec1c"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 15.842418744003226,
+            "sql_plus_cleanup_seconds": 16.714314757005923,
+            "physical_read_bytes": 141058707456,
+            "memory_full_seconds": 0.695345,
+            "allocstall": 63213,
+            "scan_buffer_task_seconds": 226.828673384,
+            "normalized_plan_sha256": "e250a3a498bccfb930c1bc1aba328ca62c932a01b7c2194bc3e1ccf3f57fec1c"
+          }
+        ],
+        "B2": [
+          {
+            "iteration": 1,
+            "sql_seconds": 22.63930325000183,
+            "sql_plus_cleanup_seconds": 23.31145181100146,
+            "physical_read_bytes": 270211919872,
+            "memory_full_seconds": 2.175135,
+            "allocstall": 133788,
+            "scan_buffer_task_seconds": 443.337271945,
+            "normalized_plan_sha256": "e250a3a498bccfb930c1bc1aba328ca62c932a01b7c2194bc3e1ccf3f57fec1c"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 15.689430799000547,
+            "sql_plus_cleanup_seconds": 16.663070392001828,
+            "physical_read_bytes": 99103076352,
+            "memory_full_seconds": 0.709965,
+            "allocstall": 38929,
+            "scan_buffer_task_seconds": 202.814094826,
+            "normalized_plan_sha256": "e250a3a498bccfb930c1bc1aba328ca62c932a01b7c2194bc3e1ccf3f57fec1c"
+          }
+        ],
+        "A3": [
+          {
+            "iteration": 1,
+            "sql_seconds": 28.254909981998935,
+            "sql_plus_cleanup_seconds": 28.477280055998563,
+            "physical_read_bytes": 219203760128,
+            "memory_full_seconds": 13.338041,
+            "allocstall": 345899,
+            "scan_buffer_task_seconds": 532.428951312,
+            "normalized_plan_sha256": "e250a3a498bccfb930c1bc1aba328ca62c932a01b7c2194bc3e1ccf3f57fec1c"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 13.20958550100113,
+            "sql_plus_cleanup_seconds": 14.08169015400199,
+            "physical_read_bytes": 22364127232,
+            "memory_full_seconds": 0.491425,
+            "allocstall": 242,
+            "scan_buffer_task_seconds": 61.82231551,
+            "normalized_plan_sha256": "e250a3a498bccfb930c1bc1aba328ca62c932a01b7c2194bc3e1ccf3f57fec1c"
+          }
+        ]
+      },
+      "second_action_median_change_fraction": -0.09821622177714906
+    },
+    {
+      "query": 13,
+      "phases": {
+        "A0": [
+          {
+            "iteration": 1,
+            "sql_seconds": 19.500310544997774,
+            "sql_plus_cleanup_seconds": 20.531453244999284,
+            "physical_read_bytes": 215526494208,
+            "memory_full_seconds": 6.160482,
+            "allocstall": 297504,
+            "scan_buffer_task_seconds": 372.310405705,
+            "normalized_plan_sha256": "03c60c557edcce8a0d60f66000cff39602334e04793d58e9e6e476df578ec295"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 13.278411505001714,
+            "sql_plus_cleanup_seconds": 14.458973722001247,
+            "physical_read_bytes": 111407452160,
+            "memory_full_seconds": 2.287513,
+            "allocstall": 145397,
+            "scan_buffer_task_seconds": 116.660208537,
+            "normalized_plan_sha256": "03c60c557edcce8a0d60f66000cff39602334e04793d58e9e6e476df578ec295"
+          }
+        ],
+        "B1": [
+          {
+            "iteration": 1,
+            "sql_seconds": 21.637449080997612,
+            "sql_plus_cleanup_seconds": 22.863267362998158,
+            "physical_read_bytes": 299857952768,
+            "memory_full_seconds": 5.104219,
+            "allocstall": 369164,
+            "scan_buffer_task_seconds": 457.675353735,
+            "normalized_plan_sha256": "03c60c557edcce8a0d60f66000cff39602334e04793d58e9e6e476df578ec295"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 14.393295290999959,
+            "sql_plus_cleanup_seconds": 15.567317196000658,
+            "physical_read_bytes": 144852361216,
+            "memory_full_seconds": 1.607883,
+            "allocstall": 127029,
+            "scan_buffer_task_seconds": 207.628826477,
+            "normalized_plan_sha256": "03c60c557edcce8a0d60f66000cff39602334e04793d58e9e6e476df578ec295"
+          }
+        ],
+        "B2": [
+          {
+            "iteration": 1,
+            "sql_seconds": 17.6873831289995,
+            "sql_plus_cleanup_seconds": 18.612553553000907,
+            "physical_read_bytes": 228663693312,
+            "memory_full_seconds": 2.789506,
+            "allocstall": 227477,
+            "scan_buffer_task_seconds": 331.787781167,
+            "normalized_plan_sha256": "03c60c557edcce8a0d60f66000cff39602334e04793d58e9e6e476df578ec295"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 11.506874823000544,
+            "sql_plus_cleanup_seconds": 12.683509034002782,
+            "physical_read_bytes": 62052044800,
+            "memory_full_seconds": 0.367693,
+            "allocstall": 30777,
+            "scan_buffer_task_seconds": 96.660043362,
+            "normalized_plan_sha256": "03c60c557edcce8a0d60f66000cff39602334e04793d58e9e6e476df578ec295"
+          }
+        ],
+        "A3": [
+          {
+            "iteration": 1,
+            "sql_seconds": 21.716547450003418,
+            "sql_plus_cleanup_seconds": 22.340460814000835,
+            "physical_read_bytes": 307118571520,
+            "memory_full_seconds": 9.773303,
+            "allocstall": 491164,
+            "scan_buffer_task_seconds": 425.139148832,
+            "normalized_plan_sha256": "03c60c557edcce8a0d60f66000cff39602334e04793d58e9e6e476df578ec295"
+          },
+          {
+            "iteration": 2,
+            "sql_seconds": 11.202506513996923,
+            "sql_plus_cleanup_seconds": 12.178529414995864,
+            "physical_read_bytes": 16897081344,
+            "memory_full_seconds": 0.031742,
+            "allocstall": 0,
+            "scan_buffer_task_seconds": 26.583703598,
+            "normalized_plan_sha256": "03c60c557edcce8a0d60f66000cff39602334e04793d58e9e6e476df578ec295"
+          }
+        ]
+      },
+      "second_action_median_change_fraction": 0.06056585276438953
+    }
+  ],
+  "normalized_plans_match": true,
+  "only_configuration_change_is_kvikio_thread_count": true,
+  "initial_second_action_regression_above_20_percent": false,
+  "worst_candidate_second_total_3_percent_below_best_control": false,
+  "critical_query_second_action_regression_below_5_percent": false,
+  "eligible_for_full_suite": false,
+  "scope": "Promotion gate for a full-suite trial, not proof of an all-query improvement",
+  "limits": [
+    "No OS cache flush; examine first-action physical reads and reclaim separately",
+    "Actual initialized native thread pools are verified for all eight executors",
+    "Thread counts differ only at fresh-executor startup; frozen SQL, data, JARs and per-query overrides are preserved"
+  ],
+  "thread16_probe": {
+    "second_total_seconds": 93.47901054199974,
+    "control_A3_second_total_seconds": 93.71425298399845,
+    "eligible_for_repetition": false,
+    "queries": [
+      {
+        "query": 9,
+        "control_sql_seconds": 39.92117153000072,
+        "candidate_sql_seconds": 40.34060624399717,
+        "control_total_seconds": 41.227345854000305,
+        "candidate_total_seconds": 41.33410541899502
+      },
+      {
+        "query": 10,
+        "control_sql_seconds": 18.287159713996516,
+        "candidate_sql_seconds": 17.704806363002717,
+        "control_total_seconds": 19.82448966499942,
+        "candidate_total_seconds": 18.63935097600188
+      },
+      {
+        "query": 11,
+        "control_sql_seconds": 6.375703487999999,
+        "candidate_sql_seconds": 6.288827152002341,
+        "control_total_seconds": 6.402197896000871,
+        "candidate_total_seconds": 6.317102713001077
+      },
+      {
+        "query": 12,
+        "control_sql_seconds": 13.20958550100113,
+        "candidate_sql_seconds": 12.296473042999423,
+        "control_total_seconds": 14.08169015400199,
+        "candidate_total_seconds": 13.022248544999456
+      },
+      {
+        "query": 13,
+        "control_sql_seconds": 11.202506513996923,
+        "candidate_sql_seconds": 13.23950698200133,
+        "control_total_seconds": 12.178529414995864,
+        "candidate_total_seconds": 14.166202889002307
+      }
+    ],
+    "scope": "Single screening probe; not an accepted configuration"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "classification": "Single-variable read-pool experiment; only an actual full-suite run can establish a new suite score",
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "validated_actions": 50,
+  "entrypoint": "benchmarks/scaleup_reference/experiments/query_sweep/start_read_tuning.sh",
+  "phases": [
+    "A0",
+    "B1",
+    "B2",
+    "A3",
+    "C1"
+  ],
+  "runtime_revisions": {
+    "A0": "dd8a89dfec711141e60aa747a96a0cec2d1a048e",
+    "B1": "73cc43e064925a0d2756ab9be761baf11d1709bc",
+    "B2": "2d341e40b84f1fd52c24fdb1b0e8c2d94c581261",
+    "A3": "36768fdef51fb8d880630c5ce3025557374104c1",
+    "C1": "d99ed53be6faa68437152c88ca1e8549fcc93a3b"
+  },
+  "required_environment": "Previously prepared dedicated AWS host with frozen decimal SF10K dataset, engine artifacts, selected-cases-before-q11.json and critical oracle/selection receipts. This incremental diagnostic entrypoint is not a clean-host bootstrap.",
+  "frozen_setup_index": "../261126-aws-speed-of-light",
+  "selected_query_index": "../261126-aws-critical-queries",
+  "measurement_boundary": "A phases use 32 KvikIO threads per executor; B phases and the optional suite phase use 8; C1 is a separate single screening probe with 16. Each application starts new executors, and all eight native pools are verified from live thread names and startup messages. Host/VM/GPM/pool observers are identical; no kernel profiling or cache flushing. All other Spark settings, SQL and engine artifacts are fixed.",
+  "hardware_boundary": "GPU GPM counters and stage timing are observed. CPU memory bandwidth, shared PCIe/UPI link saturation and matched-access-pattern storage bandwidth ceilings are not measured.",
+  "retention": "AWS instance retained until explicit user release"
+}

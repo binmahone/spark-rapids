@@ -32,6 +32,13 @@ def launch_group(work, phase, index, cases, global_conf):
         tools=str(artifacts / 'benchmark-tools.jar'), queries=queries,
         case_variants={str(c.query): c.name for c in cases},
         case_overrides={str(c.query): c.overrides for c in cases},
+        experiment_source_revision=subprocess.check_output(
+            ['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
+        experiment_source_sha256={str(p.relative_to(SUITE)): sha(p) for p in [
+            HERE / 'run_screen.py', HERE / 'run_cases.py', HERE / 'run_ceiling.py',
+            HERE / 'variants.py', HERE / 'ceiling_variants.py',
+            SUITE / 'scripts/common.py', SUITE / 'scripts/services.py',
+            SUITE / 'scripts/catalog_statistics.py', SUITE / 'scripts/validation.py']},
         classification='Unqualified screening, not a Daily Trend score')
     profiles = expand(config, queries)
     for case in cases:

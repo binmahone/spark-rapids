@@ -19,6 +19,7 @@ def task_metrics(events):
     groups = {}
     counters = defaultdict(Counter)
     finished = set()
+    windows = {}
     for path in sorted(events.glob('*')):
         if not path.is_file() or path.name.startswith('.'):
             continue
@@ -38,8 +39,11 @@ def task_metrics(events):
                     description = event.get('description', '')
                     if re.fullmatch(r'q\d+-iteration\d+', description):
                         groups[str(event['executionId'])] = description
+                        windows[str(event['executionId'])] = {'start': event['time']}
                 elif kind.endswith('SparkListenerSQLExecutionEnd'):
                     finished.add(str(event['executionId']))
+                    if str(event['executionId']) in windows:
+                        windows[str(event['executionId'])]['end'] = event['time']
                 elif kind == 'SparkListenerTaskEnd':
                     metric = event.get('Task Metrics') or {}
                     target = counters[event['Stage ID']]
@@ -65,7 +69,8 @@ def task_metrics(events):
             raise AssertionError('Stage reuse spans independent query actions; attribute explicitly')
         for token in tokens:
             result[token].update(metric)
-    return result, {groups[key] for key in finished if key in groups}
+    return result, {groups[key] for key in finished if key in groups}, {
+        groups[key]: window for key, window in windows.items()}
 
 
 def summarize(work, run):
@@ -81,7 +86,7 @@ def summarize(work, run):
     location = urlparse(profile['spark.eventLog.dir'])
     if location.scheme != 'file':
         raise ValueError('Expected host-local event logs')
-    task, finished = task_metrics(Path(location.path))
+    task, finished, windows = task_metrics(Path(location.path))
     rows = []
     for sample in data['samples']:
         token = f"q{sample['query']}-iteration{sample['iteration']}"
@@ -91,6 +96,7 @@ def summarize(work, run):
             'cleanup_seconds', 'sql_plus_cleanup_seconds', 'validation', 'reader_metrics']}
         row['variant'] = sample.get('variant', 'baseline')
         row['task_metrics'] = dict(task[token])
+        row['execution_window_ms'] = windows[token]
         if not row['task_metrics'].get('task_attempts'):
             raise AssertionError('Missing SQL-root task accounting: ' + str(run) + '/' + token)
         row['plan_shuffle_write_bytes'] = sum(op['metrics'].get('shuffleBytesWritten', 0)

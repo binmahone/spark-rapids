@@ -58,6 +58,7 @@ for arm in ('baseline', 'combined'):
     arms[arm] = {'application_id': rows[0]['application_id'], 'queries': by_query,
         'sum_query_best_sql_seconds': sum(min(q['sql_seconds']) for q in by_query.values()),
         'sum_query_best_sql_plus_cleanup_seconds': sum(min(q['sql_plus_cleanup_seconds']) for q in by_query.values()),
+        'sum_first_pass_sql_seconds': sum(q['sql_seconds'][0] for q in by_query.values()),
         'sum_second_pass_sql_seconds': sum(q['sql_seconds'][1] for q in by_query.values()),
         'sum_query_median_sql_seconds': sum(statistics.median(q['sql_seconds']) for q in by_query.values())}
 base = arms['baseline']; candidate = arms['combined']

@@ -34,7 +34,7 @@ parser.add_argument('--arms', required=True)
 parser.add_argument('--gpus', default='0,3,4,6')
 parser.add_argument('--mode', default='measure', choices=['measure', 'pilot'])
 parser.add_argument('--execution-profile', default='reference',
-                    choices=['reference', 'partitions128', 'operator512m'])
+                    choices=['reference', 'partitions128'])
 args = parser.parse_args()
 for name in (args.after, args.label):
     assert re.fullmatch('[A-Za-z0-9_-]+', name)

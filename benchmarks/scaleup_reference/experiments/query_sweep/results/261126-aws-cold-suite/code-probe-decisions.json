@@ -1,0 +1,771 @@
+{
+  "scope": "Bounded code experiments with native KvikIO fixed at 32 threads on the same owned AWS host",
+  "whole_suite_seconds": {
+    "B1": {
+      "best_of_two_sql": 329.8013788459939,
+      "best_of_two_sql_plus_cleanup": 349.3690470029942,
+      "all_actions_sql": 676.6442953389887,
+      "all_actions_sql_plus_cleanup": 714.4235371809882,
+      "first_actions_sql": 345.6265686379993,
+      "second_actions_sql": 331.01772670098944
+    },
+    "A3": {
+      "best_of_two_sql": 343.571740692998,
+      "best_of_two_sql_plus_cleanup": 361.2512943500042,
+      "all_actions_sql": 773.7971196009967,
+      "all_actions_sql_plus_cleanup": 810.8184383379885,
+      "first_actions_sql": 420.53853656999854,
+      "second_actions_sql": 353.2585830309981
+    },
+    "A0": {
+      "best_of_two_sql": 343.86361625598875,
+      "best_of_two_sql_plus_cleanup": 361.535565485985,
+      "all_actions_sql": 757.9487201519878,
+      "all_actions_sql_plus_cleanup": 794.0223342409809,
+      "first_actions_sql": 403.5649276219956,
+      "second_actions_sql": 354.3837925299922
+    }
+  },
+  "representative_windows": [
+    {
+      "phase": "A0",
+      "query": 4,
+      "iteration": 1,
+      "sql_seconds": 16.67613374099892,
+      "cleanup_seconds": 0.7283875399989483,
+      "sampled_disk_read_bytes": 188688982016,
+      "sampled_memory_full_pressure_seconds": 5.021508,
+      "sampled_allocstall": 219635,
+      "host_sampled_seconds": 16.249405345,
+      "max_task_seconds": 0.885,
+      "scan_task_seconds": {
+        "bufferTime": 268.504389444,
+        "gpuDecodeTime": 47.506675485,
+        "opTimeNew": 342.702272551
+      }
+    },
+    {
+      "phase": "A0",
+      "query": 4,
+      "iteration": 2,
+      "sql_seconds": 12.031271012998332,
+      "cleanup_seconds": 1.2793641229982313,
+      "sampled_disk_read_bytes": 83470528512,
+      "sampled_memory_full_pressure_seconds": 1.444746,
+      "sampled_allocstall": 77637,
+      "host_sampled_seconds": 10.097981978,
+      "max_task_seconds": 0.981,
+      "scan_task_seconds": {
+        "bufferTime": 101.140651896,
+        "gpuDecodeTime": 53.694892608,
+        "opTimeNew": 181.962193172
+      }
+    },
+    {
+      "phase": "A0",
+      "query": 9,
+      "iteration": 1,
+      "sql_seconds": 39.52177393300008,
+      "cleanup_seconds": 0.89461897900037,
+      "sampled_disk_read_bytes": 27574263808,
+      "sampled_memory_full_pressure_seconds": 0.081586,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 38.563704226,
+      "max_task_seconds": 2.54,
+      "scan_task_seconds": {
+        "bufferTime": 133.850419071,
+        "gpuDecodeTime": 212.990394305,
+        "opTimeNew": 419.464095128
+      }
+    },
+    {
+      "phase": "A0",
+      "query": 9,
+      "iteration": 2,
+      "sql_seconds": 39.93244552100077,
+      "cleanup_seconds": 1.3533909319994564,
+      "sampled_disk_read_bytes": 2691452928,
+      "sampled_memory_full_pressure_seconds": 0.158363,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 38.542737628,
+      "max_task_seconds": 3.066,
+      "scan_task_seconds": {
+        "bufferTime": 131.315486814,
+        "gpuDecodeTime": 217.368683613,
+        "opTimeNew": 423.487633655
+      }
+    },
+    {
+      "phase": "A0",
+      "query": 10,
+      "iteration": 1,
+      "sql_seconds": 24.855554662997747,
+      "cleanup_seconds": 1.2902910320008232,
+      "sampled_disk_read_bytes": 126655627264,
+      "sampled_memory_full_pressure_seconds": 5.149538,
+      "sampled_allocstall": 191710,
+      "host_sampled_seconds": 23.557098719,
+      "max_task_seconds": 5.303,
+      "scan_task_seconds": {
+        "bufferTime": 247.468555569,
+        "gpuDecodeTime": 109.756775716,
+        "opTimeNew": 410.148597183
+      }
+    },
+    {
+      "phase": "A0",
+      "query": 10,
+      "iteration": 2,
+      "sql_seconds": 19.230473046001862,
+      "cleanup_seconds": 1.133431844998995,
+      "sampled_disk_read_bytes": 2875510784,
+      "sampled_memory_full_pressure_seconds": 0.052587,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 18.25713397,
+      "max_task_seconds": 1.477,
+      "scan_task_seconds": {
+        "bufferTime": 58.602808969,
+        "gpuDecodeTime": 119.487098845,
+        "opTimeNew": 230.926689317
+      }
+    },
+    {
+      "phase": "A0",
+      "query": 12,
+      "iteration": 1,
+      "sql_seconds": 24.18980269700114,
+      "cleanup_seconds": 1.0791219509992516,
+      "sampled_disk_read_bytes": 247589863424,
+      "sampled_memory_full_pressure_seconds": 7.4481,
+      "sampled_allocstall": 249023,
+      "host_sampled_seconds": 23.311073617,
+      "max_task_seconds": 2.901,
+      "scan_task_seconds": {
+        "bufferTime": 459.658359203,
+        "gpuDecodeTime": 57.28394999,
+        "opTimeNew": 549.686053388
+      }
+    },
+    {
+      "phase": "A0",
+      "query": 12,
+      "iteration": 2,
+      "sql_seconds": 34.24021050200099,
+      "cleanup_seconds": 1.072342639999988,
+      "sampled_disk_read_bytes": 71412002816,
+      "sampled_memory_full_pressure_seconds": 18.058182,
+      "sampled_allocstall": 26057,
+      "host_sampled_seconds": 32.546908485,
+      "max_task_seconds": 22.961,
+      "scan_task_seconds": {
+        "bufferTime": 447.077988829,
+        "gpuDecodeTime": 82.640004852,
+        "opTimeNew": 574.657111031
+      }
+    },
+    {
+      "phase": "A0",
+      "query": 13,
+      "iteration": 1,
+      "sql_seconds": 16.112560911999026,
+      "cleanup_seconds": 1.0753428600000916,
+      "sampled_disk_read_bytes": 209994072064,
+      "sampled_memory_full_pressure_seconds": 3.707691,
+      "sampled_allocstall": 367257,
+      "host_sampled_seconds": 14.2333362,
+      "max_task_seconds": 1.463,
+      "scan_task_seconds": {
+        "bufferTime": 221.029116118,
+        "gpuDecodeTime": 47.35044333,
+        "opTimeNew": 282.574037094
+      }
+    },
+    {
+      "phase": "A0",
+      "query": 13,
+      "iteration": 2,
+      "sql_seconds": 11.427699576997838,
+      "cleanup_seconds": 1.1414520660000562,
+      "sampled_disk_read_bytes": 24055021568,
+      "sampled_memory_full_pressure_seconds": 0.049879,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 10.105576954,
+      "max_task_seconds": 0.839,
+      "scan_task_seconds": {
+        "bufferTime": 31.810375723,
+        "gpuDecodeTime": 67.981834968,
+        "opTimeNew": 115.88958719
+      }
+    },
+    {
+      "phase": "A0",
+      "query": 18,
+      "iteration": 1,
+      "sql_seconds": 20.420658781000384,
+      "cleanup_seconds": 0.049440404000051785,
+      "sampled_disk_read_bytes": 172337319936,
+      "sampled_memory_full_pressure_seconds": 4.341219,
+      "sampled_allocstall": 178693,
+      "host_sampled_seconds": 19.264000138,
+      "max_task_seconds": 2.156,
+      "scan_task_seconds": {
+        "bufferTime": 274.340751185,
+        "gpuDecodeTime": 58.885625226,
+        "opTimeNew": 353.438655044
+      }
+    },
+    {
+      "phase": "A0",
+      "query": 18,
+      "iteration": 2,
+      "sql_seconds": 14.296292292001453,
+      "cleanup_seconds": 0.026807960999576608,
+      "sampled_disk_read_bytes": 6425305088,
+      "sampled_memory_full_pressure_seconds": 0.007168,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 13.216513212,
+      "max_task_seconds": 0.739,
+      "scan_task_seconds": {
+        "bufferTime": 52.47347516,
+        "gpuDecodeTime": 80.438070914,
+        "opTimeNew": 161.703558666
+      }
+    },
+    {
+      "phase": "A0",
+      "query": 21,
+      "iteration": 1,
+      "sql_seconds": 32.00676820199806,
+      "cleanup_seconds": 0.8294717499993567,
+      "sampled_disk_read_bytes": 212988071936,
+      "sampled_memory_full_pressure_seconds": 12.115675,
+      "sampled_allocstall": 178145,
+      "host_sampled_seconds": 31.655602765,
+      "max_task_seconds": 3.628,
+      "scan_task_seconds": {
+        "bufferTime": 551.461570614,
+        "gpuDecodeTime": 53.966903613,
+        "opTimeNew": 634.680981889
+      }
+    },
+    {
+      "phase": "A0",
+      "query": 21,
+      "iteration": 2,
+      "sql_seconds": 19.94614637599807,
+      "cleanup_seconds": 0.9296482789977745,
+      "sampled_disk_read_bytes": 2981572608,
+      "sampled_memory_full_pressure_seconds": 0.005759,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 18.25557642,
+      "max_task_seconds": 1.192,
+      "scan_task_seconds": {
+        "bufferTime": 45.220968344,
+        "gpuDecodeTime": 88.751209042,
+        "opTimeNew": 173.936524933
+      }
+    },
+    {
+      "phase": "B1",
+      "query": 4,
+      "iteration": 1,
+      "sql_seconds": 9.842654973999743,
+      "cleanup_seconds": 1.2791245370026445,
+      "sampled_disk_read_bytes": 11410468864,
+      "sampled_memory_full_pressure_seconds": 0.0,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 8.124990387,
+      "max_task_seconds": 0.579,
+      "scan_task_seconds": {
+        "bufferTime": 44.541640591,
+        "gpuDecodeTime": 58.018141372,
+        "opTimeNew": 128.629130809
+      }
+    },
+    {
+      "phase": "B1",
+      "query": 4,
+      "iteration": 2,
+      "sql_seconds": 9.956639908999932,
+      "cleanup_seconds": 1.3287283259996912,
+      "sampled_disk_read_bytes": 31780864,
+      "sampled_memory_full_pressure_seconds": 0.0,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 8.101975352,
+      "max_task_seconds": 0.585,
+      "scan_task_seconds": {
+        "bufferTime": 42.491569809,
+        "gpuDecodeTime": 58.801748983,
+        "opTimeNew": 128.935898508
+      }
+    },
+    {
+      "phase": "B1",
+      "query": 9,
+      "iteration": 1,
+      "sql_seconds": 38.23453866699856,
+      "cleanup_seconds": 1.191047020998667,
+      "sampled_disk_read_bytes": 19862564864,
+      "sampled_memory_full_pressure_seconds": 0.45385,
+      "sampled_allocstall": 471,
+      "host_sampled_seconds": 37.580564334,
+      "max_task_seconds": 3.011,
+      "scan_task_seconds": {
+        "bufferTime": 224.977434742,
+        "gpuDecodeTime": 166.885238139,
+        "opTimeNew": 451.388326737
+      }
+    },
+    {
+      "phase": "B1",
+      "query": 9,
+      "iteration": 2,
+      "sql_seconds": 37.84728957100015,
+      "cleanup_seconds": 1.290216497000074,
+      "sampled_disk_read_bytes": 14420746240,
+      "sampled_memory_full_pressure_seconds": 0.013794,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 36.609907394,
+      "max_task_seconds": 2.406,
+      "scan_task_seconds": {
+        "bufferTime": 221.517249444,
+        "gpuDecodeTime": 171.968848669,
+        "opTimeNew": 450.521472672
+      }
+    },
+    {
+      "phase": "B1",
+      "query": 10,
+      "iteration": 1,
+      "sql_seconds": 19.944805933999305,
+      "cleanup_seconds": 1.1793547600027523,
+      "sampled_disk_read_bytes": 116720955392,
+      "sampled_memory_full_pressure_seconds": 0.050097,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 18.224624485,
+      "max_task_seconds": 1.128,
+      "scan_task_seconds": {
+        "bufferTime": 168.322344756,
+        "gpuDecodeTime": 94.534224676,
+        "opTimeNew": 305.198095502
+      }
+    },
+    {
+      "phase": "B1",
+      "query": 10,
+      "iteration": 2,
+      "sql_seconds": 19.511662296001305,
+      "cleanup_seconds": 1.3784937119999086,
+      "sampled_disk_read_bytes": 91748691968,
+      "sampled_memory_full_pressure_seconds": 0.012692,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 18.207426627,
+      "max_task_seconds": 1.601,
+      "scan_task_seconds": {
+        "bufferTime": 155.285137298,
+        "gpuDecodeTime": 95.101730721,
+        "opTimeNew": 293.694548439
+      }
+    },
+    {
+      "phase": "B1",
+      "query": 12,
+      "iteration": 1,
+      "sql_seconds": 18.509994072002883,
+      "cleanup_seconds": 0.921521465999831,
+      "sampled_disk_read_bytes": 61513912320,
+      "sampled_memory_full_pressure_seconds": 3.767843,
+      "sampled_allocstall": 10606,
+      "host_sampled_seconds": 17.225093566,
+      "max_task_seconds": 4.814,
+      "scan_task_seconds": {
+        "bufferTime": 152.828111922,
+        "gpuDecodeTime": 72.632562428,
+        "opTimeNew": 268.533872184
+      }
+    },
+    {
+      "phase": "B1",
+      "query": 12,
+      "iteration": 2,
+      "sql_seconds": 12.811963796997588,
+      "cleanup_seconds": 1.0706421380018583,
+      "sampled_disk_read_bytes": 34221785088,
+      "sampled_memory_full_pressure_seconds": 0.025355,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 11.159072547,
+      "max_task_seconds": 2.158,
+      "scan_task_seconds": {
+        "bufferTime": 71.120498185,
+        "gpuDecodeTime": 74.723377485,
+        "opTimeNew": 191.385234452
+      }
+    },
+    {
+      "phase": "B1",
+      "query": 13,
+      "iteration": 1,
+      "sql_seconds": 15.980891717001214,
+      "cleanup_seconds": 1.1725217239982157,
+      "sampled_disk_read_bytes": 285831688192,
+      "sampled_memory_full_pressure_seconds": 0.001123,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 14.124723642,
+      "max_task_seconds": 0.967,
+      "scan_task_seconds": {
+        "bufferTime": 272.66377124,
+        "gpuDecodeTime": 30.218023649,
+        "opTimeNew": 309.801732328
+      }
+    },
+    {
+      "phase": "B1",
+      "query": 13,
+      "iteration": 2,
+      "sql_seconds": 15.618548579997878,
+      "cleanup_seconds": 1.231210812999052,
+      "sampled_disk_read_bytes": 275324248064,
+      "sampled_memory_full_pressure_seconds": 0.0,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 14.10639715,
+      "max_task_seconds": 0.983,
+      "scan_task_seconds": {
+        "bufferTime": 273.354754555,
+        "gpuDecodeTime": 30.518497025,
+        "opTimeNew": 310.7419313
+      }
+    },
+    {
+      "phase": "B1",
+      "query": 18,
+      "iteration": 1,
+      "sql_seconds": 15.127661229998921,
+      "cleanup_seconds": 0.02461481299906154,
+      "sampled_disk_read_bytes": 89514840064,
+      "sampled_memory_full_pressure_seconds": 1.9e-05,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 14.130999697,
+      "max_task_seconds": 0.649,
+      "scan_task_seconds": {
+        "bufferTime": 89.686348715,
+        "gpuDecodeTime": 66.885397516,
+        "opTimeNew": 178.242631551
+      }
+    },
+    {
+      "phase": "B1",
+      "query": 18,
+      "iteration": 2,
+      "sql_seconds": 14.654319847002625,
+      "cleanup_seconds": 0.03018054800122627,
+      "sampled_disk_read_bytes": 87756464128,
+      "sampled_memory_full_pressure_seconds": 0.0,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 13.136007843,
+      "max_task_seconds": 0.617,
+      "scan_task_seconds": {
+        "bufferTime": 87.530692587,
+        "gpuDecodeTime": 67.021642712,
+        "opTimeNew": 176.723285153
+      }
+    },
+    {
+      "phase": "B1",
+      "query": 21,
+      "iteration": 1,
+      "sql_seconds": 22.24819798700264,
+      "cleanup_seconds": 0.7768316649999178,
+      "sampled_disk_read_bytes": 51733024768,
+      "sampled_memory_full_pressure_seconds": 2.581126,
+      "sampled_allocstall": 1915,
+      "host_sampled_seconds": 21.347166785,
+      "max_task_seconds": 6.014,
+      "scan_task_seconds": {
+        "bufferTime": 157.462873598,
+        "gpuDecodeTime": 80.683171497,
+        "opTimeNew": 270.021516141
+      }
+    },
+    {
+      "phase": "B1",
+      "query": 21,
+      "iteration": 2,
+      "sql_seconds": 20.4893555560011,
+      "cleanup_seconds": 1.2757078150025336,
+      "sampled_disk_read_bytes": 30211846144,
+      "sampled_memory_full_pressure_seconds": 1.176488,
+      "sampled_allocstall": 2102,
+      "host_sampled_seconds": 19.23399049,
+      "max_task_seconds": 3.975,
+      "scan_task_seconds": {
+        "bufferTime": 117.147675115,
+        "gpuDecodeTime": 78.849331194,
+        "opTimeNew": 230.935663774
+      }
+    },
+    {
+      "phase": "A3",
+      "query": 4,
+      "iteration": 1,
+      "sql_seconds": 23.42628227000023,
+      "cleanup_seconds": 0.8293650029991113,
+      "sampled_disk_read_bytes": 13059723264,
+      "sampled_memory_full_pressure_seconds": 8.030011,
+      "sampled_allocstall": 492,
+      "host_sampled_seconds": 23.168598661,
+      "max_task_seconds": 13.963,
+      "scan_task_seconds": {
+        "bufferTime": 168.688709953,
+        "gpuDecodeTime": 60.985683978,
+        "opTimeNew": 258.44052531
+      }
+    },
+    {
+      "phase": "A3",
+      "query": 4,
+      "iteration": 2,
+      "sql_seconds": 10.01728818400079,
+      "cleanup_seconds": 1.2841085450018,
+      "sampled_disk_read_bytes": 4653056,
+      "sampled_memory_full_pressure_seconds": 0.0,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 8.109775224,
+      "max_task_seconds": 0.592,
+      "scan_task_seconds": {
+        "bufferTime": 29.760986057,
+        "gpuDecodeTime": 63.464976932,
+        "opTimeNew": 123.726636156
+      }
+    },
+    {
+      "phase": "A3",
+      "query": 9,
+      "iteration": 1,
+      "sql_seconds": 39.931750905001536,
+      "cleanup_seconds": 1.3957672149990685,
+      "sampled_disk_read_bytes": 9119547392,
+      "sampled_memory_full_pressure_seconds": 0.548248,
+      "sampled_allocstall": 5904,
+      "host_sampled_seconds": 39.483424091,
+      "max_task_seconds": 3.089,
+      "scan_task_seconds": {
+        "bufferTime": 144.096987655,
+        "gpuDecodeTime": 206.556340854,
+        "opTimeNew": 422.590460142
+      }
+    },
+    {
+      "phase": "A3",
+      "query": 9,
+      "iteration": 2,
+      "sql_seconds": 39.05393807799919,
+      "cleanup_seconds": 1.3409090079985617,
+      "sampled_disk_read_bytes": 9146368,
+      "sampled_memory_full_pressure_seconds": 0.006304,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 38.521796391,
+      "max_task_seconds": 2.943,
+      "scan_task_seconds": {
+        "bufferTime": 124.029066071,
+        "gpuDecodeTime": 219.421600235,
+        "opTimeNew": 416.250359802
+      }
+    },
+    {
+      "phase": "A3",
+      "query": 10,
+      "iteration": 1,
+      "sql_seconds": 22.989106805998745,
+      "cleanup_seconds": 1.4867716990011104,
+      "sampled_disk_read_bytes": 110228938752,
+      "sampled_memory_full_pressure_seconds": 3.404625,
+      "sampled_allocstall": 143047,
+      "host_sampled_seconds": 21.356871158,
+      "max_task_seconds": 1.736,
+      "scan_task_seconds": {
+        "bufferTime": 195.023405007,
+        "gpuDecodeTime": 109.333190594,
+        "opTimeNew": 354.54055899
+      }
+    },
+    {
+      "phase": "A3",
+      "query": 10,
+      "iteration": 2,
+      "sql_seconds": 22.61808467800074,
+      "cleanup_seconds": 0.9321604689976084,
+      "sampled_disk_read_bytes": 104023908352,
+      "sampled_memory_full_pressure_seconds": 2.709285,
+      "sampled_allocstall": 147931,
+      "host_sampled_seconds": 21.311274827,
+      "max_task_seconds": 1.304,
+      "scan_task_seconds": {
+        "bufferTime": 196.245954931,
+        "gpuDecodeTime": 107.60641402,
+        "opTimeNew": 356.047546945
+      }
+    },
+    {
+      "phase": "A3",
+      "query": 12,
+      "iteration": 1,
+      "sql_seconds": 16.458266337001987,
+      "cleanup_seconds": 0.8763029369983997,
+      "sampled_disk_read_bytes": 108321234944,
+      "sampled_memory_full_pressure_seconds": 2.345287,
+      "sampled_allocstall": 113718,
+      "host_sampled_seconds": 15.185751163,
+      "max_task_seconds": 2.447,
+      "scan_task_seconds": {
+        "bufferTime": 179.625234493,
+        "gpuDecodeTime": 67.88660398,
+        "opTimeNew": 295.316065965
+      }
+    },
+    {
+      "phase": "A3",
+      "query": 12,
+      "iteration": 2,
+      "sql_seconds": 25.541821811999398,
+      "cleanup_seconds": 0.5308519069985778,
+      "sampled_disk_read_bytes": 89337573376,
+      "sampled_memory_full_pressure_seconds": 9.884207,
+      "sampled_allocstall": 12793,
+      "host_sampled_seconds": 24.565498075,
+      "max_task_seconds": 18.203,
+      "scan_task_seconds": {
+        "bufferTime": 412.701349459,
+        "gpuDecodeTime": 80.515800136,
+        "opTimeNew": 549.053421374
+      }
+    },
+    {
+      "phase": "A3",
+      "query": 13,
+      "iteration": 1,
+      "sql_seconds": 35.078927899998234,
+      "cleanup_seconds": 1.1741210279978986,
+      "sampled_disk_read_bytes": 299175780352,
+      "sampled_memory_full_pressure_seconds": 17.454887,
+      "sampled_allocstall": 235519,
+      "host_sampled_seconds": 33.757603046,
+      "max_task_seconds": 12.264,
+      "scan_task_seconds": {
+        "bufferTime": 861.698477027,
+        "gpuDecodeTime": 33.927956868,
+        "opTimeNew": 904.512858609
+      }
+    },
+    {
+      "phase": "A3",
+      "query": 13,
+      "iteration": 2,
+      "sql_seconds": 18.23454968200167,
+      "cleanup_seconds": 1.2236656179993588,
+      "sampled_disk_read_bytes": 244302413824,
+      "sampled_memory_full_pressure_seconds": 5.870873,
+      "sampled_allocstall": 357414,
+      "host_sampled_seconds": 17.229308479,
+      "max_task_seconds": 1.352,
+      "scan_task_seconds": {
+        "bufferTime": 330.53247019,
+        "gpuDecodeTime": 40.126854976,
+        "opTimeNew": 380.804151229
+      }
+    },
+    {
+      "phase": "A3",
+      "query": 18,
+      "iteration": 1,
+      "sql_seconds": 32.878938617999665,
+      "cleanup_seconds": 0.02667053400000441,
+      "sampled_disk_read_bytes": 132150427648,
+      "sampled_memory_full_pressure_seconds": 11.817189,
+      "sampled_allocstall": 176388,
+      "host_sampled_seconds": 32.090959114,
+      "max_task_seconds": 14.899,
+      "scan_task_seconds": {
+        "bufferTime": 448.444920771,
+        "gpuDecodeTime": 60.39706925,
+        "opTimeNew": 528.54050727
+      }
+    },
+    {
+      "phase": "A3",
+      "query": 18,
+      "iteration": 2,
+      "sql_seconds": 14.415260477002448,
+      "cleanup_seconds": 0.030795249000220792,
+      "sampled_disk_read_bytes": 3966111744,
+      "sampled_memory_full_pressure_seconds": 0.001278,
+      "sampled_allocstall": 0,
+      "host_sampled_seconds": 13.259985077,
+      "max_task_seconds": 0.676,
+      "scan_task_seconds": {
+        "bufferTime": 56.137871207,
+        "gpuDecodeTime": 84.814571678,
+        "opTimeNew": 168.135916672
+      }
+    },
+    {
+      "phase": "A3",
+      "query": 21,
+      "iteration": 1,
+      "sql_seconds": 30.2537670970014,
+      "cleanup_seconds": 0.9484517199998663,
+      "sampled_disk_read_bytes": 146695901184,
+      "sampled_memory_full_pressure_seconds": 7.578141,
+      "sampled_allocstall": 90953,
+      "host_sampled_seconds": 29.605884012,
+      "max_task_seconds": 4.975,
+      "scan_task_seconds": {
+        "bufferTime": 424.077268049,
+        "gpuDecodeTime": 70.203660388,
+        "opTimeNew": 525.960918988
+      }
+    },
+    {
+      "phase": "A3",
+      "query": 21,
+      "iteration": 2,
+      "sql_seconds": 19.927929442997993,
+      "cleanup_seconds": 1.281617169999663,
+      "sampled_disk_read_bytes": 44276899840,
+      "sampled_memory_full_pressure_seconds": 0.159474,
+      "sampled_allocstall": 3860,
+      "host_sampled_seconds": 19.231641588,
+      "max_task_seconds": 1.198,
+      "scan_task_seconds": {
+        "bufferTime": 52.149514956,
+        "gpuDecodeTime": 89.474039567,
+        "opTimeNew": 180.215416982
+      }
+    }
+  ],
+  "native_read_path": {
+    "decision": "Retain as an experimental candidate. Do not silently replace the frozen reference JAR or enable it by default.",
+    "evidence": "All 132 full-suite actions passed retained-result validation. The three applications used identical SQL, normalized physical plans and configuration apart from the native read adapter.",
+    "interpretation": "The candidate reduces several reclaim-heavy long tails. Original-reader warm-cache Q13 can still be faster: the candidate bypasses page cache for large absent spans, and those spans can remain absent on the next action.",
+    "remaining_work": "A general cache-admission policy must balance reuse against allocation/reclaim pressure. This prototype does not choose policy by query ID.",
+    "limits": [
+      "One full candidate application bracketed by two controls, with no cache flush; no population-level statistical guarantee",
+      "Scheduler order and page residency can vary despite matching normalized plans",
+      "Companion LD_PRELOAD library, not an integrated or generally qualified JNI implementation",
+      "Immutable local Parquet inputs; bounded error/short-read and concurrent fixture tests do not cover all production failure modes"
+    ]
+  },
+  "early_shuffle": {
+    "decision": "Do not select the current early-leaf collector. The matched Q9 pilot did not improve wall time.",
+    "boundary": "The helper executed three leaf submissions and preserved results. It is not evidence against all resource-aware scheduling approaches.",
+    "evidence_index": "../261126-aws-early-shuffle"
+  },
+  "key_representation": {
+    "decision": "Do not select the SQL-cast prototype.",
+    "boundary": "The six-key attempt lost broadcast reuse and was rejected before timing. The three-supplier-key attempt preserved reuse but changed join order and increased actual shuffle bytes. It does not isolate the cost of a narrower representation.",
+    "remaining_work": "Preserve cardinality statistics and the selected join tree when testing physical key encodings; benefit is not yet measured.",
+    "evidence_index": "../261126-aws-narrow-keys"
+  },
+  "hardware_and_spill_boundary": "Measured OS page-cache allocation/reclaim pressure does not establish a GPU-spill cost or a universal hardware speed limit.",
+  "stop_reason": "The bounded code probes and full-workload return control are complete. Further work requires a cache-policy or optimizer integration design rather than more blind parameter search.",
+  "resource_policy": "Archive exact artifacts, logs and code, then terminate only the instance proven created by this session."
+}

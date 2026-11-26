@@ -1,0 +1,98 @@
+{
+  "records": [
+    {
+      "pid": 726604,
+      "start_time": "2788263",
+      "live": false
+    },
+    {
+      "pid": 726609,
+      "start_time": "2788279",
+      "live": false
+    },
+    {
+      "pid": 726610,
+      "start_time": "2788279",
+      "live": false
+    },
+    {
+      "pid": 726611,
+      "start_time": "2788279",
+      "live": false
+    },
+    {
+      "pid": 726612,
+      "start_time": "2788279",
+      "live": false
+    },
+    {
+      "pid": 726613,
+      "start_time": "2788279",
+      "live": false
+    },
+    {
+      "pid": 762132,
+      "start_time": "2966859",
+      "live": false
+    },
+    {
+      "pid": 762138,
+      "start_time": "2966876",
+      "live": false
+    },
+    {
+      "pid": 762139,
+      "start_time": "2966876",
+      "live": false
+    },
+    {
+      "pid": 762140,
+      "start_time": "2966876",
+      "live": false
+    },
+    {
+      "pid": 762141,
+      "start_time": "2966876",
+      "live": false
+    },
+    {
+      "pid": 762142,
+      "start_time": "2966876",
+      "live": false
+    },
+    {
+      "pid": 745089,
+      "start_time": "2880853",
+      "live": false
+    },
+    {
+      "pid": 745095,
+      "start_time": "2880872",
+      "live": false
+    },
+    {
+      "pid": 745096,
+      "start_time": "2880872",
+      "live": false
+    },
+    {
+      "pid": 745097,
+      "start_time": "2880872",
+      "live": false
+    },
+    {
+      "pid": 745098,
+      "start_time": "2880872",
+      "live": false
+    },
+    {
+      "pid": 745099,
+      "start_time": "2880872",
+      "live": false
+    }
+  ],
+  "source_revision": "ca79106156b6795cf27bce5b2d3ca2c98dc3acf1",
+  "all_stopped": true,
+  "watermark_scale_factor": 10,
+  "retention": "Explicit user release only"
+}

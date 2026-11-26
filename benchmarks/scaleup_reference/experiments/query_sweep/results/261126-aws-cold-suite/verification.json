@@ -1,0 +1,11 @@
+{
+  "archive": "/home/nvidia/mahone_gluten/wild_spark_rapids/261126_aws_speed_of_light/evidence/raw/cold-suite-complete.tar.gz",
+  "bytes": 342508910,
+  "sha256": "f43d16c735421951895dd0135cdf5a8c6fcfa9267f38ade9eef7654f24bd95d8",
+  "analysis_source_revision": "ca79106156b6795cf27bce5b2d3ca2c98dc3acf1",
+  "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+  "instance_id": "i-0d4c92eab5df57fb8",
+  "verified": true,
+  "transfer": "Eight immutable SSH ranges, verified full SHA-256",
+  "retention": "Release session-created instance after useful investigations and evidence retention"
+}

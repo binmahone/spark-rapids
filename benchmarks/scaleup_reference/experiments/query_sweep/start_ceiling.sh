@@ -10,6 +10,9 @@ exec > >(tee "$work/evidence/ceiling-$phase.log") 2>&1
 ulimit -n 65536
 export JAVA_HOME="$work/jdk17"
 export PYSPARK_PYTHON=/usr/bin/python3
+if [[ ! -e "$work/evidence/host-prerequisites.json" ]]; then
+    python3 "$here/../runtime_prefilter/capture_host.py" "$work"
+fi
 python3 "$here/../runtime_prefilter/monitor_host.py" --work "$work" \
     --output "$work/evidence/ceiling-$phase-host-monitor.jsonl" &
 monitor_pid=$!

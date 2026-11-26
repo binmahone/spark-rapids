@@ -2,7 +2,9 @@
 import argparse
 from dataclasses import replace
 import hashlib
+import os
 from pathlib import Path
+import subprocess
 import sys
 
 HERE = Path(__file__).resolve().parent
@@ -11,6 +13,7 @@ from common import read, write
 from ceiling_variants import cases as new_sql_cases
 from run_screen import launch_group
 from variants import ORDER, Variant, catalog, original
+import services
 
 
 def prior_selection():
@@ -47,9 +50,13 @@ def main():
     if output.exists():
         raise RuntimeError('Phase evidence exists; use a separately named work directory for a rerun')
     report = {'status': 'running', 'classification': 'Experimental bounded performance search',
+              'source_revision': subprocess.check_output(['git', '-C', str(HERE), 'rev-parse', 'HEAD'],
+                                                         text=True).strip(),
               'cache_policy': 'No cache flush; two complete actions per query per fresh application',
               'groups': [], 'decisions': [], 'instance_policy': 'Explicit user release only'}
     write(output, report)
+    write(work / 'ceiling/controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),
+                                           'start_time': services.start_time(os.getpid())})
     def run(label, values, conf=None):
         location, result = launch_group(work, 'ceiling-' + label, 0, values, conf or {})
         report['groups'].append({'label': label, 'run': str(location),
@@ -97,7 +104,8 @@ def main():
                     baseline = totals(baseline_samples, q)[0]
                     if candidate < baseline * .95 and candidate < winners.get(q, {}).get('time', float('inf')):
                         winners[q] = {'time': candidate, 'name': name, 'overrides': overrides}
-            write(output, {**report, 'screen_winners': winners})
+            report['screen_winners'] = winners
+            write(output, report)
             if winners:
                 queries = [q for q in ORDER if q in winners]
                 candidates = [replace(selected[q], overrides={**selected[q].overrides,

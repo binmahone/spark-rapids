@@ -1,0 +1,26 @@
+{
+  "perf_interrupt_warnings": [
+    "[Fri Nov 27 07:06:36 2026] perf: interrupt took too long (2604 > 2500), lowering kernel.perf_event_max_sample_rate to 76000",
+    "[Fri Nov 27 07:06:36 2026] perf: interrupt took too long (3271 > 3255), lowering kernel.perf_event_max_sample_rate to 61000",
+    "[Fri Nov 27 07:06:37 2026] perf: interrupt took too long (4159 > 4088), lowering kernel.perf_event_max_sample_rate to 48000",
+    "[Fri Nov 27 07:06:37 2026] perf: interrupt took too long (5292 > 5198), lowering kernel.perf_event_max_sample_rate to 37000",
+    "[Fri Nov 27 07:06:39 2026] perf: interrupt took too long (6665 > 6615), lowering kernel.perf_event_max_sample_rate to 30000",
+    "[Fri Nov 27 07:06:39 2026] perf: interrupt took too long (8403 > 8331), lowering kernel.perf_event_max_sample_rate to 23000",
+    "[Fri Nov 27 07:06:44 2026] perf: interrupt took too long (10549 > 10503), lowering kernel.perf_event_max_sample_rate to 18000",
+    "[Fri Nov 27 07:06:46 2026] perf: interrupt took too long (13202 > 13186), lowering kernel.perf_event_max_sample_rate to 15000",
+    "[Fri Nov 27 07:06:49 2026] perf: interrupt took too long (16775 > 16502), lowering kernel.perf_event_max_sample_rate to 11000",
+    "[Fri Nov 27 07:07:03 2026] perf: interrupt took too long (20975 > 20968), lowering kernel.perf_event_max_sample_rate to 9000",
+    "[Fri Nov 27 07:07:03 2026] perf: interrupt took too long (26520 > 26218), lowering kernel.perf_event_max_sample_rate to 7000",
+    "[Fri Nov 27 07:07:05 2026] perf: interrupt took too long (33165 > 33150), lowering kernel.perf_event_max_sample_rate to 6000",
+    "[Fri Nov 27 07:07:12 2026] perf: interrupt took too long (41710 > 41456), lowering kernel.perf_event_max_sample_rate to 4000",
+    "[Fri Nov 27 07:07:29 2026] perf: interrupt took too long (53812 > 52137), lowering kernel.perf_event_max_sample_rate to 3000",
+    "[Fri Nov 27 07:09:12 2026] perf: interrupt took too long (70247 > 67265), lowering kernel.perf_event_max_sample_rate to 2000",
+    "[Fri Nov 27 07:09:40 2026] perf: interrupt took too long (88314 > 87808), lowering kernel.perf_event_max_sample_rate to 2000"
+  ],
+  "other_kernel_fault_matches": [],
+  "limits": [
+    "Hardware profiling produced kernel perf interrupt-latency warnings and adaptive maximum sampling-rate reductions. Observer overhead is not isolated.",
+    "Exact-thread samples establish the observed spin-wait path, not a uniformly sampled time fraction or complete lock-wait duration.",
+    "Previously retained unprofiled Q12 scan tails support the investigation, but these profiled elapsed times are not an isolated measurement of the unprofiled mechanism."
+  ]
+}

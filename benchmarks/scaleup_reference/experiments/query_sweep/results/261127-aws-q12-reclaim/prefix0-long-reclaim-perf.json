@@ -1,0 +1,1029 @@
+{
+  "event_thread_perf": {
+    "q12-iteration1-longest-reclaim": {
+      "samples": 440,
+      "nonidle_samples": 440,
+      "executor_samples": 440,
+      "sample_period_sum": 8979591720,
+      "leaf": [
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms])",
+          436
+        ],
+        [
+          "list_lru_walk_one_irq ([kernel.kallsyms])",
+          3
+        ],
+        [
+          "__memcg_slab_free_hook ([kernel.kallsyms])",
+          1
+        ]
+      ],
+      "inclusive": [
+        [
+          "entry_SYSCALL_64_after_hwframe ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "vfs_read ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "ext4_file_read_iter ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "filemap_get_pages ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "__libc_pwrite (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          440
+        ],
+        [
+          "do_try_to_free_pages ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "folio_alloc ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "alloc_pages ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "page_cache_ra_order ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "ondemand_readahead ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "alloc_pages_mpol ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "try_to_free_pages ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "filemap_read ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "__alloc_pages ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "filemap_alloc_folio ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "page_cache_ra_unbounded ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "generic_file_read_iter ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "__x64_sys_pread64 ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "shrink_zones.constprop.0 ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "[unknown] ([unknown])",
+          440
+        ],
+        [
+          "shrink_many ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "do_syscall_64 ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "shrink_node ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "x64_sys_call ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "__alloc_pages_slowpath.constprop.0 ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "page_cache_async_ra ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "shrink_one ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms])",
+          437
+        ],
+        [
+          "shrink_slab ([kernel.kallsyms])",
+          248
+        ],
+        [
+          "list_lru_walk_one_irq ([kernel.kallsyms])",
+          248
+        ]
+      ],
+      "comm": [
+        [
+          "kvikio-27",
+          440
+        ]
+      ],
+      "stacks": [
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms]);shadow_lru_isolate ([kernel.kallsyms]);__list_lru_walk_one ([kernel.kallsyms]);list_lru_walk_one_irq ([kernel.kallsyms]);scan_shadow_nodes ([kernel.kallsyms]);do_shrink_slab ([kernel.kallsyms]);shrink_slab_memcg ([kernel.kallsyms]);shrink_slab ([kernel.kallsyms]);shrink_one ([kernel.kallsyms]);shrink_many ([kernel.kallsyms]);shrink_node ([kernel.kallsyms]);shrink_zones.constprop.0 ([kernel.kallsyms]);do_try_to_free_pages ([kernel.kallsyms]);try_to_free_pages ([kernel.kallsyms]);__alloc_pages_slowpath.constprop.0 ([kernel.kallsyms]);__alloc_pages ([kernel.kallsyms]);alloc_pages_mpol ([kernel.kallsyms]);alloc_pages ([kernel.kallsyms]);folio_alloc ([kernel.kallsyms]);filemap_alloc_folio ([kernel.kallsyms]);page_cache_ra_unbounded ([kernel.kallsyms]);page_cache_ra_order ([kernel.kallsyms]);ondemand_readahead ([kernel.kallsyms]);page_cache_async_ra ([kernel.kallsyms]);filemap_get_pages ([kernel.kallsyms]);filemap_read ([kernel.kallsyms]);generic_file_read_iter ([kernel.kallsyms]);ext4_file_read_iter ([kernel.kallsyms]);vfs_read ([kernel.kallsyms]);__x64_sys_pread64 ([kernel.kallsyms]);x64_sys_call ([kernel.kallsyms]);do_syscall_64 ([kernel.kallsyms])",
+          244
+        ],
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms]);evict_folios ([kernel.kallsyms]);try_to_shrink_lruvec ([kernel.kallsyms]);shrink_one ([kernel.kallsyms]);shrink_many ([kernel.kallsyms]);shrink_node ([kernel.kallsyms]);shrink_zones.constprop.0 ([kernel.kallsyms]);do_try_to_free_pages ([kernel.kallsyms]);try_to_free_pages ([kernel.kallsyms]);__alloc_pages_slowpath.constprop.0 ([kernel.kallsyms]);__alloc_pages ([kernel.kallsyms]);alloc_pages_mpol ([kernel.kallsyms]);alloc_pages ([kernel.kallsyms]);folio_alloc ([kernel.kallsyms]);filemap_alloc_folio ([kernel.kallsyms]);page_cache_ra_unbounded ([kernel.kallsyms]);page_cache_ra_order ([kernel.kallsyms]);ondemand_readahead ([kernel.kallsyms]);page_cache_async_ra ([kernel.kallsyms]);filemap_get_pages ([kernel.kallsyms]);filemap_read ([kernel.kallsyms]);generic_file_read_iter ([kernel.kallsyms]);ext4_file_read_iter ([kernel.kallsyms]);vfs_read ([kernel.kallsyms]);__x64_sys_pread64 ([kernel.kallsyms]);x64_sys_call ([kernel.kallsyms]);do_syscall_64 ([kernel.kallsyms]);entry_SYSCALL_64_after_hwframe ([kernel.kallsyms]);__libc_pwrite (/usr/lib/x86_64-linux-gnu/libc.so.6);[unknown] ([unknown])",
+          192
+        ],
+        [
+          "list_lru_walk_one_irq ([kernel.kallsyms]);scan_shadow_nodes ([kernel.kallsyms]);do_shrink_slab ([kernel.kallsyms]);shrink_slab_memcg ([kernel.kallsyms]);shrink_slab ([kernel.kallsyms]);shrink_one ([kernel.kallsyms]);shrink_many ([kernel.kallsyms]);shrink_node ([kernel.kallsyms]);shrink_zones.constprop.0 ([kernel.kallsyms]);do_try_to_free_pages ([kernel.kallsyms]);try_to_free_pages ([kernel.kallsyms]);__alloc_pages_slowpath.constprop.0 ([kernel.kallsyms]);__alloc_pages ([kernel.kallsyms]);alloc_pages_mpol ([kernel.kallsyms]);alloc_pages ([kernel.kallsyms]);folio_alloc ([kernel.kallsyms]);filemap_alloc_folio ([kernel.kallsyms]);page_cache_ra_unbounded ([kernel.kallsyms]);page_cache_ra_order ([kernel.kallsyms]);ondemand_readahead ([kernel.kallsyms]);page_cache_async_ra ([kernel.kallsyms]);filemap_get_pages ([kernel.kallsyms]);filemap_read ([kernel.kallsyms]);generic_file_read_iter ([kernel.kallsyms]);ext4_file_read_iter ([kernel.kallsyms]);vfs_read ([kernel.kallsyms]);__x64_sys_pread64 ([kernel.kallsyms]);x64_sys_call ([kernel.kallsyms]);do_syscall_64 ([kernel.kallsyms]);entry_SYSCALL_64_after_hwframe ([kernel.kallsyms]);__libc_pwrite (/usr/lib/x86_64-linux-gnu/libc.so.6);[unknown] ([unknown])",
+          3
+        ],
+        [
+          "__memcg_slab_free_hook ([kernel.kallsyms]);kmem_cache_free ([kernel.kallsyms]);radix_tree_node_rcu_free ([kernel.kallsyms]);rcu_do_batch ([kernel.kallsyms]);rcu_core ([kernel.kallsyms]);rcu_core_si ([kernel.kallsyms]);handle_softirqs ([kernel.kallsyms]);__irq_exit_rcu ([kernel.kallsyms]);irq_exit_rcu ([kernel.kallsyms]);sysvec_apic_timer_interrupt ([kernel.kallsyms]);asm_sysvec_apic_timer_interrupt ([kernel.kallsyms]);__raw_spin_unlock_irq ([kernel.kallsyms]);shadow_lru_isolate ([kernel.kallsyms]);__list_lru_walk_one ([kernel.kallsyms]);list_lru_walk_one_irq ([kernel.kallsyms]);scan_shadow_nodes ([kernel.kallsyms]);do_shrink_slab ([kernel.kallsyms]);shrink_slab_memcg ([kernel.kallsyms]);shrink_slab ([kernel.kallsyms]);shrink_one ([kernel.kallsyms]);shrink_many ([kernel.kallsyms]);shrink_node ([kernel.kallsyms]);shrink_zones.constprop.0 ([kernel.kallsyms]);do_try_to_free_pages ([kernel.kallsyms]);try_to_free_pages ([kernel.kallsyms]);__alloc_pages_slowpath.constprop.0 ([kernel.kallsyms]);__alloc_pages ([kernel.kallsyms]);alloc_pages_mpol ([kernel.kallsyms]);alloc_pages ([kernel.kallsyms]);folio_alloc ([kernel.kallsyms]);filemap_alloc_folio ([kernel.kallsyms]);page_cache_ra_unbounded ([kernel.kallsyms])",
+          1
+        ]
+      ],
+      "trace": [
+        [
+          "cpu-clock:",
+          440
+        ]
+      ],
+      "executor_leaf": [
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms])",
+          436
+        ],
+        [
+          "list_lru_walk_one_irq ([kernel.kallsyms])",
+          3
+        ],
+        [
+          "__memcg_slab_free_hook ([kernel.kallsyms])",
+          1
+        ]
+      ],
+      "executor_inclusive": [
+        [
+          "entry_SYSCALL_64_after_hwframe ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "vfs_read ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "ext4_file_read_iter ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "filemap_get_pages ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "__libc_pwrite (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          440
+        ],
+        [
+          "do_try_to_free_pages ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "folio_alloc ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "alloc_pages ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "page_cache_ra_order ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "ondemand_readahead ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "alloc_pages_mpol ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "try_to_free_pages ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "filemap_read ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "__alloc_pages ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "filemap_alloc_folio ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "page_cache_ra_unbounded ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "generic_file_read_iter ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "__x64_sys_pread64 ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "shrink_zones.constprop.0 ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "[unknown] ([unknown])",
+          440
+        ],
+        [
+          "shrink_many ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "do_syscall_64 ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "shrink_node ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "x64_sys_call ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "__alloc_pages_slowpath.constprop.0 ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "page_cache_async_ra ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "shrink_one ([kernel.kallsyms])",
+          440
+        ],
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms])",
+          437
+        ],
+        [
+          "shrink_slab ([kernel.kallsyms])",
+          248
+        ],
+        [
+          "list_lru_walk_one_irq ([kernel.kallsyms])",
+          248
+        ]
+      ]
+    }
+  },
+  "cpu_event": "cpu-clock",
+  "reclaim_events": {
+    "q12-iteration1-longest-reclaim": {
+      "begin_ns": 1918377511568,
+      "end_ns": 1936367986656,
+      "pid": 48616,
+      "tid": 50197,
+      "comm": "kvikio-27",
+      "duration_ns": 17990473157,
+      "reclaimed": 3728,
+      "order": 0,
+      "gfp": 1387594,
+      "stack": [
+        "try_to_free_pages+409",
+        "__alloc_pages_slowpath.constprop.0+819",
+        "__alloc_pages+772",
+        "alloc_pages_mpol+145",
+        "alloc_pages+91",
+        "folio_alloc+21",
+        "filemap_alloc_folio+49",
+        "page_cache_ra_unbounded+161",
+        "page_cache_ra_order+678",
+        "ondemand_readahead+422",
+        "page_cache_async_ra+88",
+        "filemap_get_pages+776",
+        "filemap_read+270",
+        "generic_file_read_iter+187",
+        "ext4_file_read_iter+99",
+        "vfs_read+517",
+        "__x64_sys_pread64+166",
+        "x64_sys_call+6813",
+        "do_syscall_64+137",
+        "entry_SYSCALL_64_after_hwframe+120"
+      ],
+      "overlap_seconds": 17.990475088,
+      "begin_from_sql_seconds": 14.216993488
+    }
+  },
+  "perf": {
+    "q12-iteration1-longest-reclaim": {
+      "samples": 91359,
+      "nonidle_samples": 35102,
+      "executor_samples": 32608,
+      "sample_period_sum": 716367337626,
+      "leaf": [
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms])",
+          25520
+        ],
+        [
+          "[unknown] (/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07)",
+          1798
+        ],
+        [
+          "tee (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          1564
+        ],
+        [
+          "do_syscall_64 ([kernel.kallsyms])",
+          1320
+        ],
+        [
+          "evict_folios ([kernel.kallsyms])",
+          1020
+        ],
+        [
+          "__fdget ([kernel.kallsyms])",
+          514
+        ],
+        [
+          "smp_call_function_many_cond ([kernel.kallsyms])",
+          404
+        ],
+        [
+          "[unknown] ([vdso])",
+          387
+        ],
+        [
+          "ucs_event_set_wait (/home/ubuntu/aws-q12-reclaim-261127/ucx/lib/libucs.so.0.0.0)",
+          221
+        ],
+        [
+          "fput ([kernel.kallsyms])",
+          208
+        ],
+        [
+          "__memcg_slab_free_hook ([kernel.kallsyms])",
+          126
+        ],
+        [
+          "ep_poll ([kernel.kallsyms])",
+          105
+        ],
+        [
+          "x64_sys_call ([kernel.kallsyms])",
+          103
+        ],
+        [
+          "_pthread_cleanup_pop (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          101
+        ],
+        [
+          "uct_tcp_iface_progress (/home/ubuntu/aws-q12-reclaim-261127/ucx/lib/libuct.so.0.0.0)",
+          99
+        ],
+        [
+          "_raw_spin_unlock_irqrestore ([kernel.kallsyms])",
+          86
+        ],
+        [
+          "rep_movs_alternative ([kernel.kallsyms])",
+          84
+        ],
+        [
+          "__filemap_add_folio ([kernel.kallsyms])",
+          81
+        ],
+        [
+          "do_epoll_wait ([kernel.kallsyms])",
+          79
+        ],
+        [
+          "[unknown] (/tmp/perf-48604.map)",
+          71
+        ],
+        [
+          "__x64_sys_epoll_wait ([kernel.kallsyms])",
+          68
+        ],
+        [
+          "[unknown] (/tmp/perf-48605.map)",
+          66
+        ],
+        [
+          "uct_cuda_base_iface_progress (/home/ubuntu/aws-q12-reclaim-261127/ucx/lib/ucx/libuct_cuda.so.0.0.0)",
+          57
+        ],
+        [
+          "[unknown] (/tmp/perf-48603.map)",
+          57
+        ],
+        [
+          "[unknown] (/tmp/perf-48600.map)",
+          51
+        ],
+        [
+          "[unknown] (/tmp/perf-48601.map)",
+          50
+        ],
+        [
+          "[unknown] (/tmp/perf-48599.map)",
+          48
+        ],
+        [
+          "[unknown] (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          47
+        ],
+        [
+          "ucp_worker_progress (/home/ubuntu/aws-q12-reclaim-261127/ucx/lib/libucp.so.0.0.0)",
+          44
+        ],
+        [
+          "clear_page_erms ([kernel.kallsyms])",
+          44
+        ]
+      ],
+      "inclusive": [
+        [
+          "entry_SYSCALL_64_after_hwframe ([kernel.kallsyms])",
+          27977
+        ],
+        [
+          "do_syscall_64 ([kernel.kallsyms])",
+          27940
+        ],
+        [
+          "[unknown] ([unknown])",
+          26670
+        ],
+        [
+          "shrink_many ([kernel.kallsyms])",
+          26614
+        ],
+        [
+          "shrink_node ([kernel.kallsyms])",
+          26614
+        ],
+        [
+          "shrink_one ([kernel.kallsyms])",
+          26614
+        ],
+        [
+          "x64_sys_call ([kernel.kallsyms])",
+          26584
+        ],
+        [
+          "__alloc_pages ([kernel.kallsyms])",
+          25863
+        ],
+        [
+          "__alloc_pages_slowpath.constprop.0 ([kernel.kallsyms])",
+          25835
+        ],
+        [
+          "try_to_free_pages ([kernel.kallsyms])",
+          25777
+        ],
+        [
+          "do_try_to_free_pages ([kernel.kallsyms])",
+          25775
+        ],
+        [
+          "shrink_zones.constprop.0 ([kernel.kallsyms])",
+          25775
+        ],
+        [
+          "alloc_pages_mpol ([kernel.kallsyms])",
+          25551
+        ],
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms])",
+          25539
+        ],
+        [
+          "alloc_pages ([kernel.kallsyms])",
+          25178
+        ],
+        [
+          "try_to_shrink_lruvec ([kernel.kallsyms])",
+          25099
+        ],
+        [
+          "evict_folios ([kernel.kallsyms])",
+          25096
+        ],
+        [
+          "vfs_read ([kernel.kallsyms])",
+          24246
+        ],
+        [
+          "filemap_alloc_folio ([kernel.kallsyms])",
+          24238
+        ],
+        [
+          "folio_alloc ([kernel.kallsyms])",
+          24236
+        ],
+        [
+          "ext4_file_read_iter ([kernel.kallsyms])",
+          23912
+        ],
+        [
+          "__libc_pwrite (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          23912
+        ],
+        [
+          "filemap_read ([kernel.kallsyms])",
+          23912
+        ],
+        [
+          "generic_file_read_iter ([kernel.kallsyms])",
+          23912
+        ],
+        [
+          "__x64_sys_pread64 ([kernel.kallsyms])",
+          23911
+        ],
+        [
+          "filemap_get_pages ([kernel.kallsyms])",
+          23773
+        ],
+        [
+          "ondemand_readahead ([kernel.kallsyms])",
+          22949
+        ],
+        [
+          "page_cache_ra_unbounded ([kernel.kallsyms])",
+          22949
+        ],
+        [
+          "page_cache_ra_order ([kernel.kallsyms])",
+          22935
+        ],
+        [
+          "page_cache_async_ra ([kernel.kallsyms])",
+          16726
+        ]
+      ],
+      "comm": [
+        [
+          "progress-thread",
+          5000
+        ],
+        [
+          "Executor task l",
+          2235
+        ],
+        [
+          "kvikio-22",
+          1061
+        ],
+        [
+          "kvikio-12",
+          1059
+        ],
+        [
+          "kvikio-14",
+          997
+        ],
+        [
+          "kvikio-0",
+          936
+        ],
+        [
+          "cuda-EvtHandlr",
+          916
+        ],
+        [
+          "kvikio-17",
+          895
+        ],
+        [
+          "kvikio-6",
+          888
+        ],
+        [
+          "kvikio-4",
+          859
+        ],
+        [
+          "kvikio-13",
+          858
+        ],
+        [
+          "kvikio-18",
+          837
+        ],
+        [
+          "kvikio-26",
+          811
+        ],
+        [
+          "kvikio-9",
+          795
+        ],
+        [
+          "kvikio-31",
+          782
+        ],
+        [
+          "kvikio-8",
+          782
+        ],
+        [
+          "kvikio-1",
+          774
+        ],
+        [
+          "kvikio-27",
+          770
+        ],
+        [
+          "kvikio-10",
+          741
+        ],
+        [
+          "kvikio-30",
+          733
+        ],
+        [
+          "kvikio-7",
+          721
+        ],
+        [
+          "kvikio-24",
+          687
+        ],
+        [
+          "kvikio-11",
+          680
+        ],
+        [
+          "kvikio-19",
+          679
+        ],
+        [
+          "kvikio-21",
+          672
+        ],
+        [
+          "kvikio-5",
+          672
+        ],
+        [
+          "kvikio-16",
+          668
+        ],
+        [
+          "kvikio-20",
+          645
+        ],
+        [
+          "kswapd1",
+          636
+        ],
+        [
+          "kvikio-15",
+          634
+        ]
+      ],
+      "stacks": [
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms]);evict_folios ([kernel.kallsyms]);try_to_shrink_lruvec ([kernel.kallsyms]);shrink_one ([kernel.kallsyms]);shrink_many ([kernel.kallsyms]);shrink_node ([kernel.kallsyms]);shrink_zones.constprop.0 ([kernel.kallsyms]);do_try_to_free_pages ([kernel.kallsyms]);try_to_free_pages ([kernel.kallsyms]);__alloc_pages_slowpath.constprop.0 ([kernel.kallsyms]);__alloc_pages ([kernel.kallsyms]);alloc_pages_mpol ([kernel.kallsyms]);alloc_pages ([kernel.kallsyms]);folio_alloc ([kernel.kallsyms]);filemap_alloc_folio ([kernel.kallsyms]);page_cache_ra_unbounded ([kernel.kallsyms]);page_cache_ra_order ([kernel.kallsyms]);ondemand_readahead ([kernel.kallsyms]);page_cache_async_ra ([kernel.kallsyms]);filemap_get_pages ([kernel.kallsyms]);filemap_read ([kernel.kallsyms]);generic_file_read_iter ([kernel.kallsyms]);ext4_file_read_iter ([kernel.kallsyms]);vfs_read ([kernel.kallsyms]);__x64_sys_pread64 ([kernel.kallsyms]);x64_sys_call ([kernel.kallsyms]);do_syscall_64 ([kernel.kallsyms]);entry_SYSCALL_64_after_hwframe ([kernel.kallsyms]);__libc_pwrite (/usr/lib/x86_64-linux-gnu/libc.so.6);[unknown] ([unknown])",
+          15150
+        ],
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms]);evict_folios ([kernel.kallsyms]);try_to_shrink_lruvec ([kernel.kallsyms]);shrink_one ([kernel.kallsyms]);shrink_many ([kernel.kallsyms]);shrink_node ([kernel.kallsyms]);shrink_zones.constprop.0 ([kernel.kallsyms]);do_try_to_free_pages ([kernel.kallsyms]);try_to_free_pages ([kernel.kallsyms]);__alloc_pages_slowpath.constprop.0 ([kernel.kallsyms]);__alloc_pages ([kernel.kallsyms]);alloc_pages_mpol ([kernel.kallsyms]);alloc_pages ([kernel.kallsyms]);folio_alloc ([kernel.kallsyms]);filemap_alloc_folio ([kernel.kallsyms]);page_cache_ra_unbounded ([kernel.kallsyms]);page_cache_ra_order ([kernel.kallsyms]);ondemand_readahead ([kernel.kallsyms]);page_cache_sync_ra ([kernel.kallsyms]);filemap_get_pages ([kernel.kallsyms]);filemap_read ([kernel.kallsyms]);generic_file_read_iter ([kernel.kallsyms]);ext4_file_read_iter ([kernel.kallsyms]);vfs_read ([kernel.kallsyms]);__x64_sys_pread64 ([kernel.kallsyms]);x64_sys_call ([kernel.kallsyms]);do_syscall_64 ([kernel.kallsyms]);entry_SYSCALL_64_after_hwframe ([kernel.kallsyms]);__libc_pwrite (/usr/lib/x86_64-linux-gnu/libc.so.6);[unknown] ([unknown])",
+          5598
+        ],
+        [
+          "tee (/usr/lib/x86_64-linux-gnu/libc.so.6);uct_tcp_iface_progress (/home/ubuntu/aws-q12-reclaim-261127/ucx/lib/libuct.so.0.0.0)",
+          1564
+        ],
+        [
+          "do_syscall_64 ([kernel.kallsyms]);entry_SYSCALL_64_after_hwframe ([kernel.kallsyms]);tee (/usr/lib/x86_64-linux-gnu/libc.so.6);uct_tcp_iface_progress (/home/ubuntu/aws-q12-reclaim-261127/ucx/lib/libuct.so.0.0.0)",
+          1319
+        ],
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms]);evict_folios ([kernel.kallsyms]);try_to_shrink_lruvec ([kernel.kallsyms]);shrink_one ([kernel.kallsyms]);shrink_many ([kernel.kallsyms]);shrink_node ([kernel.kallsyms]);shrink_zones.constprop.0 ([kernel.kallsyms]);do_try_to_free_pages ([kernel.kallsyms]);try_to_free_pages ([kernel.kallsyms]);__alloc_pages_slowpath.constprop.0 ([kernel.kallsyms]);__alloc_pages ([kernel.kallsyms]);alloc_pages_mpol ([kernel.kallsyms]);alloc_pages ([kernel.kallsyms]);__get_free_pages ([kernel.kallsyms]);__pollwait ([kernel.kallsyms]);pipe_poll ([kernel.kallsyms]);do_poll.constprop.0 ([kernel.kallsyms]);do_sys_poll ([kernel.kallsyms]);__x64_sys_poll ([kernel.kallsyms]);x64_sys_call ([kernel.kallsyms]);do_syscall_64 ([kernel.kallsyms]);entry_SYSCALL_64_after_hwframe ([kernel.kallsyms]);ppoll (/usr/lib/x86_64-linux-gnu/libc.so.6);[unknown] (/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07);[unknown] (/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07);[unknown] (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          882
+        ],
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms]);evict_folios ([kernel.kallsyms]);try_to_shrink_lruvec ([kernel.kallsyms]);shrink_one ([kernel.kallsyms]);shrink_many ([kernel.kallsyms]);shrink_node ([kernel.kallsyms]);shrink_zones.constprop.0 ([kernel.kallsyms]);do_try_to_free_pages ([kernel.kallsyms]);try_to_free_pages ([kernel.kallsyms]);__alloc_pages_slowpath.constprop.0 ([kernel.kallsyms]);__alloc_pages ([kernel.kallsyms]);alloc_pages_mpol ([kernel.kallsyms]);alloc_pages ([kernel.kallsyms]);folio_alloc ([kernel.kallsyms]);filemap_alloc_folio ([kernel.kallsyms]);filemap_get_pages ([kernel.kallsyms]);filemap_read ([kernel.kallsyms]);generic_file_read_iter ([kernel.kallsyms]);ext4_file_read_iter ([kernel.kallsyms]);vfs_read ([kernel.kallsyms]);__x64_sys_pread64 ([kernel.kallsyms]);x64_sys_call ([kernel.kallsyms]);do_syscall_64 ([kernel.kallsyms]);entry_SYSCALL_64_after_hwframe ([kernel.kallsyms]);__libc_pwrite (/usr/lib/x86_64-linux-gnu/libc.so.6);[unknown] ([unknown])",
+          754
+        ],
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms]);shadow_lru_isolate ([kernel.kallsyms]);__list_lru_walk_one ([kernel.kallsyms]);list_lru_walk_one_irq ([kernel.kallsyms]);scan_shadow_nodes ([kernel.kallsyms]);do_shrink_slab ([kernel.kallsyms]);shrink_slab_memcg ([kernel.kallsyms]);shrink_slab ([kernel.kallsyms]);shrink_one ([kernel.kallsyms]);shrink_many ([kernel.kallsyms]);shrink_node ([kernel.kallsyms]);shrink_zones.constprop.0 ([kernel.kallsyms]);do_try_to_free_pages ([kernel.kallsyms]);try_to_free_pages ([kernel.kallsyms]);__alloc_pages_slowpath.constprop.0 ([kernel.kallsyms]);__alloc_pages ([kernel.kallsyms]);alloc_pages_mpol ([kernel.kallsyms]);alloc_pages ([kernel.kallsyms]);folio_alloc ([kernel.kallsyms]);filemap_alloc_folio ([kernel.kallsyms]);page_cache_ra_unbounded ([kernel.kallsyms]);page_cache_ra_order ([kernel.kallsyms]);ondemand_readahead ([kernel.kallsyms]);page_cache_async_ra ([kernel.kallsyms]);filemap_get_pages ([kernel.kallsyms]);filemap_read ([kernel.kallsyms]);generic_file_read_iter ([kernel.kallsyms]);ext4_file_read_iter ([kernel.kallsyms]);vfs_read ([kernel.kallsyms]);__x64_sys_pread64 ([kernel.kallsyms]);x64_sys_call ([kernel.kallsyms]);do_syscall_64 ([kernel.kallsyms])",
+          720
+        ],
+        [
+          "evict_folios ([kernel.kallsyms]);try_to_shrink_lruvec ([kernel.kallsyms]);shrink_one ([kernel.kallsyms]);shrink_many ([kernel.kallsyms]);shrink_node ([kernel.kallsyms]);shrink_zones.constprop.0 ([kernel.kallsyms]);do_try_to_free_pages ([kernel.kallsyms]);try_to_free_pages ([kernel.kallsyms]);__alloc_pages_slowpath.constprop.0 ([kernel.kallsyms]);__alloc_pages ([kernel.kallsyms]);alloc_pages_mpol ([kernel.kallsyms]);alloc_pages ([kernel.kallsyms]);folio_alloc ([kernel.kallsyms]);filemap_alloc_folio ([kernel.kallsyms]);page_cache_ra_unbounded ([kernel.kallsyms]);page_cache_ra_order ([kernel.kallsyms]);ondemand_readahead ([kernel.kallsyms]);page_cache_async_ra ([kernel.kallsyms]);filemap_get_pages ([kernel.kallsyms]);filemap_read ([kernel.kallsyms]);generic_file_read_iter ([kernel.kallsyms]);ext4_file_read_iter ([kernel.kallsyms]);vfs_read ([kernel.kallsyms]);__x64_sys_pread64 ([kernel.kallsyms]);x64_sys_call ([kernel.kallsyms]);do_syscall_64 ([kernel.kallsyms]);entry_SYSCALL_64_after_hwframe ([kernel.kallsyms]);__libc_pwrite (/usr/lib/x86_64-linux-gnu/libc.so.6);[unknown] ([unknown])",
+          578
+        ],
+        [
+          "__fdget ([kernel.kallsyms]);do_epoll_wait ([kernel.kallsyms]);__x64_sys_epoll_wait ([kernel.kallsyms]);x64_sys_call ([kernel.kallsyms]);do_syscall_64 ([kernel.kallsyms]);entry_SYSCALL_64_after_hwframe ([kernel.kallsyms]);tee (/usr/lib/x86_64-linux-gnu/libc.so.6);uct_tcp_iface_progress (/home/ubuntu/aws-q12-reclaim-261127/ucx/lib/libuct.so.0.0.0)",
+          482
+        ],
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms]);evict_folios ([kernel.kallsyms]);try_to_shrink_lruvec ([kernel.kallsyms]);shrink_one ([kernel.kallsyms]);shrink_many ([kernel.kallsyms]);shrink_node ([kernel.kallsyms]);balance_pgdat ([kernel.kallsyms]);kswapd ([kernel.kallsyms]);kthread ([kernel.kallsyms]);ret_from_fork ([kernel.kallsyms]);ret_from_fork_asm ([kernel.kallsyms])",
+          471
+        ],
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms]);evict_folios ([kernel.kallsyms]);try_to_shrink_lruvec ([kernel.kallsyms]);shrink_one ([kernel.kallsyms]);shrink_many ([kernel.kallsyms]);shrink_node ([kernel.kallsyms]);shrink_zones.constprop.0 ([kernel.kallsyms]);do_try_to_free_pages ([kernel.kallsyms]);try_to_free_pages ([kernel.kallsyms]);__alloc_pages_slowpath.constprop.0 ([kernel.kallsyms]);__alloc_pages ([kernel.kallsyms]);alloc_pages_mpol ([kernel.kallsyms]);alloc_pages ([kernel.kallsyms]);folio_alloc ([kernel.kallsyms]);filemap_alloc_folio ([kernel.kallsyms]);__filemap_get_folio ([kernel.kallsyms]);ext4_mb_load_buddy_gfp ([kernel.kallsyms]);ext4_mb_regular_allocator ([kernel.kallsyms]);ext4_mb_new_blocks ([kernel.kallsyms]);ext4_ext_map_blocks ([kernel.kallsyms]);ext4_map_blocks ([kernel.kallsyms]);mpage_map_and_submit_extent ([kernel.kallsyms]);ext4_do_writepages ([kernel.kallsyms]);ext4_writepages ([kernel.kallsyms]);do_writepages ([kernel.kallsyms]);__writeback_single_inode ([kernel.kallsyms]);writeback_sb_inodes ([kernel.kallsyms]);__writeback_inodes_wb ([kernel.kallsyms]);wb_writeback ([kernel.kallsyms]);wb_do_writeback ([kernel.kallsyms]);wb_workfn ([kernel.kallsyms]);process_one_work ([kernel.kallsyms])",
+          376
+        ],
+        [
+          "[unknown] (/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07);[unknown] (/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07);[unknown] (/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07);[unknown] (/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07);[unknown] (/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07);[unknown] (/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07);[unknown] (/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07);[unknown] (/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07);[unknown] (/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07);cuStreamSynchronize_ptsz (/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07);[unknown] (/opt/dlami/nvme/aws-filter-probe-261125/q12-diagnosis-prefix0-0/java-tmp/cudf14345570450010114520.so);[unknown] (/opt/dlami/nvme/aws-filter-probe-261125/q12-diagnosis-prefix0-0/java-tmp/cudf14345570450010114520.so);[unknown] (/opt/dlami/nvme/aws-filter-probe-261125/q12-diagnosis-prefix0-0/java-tmp/cudf14345570450010114520.so);[unknown] ([unknown]);[unknown] ([unknown])",
+          354
+        ]
+      ],
+      "trace": [
+        [
+          "cpu-clock:",
+          35102
+        ]
+      ],
+      "executor_leaf": [
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms])",
+          23540
+        ],
+        [
+          "[unknown] (/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07)",
+          1798
+        ],
+        [
+          "tee (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          1564
+        ],
+        [
+          "do_syscall_64 ([kernel.kallsyms])",
+          1320
+        ],
+        [
+          "evict_folios ([kernel.kallsyms])",
+          971
+        ],
+        [
+          "__fdget ([kernel.kallsyms])",
+          514
+        ],
+        [
+          "[unknown] ([vdso])",
+          387
+        ],
+        [
+          "smp_call_function_many_cond ([kernel.kallsyms])",
+          259
+        ],
+        [
+          "ucs_event_set_wait (/home/ubuntu/aws-q12-reclaim-261127/ucx/lib/libucs.so.0.0.0)",
+          221
+        ],
+        [
+          "fput ([kernel.kallsyms])",
+          208
+        ],
+        [
+          "ep_poll ([kernel.kallsyms])",
+          105
+        ],
+        [
+          "x64_sys_call ([kernel.kallsyms])",
+          102
+        ],
+        [
+          "_pthread_cleanup_pop (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          101
+        ],
+        [
+          "uct_tcp_iface_progress (/home/ubuntu/aws-q12-reclaim-261127/ucx/lib/libuct.so.0.0.0)",
+          99
+        ],
+        [
+          "rep_movs_alternative ([kernel.kallsyms])",
+          83
+        ],
+        [
+          "__filemap_add_folio ([kernel.kallsyms])",
+          81
+        ],
+        [
+          "do_epoll_wait ([kernel.kallsyms])",
+          79
+        ],
+        [
+          "_raw_spin_unlock_irqrestore ([kernel.kallsyms])",
+          75
+        ],
+        [
+          "[unknown] (/tmp/perf-48604.map)",
+          71
+        ],
+        [
+          "__x64_sys_epoll_wait ([kernel.kallsyms])",
+          68
+        ],
+        [
+          "[unknown] (/tmp/perf-48605.map)",
+          66
+        ],
+        [
+          "uct_cuda_base_iface_progress (/home/ubuntu/aws-q12-reclaim-261127/ucx/lib/ucx/libuct_cuda.so.0.0.0)",
+          57
+        ],
+        [
+          "[unknown] (/tmp/perf-48603.map)",
+          57
+        ],
+        [
+          "[unknown] (/tmp/perf-48600.map)",
+          51
+        ],
+        [
+          "[unknown] (/tmp/perf-48601.map)",
+          50
+        ],
+        [
+          "[unknown] (/tmp/perf-48599.map)",
+          48
+        ],
+        [
+          "[unknown] (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          46
+        ],
+        [
+          "ucp_worker_progress (/home/ubuntu/aws-q12-reclaim-261127/ucx/lib/libucp.so.0.0.0)",
+          44
+        ],
+        [
+          "folio_mark_accessed ([kernel.kallsyms])",
+          44
+        ],
+        [
+          "[unknown] (/tmp/perf-48616.map)",
+          39
+        ]
+      ],
+      "executor_inclusive": [
+        [
+          "entry_SYSCALL_64_after_hwframe ([kernel.kallsyms])",
+          27540
+        ],
+        [
+          "do_syscall_64 ([kernel.kallsyms])",
+          27503
+        ],
+        [
+          "[unknown] ([unknown])",
+          26242
+        ],
+        [
+          "x64_sys_call ([kernel.kallsyms])",
+          26148
+        ],
+        [
+          "alloc_pages_mpol ([kernel.kallsyms])",
+          24640
+        ],
+        [
+          "__alloc_pages ([kernel.kallsyms])",
+          24638
+        ],
+        [
+          "__alloc_pages_slowpath.constprop.0 ([kernel.kallsyms])",
+          24610
+        ],
+        [
+          "try_to_free_pages ([kernel.kallsyms])",
+          24552
+        ],
+        [
+          "do_try_to_free_pages ([kernel.kallsyms])",
+          24550
+        ],
+        [
+          "shrink_zones.constprop.0 ([kernel.kallsyms])",
+          24550
+        ],
+        [
+          "shrink_many ([kernel.kallsyms])",
+          24550
+        ],
+        [
+          "shrink_node ([kernel.kallsyms])",
+          24550
+        ],
+        [
+          "shrink_one ([kernel.kallsyms])",
+          24550
+        ],
+        [
+          "alloc_pages ([kernel.kallsyms])",
+          24460
+        ],
+        [
+          "__libc_pwrite (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          23912
+        ],
+        [
+          "ext4_file_read_iter ([kernel.kallsyms])",
+          23911
+        ],
+        [
+          "filemap_read ([kernel.kallsyms])",
+          23911
+        ],
+        [
+          "generic_file_read_iter ([kernel.kallsyms])",
+          23911
+        ],
+        [
+          "__x64_sys_pread64 ([kernel.kallsyms])",
+          23911
+        ],
+        [
+          "vfs_read ([kernel.kallsyms])",
+          23911
+        ],
+        [
+          "filemap_get_pages ([kernel.kallsyms])",
+          23773
+        ],
+        [
+          "try_to_shrink_lruvec ([kernel.kallsyms])",
+          23565
+        ],
+        [
+          "evict_folios ([kernel.kallsyms])",
+          23562
+        ],
+        [
+          "__raw_spin_unlock_irq ([kernel.kallsyms])",
+          23558
+        ],
+        [
+          "filemap_alloc_folio ([kernel.kallsyms])",
+          23551
+        ],
+        [
+          "folio_alloc ([kernel.kallsyms])",
+          23549
+        ],
+        [
+          "ondemand_readahead ([kernel.kallsyms])",
+          22949
+        ],
+        [
+          "page_cache_ra_unbounded ([kernel.kallsyms])",
+          22949
+        ],
+        [
+          "page_cache_ra_order ([kernel.kallsyms])",
+          22935
+        ],
+        [
+          "page_cache_async_ra ([kernel.kallsyms])",
+          16726
+        ]
+      ]
+    }
+  },
+  "source_revision": "eb21ef6b7c1a621b8c4e158fe9093c6531ecd162",
+  "limits": [
+    "One measured reclaim interval per Q12 action; concurrent waiters overlap",
+    "Sample counts are observations, not measured lock hold durations"
+  ]
+}

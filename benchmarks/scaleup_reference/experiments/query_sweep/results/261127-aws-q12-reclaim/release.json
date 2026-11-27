@@ -1,0 +1,59 @@
+{
+  "allocation": {
+    "region": "us-west-2",
+    "thread_id": "01a20622-0ca8-74d0-9805-6bc842a9fdb3",
+    "security_group_id": "sg-0eb8d7d3a3782c324",
+    "key_name": "scaleup-reference-01a20622-0ca",
+    "account": "503960270539",
+    "instance_id": "i-09a3c76f8800ceb70",
+    "ami": "ami-06635d2cfe6f8bee4",
+    "subnet": "subnet-5622332f",
+    "market": "spot",
+    "release_deadline_utc": null,
+    "retention_policy": "explicit-user-release",
+    "api_termination_protection": false
+  },
+  "verified_archive": {
+    "verified": true,
+    "archive": "/home/nvidia/mahone_gluten/wild_spark_rapids/261126_aws_speed_of_light/evidence/q12-261127/q12-diagnosis-complete.tar.gz",
+    "sha256": "2b61f370c404332dee946bb63b93c7e4d581aff1603d04609ea907a998c87065",
+    "bytes": 447806288
+  },
+  "root_volumes": [
+    "vol-0d8f43eda9d19343a"
+  ],
+  "request_time_utc": "2026-11-27T07:23:22.904089+00:00",
+  "response": {
+    "TerminatingInstances": [
+      {
+        "InstanceId": "i-09a3c76f8800ceb70",
+        "CurrentState": {
+          "Code": 32,
+          "Name": "shutting-down"
+        },
+        "PreviousState": {
+          "Code": 16,
+          "Name": "running"
+        }
+      }
+    ]
+  },
+  "state": "terminated",
+  "force_response": {
+    "TerminatingInstances": [
+      {
+        "InstanceId": "i-09a3c76f8800ceb70",
+        "CurrentState": {
+          "Code": 32,
+          "Name": "shutting-down"
+        },
+        "PreviousState": {
+          "Code": 32,
+          "Name": "shutting-down"
+        }
+      }
+    ]
+  },
+  "remaining_root_volumes": [],
+  "verified_time_utc": "2026-11-27T07:32:09.665227+00:00"
+}

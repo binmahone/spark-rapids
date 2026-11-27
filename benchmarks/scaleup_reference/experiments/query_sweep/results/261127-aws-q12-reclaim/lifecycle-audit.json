@@ -1,0 +1,246 @@
+{
+  "all_recorded_processes_exited": true,
+  "gpu_compute_processes": [],
+  "records": [
+    {
+      "pid": 87268,
+      "start_time": "220072",
+      "live": false
+    },
+    {
+      "pid": 87274,
+      "start_time": "220089",
+      "live": false
+    },
+    {
+      "pid": 87275,
+      "start_time": "220089",
+      "live": false
+    },
+    {
+      "pid": 87276,
+      "start_time": "220089",
+      "live": false
+    },
+    {
+      "pid": 87302,
+      "start_time": "220189",
+      "live": false
+    },
+    {
+      "pid": 87303,
+      "start_time": "220189",
+      "live": false
+    },
+    {
+      "pid": 87304,
+      "start_time": "220189",
+      "live": false
+    },
+    {
+      "pid": 87305,
+      "start_time": "220189",
+      "live": false
+    },
+    {
+      "pid": 8720,
+      "start_time": "13479",
+      "live": false
+    },
+    {
+      "pid": 8731,
+      "start_time": "13495",
+      "live": false
+    },
+    {
+      "pid": 8732,
+      "start_time": "13495",
+      "live": false
+    },
+    {
+      "pid": 8733,
+      "start_time": "13495",
+      "live": false
+    },
+    {
+      "pid": 8746,
+      "start_time": "13596",
+      "live": false
+    },
+    {
+      "pid": 8747,
+      "start_time": "13596",
+      "live": false
+    },
+    {
+      "pid": 8748,
+      "start_time": "13596",
+      "live": false
+    },
+    {
+      "pid": 8749,
+      "start_time": "13596",
+      "live": false
+    },
+    {
+      "pid": 26802,
+      "start_time": "19213",
+      "live": false
+    },
+    {
+      "pid": 26807,
+      "start_time": "19229",
+      "live": false
+    },
+    {
+      "pid": 26808,
+      "start_time": "19229",
+      "live": false
+    },
+    {
+      "pid": 26809,
+      "start_time": "19229",
+      "live": false
+    },
+    {
+      "pid": 26813,
+      "start_time": "19329",
+      "live": false
+    },
+    {
+      "pid": 26814,
+      "start_time": "19329",
+      "live": false
+    },
+    {
+      "pid": 26815,
+      "start_time": "19329",
+      "live": false
+    },
+    {
+      "pid": 26816,
+      "start_time": "19329",
+      "live": false
+    },
+    {
+      "pid": 33752,
+      "start_time": "68978",
+      "live": false
+    },
+    {
+      "pid": 33758,
+      "start_time": "69004",
+      "live": false
+    },
+    {
+      "pid": 33759,
+      "start_time": "69004",
+      "live": false
+    },
+    {
+      "pid": 33760,
+      "start_time": "69005",
+      "live": false
+    },
+    {
+      "pid": 33815,
+      "start_time": "69155",
+      "live": false
+    },
+    {
+      "pid": 33816,
+      "start_time": "69155",
+      "live": false
+    },
+    {
+      "pid": 33817,
+      "start_time": "69155",
+      "live": false
+    },
+    {
+      "pid": 33818,
+      "start_time": "69155",
+      "live": false
+    },
+    {
+      "pid": 34190,
+      "start_time": "76050",
+      "live": false
+    },
+    {
+      "pid": 34196,
+      "start_time": "76074",
+      "live": false
+    },
+    {
+      "pid": 34197,
+      "start_time": "76074",
+      "live": false
+    },
+    {
+      "pid": 34198,
+      "start_time": "76074",
+      "live": false
+    },
+    {
+      "pid": 34202,
+      "start_time": "76174",
+      "live": false
+    },
+    {
+      "pid": 34203,
+      "start_time": "76174",
+      "live": false
+    },
+    {
+      "pid": 34204,
+      "start_time": "76174",
+      "live": false
+    },
+    {
+      "pid": 34205,
+      "start_time": "76175",
+      "live": false
+    },
+    {
+      "pid": 46131,
+      "start_time": "142181",
+      "live": false
+    },
+    {
+      "pid": 46137,
+      "start_time": "142198",
+      "live": false
+    },
+    {
+      "pid": 46138,
+      "start_time": "142198",
+      "live": false
+    },
+    {
+      "pid": 46139,
+      "start_time": "142198",
+      "live": false
+    },
+    {
+      "pid": 46143,
+      "start_time": "142299",
+      "live": false
+    },
+    {
+      "pid": 46144,
+      "start_time": "142299",
+      "live": false
+    },
+    {
+      "pid": 46145,
+      "start_time": "142299",
+      "live": false
+    },
+    {
+      "pid": 46146,
+      "start_time": "142299",
+      "live": false
+    }
+  ]
+}

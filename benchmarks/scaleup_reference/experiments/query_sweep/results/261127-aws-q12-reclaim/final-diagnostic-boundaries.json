@@ -1,0 +1,15 @@
+{
+  "time_unix_ns": 1795764028667048504,
+  "kernel": "6.8.0-1066-aws",
+  "mglru_enabled": "0x0007",
+  "page_size": 4096,
+  "clock_ticks": 100,
+  "limits": [
+    "Profiling overhead is not isolated; SQL times are diagnostic.",
+    "The longest reclaim event and exact-thread CPU samples establish lock contention within reclaim, not the complete lock wait duration or identity of its owner.",
+    "Thread monitor rows are not atomic snapshots; each row has sampler_seconds and individual reads can occur late in the sampling cycle.",
+    "Timer CPU samples and kernel hardware-cycle samples are different observation scopes.",
+    "No kernel policy or engine optimization was tested in this follow-up.",
+    "Memory counters have monitoring gaps; Cached and MemAvailable are not immediately free Normal-zone pages."
+  ]
+}

@@ -1,0 +1,2748 @@
+{
+  "archive": "q12-diagnosis-complete.tar.gz",
+  "bytes": 447806288,
+  "sha256": "2b61f370c404332dee946bb63b93c7e4d581aff1603d04609ea907a998c87065",
+  "files": [
+    {
+      "name": "evidence/deployment.json",
+      "bytes": 359
+    },
+    {
+      "name": "evidence/download-aws-config",
+      "bytes": 101
+    },
+    {
+      "name": "evidence/final-diagnostic-boundaries.json",
+      "bytes": 821
+    },
+    {
+      "name": "evidence/host-prerequisites.json",
+      "bytes": 5843
+    },
+    {
+      "name": "evidence/initial-buddyinfo.txt",
+      "bytes": 400
+    },
+    {
+      "name": "evidence/initial-dmesg.txt",
+      "bytes": 280323
+    },
+    {
+      "name": "evidence/initial-zoneinfo.txt",
+      "bytes": 92387
+    },
+    {
+      "name": "evidence/kernel-dmesg-final.txt",
+      "bytes": 333307
+    },
+    {
+      "name": "evidence/owner.json",
+      "bytes": 195
+    },
+    {
+      "name": "evidence/prepare-data.log",
+      "bytes": 703
+    },
+    {
+      "name": "evidence/prepare-launch.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/prepare-observers.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/prepare-observers.log",
+      "bytes": 11205
+    },
+    {
+      "name": "evidence/prepare-runtime.log",
+      "bytes": 175147
+    },
+    {
+      "name": "evidence/prepare.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/prepare.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/processes-final.txt",
+      "bytes": 111915
+    },
+    {
+      "name": "evidence/q12-diagnosis-prefix0.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/q12-diagnosis-prefix0.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/q12-diagnosis-prefix1.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/q12-diagnosis-prefix1.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/q12-diagnosis-probe.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/q12-diagnosis-probe.log",
+      "bytes": 461
+    },
+    {
+      "name": "evidence/q12-diagnosis-probe1.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/q12-diagnosis-probe1.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/q12-diagnosis-short0.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/q12-diagnosis-short0.log",
+      "bytes": 477
+    },
+    {
+      "name": "evidence/q12-diagnosis-short1.exit",
+      "bytes": 2
+    },
+    {
+      "name": "evidence/q12-diagnosis-short1.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/q12-prefix0-launch.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/q12-prefix1-launch.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/q12-probe-launch.log",
+      "bytes": 461
+    },
+    {
+      "name": "evidence/q12-probe1-launch.log",
+      "bytes": 0
+    },
+    {
+      "name": "evidence/q12-short0-launch.log",
+      "bytes": 477
+    },
+    {
+      "name": "evidence/q12-short1-launch.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/lifecycle-audit.json",
+      "bytes": 4038
+    },
+    {
+      "name": "q12-diagnosis/prefix0/analysis.json",
+      "bytes": 143620
+    },
+    {
+      "name": "q12-diagnosis/prefix0/controller.json",
+      "bytes": 66
+    },
+    {
+      "name": "q12-diagnosis/prefix0/cpu.data",
+      "bytes": 835690782
+    },
+    {
+      "name": "q12-diagnosis/prefix0/cpu.decode.log",
+      "bytes": 41
+    },
+    {
+      "name": "q12-diagnosis/prefix0/cpu.log",
+      "bytes": 224
+    },
+    {
+      "name": "q12-diagnosis/prefix0/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "q12-diagnosis/prefix0/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "q12-diagnosis/prefix0/gpm.jsonl",
+      "bytes": 2321401
+    },
+    {
+      "name": "q12-diagnosis/prefix0/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/prefix0/host.jsonl",
+      "bytes": 2940681
+    },
+    {
+      "name": "q12-diagnosis/prefix0/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/prefix0/long-reclaim-perf.json",
+      "bytes": 35944
+    },
+    {
+      "name": "q12-diagnosis/prefix0/pool.jsonl",
+      "bytes": 859720
+    },
+    {
+      "name": "q12-diagnosis/prefix0/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/prefix0/reclaim.log",
+      "bytes": 10685266
+    },
+    {
+      "name": "q12-diagnosis/prefix0/stall-analysis.json",
+      "bytes": 10075961
+    },
+    {
+      "name": "q12-diagnosis/prefix0/state.json",
+      "bytes": 487720
+    },
+    {
+      "name": "q12-diagnosis/prefix0/threads-receipt.json",
+      "bytes": 163
+    },
+    {
+      "name": "q12-diagnosis/prefix0/threads.jsonl",
+      "bytes": 34448484
+    },
+    {
+      "name": "q12-diagnosis/prefix0/threads.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/prefix0/vm-owner.json",
+      "bytes": 744
+    },
+    {
+      "name": "q12-diagnosis/prefix0/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "q12-diagnosis/prefix0/vm.jsonl",
+      "bytes": 968227
+    },
+    {
+      "name": "q12-diagnosis/prefix0/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/prefix1/analysis.json",
+      "bytes": 137909
+    },
+    {
+      "name": "q12-diagnosis/prefix1/controller.json",
+      "bytes": 66
+    },
+    {
+      "name": "q12-diagnosis/prefix1/cpu.data",
+      "bytes": 434772054
+    },
+    {
+      "name": "q12-diagnosis/prefix1/cpu.decode.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/prefix1/cpu.log",
+      "bytes": 165
+    },
+    {
+      "name": "q12-diagnosis/prefix1/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "q12-diagnosis/prefix1/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "q12-diagnosis/prefix1/gpm.jsonl",
+      "bytes": 2232980
+    },
+    {
+      "name": "q12-diagnosis/prefix1/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/prefix1/host.jsonl",
+      "bytes": 2878544
+    },
+    {
+      "name": "q12-diagnosis/prefix1/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/prefix1/long-reclaim-perf.json",
+      "bytes": 30039
+    },
+    {
+      "name": "q12-diagnosis/prefix1/pool.jsonl",
+      "bytes": 837886
+    },
+    {
+      "name": "q12-diagnosis/prefix1/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/prefix1/reclaim.log",
+      "bytes": 5947087
+    },
+    {
+      "name": "q12-diagnosis/prefix1/stall-analysis.json",
+      "bytes": 2337978
+    },
+    {
+      "name": "q12-diagnosis/prefix1/stall-analysis.stdout",
+      "bytes": 12453
+    },
+    {
+      "name": "q12-diagnosis/prefix1/state.json",
+      "bytes": 487862
+    },
+    {
+      "name": "q12-diagnosis/prefix1/threads-receipt.json",
+      "bytes": 163
+    },
+    {
+      "name": "q12-diagnosis/prefix1/threads.jsonl",
+      "bytes": 29537726
+    },
+    {
+      "name": "q12-diagnosis/prefix1/threads.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/prefix1/vm-owner.json",
+      "bytes": 744
+    },
+    {
+      "name": "q12-diagnosis/prefix1/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "q12-diagnosis/prefix1/vm.jsonl",
+      "bytes": 928803
+    },
+    {
+      "name": "q12-diagnosis/prefix1/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/probe/controller.json",
+      "bytes": 64
+    },
+    {
+      "name": "q12-diagnosis/probe/cpu.data",
+      "bytes": 3048982
+    },
+    {
+      "name": "q12-diagnosis/probe/cpu.log",
+      "bytes": 174
+    },
+    {
+      "name": "q12-diagnosis/probe/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "q12-diagnosis/probe/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "q12-diagnosis/probe/gpm.jsonl",
+      "bytes": 18324
+    },
+    {
+      "name": "q12-diagnosis/probe/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/probe/host.jsonl",
+      "bytes": 15931
+    },
+    {
+      "name": "q12-diagnosis/probe/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/probe/pool.jsonl",
+      "bytes": 110
+    },
+    {
+      "name": "q12-diagnosis/probe/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/probe/reclaim.log",
+      "bytes": 62
+    },
+    {
+      "name": "q12-diagnosis/probe/state.json",
+      "bytes": 4001
+    },
+    {
+      "name": "q12-diagnosis/probe/threads-receipt.json",
+      "bytes": 106
+    },
+    {
+      "name": "q12-diagnosis/probe/threads.jsonl",
+      "bytes": 77234
+    },
+    {
+      "name": "q12-diagnosis/probe/threads.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/probe/vm-owner.json",
+      "bytes": 740
+    },
+    {
+      "name": "q12-diagnosis/probe/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "q12-diagnosis/probe/vm.jsonl",
+      "bytes": 8414
+    },
+    {
+      "name": "q12-diagnosis/probe/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/probe1/controller.json",
+      "bytes": 65
+    },
+    {
+      "name": "q12-diagnosis/probe1/cpu.data",
+      "bytes": 10076774
+    },
+    {
+      "name": "q12-diagnosis/probe1/cpu.log",
+      "bytes": 175
+    },
+    {
+      "name": "q12-diagnosis/probe1/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "q12-diagnosis/probe1/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "q12-diagnosis/probe1/gpm.jsonl",
+      "bytes": 33039
+    },
+    {
+      "name": "q12-diagnosis/probe1/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/probe1/host.jsonl",
+      "bytes": 28816
+    },
+    {
+      "name": "q12-diagnosis/probe1/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/probe1/pool.jsonl",
+      "bytes": 220
+    },
+    {
+      "name": "q12-diagnosis/probe1/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/probe1/reclaim.log",
+      "bytes": 69
+    },
+    {
+      "name": "q12-diagnosis/probe1/state.json",
+      "bytes": 3961
+    },
+    {
+      "name": "q12-diagnosis/probe1/threads-receipt.json",
+      "bytes": 107
+    },
+    {
+      "name": "q12-diagnosis/probe1/threads.jsonl",
+      "bytes": 158783
+    },
+    {
+      "name": "q12-diagnosis/probe1/threads.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/probe1/vm-owner.json",
+      "bytes": 742
+    },
+    {
+      "name": "q12-diagnosis/probe1/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "q12-diagnosis/probe1/vm.jsonl",
+      "bytes": 15157
+    },
+    {
+      "name": "q12-diagnosis/probe1/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/short0/controller.json",
+      "bytes": 65
+    },
+    {
+      "name": "q12-diagnosis/short0/cpu.data",
+      "bytes": 3820722
+    },
+    {
+      "name": "q12-diagnosis/short0/cpu.log",
+      "bytes": 175
+    },
+    {
+      "name": "q12-diagnosis/short0/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "q12-diagnosis/short0/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "q12-diagnosis/short0/gpm.jsonl",
+      "bytes": 18308
+    },
+    {
+      "name": "q12-diagnosis/short0/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/short0/host.jsonl",
+      "bytes": 16256
+    },
+    {
+      "name": "q12-diagnosis/short0/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/short0/pool.jsonl",
+      "bytes": 110
+    },
+    {
+      "name": "q12-diagnosis/short0/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/short0/reclaim.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/short0/state.json",
+      "bytes": 6037
+    },
+    {
+      "name": "q12-diagnosis/short0/threads-receipt.json",
+      "bytes": 106
+    },
+    {
+      "name": "q12-diagnosis/short0/threads.jsonl",
+      "bytes": 82689
+    },
+    {
+      "name": "q12-diagnosis/short0/threads.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/short0/vm-owner.json",
+      "bytes": 742
+    },
+    {
+      "name": "q12-diagnosis/short0/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "q12-diagnosis/short0/vm.jsonl",
+      "bytes": 10495
+    },
+    {
+      "name": "q12-diagnosis/short0/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/short1/analysis.json",
+      "bytes": 143872
+    },
+    {
+      "name": "q12-diagnosis/short1/controller.json",
+      "bytes": 65
+    },
+    {
+      "name": "q12-diagnosis/short1/cpu.data",
+      "bytes": 650901002
+    },
+    {
+      "name": "q12-diagnosis/short1/cpu.decode.log",
+      "bytes": 41
+    },
+    {
+      "name": "q12-diagnosis/short1/cpu.log",
+      "bytes": 223
+    },
+    {
+      "name": "q12-diagnosis/short1/gpm-ready.json",
+      "bytes": 1841
+    },
+    {
+      "name": "q12-diagnosis/short1/gpm-receipt.json",
+      "bytes": 2435
+    },
+    {
+      "name": "q12-diagnosis/short1/gpm.jsonl",
+      "bytes": 1913768
+    },
+    {
+      "name": "q12-diagnosis/short1/gpm.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/short1/host.jsonl",
+      "bytes": 2362747
+    },
+    {
+      "name": "q12-diagnosis/short1/host.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/short1/pool.jsonl",
+      "bytes": 515012
+    },
+    {
+      "name": "q12-diagnosis/short1/pool.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/short1/reclaim.log",
+      "bytes": 89723
+    },
+    {
+      "name": "q12-diagnosis/short1/stall-analysis.json",
+      "bytes": 1630488
+    },
+    {
+      "name": "q12-diagnosis/short1/state.json",
+      "bytes": 189814
+    },
+    {
+      "name": "q12-diagnosis/short1/threads-receipt.json",
+      "bytes": 162
+    },
+    {
+      "name": "q12-diagnosis/short1/threads.jsonl",
+      "bytes": 32514725
+    },
+    {
+      "name": "q12-diagnosis/short1/threads.log",
+      "bytes": 0
+    },
+    {
+      "name": "q12-diagnosis/short1/vm-owner.json",
+      "bytes": 742
+    },
+    {
+      "name": "q12-diagnosis/short1/vm.exit",
+      "bytes": 2
+    },
+    {
+      "name": "q12-diagnosis/short1/vm.jsonl",
+      "bytes": 842568
+    },
+    {
+      "name": "q12-diagnosis/short1/vm.log",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/events/app-20261127065350-0000",
+      "bytes": 447424283
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/master.log",
+      "bytes": 5360
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-0/work/app-20261127065350-0000/7/stderr",
+      "bytes": 12484480
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-0/work/app-20261127065350-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-0/worker.log",
+      "bytes": 6407
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-1/work/app-20261127065350-0000/0/stderr",
+      "bytes": 12565671
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-1/work/app-20261127065350-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-1/worker.log",
+      "bytes": 5821
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-2/work/app-20261127065350-0000/5/stderr",
+      "bytes": 12325226
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-2/work/app-20261127065350-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-2/worker.log",
+      "bytes": 6407
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-3/work/app-20261127065350-0000/6/stderr",
+      "bytes": 12217530
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-3/work/app-20261127065350-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-3/worker.log",
+      "bytes": 6406
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-4/work/app-20261127065350-0000/4/stderr",
+      "bytes": 12744860
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-4/work/app-20261127065350-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-4/worker.log",
+      "bytes": 5821
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-5/work/app-20261127065350-0000/3/stderr",
+      "bytes": 12704417
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-5/work/app-20261127065350-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-5/worker.log",
+      "bytes": 6407
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-6/work/app-20261127065350-0000/1/stderr",
+      "bytes": 12790844
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-6/work/app-20261127065350-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-6/worker.log",
+      "bytes": 5820
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-7/work/app-20261127065350-0000/2/stderr",
+      "bytes": 12777287
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-7/work/app-20261127065350-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix0-0/suite/worker-7/worker.log",
+      "bytes": 6405
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/events/app-20261127070645-0000",
+      "bytes": 452506698
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/master.log",
+      "bytes": 4880
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-0/work/app-20261127070645-0000/5/stderr",
+      "bytes": 12440399
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-0/work/app-20261127070645-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-0/worker.log",
+      "bytes": 5821
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-1/work/app-20261127070645-0000/6/stderr",
+      "bytes": 12552604
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-1/work/app-20261127070645-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-1/worker.log",
+      "bytes": 5822
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-2/work/app-20261127070645-0000/7/stderr",
+      "bytes": 12549068
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-2/work/app-20261127070645-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-2/worker.log",
+      "bytes": 5822
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-3/work/app-20261127070645-0000/4/stderr",
+      "bytes": 12573914
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-3/work/app-20261127070645-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-3/worker.log",
+      "bytes": 5821
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-4/work/app-20261127070645-0000/3/stderr",
+      "bytes": 12524946
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-4/work/app-20261127070645-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-4/worker.log",
+      "bytes": 5821
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-5/work/app-20261127070645-0000/1/stderr",
+      "bytes": 12648390
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-5/work/app-20261127070645-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-5/worker.log",
+      "bytes": 5821
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-6/work/app-20261127070645-0000/0/stderr",
+      "bytes": 12583201
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-6/work/app-20261127070645-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-6/worker.log",
+      "bytes": 5821
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-7/work/app-20261127070645-0000/2/stderr",
+      "bytes": 12722580
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-7/work/app-20261127070645-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-prefix1-0/suite/worker-7/worker.log",
+      "bytes": 5821
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/events/app-20261127064422-0000",
+      "bytes": 196285493
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/master.log",
+      "bytes": 4880
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-0/work/app-20261127064422-0000/1/stderr",
+      "bytes": 6300755
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-0/work/app-20261127064422-0000/1/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-0/worker.log",
+      "bytes": 5818
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-1/work/app-20261127064422-0000/6/stderr",
+      "bytes": 6356930
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-1/work/app-20261127064422-0000/6/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-1/worker.log",
+      "bytes": 5818
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-2/work/app-20261127064422-0000/3/stderr",
+      "bytes": 6518333
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-2/work/app-20261127064422-0000/3/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-2/worker.log",
+      "bytes": 5817
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-3/work/app-20261127064422-0000/2/stderr",
+      "bytes": 6514689
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-3/work/app-20261127064422-0000/2/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-3/worker.log",
+      "bytes": 5817
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-4/work/app-20261127064422-0000/7/stderr",
+      "bytes": 6473882
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-4/work/app-20261127064422-0000/7/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-4/worker.log",
+      "bytes": 5818
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-5/work/app-20261127064422-0000/5/stderr",
+      "bytes": 6341371
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-5/work/app-20261127064422-0000/5/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-5/worker.log",
+      "bytes": 5816
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-6/work/app-20261127064422-0000/4/stderr",
+      "bytes": 6346607
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-6/work/app-20261127064422-0000/4/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-6/worker.log",
+      "bytes": 5816
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-7/work/app-20261127064422-0000/0/stderr",
+      "bytes": 6428463
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-7/work/app-20261127064422-0000/0/stdout",
+      "bytes": 0
+    },
+    {
+      "name": "scratch/q12-diagnosis-short1-0/suite/worker-7/worker.log",
+      "bytes": 5817
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/command.json",
+      "bytes": 824
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/driver-service.json",
+      "bytes": 981
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/driver.log",
+      "bytes": 21590961
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/profile.json",
+      "bytes": 6039
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q1-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q1-iteration1.executed.txt",
+      "bytes": 3180
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q1-iteration1.logical.txt",
+      "bytes": 1070
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q1-iteration1.metrics.json",
+      "bytes": 4038
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q1-iteration1.observed.json",
+      "bytes": 6886
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q1-iteration1.preflight.txt",
+      "bytes": 3180
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q1-iteration1.sql",
+      "bytes": 539
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q1-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q1-iteration2.executed.txt",
+      "bytes": 3180
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q1-iteration2.logical.txt",
+      "bytes": 1070
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q1-iteration2.metrics.json",
+      "bytes": 4037
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q1-iteration2.observed.json",
+      "bytes": 6884
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q1-iteration2.preflight.txt",
+      "bytes": 3180
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q1-iteration2.sql",
+      "bytes": 539
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q10-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q10-iteration1.executed.txt",
+      "bytes": 7508
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q10-iteration1.logical.txt",
+      "bytes": 2783
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q10-iteration1.metrics.json",
+      "bytes": 14232
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q10-iteration1.observed.json",
+      "bytes": 19372
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q10-iteration1.preflight.txt",
+      "bytes": 7508
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q10-iteration1.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q10-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q10-iteration2.executed.txt",
+      "bytes": 7508
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q10-iteration2.logical.txt",
+      "bytes": 2783
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q10-iteration2.metrics.json",
+      "bytes": 14225
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q10-iteration2.observed.json",
+      "bytes": 19365
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q10-iteration2.preflight.txt",
+      "bytes": 7508
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q10-iteration2.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q11-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q11-iteration1.executed.txt",
+      "bytes": 7575
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q11-iteration1.logical.txt",
+      "bytes": 3206
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q11-iteration1.metrics.json",
+      "bytes": 9017
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q11-iteration1.observed.json",
+      "bytes": 10849
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q11-iteration1.preflight.txt",
+      "bytes": 7575
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q11-iteration1.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q11-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q11-iteration2.executed.txt",
+      "bytes": 7584
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q11-iteration2.logical.txt",
+      "bytes": 3206
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q11-iteration2.metrics.json",
+      "bytes": 9017
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q11-iteration2.observed.json",
+      "bytes": 10850
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q11-iteration2.preflight.txt",
+      "bytes": 7584
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q11-iteration2.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q12-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q12-iteration1.executed.txt",
+      "bytes": 3805
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q12-iteration1.logical.txt",
+      "bytes": 1513
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q12-iteration1.metrics.json",
+      "bytes": 7653
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q12-iteration1.observed.json",
+      "bytes": 9079
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q12-iteration1.preflight.txt",
+      "bytes": 3805
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q12-iteration1.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q12-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q12-iteration2.executed.txt",
+      "bytes": 3805
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q12-iteration2.logical.txt",
+      "bytes": 1513
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q12-iteration2.metrics.json",
+      "bytes": 7651
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q12-iteration2.observed.json",
+      "bytes": 9078
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q12-iteration2.preflight.txt",
+      "bytes": 3805
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q12-iteration2.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q2-iteration1.cleanup.json",
+      "bytes": 1155
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q2-iteration1.executed.txt",
+      "bytes": 15025
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q2-iteration1.logical.txt",
+      "bytes": 6438
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q2-iteration1.metrics.json",
+      "bytes": 21968
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q2-iteration1.observed.json",
+      "bytes": 27557
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q2-iteration1.preflight.txt",
+      "bytes": 15025
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q2-iteration1.sql",
+      "bytes": 691
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q2-iteration2.cleanup.json",
+      "bytes": 1155
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q2-iteration2.executed.txt",
+      "bytes": 15028
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q2-iteration2.logical.txt",
+      "bytes": 6438
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q2-iteration2.metrics.json",
+      "bytes": 21963
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q2-iteration2.observed.json",
+      "bytes": 27551
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q2-iteration2.preflight.txt",
+      "bytes": 15028
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q2-iteration2.sql",
+      "bytes": 691
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q3-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q3-iteration1.executed.txt",
+      "bytes": 5426
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q3-iteration1.logical.txt",
+      "bytes": 2113
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q3-iteration1.metrics.json",
+      "bytes": 10747
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q3-iteration1.observed.json",
+      "bytes": 13258
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q3-iteration1.preflight.txt",
+      "bytes": 5426
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q3-iteration1.sql",
+      "bytes": 569
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q3-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q3-iteration2.executed.txt",
+      "bytes": 5426
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q3-iteration2.logical.txt",
+      "bytes": 2113
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q3-iteration2.metrics.json",
+      "bytes": 10743
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q3-iteration2.observed.json",
+      "bytes": 13255
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q3-iteration2.preflight.txt",
+      "bytes": 5426
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q3-iteration2.sql",
+      "bytes": 569
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q4-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q4-iteration1.executed.txt",
+      "bytes": 3629
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q4-iteration1.logical.txt",
+      "bytes": 1187
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q4-iteration1.metrics.json",
+      "bytes": 8406
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q4-iteration1.observed.json",
+      "bytes": 9903
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q4-iteration1.preflight.txt",
+      "bytes": 3629
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q4-iteration1.sql",
+      "bytes": 385
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q4-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q4-iteration2.executed.txt",
+      "bytes": 3629
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q4-iteration2.logical.txt",
+      "bytes": 1187
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q4-iteration2.metrics.json",
+      "bytes": 8402
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q4-iteration2.observed.json",
+      "bytes": 9899
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q4-iteration2.preflight.txt",
+      "bytes": 3629
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q4-iteration2.sql",
+      "bytes": 385
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q5-iteration1.cleanup.json",
+      "bytes": 1203
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q5-iteration1.executed.txt",
+      "bytes": 13344
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q5-iteration1.logical.txt",
+      "bytes": 6820
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q5-iteration1.metrics.json",
+      "bytes": 18023
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q5-iteration1.observed.json",
+      "bytes": 20371
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q5-iteration1.preflight.txt",
+      "bytes": 13344
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q5-iteration1.sql",
+      "bytes": 692
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q5-iteration2.cleanup.json",
+      "bytes": 1203
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q5-iteration2.executed.txt",
+      "bytes": 13344
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q5-iteration2.logical.txt",
+      "bytes": 6820
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q5-iteration2.metrics.json",
+      "bytes": 18022
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q5-iteration2.observed.json",
+      "bytes": 20369
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q5-iteration2.preflight.txt",
+      "bytes": 13344
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q5-iteration2.sql",
+      "bytes": 692
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q6-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q6-iteration1.executed.txt",
+      "bytes": 1575
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q6-iteration1.logical.txt",
+      "bytes": 703
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q6-iteration1.metrics.json",
+      "bytes": 2782
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q6-iteration1.observed.json",
+      "bytes": 3515
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q6-iteration1.preflight.txt",
+      "bytes": 1575
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q6-iteration1.sql",
+      "bytes": 266
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q6-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q6-iteration2.executed.txt",
+      "bytes": 1575
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q6-iteration2.logical.txt",
+      "bytes": 703
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q6-iteration2.metrics.json",
+      "bytes": 2782
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q6-iteration2.observed.json",
+      "bytes": 3515
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q6-iteration2.preflight.txt",
+      "bytes": 1575
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q6-iteration2.sql",
+      "bytes": 266
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q7-iteration1.cleanup.json",
+      "bytes": 1203
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q7-iteration1.executed.txt",
+      "bytes": 10677
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q7-iteration1.logical.txt",
+      "bytes": 5105
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q7-iteration1.metrics.json",
+      "bytes": 14689
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q7-iteration1.observed.json",
+      "bytes": 17032
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q7-iteration1.preflight.txt",
+      "bytes": 10677
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q7-iteration1.sql",
+      "bytes": 797
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q7-iteration2.cleanup.json",
+      "bytes": 1203
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q7-iteration2.executed.txt",
+      "bytes": 10677
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q7-iteration2.logical.txt",
+      "bytes": 5105
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q7-iteration2.metrics.json",
+      "bytes": 14689
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q7-iteration2.observed.json",
+      "bytes": 17032
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q7-iteration2.preflight.txt",
+      "bytes": 10677
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q7-iteration2.sql",
+      "bytes": 797
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q8-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q8-iteration1.executed.txt",
+      "bytes": 10699
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q8-iteration1.logical.txt",
+      "bytes": 4467
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q8-iteration1.metrics.json",
+      "bytes": 21083
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q8-iteration1.observed.json",
+      "bytes": 23388
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q8-iteration1.preflight.txt",
+      "bytes": 10699
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q8-iteration1.sql",
+      "bytes": 1098
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q8-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q8-iteration2.executed.txt",
+      "bytes": 10699
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q8-iteration2.logical.txt",
+      "bytes": 4467
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q8-iteration2.metrics.json",
+      "bytes": 21090
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q8-iteration2.observed.json",
+      "bytes": 23401
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q8-iteration2.preflight.txt",
+      "bytes": 10699
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q8-iteration2.sql",
+      "bytes": 1098
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q9-iteration1.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q9-iteration1.executed.txt",
+      "bytes": 9268
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q9-iteration1.logical.txt",
+      "bytes": 4330
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q9-iteration1.metrics.json",
+      "bytes": 17818
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q9-iteration1.observed.json",
+      "bytes": 20613
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q9-iteration1.preflight.txt",
+      "bytes": 9268
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q9-iteration1.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q9-iteration2.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q9-iteration2.executed.txt",
+      "bytes": 9268
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q9-iteration2.logical.txt",
+      "bytes": 4330
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q9-iteration2.metrics.json",
+      "bytes": 17821
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q9-iteration2.observed.json",
+      "bytes": 20617
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q9-iteration2.preflight.txt",
+      "bytes": 9268
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/q9-iteration2.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/result.json",
+      "bytes": 458210
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/applications/suite/spark-defaults.conf",
+      "bytes": 5220
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/config.json",
+      "bytes": 8467
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/profiles.json",
+      "bytes": 75040
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/services/suite/ip-172-31-19-183.json",
+      "bytes": 4951
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix0-0/services/suite/ip-172-31-19-183.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/command.json",
+      "bytes": 824
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/driver-service.json",
+      "bytes": 981
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/driver.log",
+      "bytes": 21600397
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/profile.json",
+      "bytes": 6039
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q1-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q1-iteration1.executed.txt",
+      "bytes": 3180
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q1-iteration1.logical.txt",
+      "bytes": 1070
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q1-iteration1.metrics.json",
+      "bytes": 4038
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q1-iteration1.observed.json",
+      "bytes": 6886
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q1-iteration1.preflight.txt",
+      "bytes": 3180
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q1-iteration1.sql",
+      "bytes": 539
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q1-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q1-iteration2.executed.txt",
+      "bytes": 3180
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q1-iteration2.logical.txt",
+      "bytes": 1070
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q1-iteration2.metrics.json",
+      "bytes": 4037
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q1-iteration2.observed.json",
+      "bytes": 6885
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q1-iteration2.preflight.txt",
+      "bytes": 3180
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q1-iteration2.sql",
+      "bytes": 539
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q10-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q10-iteration1.executed.txt",
+      "bytes": 7508
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q10-iteration1.logical.txt",
+      "bytes": 2783
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q10-iteration1.metrics.json",
+      "bytes": 14226
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q10-iteration1.observed.json",
+      "bytes": 19365
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q10-iteration1.preflight.txt",
+      "bytes": 7508
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q10-iteration1.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q10-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q10-iteration2.executed.txt",
+      "bytes": 7508
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q10-iteration2.logical.txt",
+      "bytes": 2783
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q10-iteration2.metrics.json",
+      "bytes": 14225
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q10-iteration2.observed.json",
+      "bytes": 19365
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q10-iteration2.preflight.txt",
+      "bytes": 7508
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q10-iteration2.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q11-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q11-iteration1.executed.txt",
+      "bytes": 7575
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q11-iteration1.logical.txt",
+      "bytes": 3206
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q11-iteration1.metrics.json",
+      "bytes": 9016
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q11-iteration1.observed.json",
+      "bytes": 10849
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q11-iteration1.preflight.txt",
+      "bytes": 7575
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q11-iteration1.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q11-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q11-iteration2.executed.txt",
+      "bytes": 7584
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q11-iteration2.logical.txt",
+      "bytes": 3206
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q11-iteration2.metrics.json",
+      "bytes": 9016
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q11-iteration2.observed.json",
+      "bytes": 10850
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q11-iteration2.preflight.txt",
+      "bytes": 7584
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q11-iteration2.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q12-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q12-iteration1.executed.txt",
+      "bytes": 3805
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q12-iteration1.logical.txt",
+      "bytes": 1513
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q12-iteration1.metrics.json",
+      "bytes": 7654
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q12-iteration1.observed.json",
+      "bytes": 9081
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q12-iteration1.preflight.txt",
+      "bytes": 3805
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q12-iteration1.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q12-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q12-iteration2.executed.txt",
+      "bytes": 3805
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q12-iteration2.logical.txt",
+      "bytes": 1513
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q12-iteration2.metrics.json",
+      "bytes": 7653
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q12-iteration2.observed.json",
+      "bytes": 9080
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q12-iteration2.preflight.txt",
+      "bytes": 3805
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q12-iteration2.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q2-iteration1.cleanup.json",
+      "bytes": 1155
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q2-iteration1.executed.txt",
+      "bytes": 15025
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q2-iteration1.logical.txt",
+      "bytes": 6438
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q2-iteration1.metrics.json",
+      "bytes": 21974
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q2-iteration1.observed.json",
+      "bytes": 27562
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q2-iteration1.preflight.txt",
+      "bytes": 15025
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q2-iteration1.sql",
+      "bytes": 691
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q2-iteration2.cleanup.json",
+      "bytes": 1155
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q2-iteration2.executed.txt",
+      "bytes": 15028
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q2-iteration2.logical.txt",
+      "bytes": 6438
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q2-iteration2.metrics.json",
+      "bytes": 21961
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q2-iteration2.observed.json",
+      "bytes": 27549
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q2-iteration2.preflight.txt",
+      "bytes": 15028
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q2-iteration2.sql",
+      "bytes": 691
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q3-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q3-iteration1.executed.txt",
+      "bytes": 5426
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q3-iteration1.logical.txt",
+      "bytes": 2113
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q3-iteration1.metrics.json",
+      "bytes": 10746
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q3-iteration1.observed.json",
+      "bytes": 13257
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q3-iteration1.preflight.txt",
+      "bytes": 5426
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q3-iteration1.sql",
+      "bytes": 569
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q3-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q3-iteration2.executed.txt",
+      "bytes": 5426
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q3-iteration2.logical.txt",
+      "bytes": 2113
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q3-iteration2.metrics.json",
+      "bytes": 10745
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q3-iteration2.observed.json",
+      "bytes": 13256
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q3-iteration2.preflight.txt",
+      "bytes": 5426
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q3-iteration2.sql",
+      "bytes": 569
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q4-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q4-iteration1.executed.txt",
+      "bytes": 3629
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q4-iteration1.logical.txt",
+      "bytes": 1187
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q4-iteration1.metrics.json",
+      "bytes": 8406
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q4-iteration1.observed.json",
+      "bytes": 9903
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q4-iteration1.preflight.txt",
+      "bytes": 3629
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q4-iteration1.sql",
+      "bytes": 385
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q4-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q4-iteration2.executed.txt",
+      "bytes": 3629
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q4-iteration2.logical.txt",
+      "bytes": 1187
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q4-iteration2.metrics.json",
+      "bytes": 8405
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q4-iteration2.observed.json",
+      "bytes": 9903
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q4-iteration2.preflight.txt",
+      "bytes": 3629
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q4-iteration2.sql",
+      "bytes": 385
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q5-iteration1.cleanup.json",
+      "bytes": 1203
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q5-iteration1.executed.txt",
+      "bytes": 13344
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q5-iteration1.logical.txt",
+      "bytes": 6820
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q5-iteration1.metrics.json",
+      "bytes": 18024
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q5-iteration1.observed.json",
+      "bytes": 20372
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q5-iteration1.preflight.txt",
+      "bytes": 13344
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q5-iteration1.sql",
+      "bytes": 692
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q5-iteration2.cleanup.json",
+      "bytes": 1203
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q5-iteration2.executed.txt",
+      "bytes": 13344
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q5-iteration2.logical.txt",
+      "bytes": 6820
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q5-iteration2.metrics.json",
+      "bytes": 18027
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q5-iteration2.observed.json",
+      "bytes": 20375
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q5-iteration2.preflight.txt",
+      "bytes": 13344
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q5-iteration2.sql",
+      "bytes": 692
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q6-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q6-iteration1.executed.txt",
+      "bytes": 1575
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q6-iteration1.logical.txt",
+      "bytes": 703
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q6-iteration1.metrics.json",
+      "bytes": 2782
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q6-iteration1.observed.json",
+      "bytes": 3515
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q6-iteration1.preflight.txt",
+      "bytes": 1575
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q6-iteration1.sql",
+      "bytes": 266
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q6-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q6-iteration2.executed.txt",
+      "bytes": 1575
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q6-iteration2.logical.txt",
+      "bytes": 703
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q6-iteration2.metrics.json",
+      "bytes": 2782
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q6-iteration2.observed.json",
+      "bytes": 3515
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q6-iteration2.preflight.txt",
+      "bytes": 1575
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q6-iteration2.sql",
+      "bytes": 266
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q7-iteration1.cleanup.json",
+      "bytes": 1203
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q7-iteration1.executed.txt",
+      "bytes": 10677
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q7-iteration1.logical.txt",
+      "bytes": 5105
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q7-iteration1.metrics.json",
+      "bytes": 14691
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q7-iteration1.observed.json",
+      "bytes": 17033
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q7-iteration1.preflight.txt",
+      "bytes": 10677
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q7-iteration1.sql",
+      "bytes": 797
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q7-iteration2.cleanup.json",
+      "bytes": 1203
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q7-iteration2.executed.txt",
+      "bytes": 10677
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q7-iteration2.logical.txt",
+      "bytes": 5105
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q7-iteration2.metrics.json",
+      "bytes": 14689
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q7-iteration2.observed.json",
+      "bytes": 17032
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q7-iteration2.preflight.txt",
+      "bytes": 10677
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q7-iteration2.sql",
+      "bytes": 797
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q8-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q8-iteration1.executed.txt",
+      "bytes": 10699
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q8-iteration1.logical.txt",
+      "bytes": 4467
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q8-iteration1.metrics.json",
+      "bytes": 21090
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q8-iteration1.observed.json",
+      "bytes": 23401
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q8-iteration1.preflight.txt",
+      "bytes": 10699
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q8-iteration1.sql",
+      "bytes": 1098
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q8-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q8-iteration2.executed.txt",
+      "bytes": 10699
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q8-iteration2.logical.txt",
+      "bytes": 4467
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q8-iteration2.metrics.json",
+      "bytes": 21092
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q8-iteration2.observed.json",
+      "bytes": 23402
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q8-iteration2.preflight.txt",
+      "bytes": 10699
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q8-iteration2.sql",
+      "bytes": 1098
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q9-iteration1.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q9-iteration1.executed.txt",
+      "bytes": 9268
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q9-iteration1.logical.txt",
+      "bytes": 4330
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q9-iteration1.metrics.json",
+      "bytes": 17822
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q9-iteration1.observed.json",
+      "bytes": 20617
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q9-iteration1.preflight.txt",
+      "bytes": 9268
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q9-iteration1.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q9-iteration2.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q9-iteration2.executed.txt",
+      "bytes": 9268
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q9-iteration2.logical.txt",
+      "bytes": 4330
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q9-iteration2.metrics.json",
+      "bytes": 17820
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q9-iteration2.observed.json",
+      "bytes": 20615
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q9-iteration2.preflight.txt",
+      "bytes": 9268
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/q9-iteration2.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/result.json",
+      "bytes": 458273
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/applications/suite/spark-defaults.conf",
+      "bytes": 5220
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/config.json",
+      "bytes": 8467
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/profiles.json",
+      "bytes": 75040
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/services/suite/ip-172-31-19-183.json",
+      "bytes": 4951
+    },
+    {
+      "name": "screen/q12-diagnosis-prefix1-0/services/suite/ip-172-31-19-183.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/command.json",
+      "bytes": 808
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/driver-service.json",
+      "bytes": 964
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/driver-service.json.stopped.json",
+      "bytes": 62
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/driver.log",
+      "bytes": 9511017
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/profile.json",
+      "bytes": 6035
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q10-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q10-iteration1.executed.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q10-iteration1.logical.txt",
+      "bytes": 2777
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q10-iteration1.metrics.json",
+      "bytes": 14233
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q10-iteration1.observed.json",
+      "bytes": 19372
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q10-iteration1.preflight.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q10-iteration1.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q10-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q10-iteration2.executed.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q10-iteration2.logical.txt",
+      "bytes": 2777
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q10-iteration2.metrics.json",
+      "bytes": 14226
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q10-iteration2.observed.json",
+      "bytes": 19365
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q10-iteration2.preflight.txt",
+      "bytes": 7494
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q10-iteration2.sql",
+      "bytes": 697
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q11-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q11-iteration1.executed.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q11-iteration1.logical.txt",
+      "bytes": 3159
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q11-iteration1.metrics.json",
+      "bytes": 9019
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q11-iteration1.observed.json",
+      "bytes": 10852
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q11-iteration1.preflight.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q11-iteration1.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q11-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q11-iteration2.executed.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q11-iteration2.logical.txt",
+      "bytes": 3159
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q11-iteration2.metrics.json",
+      "bytes": 9017
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q11-iteration2.observed.json",
+      "bytes": 10850
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q11-iteration2.preflight.txt",
+      "bytes": 7536
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q11-iteration2.sql",
+      "bytes": 511
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q12-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q12-iteration1.executed.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q12-iteration1.logical.txt",
+      "bytes": 1511
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q12-iteration1.metrics.json",
+      "bytes": 7654
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q12-iteration1.observed.json",
+      "bytes": 9080
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q12-iteration1.preflight.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q12-iteration1.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q12-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q12-iteration2.executed.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q12-iteration2.logical.txt",
+      "bytes": 1511
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q12-iteration2.metrics.json",
+      "bytes": 7650
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q12-iteration2.observed.json",
+      "bytes": 9076
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q12-iteration2.preflight.txt",
+      "bytes": 3797
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q12-iteration2.sql",
+      "bytes": 598
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q13-iteration1.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q13-iteration1.executed.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q13-iteration1.logical.txt",
+      "bytes": 943
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q13-iteration1.metrics.json",
+      "bytes": 7663
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q13-iteration1.observed.json",
+      "bytes": 9235
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q13-iteration1.preflight.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q13-iteration1.sql",
+      "bytes": 349
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q13-iteration2.cleanup.json",
+      "bytes": 1139
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q13-iteration2.executed.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q13-iteration2.logical.txt",
+      "bytes": 943
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q13-iteration2.metrics.json",
+      "bytes": 7661
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q13-iteration2.observed.json",
+      "bytes": 9233
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q13-iteration2.preflight.txt",
+      "bytes": 2863
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q13-iteration2.sql",
+      "bytes": 349
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q9-iteration1.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q9-iteration1.executed.txt",
+      "bytes": 9226
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q9-iteration1.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q9-iteration1.metrics.json",
+      "bytes": 17829
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q9-iteration1.observed.json",
+      "bytes": 20624
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q9-iteration1.preflight.txt",
+      "bytes": 9226
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q9-iteration1.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q9-iteration2.cleanup.json",
+      "bytes": 1211
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q9-iteration2.executed.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q9-iteration2.logical.txt",
+      "bytes": 4305
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q9-iteration2.metrics.json",
+      "bytes": 17822
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q9-iteration2.observed.json",
+      "bytes": 20617
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q9-iteration2.preflight.txt",
+      "bytes": 9230
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/q9-iteration2.sql",
+      "bytes": 790
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/result.json",
+      "bytes": 194181
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/applications/suite/spark-defaults.conf",
+      "bytes": 5216
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/config.json",
+      "bytes": 7845
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/profiles.json",
+      "bytes": 31250
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/services/suite/ip-172-31-19-183.json",
+      "bytes": 4942
+    },
+    {
+      "name": "screen/q12-diagnosis-short1-0/services/suite/ip-172-31-19-183.json.stopped.json",
+      "bytes": 62
+    }
+  ],
+  "source_revision": "eb21ef6b7c1a621b8c4e158fe9093c6531ecd162"
+}

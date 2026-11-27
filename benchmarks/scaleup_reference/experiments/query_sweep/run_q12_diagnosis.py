@@ -108,9 +108,12 @@ def main():
         start('cpu', ['perf', 'record', '-a', '-e', 'cpu-clock', '-F', '49', '-g',
                       '--call-graph', 'fp', '--clockid', 'mono',
                       '-o', str(directory / 'cpu.data'), '--', 'sleep', '3600'], privileged=True)
-        time.sleep(4)
+        deadline = time.monotonic() + 60
+        while 'READY monotonic_ns=' not in (directory / 'reclaim.log').read_text():
+            assert all(p.poll() is None for p, _ in children), 'Profiler startup failed'
+            assert time.monotonic() < deadline, 'BPF probes not ready within 60 seconds'
+            time.sleep(0.5)
         assert all(p.poll() is None for p, _ in children), 'Profiler startup failed'
-        assert 'READY monotonic_ns=' in (directory / 'reclaim.log').read_text(), 'BPF probes not ready'
         if a.phase.startswith('probe'):
             time.sleep(4)
         else:

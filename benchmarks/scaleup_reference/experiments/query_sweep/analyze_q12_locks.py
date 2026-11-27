@@ -6,6 +6,7 @@ import argparse
 from collections import Counter
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import statistics
@@ -71,6 +72,13 @@ def main():
         sample['host_sampled_seconds'] = (h[-1]['time_unix_ns'] - h[0]['time_unix_ns']) / 1e9
         sample['host_max_gap_seconds'] = max((y['time_unix_ns'] - x['time_unix_ns']) / 1e9
                                              for x, y in zip(h, h[1:]))
+        tick_hz = os.sysconf('SC_CLK_TCK')
+        sample['host_cpu_seconds'] = {
+            name: (h[-1]['cpu_ticks'][i] - h[0]['cpu_ticks'][i]) / tick_hz
+            for i, name in enumerate(('user', 'nice', 'system', 'idle', 'iowait',
+                                      'irq', 'softirq', 'steal', 'guest', 'guest_nice'))
+            if i < len(h[0]['cpu_ticks'])}
+        sample['host_max_sampling_seconds'] = max(r.get('sampling_seconds', 0) for r in h)
         sample['disk_read_bytes'] = {k: (h[-1]['diskstats'][k][2] - h[0]['diskstats'][k][2]) * 512
                                      for k in h[0]['diskstats']}
         sample['vm_deltas'] = {k: v[-1]['vmstat'][k] - v[0]['vmstat'][k] for k in v[0]['vmstat']}
@@ -100,6 +108,7 @@ def main():
                   'scan_candidate_tid is a correlation candidate, not a proven lock owner.',
                   'Function entry/exit counts, reentry, residual intervals and dropped-output warnings must be audited before causal interpretation.',
                   'Summed concurrent thread intervals are not query wall time.',
+                  'Host CPU seconds sum scheduler ticks across all logical CPUs during the sampled interval; they are not wall time.',
                   'No cache flush is performed; separate runs have different cache histories.']}
     (directory / 'lock-analysis.json').write_text(json.dumps(output, indent=2) + '\n')
     print(json.dumps([{'iteration': s['iteration'], 'sql_seconds': s['sql_seconds'],

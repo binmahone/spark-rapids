@@ -13,7 +13,7 @@ import time
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work', required=True, type=Path)
 p.add_argument('--thread-id', required=True)
-p.add_argument('--phase', required=True, choices=['lruoff0', 'lruon0', 'lruoff1', 'lruon1'])
+p.add_argument('--phase', required=True, choices=['lruoff0', 'lruon0', 'lruoff1', 'lruon1', 'restore-original'])
 a = p.parse_args()
 work = a.work.resolve()
 owner = json.loads((work / 'evidence/owner.json').read_text())

@@ -19,7 +19,9 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', type=Path, required=True)
     p.add_argument('--phases', nargs='+', required=True)
+    p.add_argument('--name', default='sol-suite-complete')
     a = p.parse_args()
+    assert a.name and all(c.isalnum() or c == '-' for c in a.name)
     work = a.work.resolve()
     files, audit = {}, []
 
@@ -29,7 +31,8 @@ def main():
                 files[path] = str(Path(prefix) / path.relative_to(root))
 
     for phase in a.phases:
-        assert phase in ('S0', 'S1', 'S2', 'S3', 'R0', 'R1', 'R2', 'R3')
+        assert phase in ('S0', 'S1', 'S2', 'S3', 'R0', 'R1', 'R2', 'R3',
+                         'K0', 'K1', 'K2', 'K3')
         directory = work / 'critical-path' / phase
         state = read(directory / 'state.json')
         assert state['status'] in ('completed', 'failed')
@@ -64,7 +67,7 @@ def main():
         files[path] = 'evidence/' + name
     for name in ('critical/oracle.json', 'critical-path/oracle.json'):
         files[work / name] = name
-    archive = work / 'evidence/sol-suite-complete.tar.gz'
+    archive = work / 'evidence' / (a.name + '.tar.gz')
     assert not archive.exists()
     manifest = []
     with tarfile.open(archive, 'w:gz', compresslevel=1) as target:
@@ -81,7 +84,7 @@ def main():
     receipt = {'archive': archive.name, 'bytes': archive.stat().st_size, 'sha256': digest.hexdigest(),
                'phases': a.phases, 'files': manifest, 'source_revision': subprocess.check_output(
                    ['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip()}
-    write(work / 'evidence/sol-suite-complete-manifest.json', receipt)
+    write(work / 'evidence' / (a.name + '-manifest.json'), receipt)
     print(archive, receipt['bytes'], receipt['sha256'])
 
 

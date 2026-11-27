@@ -1,0 +1,52 @@
+/* Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Licensed under the Apache License, Version 2.0.
+ * Aggregate reader reclaim calls by completion second without tracing locks.
+ */
+interval:s:1 /!@ready/ { printf("READY monotonic_ns=%llu\n", nsecs); @ready = 1; }
+
+tracepoint:vmscan:mm_vmscan_direct_reclaim_begin
+/strncmp(comm, "kvikio-", 7) == 0/
+{
+  if (@batch_begin[tid]) { @batch_reentry = count(); }
+  @batch_begin[tid] = nsecs;
+  @batch_order[tid] = args->order;
+  @batch_begins = count();
+}
+
+fentry:shrink_lruvec /@batch_begin[tid]/
+{
+  $second = nsecs / 1000000000;
+  @shrink_lruvec_entry[$second] = count();
+  if (args->sc->priority == 12 && (uint64)args->sc->target_mem_cgroup == 0) {
+    @proportional_eligible_at_entry[$second] = count();
+  }
+}
+
+fentry:try_to_shrink_lruvec /@batch_begin[tid]/
+{
+  @mglru_entry[nsecs / 1000000000] = count();
+  @mglru_target_max[nsecs / 1000000000] = max(args->sc->nr_to_reclaim);
+}
+
+tracepoint:vmscan:mm_vmscan_direct_reclaim_end /@batch_begin[tid]/
+{
+  $end = nsecs;
+  $duration = $end - @batch_begin[tid];
+  $second = $end / 1000000000;
+  $pages = args->nr_reclaimed;
+  @batch_ends = count();
+  @total_pages = sum($pages);
+  @total_duration_ns = sum($duration);
+  @calls[$second] = count();
+  @duration_ns[$second] = sum($duration);
+  @max_duration_ns[$second] = max($duration);
+  @pages[$second] = sum($pages);
+  @max_pages[$second] = max($pages);
+  if ($pages <= 256) { @small_calls[$second] = count(); }
+  if ($pages > 4096) { @large_calls[$second] = count(); }
+  if ($duration > 50000000) {
+    printf("BATCH_RECLAIM begin_ns=%llu end_ns=%llu pid=%d tid=%d comm=%s duration_ns=%llu reclaimed=%llu order=%llu\n",
+           @batch_begin[tid], $end, pid, tid, comm, $duration, $pages, @batch_order[tid]);
+  }
+  delete(@batch_begin[tid]); delete(@batch_order[tid]);
+}

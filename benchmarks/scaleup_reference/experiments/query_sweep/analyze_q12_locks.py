@@ -66,7 +66,7 @@ def main():
     directory = args.work / 'q12-diagnosis' / args.phase
     state = json.loads((directory / 'state.json').read_text())
     assert state['status'] == 'completed'
-    assert state['observer_mode'] in ('light', 'locks') and state['cpu_event'] is None
+    assert state['observer_mode'] in ('light', 'locks', 'batches') and state['cpu_event'] is None
     assert not state['gpm_enabled'] and state['native_pool_verification']['passed']
     assert all(g['status'] == 'completed' and g['driver_exit_code'] == 0 and
                all(s['validation']['status'] == 'passed' for s in g['samples']) for g in state['groups'])

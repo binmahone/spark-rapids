@@ -40,7 +40,7 @@ def main():
     p.add_argument('--thread-id', required=True)
     p.add_argument('--phase', choices=['probe', 'probe1', 'probe2', 'probe3', 'probe4', 'probe5', 'probe6', 'probe7', 'short0', 'short1',
                    'prefix0', 'prefix1', 'light0', 'locks0', 'light1', 'locks1', 'locks2', 'light2', 'lruoff0', 'lruon0', 'lruoff1', 'lruon1'], required=True)
-    p.add_argument('--observer-mode', choices=['full', 'light', 'locks'], default='full')
+    p.add_argument('--observer-mode', choices=['full', 'light', 'locks', 'batches'], default='full')
     a = p.parse_args()
     work = Path(a.work).resolve()
     owner = read(work / 'evidence/owner.json')
@@ -70,6 +70,8 @@ def main():
               'probe_thresholds_ns': {'RECLAIM': 50000000, 'EVICT': 100000000,
                                       'SCAN': 10000000, 'LOCK_WAIT': 50000000}
                                      if a.observer_mode == 'locks' else None,
+              'batch_probe_scope': 'kvikio reader threads; one-second completion buckets and calls above 50 ms'
+                                   if a.observer_mode == 'batches' else None,
               'gpm_enabled': a.observer_mode == 'full',
               'cache_policy': 'No cache flush; two actions per query',
               'instance_policy': 'Retain across diagnostic iterations; archive and release when the investigation ends'}
@@ -118,9 +120,10 @@ def main():
         start('pool', [sys.executable, str(HERE / 'monitor_read_pool.py'),
                        '--work', str(work), '--output', str(directory / 'pool.jsonl')])
         if a.observer_mode != 'light':
-            script = 'q12_locks.bt' if a.observer_mode == 'locks' else 'q12_reclaim.bt'
+            script = {'locks': 'q12_locks.bt', 'batches': 'q12_reclaim_batches.bt',
+                      'full': 'q12_reclaim.bt'}[a.observer_mode]
             binary = 'bpftrace'
-            if a.observer_mode == 'locks':
+            if a.observer_mode in ('locks', 'batches'):
                 tool = read(work / 'evidence/bpftrace-tool.json')
                 assert tool['thread_id'] == a.thread_id and tool['instance_id'] == owner['instance_id']
                 binary = tool['path']

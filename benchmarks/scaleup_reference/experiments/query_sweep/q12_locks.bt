@@ -1,0 +1,115 @@
+/* Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Licensed under the Apache License, Version 2.0.
+ * Measure reclaim, spin slow paths, and scan_folios intervals separately.
+ * A scan interval is not a complete or necessarily continuous lock hold.
+ */
+interval:s:1 /!@ready/ { printf("READY monotonic_ns=%llu\n", nsecs); @ready = 1; }
+
+tracepoint:vmscan:mm_vmscan_direct_reclaim_begin
+{
+  @reclaim_begin[tid] = nsecs;
+  @order[tid] = args->order;
+  @reclaim_begins = count();
+}
+tracepoint:vmscan:mm_vmscan_direct_reclaim_end /@reclaim_begin[tid]/
+{
+  $end = nsecs;
+  $duration = $end - @reclaim_begin[tid];
+  @reclaim_duration_us = hist($duration / 1000);
+  @reclaim_ends = count();
+  if ($duration > 50000000) {
+    printf("RECLAIM begin_ns=%llu end_ns=%llu pid=%d tid=%d comm=%s duration_ns=%llu reclaimed=%llu order=%llu\n%s\n",
+           @reclaim_begin[tid], $end, pid, tid, comm, $duration,
+           args->nr_reclaimed, @order[tid], kstack(24));
+  }
+  delete(@reclaim_begin[tid]); delete(@order[tid]);
+}
+
+kprobe:evict_folios
+{
+  $lru = (struct lruvec *)arg0;
+  $lock = (uint64)&$lru->lru_lock;
+  if (@evict_begin[tid]) { @evict_reentry = count(); }
+  @evict_begin[tid] = nsecs;
+  @evict_lock[tid] = $lock;
+  @known_lock[$lock] = 1;
+  @lock_node[$lock] = $lru->pgdat->node_id;
+  @evict_begins = count();
+}
+kretprobe:evict_folios /@evict_begin[tid]/
+{
+  $end = nsecs;
+  $duration = $end - @evict_begin[tid];
+  @evict_duration_us = hist($duration / 1000);
+  @evict_ends = count();
+  if ($duration > 10000000) {
+    printf("EVICT begin_ns=%llu end_ns=%llu pid=%d tid=%d comm=%s lock=%llx node=%d duration_ns=%llu returned=%lld\n",
+           @evict_begin[tid], $end, pid, tid, comm, @evict_lock[tid],
+           @lock_node[@evict_lock[tid]], $duration, retval);
+  }
+  delete(@evict_begin[tid]); delete(@evict_lock[tid]);
+}
+
+kprobe:scan_folios
+{
+  $lru = (struct lruvec *)arg0;
+  $lock = (uint64)&$lru->lru_lock;
+  if (@scan_begin[tid]) { @scan_reentry = count(); }
+  if (@scan_active[$lock]) { @overlapping_scan_intervals = count(); }
+  @scan_begin[tid] = nsecs;
+  @scan_lock[tid] = $lock;
+  @scan_candidate[$lock] = tid;
+  @scan_candidate_begin[$lock] = nsecs;
+  @scan_active[$lock] = @scan_active[$lock] + 1;
+  @scan_begins = count();
+}
+kretprobe:scan_folios /@scan_begin[tid]/
+{
+  $end = nsecs;
+  $duration = $end - @scan_begin[tid];
+  $lock = @scan_lock[tid];
+  @scan_duration_us = hist($duration / 1000);
+  @scan_ends = count();
+  if ($duration > 1000000) {
+    printf("SCAN begin_ns=%llu end_ns=%llu pid=%d tid=%d comm=%s lock=%llx node=%d duration_ns=%llu returned=%lld active=%llu\n",
+           @scan_begin[tid], $end, pid, tid, comm, $lock,
+           @lock_node[$lock], $duration, retval, @scan_active[$lock]);
+  }
+  @scan_active[$lock] = @scan_active[$lock] - 1;
+  if (@scan_candidate[$lock] == tid) {
+    delete(@scan_candidate[$lock]); delete(@scan_candidate_begin[$lock]);
+  }
+  delete(@scan_begin[tid]); delete(@scan_lock[tid]);
+}
+
+kprobe:native_queued_spin_lock_slowpath
+/@known_lock[(uint64)arg0] || @evict_begin[tid]/
+{
+  $lock = (uint64)arg0;
+  if (@wait_begin[tid]) { @wait_reentry = count(); }
+  @wait_begin[tid] = nsecs;
+  @wait_lock[tid] = $lock;
+  @wait_scan_candidate[tid] = @scan_candidate[$lock];
+  @wait_scan_candidate_begin[tid] = @scan_candidate_begin[$lock];
+  @wait_scan_active[tid] = @scan_active[$lock];
+  @wait_begins = count();
+}
+kretprobe:native_queued_spin_lock_slowpath /@wait_begin[tid]/
+{
+  $end = nsecs;
+  $duration = $end - @wait_begin[tid];
+  $lock = @wait_lock[tid];
+  @wait_duration_us = hist($duration / 1000);
+  @wait_ends = count();
+  @wait_ns_by_lock[$lock] = sum($duration);
+  @wait_max_ns_by_lock[$lock] = max($duration);
+  if ($duration > 1000000) {
+    printf("LOCK_WAIT begin_ns=%llu end_ns=%llu pid=%d tid=%d comm=%s lock=%llx known_lru=%d node=%d duration_ns=%llu scan_candidate_tid=%llu scan_candidate_begin_ns=%llu scan_active_at_begin=%llu\n%s\n",
+           @wait_begin[tid], $end, pid, tid, comm, $lock, @known_lock[$lock],
+           @lock_node[$lock], $duration, @wait_scan_candidate[tid],
+           @wait_scan_candidate_begin[tid], @wait_scan_active[tid], kstack(24));
+  }
+  delete(@wait_begin[tid]); delete(@wait_lock[tid]);
+  delete(@wait_scan_candidate[tid]); delete(@wait_scan_candidate_begin[tid]);
+  delete(@wait_scan_active[tid]);
+}

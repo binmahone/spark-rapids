@@ -36,7 +36,7 @@ pids=[];tick=0
 try:
  with output.open('w',buffering=1) as stream:
   while running:
-   stamp=time.time_ns()
+   stamp=time.time_ns();mono=time.monotonic_ns()
    if tick%5==0:
     pids=[]
     for proc in Path('/proc').iterdir():
@@ -57,7 +57,7 @@ try:
    for line in Path('/proc/diskstats').read_text().splitlines():
     fields=line.split()
     if fields[2].startswith(('nvme','dm-','md')):disks[fields[2]]=[int(v) for v in fields[3:]]
-   record={'time_unix_ns':stamp,'monotonic_ns':time.monotonic_ns(),'executors':tasks,'diskstats':disks,
+   record={'time_unix_ns':stamp,'monotonic_ns':mono,'executors':tasks,'diskstats':disks,
     'memory_kib':keyed('/proc/meminfo',{'MemAvailable','MemFree','Cached','Buffers','Dirty','Writeback','AnonPages','SwapFree','Slab'}),
     'vmstat':keyed('/proc/vmstat',{'pgpgin','pgpgout','pgmajfault','pgscan_kswapd','pgsteal_kswapd','pgscan_direct','pgsteal_direct','workingset_refault_file','workingset_refault_anon'}),
     'cpu_ticks':[int(v) for v in Path('/proc/stat').read_text().splitlines()[0].split()[1:]],
@@ -65,5 +65,6 @@ try:
    for kind in ['io','memory','cpu']:
     pressure=Path('/proc/pressure')/kind
     if pressure.exists():record['pressure_'+kind]=pressure.read_text().strip()
+   record['sampling_seconds']=(time.monotonic_ns()-mono)/1e9
    stream.write(json.dumps(record,separators=(',',':'))+'\n');tick+=1;time.sleep(1)
 finally:lib.nvmlShutdown()

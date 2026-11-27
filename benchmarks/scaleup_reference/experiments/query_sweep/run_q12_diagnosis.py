@@ -38,7 +38,9 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', required=True)
     p.add_argument('--thread-id', required=True)
-    p.add_argument('--phase', choices=['probe', 'probe1', 'short0', 'short1', 'prefix0', 'prefix1'], required=True)
+    p.add_argument('--phase', choices=['probe', 'probe1', 'probe2', 'short0', 'short1',
+                   'prefix0', 'prefix1', 'light0', 'locks0', 'light1', 'locks1', 'light2'], required=True)
+    p.add_argument('--observer-mode', choices=['full', 'light', 'locks'], default='full')
     a = p.parse_args()
     work = Path(a.work).resolve()
     owner = read(work / 'evidence/owner.json')
@@ -55,14 +57,16 @@ def main():
             assert s.connect_ex((socket.gethostbyname(socket.gethostname()), port)) != 0
     directory = work / 'q12-diagnosis' / a.phase
     directory.mkdir(parents=True, exist_ok=False)
-    cpu_event = 'cycles:k' if a.phase == 'prefix1' else 'cpu-clock'
+    cpu_event = ('cycles:k' if a.phase == 'prefix1' else 'cpu-clock') if a.observer_mode == 'full' else None
     report = {'status': 'running', 'phase': a.phase, 'groups': [], 'profilers': [],
               'thread_id': a.thread_id, 'instance_id': owner['instance_id'],
               'source_revision': subprocess.check_output(['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
               'classification': 'Diagnostic with profiling overhead; not a benchmark score',
               'cpu_event': cpu_event,
+              'observer_mode': a.observer_mode,
+              'gpm_enabled': a.observer_mode == 'full',
               'cache_policy': 'No cache flush; two actions per query',
-              'instance_policy': 'Archive evidence and terminate the session-created instance after diagnosis'}
+              'instance_policy': 'Retain across diagnostic iterations; archive and release when the investigation ends'}
     report['host_state_before'] = {path: Path(path).read_text() for path in [
         '/proc/meminfo', '/proc/sys/vm/min_free_kbytes', '/proc/sys/vm/watermark_scale_factor',
         '/proc/sys/vm/zone_reclaim_mode', '/sys/kernel/mm/lru_gen/enabled',
@@ -95,26 +99,30 @@ def main():
         start('vm', [sys.executable, str(HERE / 'monitor_vm.py'), '--work', str(work),
                      '--thread-id', a.thread_id, '--controller', str(directory / 'controller.json'),
                      '--output', str(directory / 'vm.jsonl')])
-        start('gpm', ['/usr/bin/python3', str(HERE / 'monitor_gpm.py'),
-                      '--directory', str(directory)], privileged=True)
-        deadline = time.monotonic() + 30
-        while not (directory / 'gpm-ready.json').exists():
-            assert all(p.poll() is None for p, _ in children), 'Monitor startup failed; inspect logs'
-            assert time.monotonic() < deadline, 'GPM startup timeout'
-            time.sleep(0.5)
-        start('threads', ['/usr/bin/python3', str(HERE / 'monitor_q12_threads.py'),
-                          '--work', str(work), '--directory', str(directory)], privileged=True)
+        if a.observer_mode == 'full':
+            start('gpm', ['/usr/bin/python3', str(HERE / 'monitor_gpm.py'),
+                          '--directory', str(directory)], privileged=True)
+            deadline = time.monotonic() + 30
+            while not (directory / 'gpm-ready.json').exists():
+                assert all(p.poll() is None for p, _ in children), 'Monitor startup failed; inspect logs'
+                assert time.monotonic() < deadline, 'GPM startup timeout'
+                time.sleep(0.5)
+            start('threads', ['/usr/bin/python3', str(HERE / 'monitor_q12_threads.py'),
+                              '--work', str(work), '--directory', str(directory)], privileged=True)
         start('pool', [sys.executable, str(HERE / 'monitor_read_pool.py'),
                        '--work', str(work), '--output', str(directory / 'pool.jsonl')])
-        start('reclaim', ['bpftrace', '-q', str(HERE / 'q12_reclaim.bt')], privileged=True)
-        start('cpu', ['perf', 'record', '-a', '-e', cpu_event, '-F', '49', '-g',
-                      '--call-graph', 'fp', '--clockid', 'mono', '--no-buildid', '--no-buildid-cache',
-                      '-o', str(directory / 'cpu.data'), '--', 'sleep', '3600'], privileged=True)
-        deadline = time.monotonic() + 60
-        while 'READY monotonic_ns=' not in (directory / 'reclaim.log').read_text():
-            assert all(p.poll() is None for p, _ in children), 'Profiler startup failed'
-            assert time.monotonic() < deadline, 'BPF probes not ready within 60 seconds'
-            time.sleep(0.5)
+        if a.observer_mode != 'light':
+            script = 'q12_locks.bt' if a.observer_mode == 'locks' else 'q12_reclaim.bt'
+            start('reclaim', ['bpftrace', '-q', str(HERE / script)], privileged=True)
+            deadline = time.monotonic() + 60
+            while 'READY monotonic_ns=' not in (directory / 'reclaim.log').read_text():
+                assert all(p.poll() is None for p, _ in children), 'Profiler startup failed'
+                assert time.monotonic() < deadline, 'BPF probes not ready within 60 seconds'
+                time.sleep(0.5)
+        if a.observer_mode == 'full':
+            start('cpu', ['perf', 'record', '-a', '-e', cpu_event, '-F', '49', '-g',
+                          '--call-graph', 'fp', '--clockid', 'mono', '--no-buildid', '--no-buildid-cache',
+                          '-o', str(directory / 'cpu.data'), '--', 'sleep', '3600'], privileged=True)
         assert all(p.poll() is None for p, _ in children), 'Profiler startup failed'
         if a.phase.startswith('probe'):
             time.sleep(4)
@@ -164,6 +172,13 @@ def main():
         raise
     finally:
         signal.alarm(0)
+        if a.observer_mode == 'locks':
+            for path in ('/sys/kernel/tracing/kprobe_profile', '/sys/kernel/debug/tracing/kprobe_profile'):
+                snapshot = subprocess.run(['sudo', '-n', 'cat', path], capture_output=True, text=True)
+                if snapshot.returncode == 0:
+                    (directory / 'kprobe-profile.txt').write_text(snapshot.stdout)
+                    report['kprobe_profile_source'] = path
+                    break
         for process, receipt in reversed(children):
             if process.poll() is None:
                 assert services.start_time(process.pid) == receipt['start_time']
@@ -177,7 +192,9 @@ def main():
         for log in logs:
             log.close()
         report['end_unix_ns'] = time.time_ns()
-        if (directory / 'gpm-receipt.json').exists():
+        if not report['gpm_enabled']:
+            report['gpm_restored'] = None
+        elif (directory / 'gpm-receipt.json').exists():
             restoration = read(directory / 'gpm-receipt.json')['restoration']
             report['gpm_restored'] = len(restoration) == 8 and all(r.get('passed') for r in restoration)
             if not report['gpm_restored']:

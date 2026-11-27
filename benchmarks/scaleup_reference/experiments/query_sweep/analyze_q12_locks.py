@@ -36,6 +36,28 @@ def parse_events(path):
     return events
 
 
+def probe_audit(path, provider):
+    if not path.exists():
+        return {'provider': provider, 'attached': False}
+    contents = path.read_text()
+    scalars = {key: int(value) for key, value in
+               re.findall(r'^@(\w+): (\d+)$', contents, re.M)}
+    pairs = {kind: {'begins': scalars.get(kind + '_begins', 0),
+                    'ends': scalars.get(kind + '_ends', 0)}
+             for kind in ('reclaim', 'evict', 'scan', 'wait')}
+    residual = [line for line in contents.splitlines()
+                if re.match(r'^@(reclaim|evict|scan|wait)_begin\[', line)]
+    return {'provider': provider, 'attached': 'READY monotonic_ns=' in contents,
+            'function_counts': pairs,
+            'reentry_counts': {kind: scalars.get(kind + '_reentry', 0)
+                               for kind in ('evict', 'scan', 'wait')},
+            'overlapping_scan_intervals': scalars.get('overlapping_scan_intervals', 0),
+            'residual_intervals': residual,
+            'output_loss_messages': [line for line in contents.splitlines()
+                                     if re.search(r'\blost\b|\bdropped\b', line, re.I)],
+            'boundary_limit': 'Attach/detach can straddle background reclaim; unmatched calls require inspection.'}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', required=True, type=Path)
@@ -95,6 +117,7 @@ def main():
                                     for kind in ('RECLAIM', 'EVICT', 'SCAN', 'LOCK_WAIT')}
         samples.append(sample)
     output = {'phase': args.phase, 'observer_mode': state['observer_mode'], 'samples': samples,
+              'probe_audit': probe_audit(directory / 'reclaim.log', state.get('lock_probe_provider')),
               'event_counts_whole_run': dict(Counter(e['kind'] for e in events)),
               'monotonic_to_unix_offset_ns': offset, 'runtime_source_revision': state['source_revision'],
               'analysis_source_revision': subprocess.check_output(

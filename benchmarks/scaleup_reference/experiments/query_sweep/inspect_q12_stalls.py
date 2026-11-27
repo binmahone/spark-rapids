@@ -27,6 +27,8 @@ def main():
             events.append(current)
         elif line.startswith('        ') and current is not None:
             current['stack'].append(line.strip())
+        elif not line.strip() and current is not None:
+            continue
         else:
             current = None
     results = []

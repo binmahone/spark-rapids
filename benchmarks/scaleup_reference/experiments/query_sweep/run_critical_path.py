@@ -27,11 +27,13 @@ def main():
     p.add_argument('--work', required=True, type=Path)
     p.add_argument('--thread-id', required=True)
     p.add_argument('--phase', required=True, choices=['oracle', 'A0', 'B1', 'B2', 'C1', 'C2', 'A3',
-                                                    'S0', 'S1', 'S2', 'S3', 'R0', 'R1', 'R2', 'R3'])
+                                                    'S0', 'S1', 'S2', 'S3', 'R0', 'R1', 'R2', 'R3',
+                                                    'K0', 'K1', 'K2', 'K3'])
     p.add_argument('--reuse-queries', default='9', help='Queries with diagnostic runtime reuse in candidate arms')
     a = p.parse_args()
     full_suite = a.phase.startswith('S')
     reuse_probe = a.phase.startswith('R')
+    codec_probe = a.phase.startswith('K')
     candidate = a.phase.startswith(('B', 'C')) or a.phase in ('S1', 'S2', 'S3', 'R1', 'R2')
     isolated_reuse = a.phase.startswith('C') or a.phase in ('S1', 'S2', 'S3', 'R1', 'R2')
     reuse_queries = [int(q) for q in a.reuse_queries.split(',')]
@@ -55,7 +57,8 @@ def main():
              'source_revision': subprocess.check_output(['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
              'source_sha256': {f: hashlib.sha256((HERE / f).read_bytes()).hexdigest() for f in
                                ['critical_path_variants.py', 'run_critical_path.py', 'run_cases.py', 'run_screen.py']},
-             'classification': ('Complete 22-query SOL experiment; Q7 plan and selected ordinary hash reuse'
+             'classification': ('Q8 shuffle codec ABBA probe; unchanged SQL and engine; no full-suite score'
+                                if codec_probe else 'Complete 22-query SOL experiment; Q7 plan and selected ordinary hash reuse'
                                 if full_suite else 'Focused ordinary hash reuse without SQL changes'
                                 if reuse_probe else 'Focused Q9 and Q7 probes; unchanged Q8 temporal control; no full-suite score'),
              'runtime_hash_reuse_queries': reuse_queries if isolated_reuse else [],
@@ -95,7 +98,8 @@ def main():
             start('pool', [sys.executable, str(HERE / 'monitor_read_pool.py'), '--work', str(work),
                            '--output', str(directory / 'pool.jsonl')])
             selected = controls()
-            queries = list(ORDER) if full_suite else [5, 19, 20] if reuse_probe else [9, 7, 8]
+            queries = ([8] if codec_probe else list(ORDER) if full_suite else
+                       [5, 19, 20] if reuse_probe else [9, 7, 8])
             if isolated_reuse:
                 assert set(reuse_queries) <= set(queries)
             for q in queries:
@@ -111,9 +115,13 @@ def main():
             state['queries'] = queries
             state['start_unix_ns'] = time.time_ns()
             write(directory / 'state.json', state)
+            global_conf = {'spark.rapids.sql.reader.kvikio.numThreads': '32',
+                           'spark.rapids.sql.metrics.level': 'DEBUG'}
+            if codec_probe:
+                global_conf['spark.rapids.shuffle.compression.codec'] = (
+                    'none' if a.phase in ('K1', 'K2') else 'lz4')
             path, result = launch_group(work, 'critical-path-' + a.phase, 0,
-                [selected[q] for q in queries], {'spark.rapids.sql.reader.kvikio.numThreads': '32',
-                    'spark.rapids.sql.metrics.level': 'DEBUG'},
+                [selected[q] for q in queries], global_conf,
                 runtime_hash_reuse_queries=reuse_queries if isolated_reuse else None)
             state['groups'].append({'run': str(path), 'status': result['status'], 'samples': result['samples'],
                                     'error': result.get('error'), 'driver_exit_code': result['driver_exit_code']})

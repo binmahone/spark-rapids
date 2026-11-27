@@ -7,7 +7,7 @@ readonly thread=${2:?Owner thread is required}
 readonly phase=${3:?Phase is required}
 readonly reuse_queries=${4:-9}
 readonly here=$(cd "$(dirname "$0")" && pwd)
-[[ "$phase" =~ ^(oracle|A0|B1|B2|C1|C2|A3|S0|S1|S2|S3|R0|R1|R2|R3)$ ]] || exit 2
+[[ "$phase" =~ ^(oracle|A0|B1|B2|C1|C2|A3|S0|S1|S2|S3|R0|R1|R2|R3|K0|K1|K2|K3)$ ]] || exit 2
 [[ ! -e "$work/evidence/critical-path-$phase.log" ]] || exit 1
 exec > >(tee "$work/evidence/critical-path-$phase.log") 2>&1
 finish() { printf '%s\n' "$?" > "$work/evidence/critical-path-$phase.exit"; }

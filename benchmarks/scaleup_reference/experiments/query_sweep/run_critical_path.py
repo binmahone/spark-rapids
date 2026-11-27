@@ -25,7 +25,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', required=True, type=Path)
     p.add_argument('--thread-id', required=True)
-    p.add_argument('--phase', required=True, choices=['oracle', 'A0', 'B1', 'B2', 'A3'])
+    p.add_argument('--phase', required=True, choices=['oracle', 'A0', 'B1', 'B2', 'C1', 'C2', 'A3'])
     a = p.parse_args()
     work = a.work.resolve()
     owner = read(work / 'evidence/owner.json')
@@ -86,9 +86,10 @@ def main():
             for q in queries:
                 selected[q] = replace(selected[q], overrides={**selected[q].overrides,
                     'spark.rapids.sql.join.hashTable.reuse': 'false'})
-            if a.phase.startswith('B'):
-                selected[9] = replace(selected[9], overrides={**selected[9].overrides,
-                    'spark.rapids.sql.join.hashTable.reuse': 'true'})
+            if a.phase.startswith(('B', 'C')):
+                if a.phase.startswith('B'):
+                    selected[9] = replace(selected[9], overrides={**selected[9].overrides,
+                        'spark.rapids.sql.join.hashTable.reuse': 'true'})
                 c = cases()[0]
                 selected[7] = replace(c, overrides={**selected[7].overrides, **c.overrides})
             state['queries'] = queries
@@ -96,7 +97,8 @@ def main():
             write(directory / 'state.json', state)
             path, result = launch_group(work, 'critical-path-' + a.phase, 0,
                 [selected[q] for q in queries], {'spark.rapids.sql.reader.kvikio.numThreads': '32',
-                                               'spark.rapids.sql.metrics.level': 'DEBUG'})
+                    'spark.rapids.sql.metrics.level': 'DEBUG'},
+                runtime_hash_reuse_queries=[9] if a.phase.startswith('C') else None)
             state['groups'].append({'run': str(path), 'status': result['status'], 'samples': result['samples'],
                                     'error': result.get('error'), 'driver_exit_code': result['driver_exit_code']})
             assert result['status'] == 'completed' and result['driver_exit_code'] == 0, result.get('error')
@@ -104,7 +106,9 @@ def main():
             for s in result['samples']:
                 if s['query'] == 9:
                     count = sum(n['metrics'].get('hashTableReuses', 0) for n in s['plan_metrics'])
-                    assert (count > 0) == a.phase.startswith('B'), (a.phase, count)
+                    assert (count > 0) == a.phase.startswith(('B', 'C')), (a.phase, count)
+                    if a.phase.startswith('C'):
+                        assert s['runtime_hash_reuse_proof']['physical_plan_unchanged']
             observed = {}
             for line in (directory / 'pool.jsonl').open():
                 for r in json.loads(line)['executors']:

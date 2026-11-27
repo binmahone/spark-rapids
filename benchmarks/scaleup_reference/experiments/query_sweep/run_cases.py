@@ -307,6 +307,9 @@ def main():
                 timer.daemon = hard.daemon = True
                 timer.start()
                 hard.start()
+                reuse_key = 'spark.rapids.sql.join.hashTable.reuse'
+                runtime_reuse = query in config.get('experimental_runtime_hash_reuse_queries', [])
+                reuse_proof = None
                 try:
                     started = time.perf_counter()
                     frame = prepare_frame(spark, candidate)
@@ -315,6 +318,14 @@ def main():
                     (app / (token + '.preflight.txt')).write_text(preflight)
                     (app / (token + '.sql')).write_text(candidate.sql)
                     check_branch(query, candidate, preflight)
+                    if runtime_reuse:
+                        assert spark.conf.get(reuse_key) == 'false'
+                        assert 'GpuDriverlessBroadcastHashJoin' in preflight
+                        assert re.search(r'\bGpuBroadcastHashJoin\b', preflight)
+                        # Materialize the plan with its original broadcast transports, then change
+                        # only the configuration read by existing ordinary joins at execution.
+                        spark.conf.set(reuse_key, 'true')
+                        assert spark.conf.get(reuse_key) == 'true'
                     if collector_config:
                         rows = spark._jvm.com.nvidia.spark.rapids.benchmark.EarlyShuffleCollector.collect(
                             frame._jdf, collector_config['mode'] == 'early-leaves',
@@ -325,6 +336,8 @@ def main():
                     if expired.is_set():
                         raise TimeoutError('Query exceeded its limit')
                 finally:
+                    if runtime_reuse:
+                        spark.conf.set(reuse_key, 'false')
                     timer.cancel()
                     hard.cancel()
                 plan = execution.executedPlan()
@@ -336,6 +349,16 @@ def main():
                 Path(str(prefix) + '.executed.txt').write_text(plan_text)
                 node_metrics = metrics(plan)
                 write(str(prefix) + '.metrics.json', node_metrics)
+                if runtime_reuse:
+                    assert preflight == plan_text, 'Execution changed the frozen physical plan'
+                    ordinary = [n for n in node_metrics if n['node'] == 'GpuBroadcastHashJoin']
+                    assert sum(n['metrics'].get('hashTableReuses', 0) for n in ordinary) > 0
+                    assert any(n['node'] == 'GpuDriverlessBroadcastHashJoin' for n in node_metrics)
+                    reuse_proof = {'planning_value': 'false', 'execution_value': 'true',
+                        'restored_value': spark.conf.get(reuse_key), 'physical_plan_unchanged': True,
+                        'ordinary_join_reuses': sum(n['metrics'].get('hashTableReuses', 0) for n in ordinary),
+                        'scope': 'Diagnostic planning/execution separation, not a production configuration'}
+                    write(str(prefix) + '.runtime-reuse.json', reuse_proof)
                 if (candidate.name == 'ordinary_customer_reuse' and
                         query_profile['spark.rapids.sql.metrics.level'] == 'DEBUG' and
                         not sum(n['metrics'].get('hashTableReuses', 0) for n in node_metrics)):
@@ -385,6 +408,8 @@ def main():
                           'validation': validation, 'validation_seconds': validation_seconds,
                           'reader_metrics': reader, 'plan_metrics': node_metrics,
                           'scan_configuration': scan_configuration}
+                if reuse_proof:
+                    sample['runtime_hash_reuse_proof'] = reuse_proof
                 rows = frame = execution = plan = None
                 if not args.reference_only:
                     before = time.perf_counter()

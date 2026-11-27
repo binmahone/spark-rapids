@@ -18,7 +18,7 @@ from variants import ORDER, catalog, extra_cases, targeted
 
 
 def launch_group(work, phase, index, cases, global_conf, collector=None,
-                 view_casts=None, domain_proof=None):
+                 view_casts=None, domain_proof=None, runtime_hash_reuse_queries=None):
     deployment = read(work / 'evidence/deployment.json')
     config = load_config('aws48x', work / 'evidence/deployment.json')
     config['spark_conf'].update(global_conf)
@@ -42,6 +42,9 @@ def launch_group(work, phase, index, cases, global_conf, collector=None,
             SUITE / 'scripts/common.py', SUITE / 'scripts/services.py',
             SUITE / 'scripts/catalog_statistics.py', SUITE / 'scripts/validation.py']},
         classification='Unqualified screening, not a Daily Trend score')
+    if runtime_hash_reuse_queries:
+        assert set(runtime_hash_reuse_queries) <= set(queries)
+        config['experimental_runtime_hash_reuse_queries'] = runtime_hash_reuse_queries
     helper = None
     if view_casts is not None:
         assert domain_proof is not None

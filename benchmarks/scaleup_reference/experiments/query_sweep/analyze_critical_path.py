@@ -141,6 +141,8 @@ def main():
             s['sql_sha256'] = raw['sql_sha256']
             s['case_conf'] = raw['case_conf']
             s['plan_metrics'] = raw['plan_metrics']
+            if 'runtime_hash_reuse_proof' in raw:
+                s['runtime_hash_reuse_proof'] = raw['runtime_hash_reuse_proof']
             s.update(pressure(directory, s['execution_window_ms']))
             s['schedule'] = timeline[token]
         reports[directory.name] = data

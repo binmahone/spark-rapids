@@ -56,10 +56,11 @@ kprobe:scan_folios
   $lock = (uint64)&$lru->lru_lock;
   if (@scan_begin[tid]) { @scan_reentry = count(); }
   if (@scan_active[$lock]) { @overlapping_scan_intervals = count(); }
-  @scan_begin[tid] = nsecs;
+  $begin = nsecs;
+  @scan_begin[tid] = $begin;
   @scan_lock[tid] = $lock;
   @scan_candidate[$lock] = tid;
-  @scan_candidate_begin[$lock] = nsecs;
+  @scan_candidate_begin[$lock] = $begin;
   @scan_active[$lock] = @scan_active[$lock] + 1;
   @scan_begins = count();
 }

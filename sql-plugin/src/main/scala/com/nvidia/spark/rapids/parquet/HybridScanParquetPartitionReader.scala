@@ -110,7 +110,8 @@ private[parquet] class HybridScanPipeline(context: HybridScanContext) extends Lo
   private def withStagedOnDevice[T](chunks: Array[HostMemoryBuffer])(
       fn: Array[DeviceMemoryBuffer] => T): T =
     HybridScanPipeline.withCopyEvent { event =>
-      HybridScanPipeline.withStagedOnDevice(chunks, maxH2DPackSize, minH2DPackSize, event)(fn)
+      HybridScanPipeline.withStagedOnDevice(chunks, maxH2DPackSize, minH2DPackSize,
+        event, HybridScanPipeline.copyStream)(fn)
     }
 
   private def totalBytes(ranges: Array[ByteRange]): Long = ranges.map(_.size()).sum
@@ -605,14 +606,20 @@ object HybridScanPipeline extends Logging {
    * holding the GPU semaphore.
    */
   private val freeCopyEvents = new LinkedBlockingQueue[Cuda.Event]()
+  private var copyStream: Cuda.Stream = _
   @volatile private var copyEventsCreated = false
 
   /** Create the copy events. Called with the GPU memory setup. */
   def init(numCores: Int): Unit = synchronized {
     require(numCores > 0, s"hybrid scan copy events need a positive core count, got $numCores")
     if (!copyEventsCreated) {
-      (0 until numCores).foreach(_ => freeCopyEvents.add(new Cuda.Event()))
+      closeOnExcept(new Cuda.Stream(true)) { stream =>
+        val events = (0 until numCores).toArray.safeMap(_ => new Cuda.Event())
+        events.foreach(freeCopyEvents.add)
+        copyStream = stream
+      }
       copyEventsCreated = true
+      logInfo("Hybrid scan stages host buffers on a nonblocking copy stream")
     }
   }
 
@@ -638,7 +645,9 @@ object HybridScanPipeline extends Logging {
     val events = freeCopyEvents.toArray(Array.empty[Cuda.Event])
     freeCopyEvents.clear()
     copyEventsCreated = false
-    events.safeClose()
+    val stream = copyStream
+    copyStream = null
+    withResource(stream) { _ => events.safeClose() }
   }
 
   /** Parse the footer into a reader. The caller owns and closes both the reader and the footer. */
@@ -657,15 +666,16 @@ object HybridScanPipeline extends Logging {
 
   /**
    * Copy `chunks` to the device in packs of at most `maxPackSize` bytes and run `fn` on the device
-   * buffers, which are freed when it returns. `fn` is queued on the copy's stream, so it is
-   * ordered after the copy. `event` must stay open until the copy is closed and must not be
-   * shared with another open copy.
+   * buffers, which are freed on the default stream. The default stream waits on the copy's
+   * completion event before `fn` queues its work. `event` and `copyStream` must stay open until
+   * the copy is closed, and the event must not be shared with another open copy.
    */
   private[parquet] def withStagedOnDevice[T](
       chunks: Array[HostMemoryBuffer],
       maxPackSize: Long,
       minPackSize: Long,
-      event: Cuda.Event)(fn: Array[DeviceMemoryBuffer] => T): T = {
+      event: Cuda.Event,
+      copyStream: Cuda.Stream = Cuda.DEFAULT_STREAM)(fn: Array[DeviceMemoryBuffer] => T): T = {
     var copied = false
     val splitCopy = (target: AutoCloseableTargetSize) => {
       if (copied) {
@@ -689,9 +699,11 @@ object HybridScanPipeline extends Logging {
     // waits, then copies again and reruns fn; the host chunks outlive each attempt.
     withRetry(packSize, splitCopy) { attempt =>
       copied = false
-      withResource(PackedHostToDeviceCopy.copyAsync(chunks, Cuda.DEFAULT_STREAM,
+      withResource(PackedHostToDeviceCopy.copyAsync(chunks, copyStream,
           attempt.targetSize, event)) { staged =>
         copied = true
+        staged.makeStreamWait(Cuda.DEFAULT_STREAM)
+        staged.setFreeStream(Cuda.DEFAULT_STREAM)
         fn(staged.getBuffers())
       }
     }.next()

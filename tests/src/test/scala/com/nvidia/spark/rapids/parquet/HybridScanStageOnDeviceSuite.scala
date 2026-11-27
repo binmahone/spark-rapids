@@ -36,6 +36,12 @@ class HybridScanStageOnDeviceSuite extends RmmSparkRetrySuiteBase {
     }
   }
 
+  private def withCopyResources(body: (Cuda.Event, Cuda.Stream) => Unit): Unit = {
+    withResource(new Cuda.Stream(true)) { stream =>
+      withResource(new Cuda.Event()) { event => body(event, stream) }
+    }
+  }
+
   private def injectSplitOnNextGpuAlloc(): Unit =
     RmmSpark.forceSplitAndRetryOOM(RmmSpark.getCurrentThreadId, 1,
       RmmSpark.OomInjectionType.GPU.ordinal, 0)
@@ -62,12 +68,12 @@ class HybridScanStageOnDeviceSuite extends RmmSparkRetrySuiteBase {
   }
 
   test("a split OOM while staging retries with half the pack size") {
-    withResource(new Cuda.Event()) { event =>
+    withCopyResources { (event, stream) =>
       withResource(filledChunks(2)) { chunks =>
         RmmSpark.getAndResetNumSplitRetryThrow(/*taskId*/ 1)
         injectSplitOnNextGpuAlloc()
         assertStagedClosed { record =>
-          HybridScanPipeline.withStagedOnDevice(chunks, 2 * CHUNK, CHUNK, event) { device =>
+          HybridScanPipeline.withStagedOnDevice(chunks, 2 * CHUNK, CHUNK, event, stream) { device =>
             record(device)
             assert(RmmSpark.getAndResetNumSplitRetryThrow(/*taskId*/ 1) > 0)
             assertStaged(chunks, device)
@@ -78,13 +84,13 @@ class HybridScanStageOnDeviceSuite extends RmmSparkRetrySuiteBase {
   }
 
   test("a split OOM while staging retries at the minimum when half would be below it") {
-    withResource(new Cuda.Event()) { event =>
+    withCopyResources { (event, stream) =>
       withResource(filledChunks(3)) { chunks =>
         RmmSpark.getAndResetNumSplitRetryThrow(/*taskId*/ 1)
         injectSplitOnNextGpuAlloc()
         // Half of the 3 * CHUNK bytes is below the 2 * CHUNK floor, so the retry uses the floor.
         assertStagedClosed { record =>
-          HybridScanPipeline.withStagedOnDevice(chunks, 8 * CHUNK, 2 * CHUNK, event) { device =>
+          HybridScanPipeline.withStagedOnDevice(chunks, 8 * CHUNK, 2 * CHUNK, event, stream) { device =>
             record(device)
             assert(RmmSpark.getAndResetNumSplitRetryThrow(/*taskId*/ 1) > 0)
             assertStaged(chunks, device)
@@ -100,12 +106,12 @@ class HybridScanStageOnDeviceSuite extends RmmSparkRetrySuiteBase {
   }
 
   test("a split OOM while staging at the minimum pack size fails") {
-    withResource(new Cuda.Event()) { event =>
+    withCopyResources { (event, stream) =>
       withResource(filledChunks(2)) { chunks =>
         injectSplitOnNextGpuAlloc()
         assertStagedClosed { record =>
           assertThrows[GpuSplitAndRetryOOM] {
-            HybridScanPipeline.withStagedOnDevice(chunks, CHUNK, CHUNK, event)(record)
+            HybridScanPipeline.withStagedOnDevice(chunks, CHUNK, CHUNK, event, stream)(record)
           }
         }
       }
@@ -113,14 +119,14 @@ class HybridScanStageOnDeviceSuite extends RmmSparkRetrySuiteBase {
   }
 
   test("an injected OOM reaches the work on the staged buffers") {
-    withResource(new Cuda.Event()) { event =>
+    withCopyResources { (event, stream) =>
       withResource(filledChunks(2)) { chunks =>
         var calls = 0
         // Skip the one pack allocation, so the OOM hits the allocation in the work.
         RmmSpark.forceRetryOOM(RmmSpark.getCurrentThreadId, 1,
           RmmSpark.OomInjectionType.GPU.ordinal, 1)
         assertStagedClosed { record =>
-          HybridScanPipeline.withStagedOnDevice(chunks, 2 * CHUNK, CHUNK, event) { device =>
+          HybridScanPipeline.withStagedOnDevice(chunks, 2 * CHUNK, CHUNK, event, stream) { device =>
             record(device)
             calls += 1
             withResource(DeviceMemoryBuffer.allocate(1))(_ => ())
@@ -132,12 +138,12 @@ class HybridScanStageOnDeviceSuite extends RmmSparkRetrySuiteBase {
   }
 
   test("a split OOM in the work on the staged buffers fails without shrinking the pack") {
-    withResource(new Cuda.Event()) { event =>
+    withCopyResources { (event, stream) =>
       withResource(filledChunks(2)) { chunks =>
         var calls = 0
         assertStagedClosed { record =>
           assertThrows[GpuSplitAndRetryOOM] {
-            HybridScanPipeline.withStagedOnDevice(chunks, 2 * CHUNK, CHUNK, event) { device =>
+            HybridScanPipeline.withStagedOnDevice(chunks, 2 * CHUNK, CHUNK, event, stream) { device =>
               record(device)
               calls += 1
               injectSplitOnNextGpuAlloc()
@@ -149,4 +155,42 @@ class HybridScanStageOnDeviceSuite extends RmmSparkRetrySuiteBase {
       }
     }
   }
+
+  test("side-stream staging preserves a large payload before default-stream consumption") {
+    val bytes = 32L * 1024 * 1024
+    withCopyResources { (event, stream) =>
+      withResource(HostMemoryBuffer.allocate(bytes)) { input =>
+        withResource(HostMemoryBuffer.allocate(bytes)) { output =>
+          (1 to 4).foreach { seed =>
+            input.setMemory(0, bytes, seed.toByte)
+            HybridScanPipeline.withStagedOnDevice(Array(input), bytes, bytes,
+                event, stream) { device =>
+              output.copyFromDeviceBuffer(device(0), Cuda.DEFAULT_STREAM)
+              val observed = new Array[Byte](bytes.toInt)
+              output.getBytes(observed, 0, 0, bytes)
+              assert(observed.forall(_ == seed.toByte))
+            }
+          }
+        }
+      }
+    }
+  }
+
+  test("side-stream staging closes buffers when the consumer fails") {
+    withCopyResources { (event, stream) =>
+      withResource(filledChunks(2)) { chunks =>
+        assertStagedClosed { record =>
+          intercept[IllegalStateException] {
+            HybridScanPipeline.withStagedOnDevice(chunks, 2 * CHUNK, CHUNK,
+                event, stream) { device =>
+              record(device)
+              assertStaged(chunks, device)
+              throw new IllegalStateException("consumer failure")
+            }
+          }
+        }
+      }
+    }
+  }
+
 }

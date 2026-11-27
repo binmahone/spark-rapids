@@ -19,14 +19,15 @@ import java.util.concurrent.{Callable, CountDownLatch, Executors, TimeUnit}
 
 import ai.rapids.cudf.{ColumnVector, Rmm}
 import com.nvidia.spark.rapids._
-import com.nvidia.spark.rapids.Arm.withResource
+import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 
-import org.apache.spark.sql.catalyst.expressions.ExprId
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, ExprId}
+import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.types.IntegerType
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
 class DriverlessJoinStatsCacheSuite extends RmmSparkRetrySuiteBase {
-  private def keys(index: Int = 0): Seq[GpuExpression] =
+  private def keys(index: Int): Seq[GpuExpression] =
     Seq(GpuBoundReference(index, IntegerType, nullable = true)(ExprId(index), "key"))
 
   private def key(index: Int = 0, filter: Boolean = false): HashBuildKey =
@@ -127,6 +128,61 @@ class DriverlessJoinStatsCacheSuite extends RmmSparkRetrySuiteBase {
         }
         assert(cache.get(key()).isEmpty)
         assert(cache.getOrCompute(key(), NoopMetric, NoopMetric)(stats(borrowed)).isDistinct)
+      }
+    }
+  }
+
+  test("real join iterators publish and reuse key-specific statistics without losing duplicates") {
+    withResource(ColumnVector.fromInts(1, 2, 3)) { unique =>
+      withResource(ColumnVector.fromInts(1, 1, 3)) { duplicates =>
+        val batch = new ColumnarBatch(Array(
+          GpuColumnVector.from(unique.incRefCount(), IntegerType),
+          GpuColumnVector.from(duplicates.incRefCount(), IntegerType)), 3)
+        withResource(new StatsCachedBroadcastBatch(
+            SpillableColumnarBatch(batch, SpillPriorities.ACTIVE_ON_DECK_PRIORITY))) { cached =>
+          def join(index: Int): Seq[(Int, Int, Int)] = {
+            withResource(cached.getColumnarBatch()) { borrowed =>
+              val cache = borrowed.asInstanceOf[BorrowedBroadcastWithStats].joinStats
+              val provider = new StatsOnlyHashBackendProvider(cache, key(index),
+                NoopMetric, NoopMetric)
+              withResource(ColumnVector.fromBoxedInts(1, 2, 4, null)) { probeColumn =>
+                withResource(new ColumnarBatch(Array(
+                    GpuColumnVector.from(probeColumn.incRefCount(), IntegerType)), 4)) { probe =>
+                  val options = JoinOptions(JoinStrategy.HASH_ONLY,
+                    JoinBuildSideSelection.FIXED, 1024 * 1024, false, 0.75)
+                  val iterator = closeOnExcept(LazySpillableColumnarBatch(borrowed, "build")) {
+                    build => closeOnExcept(LazySpillableColumnarBatch(probe, "probe")) { stream =>
+                      new HashJoinIterator(build, keys(index), None, Iterator(stream), keys(0),
+                        Seq(AttributeReference("probe", IntegerType)()), options, Inner,
+                        GpuBuildRight, true, None, NoopMetric, NoopMetric, provider)
+                    }
+                  }
+                  val rows = withResource(iterator) { it =>
+                    it.flatMap { result =>
+                      withResource(result) { cb =>
+                        val columns = GpuColumnVector.extractBases(cb)
+                        withResource(columns(0).copyToHost()) { a =>
+                          withResource(columns(1).copyToHost()) { b =>
+                            withResource(columns(2).copyToHost()) { c =>
+                              (0 until cb.numRows()).map(i =>
+                                (a.getInt(i), b.getInt(i), c.getInt(i)))
+                            }
+                          }
+                        }
+                      }
+                    }.toVector.sorted
+                  }
+                  assert(cache.get(key(index)).exists(_.isDistinct == (index == 0)))
+                  rows
+                }
+              }
+            }
+          }
+          assert(join(0) == Seq((1, 1, 1), (2, 2, 1)))
+          assert(join(1) == Seq((1, 1, 1), (1, 2, 1)))
+          assert(join(1) == Seq((1, 1, 1), (1, 2, 1)))
+        }
+        assert(unique.getRefCount == 1 && duplicates.getRefCount == 1)
       }
     }
   }

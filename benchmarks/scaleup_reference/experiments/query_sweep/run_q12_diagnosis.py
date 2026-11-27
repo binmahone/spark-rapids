@@ -43,6 +43,10 @@ def main():
     work = Path(a.work).resolve()
     owner = read(work / 'evidence/owner.json')
     assert owner['thread_id'] == a.thread_id
+    if not a.phase.startswith('probe'):
+        assert (work / 'evidence/prepare.exit').read_text().strip() == '0'
+        assert (work / 'evidence/prepare-observers.exit').read_text().strip() == '0'
+        assert (work / 'evidence/host-prerequisites.json').is_file()
     assert Path('/proc/sys/vm/watermark_scale_factor').read_text().strip() == '10'
     assert subprocess.run(['systemctl', 'is-active', '--quiet', 'scaleup-reference-release.timer']).returncode != 0
     assert not subprocess.check_output(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader'], text=True).strip()
@@ -57,6 +61,10 @@ def main():
               'classification': 'Diagnostic with profiling overhead; not a benchmark score',
               'cache_policy': 'No cache flush; two actions per query',
               'instance_policy': 'Archive evidence and terminate the session-created instance after diagnosis'}
+    report['host_state_before'] = {path: Path(path).read_text() for path in [
+        '/proc/meminfo', '/proc/sys/vm/min_free_kbytes', '/proc/sys/vm/watermark_scale_factor',
+        '/proc/sys/vm/zone_reclaim_mode', '/sys/kernel/mm/lru_gen/enabled',
+        '/sys/kernel/mm/transparent_hugepage/enabled', '/sys/kernel/mm/transparent_hugepage/defrag']}
     write(directory / 'controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),
                                          'start_time': services.start_time(os.getpid())})
     write(directory / 'state.json', report)

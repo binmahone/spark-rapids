@@ -3,6 +3,7 @@
 # Licensed under the Apache License, Version 2.0.
 """Compare the frozen engine and a rebuilt hybrid scan copy-stream candidate."""
 import argparse
+import json
 from dataclasses import replace
 import os
 from pathlib import Path
@@ -82,6 +83,14 @@ def main():
         assert result['status'] == 'completed' and result['driver_exit_code'] == 0
         assert len(result['samples']) == 2 * len(queries)
         assert all(s['validation']['status'] == 'passed' for s in result['samples'])
+        pools = {}
+        for line in (directory / 'pool.jsonl').open():
+            for executor in json.loads(line)['executors']:
+                pools.setdefault(str(executor['pid']), set()).update(executor['thread_names'])
+        assert len(pools) == 8 and all(names == {'kvikio-' + str(i) for i in range(32)}
+                                     for names in pools.values())
+        state['native_threads'] = {pid: sorted(names) for pid, names in pools.items()}
+        assert all(child.poll() is None for child, _, _ in children)
         if candidate:
             logs = list((Path(read(run / 'config.json')['deployment']['scratch_root']) / run.name).rglob('stderr'))
             reached = [p for p in logs if 'Hybrid scan stages host buffers on a nonblocking copy stream' in p.read_text(errors='replace')]
@@ -97,6 +106,8 @@ def main():
             if child.poll() is None:
                 child.terminate()
             record['exit_code'] = child.wait(timeout=30)
+            if record['exit_code'] != 0:
+                state['status'] = 'failed'
             log.close()
         state['end_unix_ns'] = time.time_ns()
         write(directory / 'state.json', state)

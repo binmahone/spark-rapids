@@ -16,12 +16,13 @@
 package org.apache.spark.sql.rapids.execution
 
 import com.nvidia.spark.rapids._
+import com.nvidia.spark.rapids.Arm.closeOnExcept
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.rapids.shims.GpuShuffleExchangeExec
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.catalyst.plans.JoinType
+import org.apache.spark.sql.catalyst.plans.{FullOuter, InnerLike, JoinType, LeftOuter, RightOuter}
 import org.apache.spark.sql.catalyst.plans.physical.{Distribution, UnspecifiedDistribution}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.adaptive.BroadcastQueryStageExec
@@ -59,7 +60,9 @@ case class GpuDriverlessBroadcastHashJoinExec(
   override lazy val additionalMetrics: Map[String, GpuMetric] = broadcastJoinMetrics ++ Map(
     CONCAT_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_CONCAT_TIME),
     "executorBuilds" -> createMetric(ESSENTIAL_LEVEL, "executor broadcast builds"),
-    "executorBuildCacheHits" -> createMetric(ESSENTIAL_LEVEL, "executor broadcast cache hits")) ++
+    "executorBuildCacheHits" -> createMetric(ESSENTIAL_LEVEL, "executor broadcast cache hits"),
+    "buildStatsComputations" -> createMetric(DEBUG_LEVEL, "build statistics computations"),
+    "buildStatsReuses" -> createMetric(DEBUG_LEVEL, "build statistics reuses")) ++
     (if (conf.adaptiveExecutionEnabled) Map(
       "buildStageTime" -> fallbackBroadcast.gpuLongMetric("driverlessStageTime"),
       "buildStageBytes" -> fallbackBroadcast.gpuLongMetric("driverlessBuildBytes"))
@@ -83,6 +86,16 @@ case class GpuDriverlessBroadcastHashJoinExec(
     val opTime = gpuLongMetric(OP_TIME_LEGACY)
     val streamTime = gpuLongMetric(STREAM_TIME)
     val joinTime = gpuLongMetric(JOIN_TIME)
+    val statsComputations = gpuLongMetric("buildStatsComputations")
+    val statsReuses = gpuLongMetric("buildStatsReuses")
+    val reuseStats = joinType match {
+      case _: InnerLike | LeftOuter | RightOuter | FullOuter => buildKeys.forall(_.deterministic)
+      case _ => false
+    }
+    val statsKey = HashBuildKey.fromExpressions(Seq.empty,
+      GpuBindReferences.bindGpuReferencesNoMetrics(buildKeys, buildPlan.output),
+      compareNullsEqual, GpuHashJoin.buildSideNeedsNullFilter(
+        joinType, compareNullsEqual, buildSide, buildKeys))
     val joinOptions = RapidsConf.getJoinOptions(conf, RapidsConf.GPU_BATCH_SIZE_BYTES.get(conf))
     val build = exchange.executeDriverlessBroadcastBuild(schema, output, localMetrics, rapidsConf)
     new GpuDriverlessBroadcastJoinRDD[ColumnarBatch, ColumnarBatch, ColumnarBatch](
@@ -90,8 +103,16 @@ case class GpuDriverlessBroadcastHashJoinExec(
         val streamIter = new CollectTimeIterator(
           NvtxRegistry.BROADCAST_JOIN_STREAM, input, streamTime)
         val built = openBuild().next()
+        val provider = closeOnExcept(built) { _ =>
+          built match {
+            case borrowed: BorrowedBroadcastWithStats if reuseStats =>
+              new StatsOnlyHashBackendProvider(
+                borrowed.joinStats, statsKey, statsComputations, statsReuses)
+            case _ => OnDemandHashBackendProvider
+          }
+        }
         doJoin(built, streamIter, joinOptions, numOutputRows, numOutputBatches,
-          opTime, joinTime)
+          opTime, joinTime, provider)
       })
   }
 }

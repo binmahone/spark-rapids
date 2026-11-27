@@ -74,8 +74,9 @@ private[execution] class DriverlessBroadcastBuildRDD(
           val input = reader.read().asInstanceOf[Iterator[Product2[Int, ColumnarBatch]]].map(_._2)
           val batch = GpuDriverlessBroadcastHelper.assemble(input, schema, output, joinMetrics,
             codecConfigs, maxDecompressBatchMemory)
-          closeOnExcept(batch)(
+          val spillable = closeOnExcept(batch)(
             SpillableColumnarBatch(_, SpillPriorities.ACTIVE_ON_DECK_PRIORITY))
+          closeOnExcept(spillable)(new StatsCachedBroadcastBatch(_))
         }, () => GpuSemaphore.releaseIfNecessary(context),
           () => context.killTaskIfInterrupted(),
           () => GpuSemaphore.acquireIfNecessary(context), identity)(

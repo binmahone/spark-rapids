@@ -1152,21 +1152,23 @@ abstract class BaseHashJoinIterator(
   // We can cache the stats within an iterator because the build side is not changing
   protected lazy val buildStats: JoinBuildSideStats = buildStatsOpt
       .orElse(hashBackendProvider.readyStats).getOrElse {
-    joinType match {
-      case _: InnerLike | LeftOuter | RightOuter | FullOuter =>
-        built.checkpoint()
-        try {
-          withRetryNoSplit {
-            withRestoreOnRetry(built) {
-              JoinBuildSideStats.fromBatch(built.getBatch, boundBuiltKeys)
+    hashBackendProvider.cacheStats {
+      joinType match {
+        case _: InnerLike | LeftOuter | RightOuter | FullOuter =>
+          built.checkpoint()
+          try {
+            withRetryNoSplit {
+              withRestoreOnRetry(built) {
+                JoinBuildSideStats.fromBatch(built.getBatch, boundBuiltKeys)
+              }
             }
+          } finally {
+            built.allowSpilling()
           }
-        } finally {
-          built.allowSpilling()
-        }
-      case _ =>
-        // existence joins don't change size
-        JoinBuildSideStats(1.0, isDistinct = false)
+        case _ =>
+          // existence joins don't change size
+          JoinBuildSideStats(1.0, isDistinct = false)
+      }
     }
   }
 

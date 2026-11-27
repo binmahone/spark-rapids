@@ -656,9 +656,32 @@ final class HashBuildCache extends AutoCloseable {
 sealed trait HashBackendProvider {
   def readyStats: Option[JoinBuildSideStats]
 
+  def cacheStats(compute: => JoinBuildSideStats): JoinBuildSideStats = compute
+
   def backend(
       probe: HashProbeContext,
       request: BackendJoinRequest): HashProbeBackend
+}
+
+/** Reuses immutable build statistics while retaining the ordinary per-batch join backend. */
+private[execution] final class StatsOnlyHashBackendProvider(
+    cache: DriverlessJoinStatsCache,
+    key: HashBuildKey,
+    computations: GpuMetric,
+    reuses: GpuMetric) extends HashBackendProvider {
+  override def readyStats: Option[JoinBuildSideStats] = {
+    val result = cache.get(key)
+    if (result.isDefined) reuses += 1
+    result
+  }
+
+  override def cacheStats(compute: => JoinBuildSideStats): JoinBuildSideStats =
+    cache.getOrCompute(key, computations, reuses)(compute)
+
+  override def backend(
+      probe: HashProbeContext,
+      request: BackendJoinRequest): HashProbeBackend =
+    OnDemandHashBackendProvider.backend(probe, request)
 }
 
 /** Per-batch inputs used to select a physical hash-build implementation. */

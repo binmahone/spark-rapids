@@ -22,7 +22,7 @@ def main():
     p.add_argument('--work', type=Path, required=True)
     p.add_argument('--thread-id', required=True)
     p.add_argument('--variant', choices=('frozen', 'copy-stream', 'join-stats'), default='frozen')
-    p.add_argument('--query', type=int, choices=(8, 9), default=8)
+    p.add_argument('--query', type=int, choices=(1, 8, 9), default=8)
     a = p.parse_args()
     work = a.work.resolve()
     owner = read(work / 'evidence/owner.json')

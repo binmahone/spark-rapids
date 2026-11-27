@@ -6,7 +6,7 @@ readonly work=${1:?Prepared work directory is required}
 readonly thread=${2:?Owner thread is required}
 readonly variant=${3:-frozen}
 readonly query=${4:-8}
-[[ "$query" == 8 || "$query" == 9 ]] || exit 2
+[[ "$query" == 1 || "$query" == 8 || "$query" == 9 ]] || exit 2
 suffix=""
 case "$variant" in
     frozen) ;;

@@ -18,7 +18,8 @@ from variants import ORDER, catalog, extra_cases, targeted
 
 
 def launch_group(work, phase, index, cases, global_conf, collector=None,
-                 view_casts=None, domain_proof=None, runtime_hash_reuse_queries=None):
+                 view_casts=None, domain_proof=None, runtime_hash_reuse_queries=None,
+                 experimental_engine=None):
     deployment = read(work / 'evidence/deployment.json')
     config = load_config('aws48x', work / 'evidence/deployment.json')
     config['spark_conf'].update(global_conf)
@@ -29,6 +30,19 @@ def launch_group(work, phase, index, cases, global_conf, collector=None,
         raise AssertionError('Frozen engine differs')
     if sha(artifacts / 'benchmark-tools.jar') != '4d28e4919d16b6a607092f91db1e271afe837100550251976c330ee25a1a2b90':
         raise AssertionError('Frozen validation tools differ')
+    if experimental_engine is not None:
+        manifest = read(experimental_engine / 'manifest.json')
+        assert not manifest['source_dirty']
+        assert manifest['jni_maven_version'] == '26.12.0-20261124.043801-53'
+        candidate = experimental_engine / engine.name
+        assert sha(candidate) == manifest['files'][engine.name]['sha256']
+        frozen = read(artifacts / 'manifest.json')
+        for component in ('cudf-spark-jni-version-info.properties',
+                          'cudf-java-version-info.properties',
+                          'cudf-spark-private-version-info.properties'):
+            assert manifest['components'][component]['revision'] == frozen['components'][component]['revision']
+        engine = candidate
+        config['experimental_engine_manifest'] = manifest
     config.update(engine=str(engine), engine_sha256=sha(engine),
         tools=str(artifacts / 'benchmark-tools.jar'), queries=queries,
         case_variants={str(c.query): c.name for c in cases},

@@ -4,8 +4,15 @@
 set -euo pipefail
 readonly work=${1:?Prepared work directory}
 readonly here=$(cd "$(dirname "$0")" && pwd)
-readonly root=$(cd "$here/../../../.." && pwd)
+readonly root="$work/copy-stream-engine"
+readonly engine_revision=7ffdcd885c92575f94335d6a1c92de906ccfd961
 mkdir -p "$work/copy-stream-build" "$work/tools"
+if [[ -e "$work/copy-stream-build/build.exit" ]]; then
+  previous=$(date -u +%Y%m%dT%H%M%SZ)
+  mkdir "$work/copy-stream-build/attempt-$previous"
+  mv "$work/copy-stream-build/build.log" "$work/copy-stream-build/build.exit" \
+    "$work/copy-stream-build/attempt-$previous/"
+fi
 exec > >(tee "$work/copy-stream-build/build.log") 2>&1
 trap 'code=$?; printf "%s\n" "$code" > "$work/copy-stream-build/build.exit"' EXIT
 exec 8>"$work/copy-stream-build/build.lock"
@@ -39,6 +46,11 @@ if [[ ! -d "$PRIVATE_SOURCE/.git" ]]; then
 fi
 git -C "$PRIVATE_SOURCE" checkout --detach fe7a2e4c261bff14dd95c331d6a4384a44cad842
 test -z "$(git -C "$PRIVATE_SOURCE" status --porcelain)"
+if [[ ! -d "$root/.git" ]]; then
+  git clone --branch experiment/aws-copy-stream-engine-261127 \
+    https://github.com/binmahone/spark-rapids.git "$root"
+fi
+git -C "$root" checkout --detach "$engine_revision"
 git -C "$root" rev-parse HEAD > "$work/copy-stream-build/source-revision.txt"
 git -C "$root" diff --exit-code
 bash "$root/benchmarks/scaleup_reference/scripts/build.sh" amd64

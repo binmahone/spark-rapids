@@ -90,7 +90,8 @@ class HybridScanStageOnDeviceSuite extends RmmSparkRetrySuiteBase {
         injectSplitOnNextGpuAlloc()
         // Half of the 3 * CHUNK bytes is below the 2 * CHUNK floor, so the retry uses the floor.
         assertStagedClosed { record =>
-          HybridScanPipeline.withStagedOnDevice(chunks, 8 * CHUNK, 2 * CHUNK, event, stream) { device =>
+          HybridScanPipeline.withStagedOnDevice(chunks, 8 * CHUNK, 2 * CHUNK,
+              event, stream) { device =>
             record(device)
             assert(RmmSpark.getAndResetNumSplitRetryThrow(/*taskId*/ 1) > 0)
             assertStaged(chunks, device)
@@ -143,7 +144,8 @@ class HybridScanStageOnDeviceSuite extends RmmSparkRetrySuiteBase {
         var calls = 0
         assertStagedClosed { record =>
           assertThrows[GpuSplitAndRetryOOM] {
-            HybridScanPipeline.withStagedOnDevice(chunks, 2 * CHUNK, CHUNK, event, stream) { device =>
+            HybridScanPipeline.withStagedOnDevice(chunks, 2 * CHUNK, CHUNK,
+                event, stream) { device =>
               record(device)
               calls += 1
               injectSplitOnNextGpuAlloc()
@@ -192,5 +194,4 @@ class HybridScanStageOnDeviceSuite extends RmmSparkRetrySuiteBase {
       }
     }
   }
-
 }

@@ -38,7 +38,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', required=True)
     p.add_argument('--thread-id', required=True)
-    p.add_argument('--phase', choices=['probe', 'probe1', 'probe2', 'short0', 'short1',
+    p.add_argument('--phase', choices=['probe', 'probe1', 'probe2', 'probe3', 'short0', 'short1',
                    'prefix0', 'prefix1', 'light0', 'locks0', 'light1', 'locks1', 'light2'], required=True)
     p.add_argument('--observer-mode', choices=['full', 'light', 'locks'], default='full')
     a = p.parse_args()
@@ -113,7 +113,14 @@ def main():
                        '--work', str(work), '--output', str(directory / 'pool.jsonl')])
         if a.observer_mode != 'light':
             script = 'q12_locks.bt' if a.observer_mode == 'locks' else 'q12_reclaim.bt'
-            start('reclaim', ['bpftrace', '-q', str(HERE / script)], privileged=True)
+            binary = 'bpftrace'
+            if a.observer_mode == 'locks':
+                tool = read(work / 'evidence/bpftrace-tool.json')
+                assert tool['thread_id'] == a.thread_id and tool['instance_id'] == owner['instance_id']
+                binary = tool['path']
+                assert hashlib.sha256(Path(binary).read_bytes()).hexdigest() == tool['sha256']
+                report['bpftrace_tool'] = tool
+            start('reclaim', [binary, '-q', str(HERE / script)], privileged=True)
             deadline = time.monotonic() + 60
             while 'READY monotonic_ns=' not in (directory / 'reclaim.log').read_text():
                 assert all(p.poll() is None for p, _ in children), 'Profiler startup failed'

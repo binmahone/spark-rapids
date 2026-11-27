@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+# Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Licensed under the Apache License, Version 2.0.
+"""Capture one bounded Q8 CUDA timeline outside the scored SOL applications."""
+import argparse
+from pathlib import Path
+import os
+import shlex
+import signal
+import subprocess
+import sys
+import time
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
+from common import read, write
+from critical_path_variants import controls
+from run_screen import launch_group
+import services
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--work', type=Path, required=True)
+    p.add_argument('--thread-id', required=True)
+    a = p.parse_args()
+    work = a.work.resolve()
+    owner = read(work / 'evidence/owner.json')
+    assert owner['thread_id'] == a.thread_id
+    assert read(work / 'critical-path/S2/state.json')['status'] == 'completed'
+    assert not subprocess.check_output(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader'], text=True).strip()
+    directory = work / 'scan-timeline/Q8'
+    directory.mkdir(parents=True, exist_ok=False)
+    space = os.statvfs(directory)
+    assert space.f_bavail * space.f_frsize > 15 * 2**30
+    session = 'sol-scan-' + a.thread_id + '-q8'
+    report = {'status': 'starting', 'owner': owner, 'classification': 'Diagnostic profiling; excluded from SOL scores',
+              'nsys_session': session, 'source_revision': subprocess.check_output(
+                  ['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
+              'start_unix_ns': time.time_ns()}
+    write(directory / 'controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),
+                                         'start_time': services.start_time(os.getpid())})
+    write(directory / 'state.json', report)
+    def interrupt(signum, frame):
+        raise InterruptedError('Signal ' + str(signum))
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGALRM):
+        signal.signal(sig, interrupt)
+    signal.alarm(900)
+    ready = shlex.join([sys.executable, str(HERE / 'record_scan_trace_ready.py'), str(directory), session])
+    command = ['nsys', 'profile', '--trace=cuda,nvtx', '--cuda-trace-scope=system-wide',
+               '--sample=none', '--cpuctxsw=none', '--duration=240', '--stop-on-exit=false',
+               '--kill=none', '--session-new=' + session, '--output=' + str(directory / 'q8'),
+               '--after-collection-start=' + ready]
+    profiler, profiler_record = services.launch(command, directory / 'nsys.log', dict(os.environ))
+    report['profiler'] = profiler_record
+    report['profiler_command'] = command
+    write(directory / 'profiler-service.json', [profiler_record])
+    write(directory / 'state.json', report)
+    stopped = False
+    def stop_profiler():
+        nonlocal stopped
+        if stopped:
+            return
+        with (directory / 'nsys-stop.log').open('a') as log:
+            stop = subprocess.run(['nsys', 'stop', '--session=' + session], stdout=log,
+                                  stderr=subprocess.STDOUT, timeout=180)
+            report['nsys_stop_exit'] = stop.returncode
+            shutdown = subprocess.run(['nsys', 'shutdown', '--session=' + session, '--kill=none'],
+                                      stdout=log, stderr=subprocess.STDOUT, timeout=60)
+            report['nsys_shutdown_exit'] = shutdown.returncode
+        report['nsys_exit'] = profiler.wait(timeout=60)
+        stopped = True
+    try:
+        deadline = time.monotonic() + 45
+        while not (directory / 'nsys-ready.json').exists():
+            assert profiler.poll() is None, 'Profiler exited before the collection-start callback'
+            assert time.monotonic() < deadline, 'Profiler collection did not start'
+            time.sleep(.5)
+        report['status'] = 'running'
+        write(directory / 'state.json', report)
+        path, result = launch_group(work, 'scan-timeline-Q8', 0, [controls()[8]], {
+            'spark.rapids.sql.reader.kvikio.numThreads': '32',
+            'spark.rapids.sql.metrics.level': 'DEBUG',
+            'spark.executorEnv.CUDA_INJECTION_SHM_ALLOWED': 'TRUE'})
+        report['run'] = str(path)
+        report['result'] = {k: result[k] for k in ('status', 'driver_exit_code', 'samples')}
+        assert result['status'] == 'completed' and result['driver_exit_code'] == 0
+        assert len(result['samples']) == 2 and all(s['validation']['status'] == 'passed' for s in result['samples'])
+        assert profiler.poll() is None, 'Profiler ended before the diagnostic application'
+        stop_profiler()
+        trace = directory / 'q8.nsys-rep'
+        assert trace.exists() and trace.stat().st_size > 0
+        with (directory / 'export.log').open('x') as log:
+            subprocess.run(['nsys', 'export', '--type=sqlite', '--output=' + str(directory / 'q8.sqlite'),
+                            str(trace)], stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
+        report['status'] = 'completed'
+    except BaseException as error:
+        report.update(status='failed', error=repr(error))
+        raise
+    finally:
+        signal.alarm(0)
+        try:
+            stop_profiler()
+        finally:
+            services.stop(directory / 'profiler-service.json')
+            report['end_unix_ns'] = time.time_ns()
+            write(directory / 'state.json', report)
+
+
+if __name__ == '__main__':
+    main()

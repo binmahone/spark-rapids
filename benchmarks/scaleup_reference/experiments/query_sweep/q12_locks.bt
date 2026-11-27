@@ -102,7 +102,7 @@ fexit:scan_folios /@scan_begin[tid]/
 }
 
 fentry:native_queued_spin_lock_slowpath
-/@known_lock[(uint64)args->lock] || @evict_begin[tid]/
+/@known_lock[(uint64)args->lock]/
 {
   $lock = (uint64)args->lock;
   if (@wait_begin[tid]) { @wait_reentry = count(); }
@@ -113,7 +113,9 @@ fentry:native_queued_spin_lock_slowpath
   @wait_scan_active[tid] = @scan_active[$lock];
   @wait_begins = count();
 }
-fexit:native_queued_spin_lock_slowpath /@wait_begin[tid]/
+fexit:native_queued_spin_lock_slowpath
+/@known_lock[(uint64)args->lock] && @wait_begin[tid] &&
+ @wait_lock[tid] == (uint64)args->lock/
 {
   $end = nsecs;
   $duration = $end - @wait_begin[tid];

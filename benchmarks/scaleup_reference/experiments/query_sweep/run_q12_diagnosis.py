@@ -38,7 +38,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', required=True)
     p.add_argument('--thread-id', required=True)
-    p.add_argument('--phase', choices=['probe', 'probe1', 'probe2', 'probe3', 'probe4', 'probe5', 'short0', 'short1',
+    p.add_argument('--phase', choices=['probe', 'probe1', 'probe2', 'probe3', 'probe4', 'probe5', 'probe6', 'short0', 'short1',
                    'prefix0', 'prefix1', 'light0', 'locks0', 'light1', 'locks1', 'light2'], required=True)
     p.add_argument('--observer-mode', choices=['full', 'light', 'locks'], default='full')
     a = p.parse_args()

@@ -125,6 +125,7 @@ def main():
               'limits': [
                   'Light mode retains one-second host/VM monitoring and native-pool verification; it is not observer-free.',
                   'Only reclaim over 50 ms, eviction over 10 ms, and scan/spin slow paths over 1 ms are individually logged.',
+                  'Only known LRU-lock spin slow paths are instrumented at both entry and exit; other lock waits are not included.',
                   'Spin slow-path elapsed time measures that function, not the complete lock acquisition or holder duration.',
                   'Per-reclaim wait/scan subtotals include covered function calls below the individual logging threshold; evict time contains nested wait/scan time and must not be added to them.',
                   'scan_folios elapsed time is not proof of continuous lock ownership; kernel implementation and overlapping intervals require inspection.',

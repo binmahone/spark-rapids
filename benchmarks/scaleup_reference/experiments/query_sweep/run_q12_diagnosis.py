@@ -64,6 +64,8 @@ def main():
         raise InterruptedError('Signal ' + str(signum))
     signal.signal(signal.SIGTERM, interrupt)
     signal.signal(signal.SIGINT, interrupt)
+    signal.signal(signal.SIGALRM, interrupt)
+    signal.alarm(1800)
     def start(name, command, privileged=False):
         log = (directory / (name + '.log')).open('x'); logs.append(log)
         if privileged:
@@ -91,12 +93,15 @@ def main():
             time.sleep(0.5)
         start('threads', ['/usr/bin/python3', str(HERE / 'monitor_q12_threads.py'),
                           '--work', str(work), '--directory', str(directory)], privileged=True)
+        start('pool', [sys.executable, str(HERE / 'monitor_read_pool.py'),
+                       '--work', str(work), '--output', str(directory / 'pool.jsonl')])
         start('reclaim', ['bpftrace', '-q', str(HERE / 'q12_reclaim.bt')], privileged=True)
         start('cpu', ['perf', 'record', '-a', '-e', 'cpu-clock', '-F', '49', '-g',
                       '--call-graph', 'fp', '--clockid', 'mono',
                       '-o', str(directory / 'cpu.data'), '--', 'sleep', '3600'], privileged=True)
         time.sleep(4)
         assert all(p.poll() is None for p, _ in children), 'Profiler startup failed'
+        assert 'READY monotonic_ns=' in (directory / 'reclaim.log').read_text(), 'BPF probes not ready'
         if a.phase == 'probe':
             time.sleep(4)
         else:
@@ -136,6 +141,7 @@ def main():
         report.update(status='failed', error=repr(error))
         raise
     finally:
+        signal.alarm(0)
         for process, receipt in reversed(children):
             if process.poll() is None:
                 assert services.start_time(process.pid) == receipt['start_time']

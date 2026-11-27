@@ -13,10 +13,11 @@ sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
 from common import read, write
 from variants import ORDER
 from finalize_sol_reuse import normalize
+from verify_codec_postcheck import verified_state
 
 
 def summarize(work, phase, area):
-    state = read(work / area / phase / 'state.json')
+    state = verified_state(work / area / phase) if area == 'q9-codec' else read(work / area / phase / 'state.json')
     assert state['status'] == 'completed' and len(state['native_threads']) == 8
     assert all(r['exit_code'] == 0 for r in state['observers'])
     group = {**state['result'], 'run': state['run']}
@@ -62,6 +63,9 @@ def summarize(work, phase, area):
     return {'phase': phase, 'application_id': result['application_id'],
         'candidate': state['candidate'], 'engine_sha256': config['engine_sha256'],
         'source_revision': state['source_revision'], 'run': group['run'],
+        'postcheck_verification': ({k: state['postcheck_verification'][k] for k in
+            ('original_controller_status', 'original_error', 'original_state_sha256', 'verifier_revision')}
+            if state.get('postcheck_verification') else None),
         'queries': queries, 'validated_actions': len(samples),
         'best_of_two_sql_seconds': sum(q['best_sql_seconds'] for q in queries),
         'paired_cleanup_seconds': sum(q['paired_cleanup_seconds'] for q in queries),

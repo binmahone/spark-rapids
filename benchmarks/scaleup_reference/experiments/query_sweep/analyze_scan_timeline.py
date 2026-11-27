@@ -25,7 +25,7 @@ def duration(intervals):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', type=Path, required=True)
-    parser.add_argument('--variant', choices=('frozen', 'copy-stream', 'join-stats'), default='frozen')
+    parser.add_argument('--variant', choices=('frozen', 'copy-stream', 'join-stats', 'decimal-null-copy'), default='frozen')
     parser.add_argument('--query', type=int, choices=(1, 8, 9), default=8)
     args = parser.parse_args()
     trace = args.work / ('scan-timeline/Q' + str(args.query) + '-process-tree' +

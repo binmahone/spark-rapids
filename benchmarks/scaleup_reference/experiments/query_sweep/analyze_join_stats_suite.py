@@ -79,7 +79,7 @@ def summarize(work, phase, area):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', required=True, type=Path)
-    p.add_argument('--area', choices=('join-stats', 'q9-codec'), default='join-stats')
+    p.add_argument('--area', choices=('join-stats', 'q9-codec', 'decimal-null-copy'), default='join-stats')
     p.add_argument('--phases', nargs='+', default=['full-B1', 'full-A2'])
     a = p.parse_args()
     reports = [summarize(a.work, phase, a.area) for phase in a.phases]

@@ -10,7 +10,7 @@ readonly query=${4:-8}
 suffix=""
 case "$variant" in
     frozen) ;;
-    copy-stream|join-stats) suffix="-$variant" ;;
+    copy-stream|join-stats|decimal-null-copy) suffix="-$variant" ;;
     *) exit 2 ;;
 esac
 if [[ "$query" != 8 ]]; then suffix="-q$query$suffix"; fi

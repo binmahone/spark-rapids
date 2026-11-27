@@ -21,7 +21,7 @@ p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work', required=True, type=Path)
 p.add_argument('--thread-id', required=True)
 p.add_argument('--output', required=True, type=Path)
-p.add_argument('--variant', choices=('frozen', 'copy-stream', 'join-stats'), default='frozen')
+p.add_argument('--variant', choices=('frozen', 'copy-stream', 'join-stats', 'decimal-null-copy'), default='frozen')
 p.add_argument('--query', type=int, choices=(1, 8, 9), default=8)
 a = p.parse_args()
 assert read(a.work / 'evidence/owner.json')['thread_id'] == a.thread_id

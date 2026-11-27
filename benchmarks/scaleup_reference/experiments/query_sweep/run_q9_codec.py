@@ -15,7 +15,7 @@ import time
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
 from common import read, write
-from critical_path_variants import controls
+from critical_path_variants import controls, cases
 from run_screen import launch_group
 from variants import ORDER
 import services
@@ -25,7 +25,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', type=Path, required=True)
     parser.add_argument('--thread-id', required=True)
-    parser.add_argument('--phase', choices=('C0', 'N1', 'N2', 'C3'), required=True)
+    parser.add_argument('--phase', choices=('C0', 'N1', 'N2', 'C3', 'full-N1', 'full-C2'), required=True)
     args = parser.parse_args()
     work = args.work
     owner = read(work / 'evidence/owner.json')
@@ -38,19 +38,22 @@ def main():
     directory.mkdir(parents=True, exist_ok=False)
     write(directory / 'controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),
                                          'start_time': services.start_time(os.getpid())})
-    queries = [9]
+    queries = list(ORDER) if args.phase.startswith('full-') else [9]
     assert queries and len(set(queries)) == len(queries) and set(queries) <= set(ORDER)
     selected = controls()
     for q in queries:
         selected[q] = replace(selected[q], overrides={**selected[q].overrides,
             'spark.rapids.sql.join.hashTable.reuse': 'false'})
-    candidate = args.phase.startswith('N')
+    if 7 in queries:
+        q7 = cases()[0]
+        selected[7] = replace(q7, overrides={**selected[7].overrides, **q7.overrides})
+    candidate = 'N' in args.phase
     codec = 'none' if candidate else 'lz4'
     engine = work / 'join-stats-engine/.build/artifacts/amd64'
     state = {'status': 'running', 'owner': owner, 'candidate': candidate, 'codec': codec, 'queries': queries,
              'source_revision': subprocess.check_output(['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
              'start_unix_ns': time.time_ns(), 'observers': [],
-             'classification': 'Q9 LZ4 versus uncompressed shuffle; identical engine, SQL and 32 native read threads',
+             'classification': 'LZ4 versus uncompressed shuffle; identical engine, SQL and 32 native read threads',
              'gate': 'Worst candidate second-action SQL+cleanup must beat best control by at least 3%; full suite required for total score'}
     write(directory / 'state.json', state)
     def interrupt(signum, frame):

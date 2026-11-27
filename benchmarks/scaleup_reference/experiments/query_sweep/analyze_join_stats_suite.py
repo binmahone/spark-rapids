@@ -15,8 +15,8 @@ from variants import ORDER
 from finalize_sol_reuse import normalize
 
 
-def summarize(work, phase):
-    state = read(work / 'join-stats' / phase / 'state.json')
+def summarize(work, phase, area):
+    state = read(work / area / phase / 'state.json')
     assert state['status'] == 'completed' and len(state['native_threads']) == 8
     assert all(r['exit_code'] == 0 for r in state['observers'])
     group = {**state['result'], 'run': state['run']}
@@ -75,9 +75,10 @@ def summarize(work, phase):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', required=True, type=Path)
+    p.add_argument('--area', choices=('join-stats', 'q9-codec'), default='join-stats')
     p.add_argument('--phases', nargs='+', default=['full-B1', 'full-A2'])
     a = p.parse_args()
-    reports = [summarize(a.work, phase) for phase in a.phases]
+    reports = [summarize(a.work, phase, a.area) for phase in a.phases]
     output = {'classification': 'Measured experimental SOL candidates, not a theoretical lower bound or stock main score',
         'method': 'Each application contains all 22 queries in fixed order, two independent actions per query. '
                   'Choose the faster SQL action within that application and retain its matching cleanup time. '
@@ -92,7 +93,7 @@ def main():
             for q in report['queries']:
                 for key in ('sql_sha256', 'plan_sha256', 'reader_metrics'):
                     assert q[key] == reference[q['query']][key], (report['phase'], q['query'], key)
-    write(a.work / 'join-stats/sol-suite-scores.json', output)
+    write(a.work / a.area / 'sol-suite-scores.json', output)
     for report in reports:
         print(json.dumps({k: v for k, v in report.items() if k != 'queries'}))
 

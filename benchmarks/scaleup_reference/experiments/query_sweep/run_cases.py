@@ -67,6 +67,12 @@ def choose_case(query, config):
 
 
 def check_branch(query, candidate, plan):
+    if candidate.name == 'country_customer_broadcast':
+        joins = [line for line in plan.splitlines() if 'BroadcastHashJoin' in line
+                 and 'o_custkey' in line and 'c_custkey' in line and 'Gpu' in line]
+        if not joins or any('Exchange gpuhashpartitioning(o_custkey' in line
+                            for line in plan.splitlines()):
+            raise MechanismNotReached('Customer broadcast did not remove the orders customer-key exchange')
     if candidate.name.startswith('critical_witness_'):
         scans = [line for line in plan.splitlines() if 'Scan' in line and
                  'spark_catalog.default.lineitem[' in line]

@@ -39,7 +39,7 @@ def main():
     p.add_argument('--work', required=True)
     p.add_argument('--thread-id', required=True)
     p.add_argument('--phase', choices=['probe', 'probe1', 'probe2', 'probe3', 'probe4', 'probe5', 'probe6', 'short0', 'short1',
-                   'prefix0', 'prefix1', 'light0', 'locks0', 'light1', 'locks1', 'light2'], required=True)
+                   'prefix0', 'prefix1', 'light0', 'locks0', 'light1', 'locks1', 'light2', 'lruoff0', 'lruon0', 'lruoff1', 'lruon1'], required=True)
     p.add_argument('--observer-mode', choices=['full', 'light', 'locks'], default='full')
     a = p.parse_args()
     work = Path(a.work).resolve()
@@ -50,6 +50,8 @@ def main():
         assert (work / 'evidence/prepare-observers.exit').read_text().strip() == '0'
         assert (work / 'evidence/host-prerequisites.json').is_file()
     assert Path('/proc/sys/vm/watermark_scale_factor').read_text().strip() == '10'
+    expected_lru = 0 if a.phase.startswith('lruoff') else 7
+    assert int(Path('/sys/kernel/mm/lru_gen/enabled').read_text().strip(), 0) == expected_lru
     assert subprocess.run(['systemctl', 'is-active', '--quiet', 'scaleup-reference-release.timer']).returncode != 0
     assert not subprocess.check_output(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader'], text=True).strip()
     for port in (19077, 19080):

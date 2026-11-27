@@ -101,6 +101,7 @@ fexit:scan_folios /@scan_begin[tid]/
   delete(@scan_begin[tid]); delete(@scan_lock[tid]);
 }
 
+/* Match both ends to avoid consuming an outer interval on an untracked nested lock. */
 fentry:native_queued_spin_lock_slowpath
 /@known_lock[(uint64)args->lock]/
 {

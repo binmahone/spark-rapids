@@ -38,8 +38,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', required=True)
     p.add_argument('--thread-id', required=True)
-    p.add_argument('--phase', choices=['probe', 'probe1', 'probe2', 'probe3', 'probe4', 'probe5', 'probe6', 'short0', 'short1',
-                   'prefix0', 'prefix1', 'light0', 'locks0', 'light1', 'locks1', 'light2', 'lruoff0', 'lruon0', 'lruoff1', 'lruon1'], required=True)
+    p.add_argument('--phase', choices=['probe', 'probe1', 'probe2', 'probe3', 'probe4', 'probe5', 'probe6', 'probe7', 'short0', 'short1',
+                   'prefix0', 'prefix1', 'light0', 'locks0', 'light1', 'locks1', 'locks2', 'light2', 'lruoff0', 'lruon0', 'lruoff1', 'lruon1'], required=True)
     p.add_argument('--observer-mode', choices=['full', 'light', 'locks'], default='full')
     a = p.parse_args()
     work = Path(a.work).resolve()
@@ -67,6 +67,9 @@ def main():
               'cpu_event': cpu_event,
               'observer_mode': a.observer_mode,
               'lock_probe_provider': 'fentry/fexit' if a.observer_mode == 'locks' else None,
+              'probe_thresholds_ns': {'RECLAIM': 50000000, 'EVICT': 100000000,
+                                      'SCAN': 10000000, 'LOCK_WAIT': 50000000}
+                                     if a.observer_mode == 'locks' else None,
               'gpm_enabled': a.observer_mode == 'full',
               'cache_policy': 'No cache flush; two actions per query',
               'instance_policy': 'Retain across diagnostic iterations; archive and release when the investigation ends'}

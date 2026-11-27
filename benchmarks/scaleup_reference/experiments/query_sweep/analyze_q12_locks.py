@@ -118,13 +118,16 @@ def main():
         samples.append(sample)
     output = {'phase': args.phase, 'observer_mode': state['observer_mode'], 'samples': samples,
               'probe_audit': probe_audit(directory / 'reclaim.log', state.get('lock_probe_provider')),
+              'individual_event_thresholds_ns': state.get('probe_thresholds_ns',
+                  {'RECLAIM': 50000000, 'EVICT': 10000000, 'SCAN': 1000000, 'LOCK_WAIT': 1000000}),
               'event_counts_whole_run': dict(Counter(e['kind'] for e in events)),
               'monotonic_to_unix_offset_ns': offset, 'runtime_source_revision': state['source_revision'],
               'analysis_source_revision': subprocess.check_output(
                   ['git', '-C', str(Path(__file__).parent), 'rev-parse', 'HEAD'], text=True).strip(),
               'limits': [
                   'Light mode retains one-second host/VM monitoring and native-pool verification; it is not observer-free.',
-                  'Only reclaim over 50 ms, eviction over 10 ms, and scan/spin slow paths over 1 ms are individually logged.',
+                  'Individual events are logged only above the recorded thresholds.',
+                  'If output-loss messages are present, retained individual records do not establish complete event counts, distributions or global maxima.',
                   'Only known LRU-lock spin slow paths are instrumented at both entry and exit; other lock waits are not included.',
                   'Spin slow-path elapsed time measures that function, not the complete lock acquisition or holder duration.',
                   'Per-reclaim wait/scan subtotals include covered function calls below the individual logging threshold; evict time contains nested wait/scan time and must not be added to them.',

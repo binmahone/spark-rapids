@@ -11,6 +11,7 @@ tracepoint:vmscan:mm_vmscan_direct_reclaim_begin
   @order[tid] = args->order;
   @reclaim_wait_ns[tid] = 0; @reclaim_waits[tid] = 0;
   @reclaim_lru_wait_ns[tid] = 0;
+  @reclaim_wait_max_ns[tid] = 0; @reclaim_scan_max_ns[tid] = 0;
   @reclaim_scan_ns[tid] = 0; @reclaim_scans[tid] = 0;
   @reclaim_evict_ns[tid] = 0; @reclaim_evictions[tid] = 0;
   @reclaim_begins = count();
@@ -22,15 +23,16 @@ tracepoint:vmscan:mm_vmscan_direct_reclaim_end /@reclaim_begin[tid]/
   @reclaim_duration_us = hist((uint64)$duration / 1000);
   @reclaim_ends = count();
   if ($duration > 50000000) {
-    printf("RECLAIM begin_ns=%llu end_ns=%llu pid=%d tid=%d comm=%s duration_ns=%llu reclaimed=%llu order=%llu wait_ns=%llu waits=%llu lru_wait_ns=%llu scan_ns=%llu scans=%llu evict_ns=%llu evictions=%llu\n%s\n",
+    printf("RECLAIM begin_ns=%llu end_ns=%llu pid=%d tid=%d comm=%s duration_ns=%llu reclaimed=%llu order=%llu wait_ns=%llu waits=%llu lru_wait_ns=%llu scan_ns=%llu scans=%llu evict_ns=%llu evictions=%llu max_wait_ns=%llu max_scan_ns=%llu\n%s\n",
            @reclaim_begin[tid], $end, pid, tid, comm, $duration,
            args->nr_reclaimed, @order[tid], @reclaim_wait_ns[tid], @reclaim_waits[tid],
            @reclaim_lru_wait_ns[tid], @reclaim_scan_ns[tid], @reclaim_scans[tid], @reclaim_evict_ns[tid],
-           @reclaim_evictions[tid], kstack(24));
+           @reclaim_evictions[tid], @reclaim_wait_max_ns[tid], @reclaim_scan_max_ns[tid], kstack(24));
   }
   delete(@reclaim_begin[tid]); delete(@order[tid]);
   delete(@reclaim_wait_ns[tid]); delete(@reclaim_waits[tid]);
   delete(@reclaim_lru_wait_ns[tid]);
+  delete(@reclaim_wait_max_ns[tid]); delete(@reclaim_scan_max_ns[tid]);
   delete(@reclaim_scan_ns[tid]); delete(@reclaim_scans[tid]);
   delete(@reclaim_evict_ns[tid]); delete(@reclaim_evictions[tid]);
 }
@@ -56,7 +58,7 @@ fexit:evict_folios /@evict_begin[tid]/
     @reclaim_evict_ns[tid] = @reclaim_evict_ns[tid] + $duration;
     @reclaim_evictions[tid] = @reclaim_evictions[tid] + 1;
   }
-  if ($duration > 10000000) {
+  if ($duration > 100000000) {
     printf("EVICT begin_ns=%llu end_ns=%llu pid=%d tid=%d comm=%s lock=%llx node=%d duration_ns=%llu returned=%lld\n",
            @evict_begin[tid], $end, pid, tid, comm, @evict_lock[tid],
            @lock_node[@evict_lock[tid]], $duration, retval);
@@ -88,8 +90,9 @@ fexit:scan_folios /@scan_begin[tid]/
   if (@reclaim_begin[tid]) {
     @reclaim_scan_ns[tid] = @reclaim_scan_ns[tid] + $duration;
     @reclaim_scans[tid] = @reclaim_scans[tid] + 1;
+    if ($duration > @reclaim_scan_max_ns[tid]) { @reclaim_scan_max_ns[tid] = $duration; }
   }
-  if ($duration > 1000000) {
+  if ($duration > 10000000) {
     printf("SCAN begin_ns=%llu end_ns=%llu pid=%d tid=%d comm=%s lock=%llx node=%d duration_ns=%llu returned=%lld active=%llu\n",
            @scan_begin[tid], $end, pid, tid, comm, $lock,
            @lock_node[$lock], $duration, retval, @scan_active[$lock]);
@@ -126,13 +129,14 @@ fexit:native_queued_spin_lock_slowpath
   if (@reclaim_begin[tid]) {
     @reclaim_wait_ns[tid] = @reclaim_wait_ns[tid] + $duration;
     @reclaim_waits[tid] = @reclaim_waits[tid] + 1;
+    if ($duration > @reclaim_wait_max_ns[tid]) { @reclaim_wait_max_ns[tid] = $duration; }
     if (@known_lock[$lock]) {
       @reclaim_lru_wait_ns[tid] = @reclaim_lru_wait_ns[tid] + $duration;
     }
   }
   @wait_ns_by_lock[$lock] = sum($duration);
   @wait_max_ns_by_lock[$lock] = max($duration);
-  if ($duration > 1000000) {
+  if ($duration > 50000000) {
     printf("LOCK_WAIT begin_ns=%llu end_ns=%llu pid=%d tid=%d comm=%s lock=%llx known_lru=%d node=%d duration_ns=%llu scan_candidate_tid=%llu scan_candidate_begin_ns=%llu scan_active_at_begin=%llu\n%s\n",
            @wait_begin[tid], $end, pid, tid, comm, $lock, @known_lock[$lock],
            @lock_node[$lock], $duration, @wait_scan_candidate[tid],

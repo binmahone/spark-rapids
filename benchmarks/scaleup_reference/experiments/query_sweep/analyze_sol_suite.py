@@ -3,7 +3,6 @@
 # Licensed under the Apache License, Version 2.0.
 """Summarize complete validated applications without mixing samples across runs."""
 import argparse
-from collections import Counter
 import json
 from pathlib import Path
 import sys
@@ -40,8 +39,8 @@ def summarize(work, phase):
             'paired_cleanup_seconds': best['cleanup_seconds'],
             'paired_total_seconds': best['sql_plus_cleanup_seconds'],
             'native_read_bytes': best['reader_metrics']['hybridScanNativeHostBytesRead'],
-            'shuffle_write_bytes': sum(n['metrics'].get('dataSize', 0) for n in best['plan_metrics']
-                                      if n['node'] == 'GpuColumnarExchange'),
+            'shuffle_write_bytes': sum(n['metrics'].get('shuffleBytesWritten', 0) for n in best['plan_metrics']
+                                      if 'Exchange' in n['node']),
             'runtime_hash_reuse': best.get('runtime_hash_reuse_proof')})
     return {'phase': phase, 'application_id': result['application_id'],
         'source_revision': state['source_revision'], 'run': group['run'],

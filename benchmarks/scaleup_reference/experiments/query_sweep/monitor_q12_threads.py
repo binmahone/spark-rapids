@@ -33,7 +33,7 @@ def main():
         running = False
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
-    known, pids, tick = set(), [], 0
+    known, q12_seen, pids, tick = set(), set(), [], 0
     result_path = work / 'screen' / ('q12-diagnosis-' + directory.name + '-0') / 'applications/suite/result.json'
     with (directory / 'threads.jsonl').open('x', buffering=1) as output:
         while running:
@@ -65,11 +65,13 @@ def main():
             for pid in pids:
                 proc = Path('/proc') / str(pid)
                 entry = {'pid': pid, 'threads': []}
-                if pid not in known:
+                if pid not in known or (active == 12 and pid not in q12_seen):
                     entry['status'] = read(proc / 'status')
                     entry['numa_maps'] = read(proc / 'numa_maps')
                     entry['cgroup'] = read(proc / 'cgroup')
                     known.add(pid)
+                    if active == 12:
+                        q12_seen.add(pid)
                 if active == 12:
                     for task in (proc / 'task').glob('*'):
                         value = read(task / 'stat')

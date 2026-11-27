@@ -16,6 +16,14 @@ for file in /proc/sys/vm/min_free_kbytes /proc/sys/vm/watermark_scale_factor \
     cat "$file"
 done
 cat /proc/zoneinfo > "$work/evidence/initial-zoneinfo.txt"
+cat /proc/buddyinfo > "$work/evidence/initial-buddyinfo.txt"
+cat /proc/cmdline
+lscpu
+numactl --hardware
+for queue in /sys/block/nvme*/queue; do
+    echo "$queue"
+    cat "$queue/read_ahead_kb" "$queue/scheduler"
+done
 findmnt -T /opt/dlami/nvme
 nvidia-smi --query-gpu=index,pci.bus_id,driver_version,name --format=csv
 nvidia-smi topo -m

@@ -14,8 +14,6 @@ import time
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
 from common import read, write
-from critical_path_variants import controls
-from run_screen import launch_group
 import services
 
 
@@ -29,11 +27,11 @@ def main():
     assert owner['thread_id'] == a.thread_id
     assert read(work / 'critical-path/S2/state.json')['status'] == 'completed'
     assert not subprocess.check_output(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader'], text=True).strip()
-    directory = work / 'scan-timeline/Q8'
+    directory = work / 'scan-timeline/Q8-process-tree'
     directory.mkdir(parents=True, exist_ok=False)
     space = os.statvfs(directory)
     assert space.f_bavail * space.f_frsize > 15 * 2**30
-    session = 'sol-scan-' + a.thread_id + '-q8'
+    session = 'sol-scan-' + a.thread_id + '-q8-tree'
     report = {'status': 'starting', 'owner': owner, 'classification': 'Diagnostic profiling; excluded from SOL scores',
               'nsys_session': session, 'source_revision': subprocess.check_output(
                   ['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
@@ -47,10 +45,12 @@ def main():
         signal.signal(sig, interrupt)
     signal.alarm(900)
     ready = shlex.join([sys.executable, str(HERE / 'record_scan_trace_ready.py'), str(directory), session])
-    command = ['nsys', 'profile', '--trace=cuda,nvtx', '--cuda-trace-scope=system-wide',
-               '--sample=none', '--cpuctxsw=none', '--duration=240', '--stop-on-exit=false',
+    command = ['nsys', 'profile', '--trace=cuda,nvtx', '--cuda-trace-scope=process-tree',
+               '--sample=none', '--cpuctxsw=none', '--duration=240', '--stop-on-exit=true',
                '--kill=none', '--session-new=' + session, '--output=' + str(directory / 'q8'),
-               '--after-collection-start=' + ready]
+               '--after-collection-start=' + ready,
+               sys.executable, str(HERE / 'run_scan_timeline_workload.py'),
+               '--work', str(work), '--thread-id', a.thread_id, '--output', str(directory)]
     profiler, profiler_record = services.launch(command, directory / 'nsys.log', dict(os.environ))
     report['profiler'] = profiler_record
     report['profiler_command'] = command
@@ -60,6 +60,10 @@ def main():
     def stop_profiler():
         nonlocal stopped
         if stopped:
+            return
+        if profiler.poll() is not None:
+            report['nsys_exit'] = profiler.returncode
+            stopped = True
             return
         with (directory / 'nsys-stop.log').open('a') as log:
             stop = subprocess.run(['nsys', 'stop', '--session=' + session], stdout=log,
@@ -78,17 +82,16 @@ def main():
             time.sleep(.5)
         report['status'] = 'running'
         write(directory / 'state.json', report)
-        path, result = launch_group(work, 'scan-timeline-Q8', 0, [controls()[8]], {
-            'spark.rapids.sql.reader.kvikio.numThreads': '32',
-            'spark.rapids.sql.metrics.level': 'DEBUG',
-            'spark.executorEnv.CUDA_INJECTION_SHM_ALLOWED': 'TRUE'})
-        report['run'] = str(path)
+        report['nsys_exit'] = profiler.wait(timeout=600)
+        workload = read(directory / 'workload.json')
+        result = workload['result']
+        report['run'] = workload['run']
         report['result'] = {k: result[k] for k in ('status', 'driver_exit_code', 'samples')}
         assert result['status'] == 'completed' and result['driver_exit_code'] == 0
         assert len(result['samples']) == 2 and all(s['validation']['status'] == 'passed' for s in result['samples'])
-        assert profiler.poll() is None, 'Profiler ended before the diagnostic application'
+        assert (workload['end_unix_ns'] - read(directory / 'nsys-ready.json')['time_unix_ns']) / 1e9 < 240
         stop_profiler()
-        assert report['nsys_stop_exit'] == 0 and report['nsys_exit'] == 0
+        assert report['nsys_exit'] == 0
         trace = directory / 'q8.nsys-rep'
         assert trace.exists() and trace.stat().st_size > 0
         with (directory / 'export.log').open('x') as log:
@@ -100,6 +103,18 @@ def main():
         raise
     finally:
         signal.alarm(0)
+        controller = directory / 'workload-controller.json'
+        if controller.exists():
+            record = read(controller)
+            stat = Path('/proc') / str(record['pid']) / 'stat'
+            if stat.exists() and services.start_time(record['pid']) == record['start_time']:
+                assert stat.parent.stat().st_uid == record['owner_uid'] == os.getuid()
+                os.kill(record['pid'], signal.SIGTERM)
+        run = work / 'screen/scan-timeline-Q8-0'
+        services.stop(run / 'applications/suite/driver-service.json')
+        for path in (run / 'services').glob('*/*.json'):
+            if not path.name.endswith('.stopped.json'):
+                services.stop(path)
         try:
             stop_profiler()
         finally:

@@ -33,9 +33,9 @@ tracepoint:vmscan:mm_vmscan_direct_reclaim_end /@reclaim_begin[tid]/
   delete(@reclaim_evict_ns[tid]); delete(@reclaim_evictions[tid]);
 }
 
-kprobe:evict_folios
+fentry:evict_folios
 {
-  $lru = (struct lruvec *)arg0;
+  $lru = args->lruvec;
   $lock = (uint64)$lru + offsetof(struct lruvec, lru_lock);
   if (@evict_begin[tid]) { @evict_reentry = count(); }
   @evict_begin[tid] = nsecs;
@@ -44,7 +44,7 @@ kprobe:evict_folios
   @lock_node[$lock] = $lru->pgdat->node_id;
   @evict_begins = count();
 }
-kretprobe:evict_folios /@evict_begin[tid]/
+fexit:evict_folios /@evict_begin[tid]/
 {
   $end = nsecs;
   $duration = $end - @evict_begin[tid];
@@ -62,9 +62,9 @@ kretprobe:evict_folios /@evict_begin[tid]/
   delete(@evict_begin[tid]); delete(@evict_lock[tid]);
 }
 
-kprobe:scan_folios
+fentry:scan_folios
 {
-  $lru = (struct lruvec *)arg0;
+  $lru = args->lruvec;
   $lock = (uint64)$lru + offsetof(struct lruvec, lru_lock);
   if (@scan_begin[tid]) { @scan_reentry = count(); }
   if (@scan_active[$lock]) { @overlapping_scan_intervals = count(); }
@@ -76,7 +76,7 @@ kprobe:scan_folios
   @scan_active[$lock] = @scan_active[$lock] + 1;
   @scan_begins = count();
 }
-kretprobe:scan_folios /@scan_begin[tid]/
+fexit:scan_folios /@scan_begin[tid]/
 {
   $end = nsecs;
   $duration = $end - @scan_begin[tid];
@@ -99,10 +99,10 @@ kretprobe:scan_folios /@scan_begin[tid]/
   delete(@scan_begin[tid]); delete(@scan_lock[tid]);
 }
 
-kprobe:native_queued_spin_lock_slowpath
-/@known_lock[(uint64)arg0] || @evict_begin[tid]/
+fentry:native_queued_spin_lock_slowpath
+/@known_lock[(uint64)args->lock] || @evict_begin[tid]/
 {
-  $lock = (uint64)arg0;
+  $lock = (uint64)args->lock;
   if (@wait_begin[tid]) { @wait_reentry = count(); }
   @wait_begin[tid] = nsecs;
   @wait_lock[tid] = $lock;
@@ -111,7 +111,7 @@ kprobe:native_queued_spin_lock_slowpath
   @wait_scan_active[tid] = @scan_active[$lock];
   @wait_begins = count();
 }
-kretprobe:native_queued_spin_lock_slowpath /@wait_begin[tid]/
+fexit:native_queued_spin_lock_slowpath /@wait_begin[tid]/
 {
   $end = nsecs;
   $duration = $end - @wait_begin[tid];

@@ -98,7 +98,7 @@ def main():
                   'Per-reclaim wait/scan subtotals include covered function calls below the individual logging threshold; evict time contains nested wait/scan time and must not be added to them.',
                   'scan_folios elapsed time is not proof of continuous lock ownership; kernel implementation and overlapping intervals require inspection.',
                   'scan_candidate_tid is a correlation candidate, not a proven lock owner.',
-                  'Probe reentry, missing returns, and kprobe missed-hit counters must be audited before causal interpretation.',
+                  'Function entry/exit counts, reentry, residual intervals and dropped-output warnings must be audited before causal interpretation.',
                   'Summed concurrent thread intervals are not query wall time.',
                   'No cache flush is performed; separate runs have different cache histories.']}
     (directory / 'lock-analysis.json').write_text(json.dumps(output, indent=2) + '\n')

@@ -49,6 +49,10 @@ def perf_summary(path, windows, executor_pids, offset_ns):
         fields += ',trace'
     command = ['sudo', '-n', 'perf', 'script', '-i', str(path), '-F', fields,
                '--ns', '--max-stack', '64']
+    def seconds(value):
+        return f'{value // 10**9}.{value % 10**9:09d}'
+    command += ['--time', seconds(min(w[1] for w in windows) - offset_ns) + ',' +
+                seconds(max(w[2] for w in windows) - offset_ns)]
     summaries = {name: {'samples': 0, 'nonidle_samples': 0, 'executor_samples': 0,
                         'sample_period_sum': 0, 'leaf': Counter(), 'inclusive': Counter(),
                         'comm': Counter(), 'stacks': Counter(), 'trace': Counter(),
@@ -153,7 +157,17 @@ def main():
     work = Path(a.work)
     directory = work / 'q12-diagnosis' / a.phase
     state = read(directory / 'state.json')
-    assert state['status'] == 'completed' and state['gpm_restored']
+    assert state['gpm_restored'] and state.get('native_pool_verification', {}).get('passed')
+    assert all(g['status'] == 'completed' and g['driver_exit_code'] == 0 and
+               all(s['validation']['status'] == 'passed' for s in g['samples']) for g in state['groups'])
+    if state['status'] != 'completed':
+        assert state['status'] == 'failed' and not state.get('error')
+        delayed = [p for p in state['profilers'] if p.get('cleanup_error')]
+        assert len(delayed) == 1 and delayed[0]['name'] == 'cpu'
+        assert delayed[0]['cleanup_error'] == 'Process did not exit after signal; investigate recorded PID'
+    for record in state['profilers']:
+        proc = Path('/proc') / str(record['pid']) / 'stat'
+        assert not proc.exists() or proc.read_text().split(') ', 1)[1].split()[19] != str(record['start_time'])
     assert (work / 'evidence' / ('q12-diagnosis-' + a.phase + '.exit')).read_text().strip() == '0'
     controller = read(directory / 'controller.json')
     proc = Path('/proc') / str(controller['pid']) / 'stat'
@@ -223,6 +237,10 @@ def main():
         if path.exists():
             perf[name] = perf_summary(path, windows, pids, offset)
     result = {'phase': a.phase, 'samples': data['samples'], 'perf': perf,
+              'controller_status': state['status'],
+              'profiler_cleanup_records': state['profilers'],
+              'analysis_source_revision': subprocess.check_output(
+                  ['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
               'source_revision': state['source_revision'], 'perf_monotonic_to_unix_offset_ns': offset,
               'limits': ['Profiling overhead is not isolated; timings are diagnostic',
                          'CPU samples include user and kernel execution; nonidle and executor counts are separate',

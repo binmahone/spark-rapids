@@ -168,7 +168,7 @@ def main():
                 process.send_signal(signal.SIGINT if receipt['name'] in ('cpu', 'reclaim') else signal.SIGTERM)
         for process, receipt in children:
             try:
-                receipt['exit_code'] = process.wait(timeout=25)
+                receipt['exit_code'] = process.wait(timeout=180 if receipt['name'] == 'cpu' else 25)
             except subprocess.TimeoutExpired:
                 report['status'] = 'failed'
                 receipt['cleanup_error'] = 'Process did not exit after signal; investigate recorded PID'

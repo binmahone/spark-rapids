@@ -22,9 +22,12 @@ def normalize(plan):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', type=Path, required=True)
+    p.add_argument('--screen-only', action='store_true',
+                   help='Reject candidates that cannot meet the declared gate even with further repeats')
     a = p.parse_args()
     groups, rows = {}, []
-    for phase in ('R0', 'R1', 'R2', 'R3'):
+    phases = ('R0', 'R1') if a.screen_only else ('R0', 'R1', 'R2', 'R3')
+    for phase in phases:
         state = read(a.work / 'critical-path' / phase / 'state.json')
         assert state['status'] == 'completed' and state['pool_verified']
         assert all(p['exit_code'] == 0 for p in state['profilers'])
@@ -61,18 +64,24 @@ def main():
             for i in (1, 2):
                 for key in ('sql_sha256', 'plan_sha256', 'reader_metrics'):
                     assert groups[phase][q, i][key] == reference[key], (phase, q, i, key)
-        control = [groups[p][q, 2]['total_seconds'] for p in ('R0', 'R3')]
-        candidate = [groups[p][q, 2]['total_seconds'] for p in ('R1', 'R2')]
-        decisions.append({'query': q, 'accepted': max(candidate) <= .97 * min(control),
+        control = [groups[p][q, 2]['total_seconds'] for p in phases if p in ('R0', 'R3')]
+        candidate = [groups[p][q, 2]['total_seconds'] for p in phases if p in ('R1', 'R2')]
+        meets_gate = max(candidate) <= .97 * min(control)
+        decisions.append({'query': q, 'accepted': meets_gate and not a.screen_only,
+                          'eligible_for_confirmation': meets_gate,
                           'control_second_total_seconds': control,
                           'candidate_second_total_seconds': candidate,
                           'conservative_reduction_fraction': 1 - max(candidate) / min(control)})
     result = {'gate': 'Slower candidate second action including cleanup must beat faster control by at least 3 percent',
-              'order': ['R0', 'R1', 'R2', 'R3'], 'measurements': rows, 'decisions': decisions,
+              'order': list(phases), 'measurements': rows, 'decisions': decisions,
+              'screen_only': a.screen_only,
+              'early_rejection_reason': ('The slower-of-candidates and faster-of-controls gate cannot '
+                  'recover when the first candidate already misses 3 percent against the first control.'
+                  if a.screen_only else None),
               'full_suite_reuse_queries': [9] + [d['query'] for d in decisions if d['accepted']],
               'limits': ['Diagnostic execution-only switch; production integration is separate',
                          'No forced page-cache residency; preserve native work and inspect pressure']}
-    write(a.work / 'critical-path/sol-reuse-decision.json', result)
+    write(a.work / 'critical-path' / ('sol-reuse-screen.json' if a.screen_only else 'sol-reuse-decision.json'), result)
     for d in decisions:
         print(d)
     print('Full-suite reuse queries:', result['full_suite_reuse_queries'])

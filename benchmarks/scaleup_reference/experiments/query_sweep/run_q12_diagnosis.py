@@ -37,7 +37,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', required=True)
     p.add_argument('--thread-id', required=True)
-    p.add_argument('--phase', choices=['probe', 'short0', 'short1', 'prefix0', 'prefix1'], required=True)
+    p.add_argument('--phase', choices=['probe', 'probe1', 'short0', 'short1', 'prefix0', 'prefix1'], required=True)
     a = p.parse_args()
     work = Path(a.work).resolve()
     owner = read(work / 'evidence/owner.json')
@@ -102,7 +102,7 @@ def main():
         time.sleep(4)
         assert all(p.poll() is None for p, _ in children), 'Profiler startup failed'
         assert 'READY monotonic_ns=' in (directory / 'reclaim.log').read_text(), 'BPF probes not ready'
-        if a.phase == 'probe':
+        if a.phase.startswith('probe'):
             time.sleep(4)
         else:
             selection_path = HERE / 'results/261126-aws-speed-of-light/selected-cases-before-q11.json'

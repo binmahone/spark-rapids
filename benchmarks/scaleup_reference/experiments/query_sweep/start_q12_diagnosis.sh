@@ -17,7 +17,7 @@ readonly work=${1:?Prepared work directory is required}
 readonly thread=${2:?Owner thread is required}
 readonly phase=${3:?Phase is required}
 readonly here=$(cd "$(dirname "$0")" && pwd)
-[[ "$phase" =~ ^(probe|short0|short1|prefix0|prefix1)$ ]] || exit 2
+[[ "$phase" =~ ^(probe|probe1|short0|short1|prefix0|prefix1)$ ]] || exit 2
 [[ ! -e "$work/evidence/q12-diagnosis-$phase.log" ]] || exit 1
 exec > >(tee "$work/evidence/q12-diagnosis-$phase.log") 2>&1
 finish() { printf '%s\n' "$?" > "$work/evidence/q12-diagnosis-$phase.exit"; }

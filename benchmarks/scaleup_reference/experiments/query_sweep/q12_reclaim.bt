@@ -2,7 +2,8 @@
  * Licensed under the Apache License, Version 2.0.
  * Capture direct reclaim durations; counts are events, not elapsed query time.
  */
-BEGIN { printf("READY monotonic_ns=%llu\n", nsecs); }
+/* Interval probes avoid the stripped BEGIN/END symbols in Ubuntu's package. */
+interval:s:1 /!@ready/ { printf("READY monotonic_ns=%llu\n", nsecs); @ready = 1; }
 tracepoint:vmscan:mm_vmscan_direct_reclaim_begin
 {
   @begin[tid] = nsecs;
@@ -24,8 +25,4 @@ tracepoint:vmscan:mm_vmscan_direct_reclaim_end
   }
   delete(@begin[tid]); delete(@origin[tid]); delete(@order[tid]); delete(@gfp[tid]);
 }
-END {
-  print(@begins); print(@ends); print(@duration_us); print(@begin);
-  clear(@begin); clear(@origin); clear(@order); clear(@gfp);
-  clear(@begins); clear(@ends); clear(@duration_us);
-}
+/* bpftrace prints the final maps automatically on a graceful stop. */

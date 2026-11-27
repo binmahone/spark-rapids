@@ -5,7 +5,7 @@ set -euo pipefail
 readonly work=${1:?Prepared work directory}
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly root="$work/join-stats-engine"
-readonly engine_revision=1c0643063cab7a6febc80dc233c7678795a2012d
+readonly engine_revision=15bc44b501f3a65a91f1d57983e37eefee00c1c4
 mkdir -p "$work/join-stats-build" "$work/tools"
 if [[ -e "$work/join-stats-build/build.exit" ]]; then
   previous=$(date -u +%Y%m%dT%H%M%SZ)
@@ -50,6 +50,7 @@ if [[ ! -d "$root/.git" ]]; then
   git clone --branch experiment/aws-join-stats-engine-261127 \
     https://github.com/binmahone/spark-rapids.git "$root"
 fi
+git -C "$root" fetch origin experiment/aws-join-stats-engine-261127
 git -C "$root" checkout --detach "$engine_revision"
 git -C "$root" rev-parse HEAD > "$work/join-stats-build/source-revision.txt"
 git -C "$root" diff --exit-code

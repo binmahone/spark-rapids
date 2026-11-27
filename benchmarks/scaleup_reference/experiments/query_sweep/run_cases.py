@@ -320,7 +320,8 @@ def main():
                     check_branch(query, candidate, preflight)
                     if runtime_reuse:
                         assert spark.conf.get(reuse_key) == 'false'
-                        assert 'GpuDriverlessBroadcastHashJoin' in preflight
+                        if query == 9:
+                            assert 'GpuDriverlessBroadcastHashJoin' in preflight
                         assert re.search(r'\bGpuBroadcastHashJoin\b', preflight)
                         # Materialize the plan with its original broadcast transports, then change
                         # only the configuration read by existing ordinary joins at execution.
@@ -353,7 +354,8 @@ def main():
                     assert preflight == plan_text, 'Execution changed the frozen physical plan'
                     ordinary = [n for n in node_metrics if n['node'] == 'GpuBroadcastHashJoin']
                     assert sum(n['metrics'].get('hashTableReuses', 0) for n in ordinary) > 0
-                    assert any(n['node'] == 'GpuDriverlessBroadcastHashJoin' for n in node_metrics)
+                    if query == 9:
+                        assert any(n['node'] == 'GpuDriverlessBroadcastHashJoin' for n in node_metrics)
                     reuse_proof = {'planning_value': 'false', 'execution_value': 'true',
                         'restored_value': spark.conf.get(reuse_key), 'physical_plan_unchanged': True,
                         'ordinary_join_reuses': sum(n['metrics'].get('hashTableReuses', 0) for n in ordinary),

@@ -27,11 +27,16 @@ def main():
     p.add_argument('--work', required=True, type=Path)
     p.add_argument('--thread-id', required=True)
     p.add_argument('--phase', required=True, choices=['oracle', 'A0', 'B1', 'B2', 'C1', 'C2', 'A3',
-                                                    'S0', 'S1', 'S2'])
+                                                    'S0', 'S1', 'S2', 'S3', 'R0', 'R1', 'R2', 'R3'])
+    p.add_argument('--reuse-queries', default='9', help='Queries with diagnostic runtime reuse in candidate arms')
     a = p.parse_args()
     full_suite = a.phase.startswith('S')
-    candidate = a.phase.startswith(('B', 'C')) or a.phase in ('S1', 'S2')
-    isolated_reuse = a.phase.startswith('C') or a.phase in ('S1', 'S2')
+    reuse_probe = a.phase.startswith('R')
+    candidate = a.phase.startswith(('B', 'C')) or a.phase in ('S1', 'S2', 'S3', 'R1', 'R2')
+    isolated_reuse = a.phase.startswith('C') or a.phase in ('S1', 'S2', 'S3', 'R1', 'R2')
+    reuse_queries = [int(q) for q in a.reuse_queries.split(',')]
+    assert len(set(reuse_queries)) == len(reuse_queries)
+    assert set(reuse_queries) <= {5, 9, 19, 20}
     work = a.work.resolve()
     owner = read(work / 'evidence/owner.json')
     assert owner['thread_id'] == a.thread_id
@@ -50,8 +55,10 @@ def main():
              'source_revision': subprocess.check_output(['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
              'source_sha256': {f: hashlib.sha256((HERE / f).read_bytes()).hexdigest() for f in
                                ['critical_path_variants.py', 'run_critical_path.py', 'run_cases.py', 'run_screen.py']},
-             'classification': ('Complete 22-query SOL experiment; Q7 plan and Q9 runtime hash reuse'
-                                if full_suite else 'Focused Q9 and Q7 probes; unchanged Q8 temporal control; no full-suite score'),
+             'classification': ('Complete 22-query SOL experiment; Q7 plan and selected ordinary hash reuse'
+                                if full_suite else 'Focused ordinary hash reuse without SQL changes'
+                                if reuse_probe else 'Focused Q9 and Q7 probes; unchanged Q8 temporal control; no full-suite score'),
+             'runtime_hash_reuse_queries': reuse_queries if isolated_reuse else [],
              'cache_policy': 'No cache flush; same query order and two actions per query; residency is not controlled',
              'instance_policy': 'Retain instance and data; stop only recorded experiment processes'}
     write(directory / 'controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),
@@ -88,7 +95,9 @@ def main():
             start('pool', [sys.executable, str(HERE / 'monitor_read_pool.py'), '--work', str(work),
                            '--output', str(directory / 'pool.jsonl')])
             selected = controls()
-            queries = list(ORDER) if full_suite else [9, 7, 8]
+            queries = list(ORDER) if full_suite else [5, 19, 20] if reuse_probe else [9, 7, 8]
+            if isolated_reuse:
+                assert set(reuse_queries) <= set(queries)
             for q in queries:
                 selected[q] = replace(selected[q], overrides={**selected[q].overrides,
                     'spark.rapids.sql.join.hashTable.reuse': 'false'})
@@ -96,15 +105,16 @@ def main():
                 if a.phase.startswith('B'):
                     selected[9] = replace(selected[9], overrides={**selected[9].overrides,
                         'spark.rapids.sql.join.hashTable.reuse': 'true'})
-                c = cases()[0]
-                selected[7] = replace(c, overrides={**selected[7].overrides, **c.overrides})
+                if not reuse_probe:
+                    c = cases()[0]
+                    selected[7] = replace(c, overrides={**selected[7].overrides, **c.overrides})
             state['queries'] = queries
             state['start_unix_ns'] = time.time_ns()
             write(directory / 'state.json', state)
             path, result = launch_group(work, 'critical-path-' + a.phase, 0,
                 [selected[q] for q in queries], {'spark.rapids.sql.reader.kvikio.numThreads': '32',
                     'spark.rapids.sql.metrics.level': 'DEBUG'},
-                runtime_hash_reuse_queries=[9] if isolated_reuse else None)
+                runtime_hash_reuse_queries=reuse_queries if isolated_reuse else None)
             state['groups'].append({'run': str(path), 'status': result['status'], 'samples': result['samples'],
                                     'error': result.get('error'), 'driver_exit_code': result['driver_exit_code']})
             assert result['status'] == 'completed' and result['driver_exit_code'] == 0, result.get('error')
@@ -113,7 +123,7 @@ def main():
             assert [(s['query'], s['iteration']) for s in result['samples']] == [
                 (q, i) for q in queries for i in (1, 2)]
             for s in result['samples']:
-                if s['query'] == 9:
+                if s['query'] in reuse_queries:
                     count = sum(n['metrics'].get('hashTableReuses', 0) for n in s['plan_metrics'])
                     assert (count > 0) == candidate, (a.phase, count)
                     if isolated_reuse:

@@ -21,12 +21,15 @@ def main():
         assert state['status'] == 'completed'
         assert all(r['exit_code'] == 0 for r in state['observers'])
         app = Path(state['run']) / 'applications/suite'
+        config = json.loads((Path(state['run']) / 'config.json').read_text())
+        assert config['spark_conf']['spark.rapids.shuffle.compression.codec'] == state['codec']
         for sample in state['result']['samples']:
             assert sample['validation']['status'] == 'passed'
             if sample['iteration'] != 2:
                 continue
             q = sample['query']
             rows.append({'phase': phase, 'query': q, 'candidate': state['candidate'],
+                'codec': state['codec'], 'engine_sha256': config['engine_sha256'],
                 'sql_seconds': sample['sql_seconds'], 'cleanup_seconds': sample['cleanup_seconds'],
                 'sql_plus_cleanup_seconds': sample['sql_plus_cleanup_seconds'],
                 'sql_sha256': sample['sql_sha256'],
@@ -36,7 +39,7 @@ def main():
     decisions = []
     for query in sorted({r['query'] for r in rows}):
         group = [r for r in rows if r['query'] == query]
-        for key in ('sql_sha256', 'plan_sha256', 'reader_metrics'):
+        for key in ('engine_sha256', 'sql_sha256', 'plan_sha256', 'reader_metrics'):
             assert all(r[key] == group[0][key] for r in group), (query, key)
         candidates = [r['sql_plus_cleanup_seconds'] for r in group if r['candidate']]
         controls = [r['sql_plus_cleanup_seconds'] for r in group if not r['candidate']]

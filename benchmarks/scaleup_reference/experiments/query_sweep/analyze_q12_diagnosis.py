@@ -43,12 +43,15 @@ def distribution(values):
             'p95': values[min(len(values) - 1, int(len(values) * .95))], 'max': values[-1]}
 
 
-def perf_summary(path, windows, executor_pids, offset_ns):
+def perf_summary(path, windows, executor_pids, offset_ns, tids=None):
     fields = 'comm,pid,tid,time,event,period,ip,sym,dso'
     if path.stem == 'reclaim':
         fields += ',trace'
     command = ['sudo', '-n', 'perf', 'script', '-i', str(path), '-F', fields,
                '--ns', '--max-stack', '64']
+    if tids is not None:
+        assert tids
+        command += ['--tid', ','.join(str(tid) for tid in sorted(tids))]
     def seconds(value):
         return f'{value // 10**9}.{value % 10**9:09d}'
     command += ['--time', seconds(min(w[1] for w in windows) - offset_ns) + ',' +

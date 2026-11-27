@@ -38,7 +38,13 @@ def main():
             for e in json.loads(line)['executors']}
     samples = perf_summary(directory / 'cpu.data', windows, pids, offset) if windows else {}
     assert all(s['samples'] > 0 for s in samples.values()), 'No CPU observations in a requested interval'
-    output = {'cpu_event': state.get('cpu_event', 'cpu-clock'), 'reclaim_events': events,
+    event_threads = {}
+    for window in windows:
+        token = window[0]
+        event_threads[token] = perf_summary(
+            directory / 'cpu.data', [window], pids, offset,
+            tids={events[token]['tid']})[token]
+    output = {'event_thread_perf': event_threads, 'cpu_event': state.get('cpu_event', 'cpu-clock'), 'reclaim_events': events,
               'perf': samples, 'source_revision': subprocess.check_output(
                   ['git', '-C', str(Path(__file__).parent), 'rev-parse', 'HEAD'], text=True).strip(),
               'limits': ['One measured reclaim interval per Q12 action; concurrent waiters overlap',

@@ -146,7 +146,21 @@ def main():
             s.update(pressure(directory, s['execution_window_ms']))
             s['schedule'] = timeline[token]
         reports[directory.name] = data
-    result = {'phases': reports,
+    matched = []
+    if 'A0' in reports:
+        reference = {(s['query'], s['iteration']): s for s in reports['A0']['samples']}
+        for phase, report in reports.items():
+            if phase == 'B1':
+                continue
+            for s in report['samples']:
+                if s['query'] not in (8, 9):
+                    continue
+                before = reference[(s['query'], s['iteration'])]
+                for key in ('sql_sha256', 'normalized_plan_sha256', 'reader_metrics'):
+                    assert s[key] == before[key], (phase, s['query'], key)
+                matched.append({'phase': phase, 'query': s['query'], 'iteration': s['iteration'],
+                                'same_sql_plan_and_native_read_work': True})
+    result = {'phases': reports, 'matched_plan_checks': matched,
         'scope': 'Focused mechanism probes; no full-suite qualification or strict cache-state matching',
         'limits': ['Stage spans can overlap; do not add them as SQL wall time.',
                    'Operator task updates sum across concurrent tasks and are not elapsed query time.',

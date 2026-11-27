@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 import re
 
+from analyze_q12_diagnosis import summarize
+
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work', required=True, type=Path)
 p.add_argument('--phase', required=True)
@@ -39,6 +41,19 @@ for line in contents.splitlines():
         assert event['end_ns'] - event['begin_ns'] == event['duration_ns'] > 50000000
         events.append(event)
 offset = data['monotonic_to_unix_offset_ns']
+all_samples = summarize(a.work, Path(state['groups'][0]['run']))['samples']
+host = [json.loads(line) for line in (directory / 'host.jsonl').open()]
+whole_run_longest = []
+for event in sorted(events, key=lambda e: e['duration_ns'], reverse=True)[:10]:
+    begin, end = event['begin_ns'] + offset, event['end_ns'] + offset
+    queries = [{'query': s['query'], 'iteration': s['iteration']} for s in all_samples
+               if s['execution_window_ms']['start'] * 1000000 <= begin
+               and end <= s['execution_window_ms']['end'] * 1000000]
+    nearby = [r for r in host if begin - 1000000000 <= r['time_unix_ns'] <= end + 1000000000]
+    gaps = [(y['time_unix_ns'] - x['time_unix_ns']) / 1e9 for x, y in zip(nearby, nearby[1:])]
+    whole_run_longest.append({**event, 'fully_containing_sql': queries,
+                              'nearby_host_samples': len(nearby),
+                              'nearby_max_sample_gap_seconds': max(gaps) if gaps else None})
 samples = []
 for sample in data['samples']:
     begin = sample['execution_window_ms']['start'] * 1000000 - offset
@@ -60,7 +75,7 @@ for sample in data['samples']:
                     'slow_calls_fully_inside_sql': len(slow),
                     'longest_complete_calls': sorted(slow, key=lambda e: e['duration_ns'], reverse=True)[:10]})
 output = {'phase': a.phase, 'mglru_enabled': state['host_state_before']['/sys/kernel/mm/lru_gen/enabled'],
-          'audit': scalars, 'samples': samples,
+          'audit': scalars, 'samples': samples, 'whole_run_longest_calls': whole_run_longest,
           'limits': ['Reader threads only, identified by actual kvikio thread names.',
                      'Buckets group calls by completion second; durations can begin before the selected window.',
                      'Only complete one-second buckets within SQL boundaries are included; edge buckets are excluded.',

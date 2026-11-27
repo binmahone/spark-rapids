@@ -88,6 +88,7 @@ def main():
         assert len(result['samples']) == 2 and all(s['validation']['status'] == 'passed' for s in result['samples'])
         assert profiler.poll() is None, 'Profiler ended before the diagnostic application'
         stop_profiler()
+        assert report['nsys_stop_exit'] == 0 and report['nsys_exit'] == 0
         trace = directory / 'q8.nsys-rep'
         assert trace.exists() and trace.stat().st_size > 0
         with (directory / 'export.log').open('x') as log:

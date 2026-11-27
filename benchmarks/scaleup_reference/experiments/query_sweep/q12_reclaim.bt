@@ -1,0 +1,31 @@
+/* Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Licensed under the Apache License, Version 2.0.
+ * Capture direct reclaim durations; counts are events, not elapsed query time.
+ */
+BEGIN { printf("READY monotonic_ns=%llu\n", nsecs); }
+tracepoint:vmscan:mm_vmscan_direct_reclaim_begin
+{
+  @begin[tid] = nsecs;
+  @origin[tid] = kstack(24);
+  @order[tid] = args->order;
+  @gfp[tid] = args->gfp_flags;
+  @begins = count();
+}
+tracepoint:vmscan:mm_vmscan_direct_reclaim_end
+/@begin[tid]/
+{
+  $duration = nsecs - @begin[tid];
+  @duration_us = hist($duration / 1000);
+  @ends = count();
+  if ($duration > 50000000) {
+    printf("SLOW begin_ns=%llu end_ns=%llu pid=%d tid=%d comm=%s duration_ns=%llu reclaimed=%llu order=%llu gfp=%llu\n%s\n",
+           @begin[tid], nsecs, pid, tid, comm, $duration, args->nr_reclaimed,
+           @order[tid], @gfp[tid], @origin[tid]);
+  }
+  delete(@begin[tid]); delete(@origin[tid]); delete(@order[tid]); delete(@gfp[tid]);
+}
+END {
+  print(@begins); print(@ends); print(@duration_us); print(@begin);
+  clear(@begin); clear(@origin); clear(@order); clear(@gfp);
+  clear(@begins); clear(@ends); clear(@duration_us);
+}

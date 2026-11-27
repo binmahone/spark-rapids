@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # Licensed under the Apache License, Version 2.0.
-"""Capture one bounded Q8 CUDA timeline outside the scored SOL applications."""
+"""Capture one bounded CUDA timeline outside the scored SOL applications."""
 import argparse
 from pathlib import Path
 import os
@@ -21,19 +21,22 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', type=Path, required=True)
     p.add_argument('--thread-id', required=True)
-    p.add_argument('--variant', choices=('frozen', 'copy-stream'), default='frozen')
+    p.add_argument('--variant', choices=('frozen', 'copy-stream', 'join-stats'), default='frozen')
+    p.add_argument('--query', type=int, choices=(8, 9), default=8)
     a = p.parse_args()
     work = a.work.resolve()
     owner = read(work / 'evidence/owner.json')
     assert owner['thread_id'] == a.thread_id
     assert read(work / 'critical-path/S2/state.json')['status'] == 'completed'
     assert not subprocess.check_output(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader'], text=True).strip()
-    suffix = '' if a.variant == 'frozen' else '-copy-stream'
-    directory = work / ('scan-timeline/Q8-process-tree' + suffix)
+    suffix = '' if a.variant == 'frozen' else '-' + a.variant
+    label = 'Q' + str(a.query)
+    artifact = 'q' + str(a.query)
+    directory = work / ('scan-timeline/' + label + '-process-tree' + suffix)
     directory.mkdir(parents=True, exist_ok=False)
     space = os.statvfs(directory)
     assert space.f_bavail * space.f_frsize > 15 * 2**30
-    session = 'sol-scan-' + a.thread_id + '-q8-tree' + suffix
+    session = 'sol-scan-' + a.thread_id + '-' + artifact + '-tree' + suffix
     report = {'status': 'starting', 'owner': owner, 'classification': 'Diagnostic profiling; excluded from SOL scores',
               'nsys_session': session, 'source_revision': subprocess.check_output(
                   ['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
@@ -49,11 +52,11 @@ def main():
     ready = shlex.join([sys.executable, str(HERE / 'record_scan_trace_ready.py'), str(directory), session])
     command = ['nsys', 'profile', '--trace=cuda,nvtx', '--cuda-trace-scope=process-tree',
                '--sample=none', '--cpuctxsw=none', '--duration=240', '--stop-on-exit=true',
-               '--kill=none', '--session-new=' + session, '--output=' + str(directory / 'q8'),
+               '--kill=none', '--session-new=' + session, '--output=' + str(directory / artifact),
                '--after-collection-start=' + ready,
                sys.executable, str(HERE / 'run_scan_timeline_workload.py'),
                '--work', str(work), '--thread-id', a.thread_id, '--output', str(directory),
-               '--variant', a.variant]
+               '--variant', a.variant, '--query', str(a.query)]
     profiler, profiler_record = services.launch(command, directory / 'nsys.log', dict(os.environ))
     report['profiler'] = profiler_record
     report['profiler_command'] = command
@@ -95,10 +98,10 @@ def main():
         assert (workload['end_unix_ns'] - read(directory / 'nsys-ready.json')['time_unix_ns']) / 1e9 < 240
         stop_profiler()
         assert report['nsys_exit'] == 0
-        trace = directory / 'q8.nsys-rep'
+        trace = directory / (artifact + '.nsys-rep')
         assert trace.exists() and trace.stat().st_size > 0
         with (directory / 'export.log').open('x') as log:
-            subprocess.run(['nsys', 'export', '--type=sqlite', '--output=' + str(directory / 'q8.sqlite'),
+            subprocess.run(['nsys', 'export', '--type=sqlite', '--output=' + str(directory / (artifact + '.sqlite')),
                             str(trace)], stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
         report['status'] = 'completed'
     except BaseException as error:
@@ -113,7 +116,7 @@ def main():
             if stat.exists() and services.start_time(record['pid']) == record['start_time']:
                 assert stat.parent.stat().st_uid == record['owner_uid'] == os.getuid()
                 os.kill(record['pid'], signal.SIGTERM)
-        run = work / ('screen/scan-timeline-Q8' + suffix + '-0')
+        run = work / ('screen/scan-timeline-' + label + suffix + '-0')
         services.stop(run / 'applications/suite/driver-service.json')
         for path in (run / 'services').glob('*/*.json'):
             if not path.name.endswith('.stopped.json'):

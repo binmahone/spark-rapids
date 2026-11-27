@@ -25,10 +25,11 @@ def duration(intervals):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', type=Path, required=True)
-    parser.add_argument('--variant', choices=('frozen', 'copy-stream'), default='frozen')
+    parser.add_argument('--variant', choices=('frozen', 'copy-stream', 'join-stats'), default='frozen')
+    parser.add_argument('--query', type=int, choices=(8, 9), default=8)
     args = parser.parse_args()
-    trace = args.work / ('scan-timeline/Q8-process-tree' +
-                         ('-copy-stream' if args.variant == 'copy-stream' else ''))
+    trace = args.work / ('scan-timeline/Q' + str(args.query) + '-process-tree' +
+                         ('' if args.variant == 'frozen' else '-' + args.variant))
     state = json.loads((trace / 'state.json').read_text())
     assert state['status'] == 'completed' and state['nsys_exit'] == 0
     app = Path(state['run']) / 'applications/suite'
@@ -44,12 +45,12 @@ def main():
                 continue
             event = json.loads(line)
             key = event['executionId']
-            if event.get('description', '').startswith('q8-iteration'):
+            if event.get('description', '').startswith(f'q{args.query}-iteration'):
                 windows[key] = {'name': event['description'], 'start_ms': event['time']}
             elif event['Event'].endswith('SQLExecutionEnd') and key in windows:
                 windows[key]['end_ms'] = event['time']
     assert len(windows) == 2 and all('end_ms' in row for row in windows.values())
-    db = sqlite3.connect(f'file:{trace / "q8.sqlite"}?mode=ro', uri=True)
+    db = sqlite3.connect(f'file:{trace / ("q" + str(args.query) + ".sqlite")}?mode=ro', uri=True)
     epoch = db.execute('select utcEpochNs from TARGET_INFO_SESSION_START_TIME').fetchone()[0]
     pids = [row[0] for row in db.execute(
         'select distinct globalPid from CUPTI_ACTIVITY_KIND_KERNEL order by globalPid')]

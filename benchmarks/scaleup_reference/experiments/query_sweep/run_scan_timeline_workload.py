@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # Licensed under the Apache License, Version 2.0.
-"""Launch the isolated Q8 application as a child of the CUDA profiler."""
+"""Launch one isolated query application as a child of the CUDA profiler."""
 import argparse
+from dataclasses import replace
 import os
 from pathlib import Path
 import signal
@@ -20,7 +21,8 @@ p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work', required=True, type=Path)
 p.add_argument('--thread-id', required=True)
 p.add_argument('--output', required=True, type=Path)
-p.add_argument('--variant', choices=('frozen', 'copy-stream'), default='frozen')
+p.add_argument('--variant', choices=('frozen', 'copy-stream', 'join-stats'), default='frozen')
+p.add_argument('--query', type=int, choices=(8, 9), default=8)
 a = p.parse_args()
 assert read(a.work / 'evidence/owner.json')['thread_id'] == a.thread_id
 write(a.output / 'workload-controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),
@@ -30,15 +32,24 @@ def interrupt(signum, frame):
 for sig in (signal.SIGTERM, signal.SIGINT):
     signal.signal(sig, interrupt)
 started = time.time_ns()
-candidate = a.variant == 'copy-stream'
+candidate = a.variant != 'frozen'
 if candidate:
-    assert (a.work / 'copy-stream-build/build.exit').read_text().strip() == '0'
-path, result = launch_group(a.work, 'scan-timeline-Q8' + ('-copy-stream' if candidate else ''),
-    0, [controls()[8]], {
+    assert (a.work / (a.variant + '-build/build.exit')).read_text().strip() == '0'
+selected = controls()[a.query]
+if a.query == 9:
+    selected = replace(selected, overrides={**selected.overrides,
+        'spark.rapids.sql.join.hashTable.reuse': 'false'})
+path, result = launch_group(a.work, 'scan-timeline-Q' + str(a.query) + ('-' + a.variant if candidate else ''),
+    0, [selected], {
     'spark.rapids.sql.reader.kvikio.numThreads': '32',
     'spark.rapids.sql.metrics.level': 'DEBUG'},
-    experimental_engine=a.work / 'copy-stream-engine/.build/artifacts/amd64' if candidate else None)
+    experimental_engine=a.work / (a.variant + '-engine/.build/artifacts/amd64') if candidate else None,
+    runtime_hash_reuse_queries=[9] if a.query == 9 else None)
 write(a.output / 'workload.json', {'run': str(path), 'start_unix_ns': started,
                                   'end_unix_ns': time.time_ns(), 'result': result})
 assert result['status'] == 'completed' and result['driver_exit_code'] == 0
 assert len(result['samples']) == 2 and all(s['validation']['status'] == 'passed' for s in result['samples'])
+if a.query == 9:
+    for sample in result['samples']:
+        assert sample['runtime_hash_reuse_proof']['physical_plan_unchanged']
+        assert sum(n['metrics'].get('hashTableReuses', 0) for n in sample['plan_metrics']) > 0

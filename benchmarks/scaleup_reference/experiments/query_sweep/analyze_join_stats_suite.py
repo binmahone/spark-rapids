@@ -3,6 +3,7 @@
 # Licensed under the Apache License, Version 2.0.
 """Summarize complete validated applications without mixing samples across runs."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -11,6 +12,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
 from common import read, write
 from variants import ORDER
+from finalize_sol_reuse import normalize
 
 
 def summarize(work, phase):
@@ -33,8 +35,18 @@ def summarize(work, phase):
             cleanup = read(app / f'q{q}-iteration{s["iteration"]}.cleanup.json')
             assert len(cleanup) == 8
             assert abs(s['sql_plus_cleanup_seconds'] - s['sql_seconds'] - s['cleanup_seconds']) < 1e-6
+            if q == 9:
+                proof = s['runtime_hash_reuse_proof']
+                assert proof['physical_plan_unchanged'] and proof['restored_value'] == 'false'
+                assert sum(n['metrics'].get('hashTableReuses', 0) for n in s['plan_metrics']) > 0
+        plans = [normalize((app / f'q{q}-iteration{s["iteration"]}.executed.txt').read_text())
+                 for s in values]
+        assert plans[0] == plans[1], (phase, q, 'within-application plan changed')
+        assert values[0]['reader_metrics'] == values[1]['reader_metrics'], (phase, q)
         best = min(values, key=lambda s: s['sql_seconds'])
         queries.append({'query': q, 'variant': best['variant'], 'sql_sha256': best['sql_sha256'],
+            'plan_sha256': hashlib.sha256(plans[0].encode()).hexdigest(),
+            'reader_metrics': best['reader_metrics'],
             'first_sql_seconds': values[0]['sql_seconds'], 'second_sql_seconds': values[1]['sql_seconds'],
             'best_sql_seconds': best['sql_seconds'], 'selected_iteration': best['iteration'],
             'paired_cleanup_seconds': best['cleanup_seconds'],
@@ -78,7 +90,8 @@ def main():
         reference = {q['query']: q for q in reports[0]['queries']}
         for report in reports[1:]:
             for q in report['queries']:
-                assert q['sql_sha256'] == reference[q['query']]['sql_sha256']
+                for key in ('sql_sha256', 'plan_sha256', 'reader_metrics'):
+                    assert q[key] == reference[q['query']][key], (report['phase'], q['query'], key)
     write(a.work / 'join-stats/sol-suite-scores.json', output)
     for report in reports:
         print(json.dumps({k: v for k, v in report.items() if k != 'queries'}))

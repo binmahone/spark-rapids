@@ -16,11 +16,30 @@ def main():
     parser.add_argument('--phases', nargs='+', default=['A0', 'B1', 'B2', 'A3'])
     args = parser.parse_args()
     rows = []
+    configs = []
+    profiles = []
+    identities = {}
     for phase in args.phases:
         state = json.loads((args.work / f'decimal-null-copy/{phase}/state.json').read_text())
         assert state['status'] == 'completed'
         assert all(r['exit_code'] == 0 for r in state['observers'])
         app = Path(state['run']) / 'applications/suite'
+        run = Path(state['run'])
+        config = json.loads((run / 'config.json').read_text())
+        assert config['spark_conf']['spark.rapids.shuffle.compression.codec'] == 'none'
+        kind = 'candidate' if state['candidate'] else 'control'
+        identities.setdefault(kind, config['engine_sha256'])
+        assert identities[kind] == config['engine_sha256']
+        if kind == 'control':
+            assert config['engine_sha256'] == 'ed2e7f1c4c9d4523e8baab17f19496b36c0989b7afba420a136a0a406cd6954e'
+        excluded = {'engine', 'engine_sha256', 'experimental_engine_manifest'}
+        configs.append({k: v for k, v in config.items() if k not in excluded})
+        profile = json.loads((run / 'profiles.json').read_text())
+        for entries in profile.values():
+            for key, value in entries.items():
+                if isinstance(value, str):
+                    entries[key] = value.replace(config['engine'], '<engine>').replace(run.name, '<run>')
+        profiles.append(profile)
         for sample in state['result']['samples']:
             assert sample['validation']['status'] == 'passed'
             if sample['iteration'] != 2:
@@ -32,6 +51,8 @@ def main():
                 'sql_sha256': sample['sql_sha256'],
                 'plan_sha256': hashlib.sha256(normalize((app / f'q{q}-iteration2.executed.txt').read_text()).encode()).hexdigest(),
                 'reader_metrics': sample['reader_metrics']})
+    assert all(c == configs[0] for c in configs), 'Configuration differences exceed the engine artifact'
+    assert all(p == profiles[0] for p in profiles), 'Effective query profiles differ'
     decisions = []
     for query in sorted({r['query'] for r in rows}):
         group = [r for r in rows if r['query'] == query]
@@ -43,7 +64,7 @@ def main():
         decisions.append({'query': query, 'complete_repeats': complete,
                           'accepted': complete and max(candidates) <= .97 * min(controls),
                           'control_seconds': controls, 'candidate_seconds': candidates})
-    output = {'rows': rows, 'decisions': decisions,
+    output = {'rows': rows, 'decisions': decisions, 'engine_sha256': identities,
               'limits': ['Focused query times are not a full-suite total.',
                          'Cache residency is observed, not controlled.']}
     path = args.work / 'decimal-null-copy' / ('comparison-' + '-'.join(args.phases) + '.json')

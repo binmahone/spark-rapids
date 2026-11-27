@@ -16,6 +16,7 @@
 import argparse
 from dataclasses import replace
 import hashlib
+import json
 import os
 from pathlib import Path
 import signal
@@ -135,6 +136,14 @@ def main():
             assert result['status'] == 'completed' and result['driver_exit_code'] == 0
             assert len(result['samples']) == 2 * len(queries)
             assert all(s['validation']['status'] == 'passed' for s in result['samples'])
+            observed = {}
+            for line in (directory / 'pool.jsonl').open():
+                for record in json.loads(line)['executors']:
+                    observed.setdefault(record['pid'], set()).update(record['thread_names'])
+            expected = {'kvikio-' + str(i) for i in range(32)}
+            assert len(observed) == 8 and all(names == expected for names in observed.values()), observed
+            report['native_pool_verification'] = {
+                'passed': True, 'threads': {str(pid): sorted(names) for pid, names in observed.items()}}
         assert all(p.poll() is None for p, _ in children), 'Profiler exited before experiment completion'
         report['status'] = 'completed'
     except BaseException as error:

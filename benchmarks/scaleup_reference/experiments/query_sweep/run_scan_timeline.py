@@ -21,17 +21,19 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', type=Path, required=True)
     p.add_argument('--thread-id', required=True)
+    p.add_argument('--variant', choices=('frozen', 'copy-stream'), default='frozen')
     a = p.parse_args()
     work = a.work.resolve()
     owner = read(work / 'evidence/owner.json')
     assert owner['thread_id'] == a.thread_id
     assert read(work / 'critical-path/S2/state.json')['status'] == 'completed'
     assert not subprocess.check_output(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader'], text=True).strip()
-    directory = work / 'scan-timeline/Q8-process-tree'
+    suffix = '' if a.variant == 'frozen' else '-copy-stream'
+    directory = work / ('scan-timeline/Q8-process-tree' + suffix)
     directory.mkdir(parents=True, exist_ok=False)
     space = os.statvfs(directory)
     assert space.f_bavail * space.f_frsize > 15 * 2**30
-    session = 'sol-scan-' + a.thread_id + '-q8-tree'
+    session = 'sol-scan-' + a.thread_id + '-q8-tree' + suffix
     report = {'status': 'starting', 'owner': owner, 'classification': 'Diagnostic profiling; excluded from SOL scores',
               'nsys_session': session, 'source_revision': subprocess.check_output(
                   ['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
@@ -50,7 +52,8 @@ def main():
                '--kill=none', '--session-new=' + session, '--output=' + str(directory / 'q8'),
                '--after-collection-start=' + ready,
                sys.executable, str(HERE / 'run_scan_timeline_workload.py'),
-               '--work', str(work), '--thread-id', a.thread_id, '--output', str(directory)]
+               '--work', str(work), '--thread-id', a.thread_id, '--output', str(directory),
+               '--variant', a.variant]
     profiler, profiler_record = services.launch(command, directory / 'nsys.log', dict(os.environ))
     report['profiler'] = profiler_record
     report['profiler_command'] = command
@@ -110,7 +113,7 @@ def main():
             if stat.exists() and services.start_time(record['pid']) == record['start_time']:
                 assert stat.parent.stat().st_uid == record['owner_uid'] == os.getuid()
                 os.kill(record['pid'], signal.SIGTERM)
-        run = work / 'screen/scan-timeline-Q8-0'
+        run = work / ('screen/scan-timeline-Q8' + suffix + '-0')
         services.stop(run / 'applications/suite/driver-service.json')
         for path in (run / 'services').glob('*/*.json'):
             if not path.name.endswith('.stopped.json'):

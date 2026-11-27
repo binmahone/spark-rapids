@@ -25,8 +25,10 @@ def duration(intervals):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', type=Path, required=True)
+    parser.add_argument('--variant', choices=('frozen', 'copy-stream'), default='frozen')
     args = parser.parse_args()
-    trace = args.work / 'scan-timeline/Q8-process-tree'
+    trace = args.work / ('scan-timeline/Q8-process-tree' +
+                         ('-copy-stream' if args.variant == 'copy-stream' else ''))
     state = json.loads((trace / 'state.json').read_text())
     assert state['status'] == 'completed' and state['nsys_exit'] == 0
     app = Path(state['run']) / 'applications/suite'
@@ -74,7 +76,12 @@ def main():
             h2d = intervals('CUPTI_ACTIVITY_KIND_MEMCPY', 'and copyKind=1')
             combined = merged(kernels + h2d)
             overlap = duration(kernels) + duration(h2d) - duration(combined)
-            rows.append({'global_pid': pid, 'kernel_union_seconds': duration(kernels),
+            streams = db.execute('select streamId,count(*),sum(bytes) '
+                                 'from CUPTI_ACTIVITY_KIND_MEMCPY where globalPid=? '
+                                 'and end>? and start<? and copyKind=1 group by streamId',
+                                 (pid, start, end)).fetchall()
+            rows.append({'global_pid': pid, 'h2d_stream_counts_bytes': streams,
+                         'kernel_union_seconds': duration(kernels),
                          'h2d_union_seconds': duration(h2d),
                          'h2d_kernel_overlap_seconds': overlap,
                          'h2d_without_kernel_seconds': duration(h2d) - overlap,

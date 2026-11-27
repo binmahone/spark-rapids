@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import re
 import statistics
+from urllib.parse import urlparse
 
 
 def main():
@@ -33,6 +34,36 @@ def main():
             current = None
     results = []
     rows = [json.loads(line) for line in (directory / 'threads.jsonl').open()]
+    state = json.loads((directory / 'state.json').read_text())
+    run = Path(state['groups'][0]['run'])
+    profile = json.loads((run / 'applications/suite/profile.json').read_text())
+    event_root = Path(urlparse(profile['spark.eventLog.dir']).path)
+    workers = {p.parent.name: int(p.parents[3].name.split('-')[-1])
+               for p in event_root.parent.glob('suite/worker-*/work/app-*/*/stderr')}
+    assert len(workers) == 8, workers
+    scan_stages = {max(s['stages'], key=lambda stage: stage['input_bytes'])['stage']
+                   for s in analysis['samples']}
+    tasks = defaultdict(list)
+    for path in event_root.iterdir():
+        if not path.is_file() or path.name.startswith('.'):
+            continue
+        assert not path.name.endswith('.inprogress')
+        for line in path.open():
+            if 'SparkListenerTaskEnd' not in line:
+                continue
+            event = json.loads(line)
+            if event['Stage ID'] not in scan_stages:
+                continue
+            info, metrics = event['Task Info'], event['Task Metrics']
+            tasks[event['Stage ID']].append({
+                'id': info['Task ID'], 'executor': info['Executor ID'],
+                'worker': workers[info['Executor ID']], 'launch_ms': info['Launch Time'],
+                'finish_ms': info['Finish Time'],
+                'seconds': (info['Finish Time'] - info['Launch Time']) / 1000,
+                'cpu_seconds': metrics.get('Executor CPU Time', 0) / 1e9,
+                'gc_ms': metrics.get('JVM GC Time'),
+                'accumulators': [a for a in info.get('Accumulables', []) if any(
+                    k in a.get('Name', '').lower() for k in ('buffer', 'decode', 'spill', 'semaphore'))]})
     for sample in analysis['samples']:
         begin = sample['execution_window_ms']['start'] * 10**6
         end = sample['execution_window_ms']['end'] * 10**6
@@ -90,6 +121,15 @@ def main():
                   'zones': {k: {'minimum_free_pages': min(r['pages free'] for r in v),
                                 'minimum_low_margin_pages': min(r['pages free'] - r['low'] for r in v),
                                 'first': v[0], 'last': v[-1]} for k, v in zones.items()}}
+        scan = max(sample['stages'], key=lambda stage: stage['input_bytes'])
+        values = tasks[scan['stage']]
+        assert len(values) == scan['tasks']
+        result['scan_stage'] = scan['stage']
+        result['longest_scan_tasks'] = sorted(values, key=lambda t: t['seconds'], reverse=True)[:32]
+        result['scan_workers'] = [{
+            'worker': w, 'tasks': sum(t['worker'] == w for t in values),
+            'over_5_seconds': sum(t['worker'] == w and t['seconds'] > 5 for t in values),
+            'max_seconds': max(t['seconds'] for t in values if t['worker'] == w)} for w in range(8)]
         results.append(result)
     output = {'samples': results, 'limits': [
         'Only direct reclaim events longer than 50 ms are individually logged.',

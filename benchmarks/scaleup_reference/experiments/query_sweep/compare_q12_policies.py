@@ -10,13 +10,16 @@ from pathlib import Path
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work', required=True, type=Path)
 p.add_argument('--phases', nargs='+', required=True)
+p.add_argument('--output', type=Path)
 a = p.parse_args()
 rows, invariants, host_settings, owners, plans = [], [], [], set(), set()
+observer_modes = set()
 for phase in a.phases:
     directory = a.work / 'q12-diagnosis' / phase
     state = json.loads((directory / 'state.json').read_text())
     data = json.loads((directory / 'lock-analysis.json').read_text())
-    assert state['status'] == 'completed' and state['observer_mode'] == 'light'
+    assert state['status'] == 'completed' and state['observer_mode'] in ('light', 'batches')
+    observer_modes.add(state['observer_mode'])
     assert state['native_pool_verification']['passed']
     owners.add((state['thread_id'], state['instance_id']))
     group = state['groups'][0]
@@ -46,6 +49,7 @@ for phase in a.phases:
                      'vm_deltas': s['vm_deltas'], 'memory_kib_range': s['memory_kib_range'],
                      'host_max_gap_seconds': s['host_max_gap_seconds']})
 assert len(owners) == len(plans) == 1
+assert len(observer_modes) == 1, 'Observer modes differ'
 assert all(value == invariants[0] for value in invariants[1:]), 'Experiment inputs changed'
 assert all(value == host_settings[0] for value in host_settings[1:]), 'Other host settings changed'
 prefix = {}
@@ -54,6 +58,7 @@ for phase in a.phases:
     prefix[phase] = [{k: s[k] for k in ('query', 'iteration', 'sql_seconds')}
                      for s in state['groups'][0]['samples']]
 report = {'classification': 'Diagnostic policy comparison; not a full-suite benchmark score',
+          'observer_mode': next(iter(observer_modes)),
           'owner': list(owners)[0], 'q12_plan_sha256': next(iter(plans)),
           'invariants_verified': invariants[0], 'page_size_bytes': os.sysconf('SC_PAGE_SIZE'),
           'other_host_settings_verified': host_settings[0],
@@ -63,7 +68,7 @@ report = {'classification': 'Diagnostic policy comparison; not a full-suite benc
                      'Disk and VM deltas cover sampled intervals rather than exact SQL boundaries.',
                      'MGLRU pgscan counts isolated pages; classic LRU pgscan counts scanned pages in the inspected kernel.',
                      'The first no-probe control showed a large tail that later controls may not reproduce.']}
-target = a.work / 'evidence/q12-policy-comparison.json'
+target = a.output or a.work / 'evidence/q12-policy-comparison.json'
 target.write_text(json.dumps(report, indent=2) + '\n')
 print(json.dumps([{k: row[k] for k in ('phase', 'iteration', 'sql_seconds',
                   'large_input_scan_seconds', 'largest_scan_task_seconds')} for row in rows], indent=2))

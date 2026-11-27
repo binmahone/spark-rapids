@@ -136,6 +136,7 @@ def main():
                   'Function entry/exit counts, reentry, residual intervals and dropped-output warnings must be audited before causal interpretation.',
                   'Summed concurrent thread intervals are not query wall time.',
                   'Host CPU seconds sum scheduler ticks across all logical CPUs during the sampled interval; they are not wall time.',
+                  'In the inspected 6.8.0-1066-aws kernel, MGLRU pgscan accounts isolated pages while classic LRU accounts scanned pages; pgscan/pgsteal ratios are not equivalent across policies.',
                   'No cache flush is performed; separate runs have different cache histories.']}
     (directory / 'lock-analysis.json').write_text(json.dumps(output, indent=2) + '\n')
     print(json.dumps([{'iteration': s['iteration'], 'sql_seconds': s['sql_seconds'],

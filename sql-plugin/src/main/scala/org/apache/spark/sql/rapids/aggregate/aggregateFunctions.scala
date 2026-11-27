@@ -663,6 +663,7 @@ case class GpuExtractChunk32(
 
   override def columnarEval(batch: ColumnarBatch): GpuColumnVector = {
     withResource(data.columnarEval(batch)) { dataCol =>
+      val needsNullReplacement = replaceNullsWithZero && dataCol.hasNull
       val dtype = dataType match {
         case GpuUnsignedIntegerType => DType.UINT32
         case _ => DType.INT32
@@ -672,7 +673,7 @@ case class GpuExtractChunk32(
       } else {
         Aggregation64Utils.extractInt32Chunk(dataCol.getBase, dtype, chunkIdx)
       }
-      val replacedCol = if (replaceNullsWithZero) {
+      val replacedCol = if (needsNullReplacement) {
         withResource(chunkCol) { chunkCol =>
           val zero = dtype match {
             case DType.INT32 => Scalar.fromInt(0)

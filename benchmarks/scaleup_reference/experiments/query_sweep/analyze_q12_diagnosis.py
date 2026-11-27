@@ -147,6 +147,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', required=True)
     p.add_argument('--phase', choices=['short0', 'short1', 'prefix0', 'prefix1'], required=True)
+    p.add_argument('--queries', type=int, nargs='+', default=[12],
+                   help='Queries to correlate; all query results remain in the raw evidence')
     a = p.parse_args()
     work = Path(a.work)
     directory = work / 'q12-diagnosis' / a.phase
@@ -160,6 +162,8 @@ def main():
     offset = int(statistics.median(row['time_unix_ns'] - row['monotonic_ns'] for row in host))
     times = [row['time_unix_ns'] for row in host]
     data = summarize(work, Path(state['groups'][0]['run']))
+    data['samples'] = [s for s in data['samples'] if s['query'] in a.queries]
+    assert data['samples'], 'No requested query samples'
     raw = read(Path(state['groups'][0]['run']) / 'applications/suite/result.json')
     original = {(s['query'], s['iteration']): s for s in raw['samples']}
     stages = stage_windows(Path(state['groups'][0]['run']))

@@ -18,7 +18,7 @@ tracepoint:vmscan:mm_vmscan_direct_reclaim_end /@reclaim_begin[tid]/
 {
   $end = nsecs;
   $duration = $end - @reclaim_begin[tid];
-  @reclaim_duration_us = hist($duration / 1000);
+  @reclaim_duration_us = hist((uint64)$duration / 1000);
   @reclaim_ends = count();
   if ($duration > 50000000) {
     printf("RECLAIM begin_ns=%llu end_ns=%llu pid=%d tid=%d comm=%s duration_ns=%llu reclaimed=%llu order=%llu wait_ns=%llu waits=%llu scan_ns=%llu scans=%llu evict_ns=%llu evictions=%llu\n%s\n",
@@ -36,7 +36,7 @@ tracepoint:vmscan:mm_vmscan_direct_reclaim_end /@reclaim_begin[tid]/
 kprobe:evict_folios
 {
   $lru = (struct lruvec *)arg0;
-  $lock = (uint64)&$lru->lru_lock;
+  $lock = (uint64)$lru + offsetof(struct lruvec, lru_lock);
   if (@evict_begin[tid]) { @evict_reentry = count(); }
   @evict_begin[tid] = nsecs;
   @evict_lock[tid] = $lock;
@@ -48,7 +48,7 @@ kretprobe:evict_folios /@evict_begin[tid]/
 {
   $end = nsecs;
   $duration = $end - @evict_begin[tid];
-  @evict_duration_us = hist($duration / 1000);
+  @evict_duration_us = hist((uint64)$duration / 1000);
   @evict_ends = count();
   if (@reclaim_begin[tid]) {
     @reclaim_evict_ns[tid] = @reclaim_evict_ns[tid] + $duration;
@@ -65,7 +65,7 @@ kretprobe:evict_folios /@evict_begin[tid]/
 kprobe:scan_folios
 {
   $lru = (struct lruvec *)arg0;
-  $lock = (uint64)&$lru->lru_lock;
+  $lock = (uint64)$lru + offsetof(struct lruvec, lru_lock);
   if (@scan_begin[tid]) { @scan_reentry = count(); }
   if (@scan_active[$lock]) { @overlapping_scan_intervals = count(); }
   $begin = nsecs;
@@ -81,7 +81,7 @@ kretprobe:scan_folios /@scan_begin[tid]/
   $end = nsecs;
   $duration = $end - @scan_begin[tid];
   $lock = @scan_lock[tid];
-  @scan_duration_us = hist($duration / 1000);
+  @scan_duration_us = hist((uint64)$duration / 1000);
   @scan_ends = count();
   if (@reclaim_begin[tid]) {
     @reclaim_scan_ns[tid] = @reclaim_scan_ns[tid] + $duration;
@@ -116,7 +116,7 @@ kretprobe:native_queued_spin_lock_slowpath /@wait_begin[tid]/
   $end = nsecs;
   $duration = $end - @wait_begin[tid];
   $lock = @wait_lock[tid];
-  @wait_duration_us = hist($duration / 1000);
+  @wait_duration_us = hist((uint64)$duration / 1000);
   @wait_ends = count();
   if (@reclaim_begin[tid]) {
     @reclaim_wait_ns[tid] = @reclaim_wait_ns[tid] + $duration;

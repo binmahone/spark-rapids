@@ -17,16 +17,20 @@
 #include <sys/mman.h>
 #include <sys/prctl.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 namespace {
 constexpr size_t max_request = 8 * 1024 * 1024;
 constexpr size_t min_request = 1024 * 1024;
 enum Counter { ELIGIBLE, BUFFERED, DIRECT, DIRECT_BYTES, COLD, RESIDENT,
-               MIXED, INSPECT_FAIL, DIRECT_FAIL, REQUEST_BYTES, MIXED_DIRECT, COUNTERS };
+               MIXED, INSPECT_FAIL, DIRECT_FAIL, REQUEST_BYTES, MIXED_DIRECT,
+               PRESSURE_ACTIVE, PRESSURE_INACTIVE, PRESSURE_INVALID, COUNTERS };
 uint64_t* counters = nullptr;
 const char* prefix = nullptr;
 bool enabled = false;
+bool pressure_mode = false;
+const uint64_t* pressure_word = nullptr;
 long page_size = 0;
 using Read = ssize_t (*)(int, void*, size_t, off64_t);
 
@@ -41,11 +45,26 @@ __attribute__((constructor)) void initialize()
   const char* directory = getenv("SCALEUP_COLD_READ_STATS");
   const char* mode = getenv("SCALEUP_COLD_READ_MODE");
   if (!prefix || !directory || !mode || prefix[0] != '/' ||
-      (strcmp(mode, "buffered") && strcmp(mode, "cold-direct"))) {
+      (strcmp(mode, "buffered") && strcmp(mode, "cold-direct") &&
+       strcmp(mode, "pressure-direct"))) {
     prefix = nullptr;
     return;
   }
-  enabled = !strcmp(mode, "cold-direct");
+  pressure_mode = !strcmp(mode, "pressure-direct");
+  enabled = !strcmp(mode, "cold-direct") || pressure_mode;
+  if (pressure_mode) {
+    const char* control = getenv("SCALEUP_COLD_READ_PRESSURE");
+    const int control_fd = control ? open(control, O_RDONLY | O_CLOEXEC) : -1;
+    struct stat control_info {};
+    if (control_fd >= 0) {
+      if (!fstat(control_fd, &control_info) && S_ISREG(control_info.st_mode) &&
+          control_info.st_uid == geteuid() && control_info.st_size == static_cast<off_t>(sizeof(uint64_t))) {
+        void* mapped = mmap(nullptr, sizeof(uint64_t), PROT_READ, MAP_SHARED, control_fd, 0);
+        if (mapped != MAP_FAILED) pressure_word = static_cast<const uint64_t*>(mapped);
+      }
+      close(control_fd);
+    }
+  }
   page_size = sysconf(_SC_PAGESIZE);
   if (page_size != 4096) { prefix = nullptr; return; }
   char path[4096];
@@ -61,6 +80,26 @@ __attribute__((constructor)) void initialize()
   close(fd);
   if (!counters) { prefix = nullptr; return; }
   fprintf(stderr, "SCALEUP_COLD_READ mode=%s pid=%ld root=%s\n", mode, long(getpid()), prefix);
+}
+
+bool pressure_allows_direct()
+{
+  struct timespec now {};
+  if (!pressure_word || clock_gettime(CLOCK_MONOTONIC, &now)) {
+    count(PRESSURE_INVALID);
+    return false;
+  }
+  const uint64_t word = __atomic_load_n(pressure_word, __ATOMIC_ACQUIRE);
+  const uint64_t stamp = word >> 1;
+  const uint64_t now_ms = uint64_t(now.tv_sec) * 1000 + now.tv_nsec / 1000000;
+  // An absent, future, or stale heartbeat preserves the original buffered path.
+  if (!stamp || stamp > now_ms || now_ms - stamp > 2000) {
+    count(PRESSURE_INVALID);
+    return false;
+  }
+  const bool active = word & 1;
+  count(active ? PRESSURE_ACTIVE : PRESSURE_INACTIVE);
+  return active;
 }
 
 struct Bounce {
@@ -114,6 +153,7 @@ ssize_t read_request(Read real, int fd, void* dst, size_t bytes, off64_t offset)
     return real(fd, dst, bytes, offset);
   };
   if (!enabled) return buffered();
+  if (pressure_mode && !pressure_allows_direct()) return buffered();
   const off64_t map_offset = offset / page_size * page_size;
   const size_t map_length = size_t(offset - map_offset) + bytes;
   unsigned char residency[max_request / 4096 + 2];

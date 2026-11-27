@@ -37,10 +37,11 @@ lib.mincore.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p]
 lib.munmap.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
 stats = Path(os.environ['SCALEUP_COLD_READ_STATS']) / (str(os.getpid()) + '.bin')
 names = ['eligible', 'buffered', 'direct', 'direct_bytes', 'cold', 'resident',
-         'mixed', 'inspect_fail', 'direct_fail', 'request_bytes', 'mixed_direct']
+         'mixed', 'inspect_fail', 'direct_fail', 'request_bytes', 'mixed_direct',
+         'pressure_active', 'pressure_inactive', 'pressure_invalid']
 
 def counters():
-    return dict(zip(names, struct.unpack('=11Q', stats.read_bytes())))
+    return dict(zip(names, struct.unpack('=' + str(len(stats.read_bytes()) // 8) + 'Q', stats.read_bytes())))
 
 def resident_pages(offset, length):
     assert offset % 4096 == 0

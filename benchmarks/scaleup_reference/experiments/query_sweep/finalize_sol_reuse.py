@@ -24,9 +24,13 @@ def main():
     p.add_argument('--work', type=Path, required=True)
     p.add_argument('--screen-only', action='store_true',
                    help='Reject candidates that cannot meet the declared gate even with further repeats')
+    p.add_argument('--reject-after-r2', action='store_true',
+                   help='Finalize rejection if both candidates together cannot pass against R0')
     a = p.parse_args()
+    assert not (a.screen_only and a.reject_after_r2)
     groups, rows = {}, []
-    phases = ('R0', 'R1') if a.screen_only else ('R0', 'R1', 'R2', 'R3')
+    phases = (('R0', 'R1') if a.screen_only else ('R0', 'R1', 'R2')
+              if a.reject_after_r2 else ('R0', 'R1', 'R2', 'R3'))
     for phase in phases:
         state = read(a.work / 'critical-path' / phase / 'state.json')
         assert state['status'] == 'completed' and state['pool_verified']
@@ -67,17 +71,19 @@ def main():
         control = [groups[p][q, 2]['total_seconds'] for p in phases if p in ('R0', 'R3')]
         candidate = [groups[p][q, 2]['total_seconds'] for p in phases if p in ('R1', 'R2')]
         meets_gate = max(candidate) <= .97 * min(control)
-        decisions.append({'query': q, 'accepted': meets_gate and not a.screen_only,
+        decisions.append({'query': q, 'accepted': meets_gate and not (a.screen_only or a.reject_after_r2),
                           'eligible_for_confirmation': meets_gate,
                           'control_second_total_seconds': control,
                           'candidate_second_total_seconds': candidate,
                           'conservative_reduction_fraction': 1 - max(candidate) / min(control)})
+    if a.reject_after_r2:
+        assert not any(d['eligible_for_confirmation'] for d in decisions)
     result = {'gate': 'Slower candidate second action including cleanup must beat faster control by at least 3 percent',
               'order': list(phases), 'measurements': rows, 'decisions': decisions,
               'screen_only': a.screen_only,
               'early_rejection_reason': ('The slower-of-candidates and faster-of-controls gate cannot '
-                  'recover when the first candidate already misses 3 percent against the first control.'
-                  if a.screen_only else None),
+                  'recover when a candidate already misses 3 percent against the first control.'
+                  if a.screen_only or a.reject_after_r2 else None),
               'full_suite_reuse_queries': [9] + [d['query'] for d in decisions if d['accepted']],
               'limits': ['Diagnostic execution-only switch; production integration is separate',
                          'No forced page-cache residency; preserve native work and inspect pressure']}

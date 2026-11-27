@@ -237,13 +237,15 @@ def main():
         if path.exists():
             perf[name] = perf_summary(path, windows, pids, offset)
     result = {'phase': a.phase, 'samples': data['samples'], 'perf': perf,
+              'cpu_event': state.get('cpu_event', 'cpu-clock'),
               'controller_status': state['status'],
               'profiler_cleanup_records': state['profilers'],
               'analysis_source_revision': subprocess.check_output(
                   ['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
               'source_revision': state['source_revision'], 'perf_monotonic_to_unix_offset_ns': offset,
               'limits': ['Profiling overhead is not isolated; timings are diagnostic',
-                         'CPU samples include user and kernel execution; nonidle and executor counts are separate',
+                         'CPU event scope is recorded separately; cycles:k includes only kernel execution',
+                         'User-space symbol labels can be unreliable after executable mappings disappear; kernel syscall frames establish the read path',
                          'Direct reclaim durations and origins are retained separately in reclaim.log; slow-event threshold is 50 ms',
                          'GPM percentages and throughput are half-second interval observations',
                          'Whole-query averages do not establish a critical-stage hardware ceiling',

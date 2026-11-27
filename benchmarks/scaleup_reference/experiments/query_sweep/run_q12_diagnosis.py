@@ -55,10 +55,12 @@ def main():
             assert s.connect_ex((socket.gethostbyname(socket.gethostname()), port)) != 0
     directory = work / 'q12-diagnosis' / a.phase
     directory.mkdir(parents=True, exist_ok=False)
+    cpu_event = 'cycles:k' if a.phase == 'prefix1' else 'cpu-clock'
     report = {'status': 'running', 'phase': a.phase, 'groups': [], 'profilers': [],
               'thread_id': a.thread_id, 'instance_id': owner['instance_id'],
               'source_revision': subprocess.check_output(['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
               'classification': 'Diagnostic with profiling overhead; not a benchmark score',
+              'cpu_event': cpu_event,
               'cache_policy': 'No cache flush; two actions per query',
               'instance_policy': 'Archive evidence and terminate the session-created instance after diagnosis'}
     report['host_state_before'] = {path: Path(path).read_text() for path in [
@@ -105,8 +107,8 @@ def main():
         start('pool', [sys.executable, str(HERE / 'monitor_read_pool.py'),
                        '--work', str(work), '--output', str(directory / 'pool.jsonl')])
         start('reclaim', ['bpftrace', '-q', str(HERE / 'q12_reclaim.bt')], privileged=True)
-        start('cpu', ['perf', 'record', '-a', '-e', 'cpu-clock', '-F', '49', '-g',
-                      '--call-graph', 'fp', '--clockid', 'mono',
+        start('cpu', ['perf', 'record', '-a', '-e', cpu_event, '-F', '49', '-g',
+                      '--call-graph', 'fp', '--clockid', 'mono', '--no-buildid', '--no-buildid-cache',
                       '-o', str(directory / 'cpu.data'), '--', 'sleep', '3600'], privileged=True)
         deadline = time.monotonic() + 60
         while 'READY monotonic_ns=' not in (directory / 'reclaim.log').read_text():

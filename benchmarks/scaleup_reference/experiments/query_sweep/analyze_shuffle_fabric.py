@@ -27,6 +27,7 @@ for index, bus, uuid in db.execute('select id,busLocation,uuid from TARGET_INFO_
     devices[index] = dict(bus=bus, uuid=uuid, numa=node)
 assert len(devices) == 8
 kinds = dict(db.execute('select id,label from ENUM_CUDA_MEMCPY_OPER'))
+assert {'Peer-to-Peer', 'Device-to-Device'} <= set(kinds.values())
 timeline = schedule(Path(state['run']))[f'q{a.query}-iteration2']
 sample = next(s for s in state['result']['samples'] if s['iteration'] == 2)
 windows = [('whole-query', sample['started_unix_ns']-epoch, sample['finished_unix_ns']-epoch)]
@@ -43,23 +44,30 @@ for stage in sorted(timeline['stages'], key=lambda s: s['start_seconds']):
     else:
         groups.append([[stage['stage']], start, end])
 windows += [('stages-' + '-'.join(map(str, ids)), start, end) for ids, start, end in groups]
+for stage in timeline['stages']:
+    if stage['span_seconds'] >= 1:
+        windows.append(('individual-stage-' + str(stage['stage']),
+            timeline['window']['start']*1000000+round(stage['start_seconds']*1e9)-epoch,
+            timeline['window']['start']*1000000+round(stage['end_seconds']*1e9)-epoch))
 result = {'devices': devices, 'windows': [], 'limits': [
     'This is a profiled application; durations are not unprofiled benchmark scores.',
     'Stage groups are interval associations, not exclusive attribution of copies to operators.',
     'Bytes include whole copies intersecting each window; activity is clipped to the window.',
-    'Whole-query and stage-group rows overlap and must not be added together.',
+    'Whole-query, stage-group and individual-stage rows overlap and must not be added together.',
     'Summed copy durations include concurrency and are not query wall time.',
     'NUMA placement is read from the same host PCI addresses; GPU IDs come from the trace.',
     'CUDA activity device indicates the recording context; source and destination identify direction.'
 ]}
 for label, begin, end in windows:
     grouped = defaultdict(lambda: {'bytes': 0, 'count': 0, 'intervals': [], 'streams': set()})
+    per_device = defaultdict(list)
     for start, stop, gpu, pid, stream, size, kind, src, dst in db.execute(
             'select start,end,deviceId,globalPid,streamId,bytes,copyKind,srcDeviceId,dstDeviceId '
             'from CUPTI_ACTIVITY_KIND_MEMCPY where end>? and start<?', (begin, end)):
         name = kinds[kind]
-        if name not in ('P2P', 'D2D'):
+        if name not in ('Peer-to-Peer', 'Device-to-Device'):
             continue
+        per_device[(name, gpu)].append((max(begin,start), min(end,stop)))
         topology = 'unknown'
         if src in devices and dst in devices:
             topology = ('same-gpu' if src == dst else 'within-numa'
@@ -82,8 +90,12 @@ for label, begin, end in windows:
         item['bytes'] += row['bytes']
         item['copies'] += row['count']
         item['summed_seconds'] += row['summed_seconds']
+    if label == 'whole-query':
+        assert any(row['kind'] == 'Peer-to-Peer' for row in rows), 'Expected peer transfers in Q9'
+    activity = [dict(kind=kind, device=gpu, active_seconds=duration(merged(intervals)))
+                for (kind,gpu), intervals in sorted(per_device.items())]
     result['windows'].append(dict(label=label, wall_seconds=(end-begin)/1e9,
-                                  summary=dict(summary), pairs=rows))
+                                  summary=dict(summary), pairs=rows, device_activity=activity))
     print(json.dumps(result['windows'][-1] | {'pairs': len(rows)}), flush=True)
 db.close()
 (a.trace/'shuffle-fabric-analysis.json').write_text(json.dumps(result, indent=2)+'\n')

@@ -45,8 +45,7 @@ def main():
         profiler = read(a.work / 'profilers/manifest.json')
         assert sha(Path(profiler['library'])) == profiler['library_sha256']
         options = (f"-agentpath:{profiler['library']}=start,event=cpu,interval=10ms,wall=20ms,"
-                   f"cstack=dwarf,jstackdepth=256,timeout=900,file={scratch}/profile-%p.jfr,"
-                   f"log={scratch}/profile-%p.log")
+                   f"cstack=dwarf,jstackdepth=256,timeout=900,file={scratch}/profile-%p.jfr,log=stderr")
     selected = controls()
     queries = [int(q) for q in a.queries.split(',')]
     assert queries and len(queries) == len(set(queries)) and set(queries) <= {5, 8, 18, 20, 10}

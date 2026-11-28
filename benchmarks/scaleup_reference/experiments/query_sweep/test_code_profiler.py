@@ -31,7 +31,7 @@ source.write_text('''public class ProfilerSmoke {
 java = str(a.work / 'jdk17/bin/java')
 subprocess.run([str(a.work / 'jdk17/bin/javac'), str(source)], check=True)
 options = (f"-agentpath:{manifest['library']}=start,event=cpu,interval=10ms,wall=20ms,"
-           f"cstack=dwarf,jstackdepth=256,timeout=30,file={directory}/profile-%p.jfr,log={directory}/profile-%p.log")
+           f"cstack=dwarf,jstackdepth=256,timeout=30,file={directory}/profile-%p.jfr,log=stderr")
 with (directory / 'launch.log').open('x') as log:
     subprocess.run([java, options, '-cp', str(directory), 'ProfilerSmoke'], stdout=log,
                    stderr=subprocess.STDOUT, check=True, timeout=60)

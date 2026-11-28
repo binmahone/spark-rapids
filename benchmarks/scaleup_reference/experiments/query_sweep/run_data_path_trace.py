@@ -61,6 +61,7 @@ def main():
     signal.alarm(900)
     ready = shlex.join([sys.executable, str(HERE / 'record_scan_trace_ready.py'), str(directory), session])
     sampling = (['--sample=process-tree', '--cpuctxsw=process-tree', '--backtrace=dwarf',
+                 '--sampling-period=8000000', '--discard-environment=true',
                  '--cudabacktrace=sync:100000,memory:100000'] if a.variant == 'code-profile'
                 else ['--sample=none', '--cpuctxsw=none'])
     command = ['nsys', 'profile', '--trace=cuda,nvtx', '--cuda-trace-scope=process-tree',

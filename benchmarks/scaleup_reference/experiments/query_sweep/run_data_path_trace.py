@@ -151,7 +151,10 @@ def main():
         write(directory / 'state.json', report)
         deadline = time.monotonic() + 600
         while not (directory / 'workload.json').exists():
-            assert profiler.poll() is None, 'Profiler exited before workload evidence'
+            profiler_exit = profiler.poll()
+            # A bounded collection can finish while --kill=none leaves the workload running.
+            assert profiler_exit is None or (a.kernel_proof_window and profiler_exit == 0), \
+                'Profiler failed before workload evidence: ' + str(profiler_exit)
             assert time.monotonic() < deadline, 'Profiled workload did not finish'
             space = os.statvfs(directory)
             assert space.f_bavail * space.f_frsize > 20 * 2**30, 'Profiler storage reserve exhausted'

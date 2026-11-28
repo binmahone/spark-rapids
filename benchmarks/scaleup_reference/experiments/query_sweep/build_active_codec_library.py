@@ -174,7 +174,11 @@ try:
   run([venv/'bin/cmake','--build',build,'--target','PARQUET_ACTIVE_CODECS_TEST','-j','24'],
       'reader-tests-build.log',1200)
   uuid=subprocess.check_output(['nvidia-smi','--id=0','--query-gpu=uuid','--format=csv,noheader'],text=True).strip()
-  test_env={'CUDA_VISIBLE_DEVICES':uuid,'LD_LIBRARY_PATH':str(root/'compiler/lib')+':/usr/local/cuda-13.1/lib64'}
+  tested_library=root/'candidate/libcudf.so'
+  assert sha(tested_library)==read(root/'candidate-state.json')['library_sha256']
+  test_env={'CUDA_VISIBLE_DEVICES':uuid,
+            'LD_LIBRARY_PATH':str(root/'candidate')+':'+str(root/'compiler/lib')+':/usr/local/cuda-13.1/lib64',
+            'LD_DEBUG':'libs'}
   run([build/'gtests/PARQUET_ACTIVE_CODECS_TEST','--gtest_output=xml:'+str(root/'reader-tests.xml')],
       'reader-tests.log',300,extra_env=test_env)
   import xml.etree.ElementTree as ET
@@ -182,7 +186,12 @@ try:
   assert int(result.attrib['tests'])==3 and int(result.attrib['failures'])==0 and int(result.attrib['disabled'])==0
   assert not result.findall('.//skipped')
   state['reader_tests']=dict(result.attrib)
-  state['tested_library_sha256']=sha(build/'libcudf.so')
+  loaded=[line.strip() for line in (root/'reader-tests.log').read_text().splitlines()
+          if 'calling init:' in line and 'libcudf.so' in line]
+  assert len(loaded)==1 and loaded[0].endswith('calling init: '+str(tested_library)),loaded
+  state['tested_library_load_evidence']=loaded
+  state['tested_executable_sha256']=sha(build/'gtests/PARQUET_ACTIVE_CODECS_TEST')
+  state['tested_library_sha256']=sha(tested_library)
   assert state['tested_library_sha256']==read(root/'candidate-state.json')['library_sha256']
  else:
   assert read(root/'configure-state.json')['status']=='completed'

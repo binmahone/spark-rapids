@@ -36,7 +36,7 @@ if [[ "$mode" == all ]]; then
   -ldl -lpthread -lrt -o "$root/native-concat-probe"
 sha256sum "$root/native-concat-probe" > "$root/probe.sha256"
 fi
-printf '%s\n' '{ global: Java_com_nvidia_spark_rapids_experiments_ConcatOffsetProbe_*; local: *; };' \
+printf '%s\n' '{ global: Java_com_nvidia_spark_rapids_experiments_ConcatOffsetProbe_*; *rmm*; local: *; };' \
   > "$root/exports.map"
 "$cuda/bin/nvcc" "${common[@]}" -shared -Xcompiler -fPIC \
   -I"$work/jdk17/include" -I"$work/jdk17/include/linux" \

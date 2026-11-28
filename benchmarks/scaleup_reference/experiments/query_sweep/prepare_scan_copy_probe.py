@@ -29,7 +29,7 @@ here = Path(__file__).resolve().parent
 manifest['source_revision'] = subprocess.check_output(
     ['git', '-C', str(here), 'rev-parse', 'HEAD'], text=True).strip()
 manifest['probe_sources'] = {name: hashlib.sha256((here / name).read_bytes()).hexdigest()
-    for name in ('copy_admission.hpp', 'scan_copy_admission.hpp', 'scan_copy_probe_jni.cpp',
+    for name in ('copy_admission.hpp', 'scan_copy_admission.hpp', 'probe_allocator.hpp', 'scan_copy_probe_jni.cpp',
                  'ScanCopyProbe.java', 'build_scan_copy_probe.sh')}
 for name, expected in pins.items():
     url = f'https://raw.githubusercontent.com/NVIDIA/cudf-spark-jni/{revision}/src/main/cpp/src/{name}'

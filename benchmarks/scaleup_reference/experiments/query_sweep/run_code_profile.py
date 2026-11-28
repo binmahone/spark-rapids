@@ -150,6 +150,7 @@ def main():
             proof = []
             for stderr in logs.glob('worker-*/work/*/*/stderr'):
                 content = stderr.read_text()
+                assert 'NATIVE_PROBE_RMM_SHARED registry=' in content, str(stderr)
                 first_call = re.search(r'CONCAT_OFFSET_PROBE_FIRST_CALL mode=(\w+)', content)
                 assert first_call and first_call[1] == a.concat_implementation
                 first_string = 'CONCAT_OFFSET_PROBE_FIRST_STRING mode=candidate' in content
@@ -169,6 +170,7 @@ def main():
             proof = []
             for stderr in logs.glob('worker-*/work/*/*/stderr'):
                 content = stderr.read_text()
+                assert 'NATIVE_PROBE_RMM_SHARED registry=' in content, str(stderr)
                 assert f'SCAN_COPY_NATIVE_ENTER mode={mode}' in content
                 if mode:
                     assert f'SCAN_COPY_ADMITTED mode={mode}' in content

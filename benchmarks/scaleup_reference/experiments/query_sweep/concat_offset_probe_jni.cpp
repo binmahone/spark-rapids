@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "cudf_jni_apis.hpp"
+#include "probe_allocator.hpp"
 #include <cudf/concatenate.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/table/table.hpp>
@@ -68,13 +69,17 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_nvidia_spark_rapids_experiments_ConcatOffsetProbe_install(
   JNIEnv* env, jclass, jclass table, jboolean candidate)
 {
-  use_candidate.store(candidate, std::memory_order_relaxed);
-  JNINativeMethod method{const_cast<char*>("concatenate"), const_cast<char*>("([J)[J"),
-                         reinterpret_cast<void*>(&concatenate)};
-  if (env->RegisterNatives(table, &method, 1) != JNI_OK && !env->ExceptionCheck()) {
-    auto error = env->FindClass("java/lang/UnsatisfiedLinkError");
-    if (error != nullptr) { env->ThrowNew(error, "Unable to bind native concatenate probe"); }
+  JNI_TRY {
+    verify_shared_probe_allocator();
+    use_candidate.store(candidate, std::memory_order_relaxed);
+    JNINativeMethod method{const_cast<char*>("concatenate"), const_cast<char*>("([J)[J"),
+                           reinterpret_cast<void*>(&concatenate)};
+    if (env->RegisterNatives(table, &method, 1) != JNI_OK && !env->ExceptionCheck()) {
+      auto error = env->FindClass("java/lang/UnsatisfiedLinkError");
+      if (error != nullptr) { env->ThrowNew(error, "Unable to bind native concatenate probe"); }
+    }
   }
+  JNI_CATCH(env, );
 }
 
 extern "C" JNIEXPORT jlongArray JNICALL

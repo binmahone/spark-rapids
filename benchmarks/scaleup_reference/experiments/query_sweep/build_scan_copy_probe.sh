@@ -20,7 +20,7 @@ common=(-std=c++20 -O3 -DNDEBUG --extended-lambda --expt-relaxed-constexpr \
   -I"$work/jdk17/include" -I"$work/jdk17/include/linux" \
   -I"$sdk/cudf/java/src/main/native/include" -I"$sdk/cudf/java/src/main/native/src" \
   -I"$here" -I"$root")
-printf '%s\n' '{ global: Java_com_nvidia_spark_rapids_experiments_ScanCopyProbe_*; local: *; };' \
+printf '%s\n' '{ global: Java_com_nvidia_spark_rapids_experiments_ScanCopyProbe_*; *rmm*; local: *; };' \
   > "$root/exports.map"
 /usr/local/cuda-13.1/bin/nvcc "${common[@]}" -shared -Xcompiler -fPIC \
   "$root/memory_utils.cu" "$root/MemoryUtilsJni.cpp" "$here/scan_copy_probe_jni.cpp" \

@@ -15,7 +15,9 @@ from analyze_data_path_trace import merged, duration
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work',type=Path,required=True)
 p.add_argument('--trace',type=Path,required=True)
+p.add_argument('--output-name',default='paired-stack-analysis')
 a=p.parse_args()
+assert a.output_name.replace('-','').isalnum()
 s=json.loads((a.trace/'state.json').read_text())
 assert s['status']=='completed' and s['wall_stacks'] and not s['full_sql_trace']
 db=sqlite3.connect('file:'+str(a.trace/'q9.sqlite')+'?mode=ro',uri=True)
@@ -38,7 +40,7 @@ for token,q in timeline.items():
         if end>begin:candidates.append((end-begin,token,stage,begin,end))
 assert candidates,'Bounded capture missed the lineitem scan'
 _,token,stage,begin,end=max(candidates,key=lambda x:x[0])
-out=a.trace/'paired-stack-analysis';out.mkdir(exist_ok=False)
+out=a.trace/a.output_name;out.mkdir(exist_ok=False)
 classes=out/'classes';classes.mkdir()
 here=Path(__file__).resolve().parent
 subprocess.run([str(a.work/'jdk17/bin/javac'),'--release','17','-d',str(classes),

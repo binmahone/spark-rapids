@@ -30,6 +30,7 @@ public final class ReadPairedStackSamples {
     long events;
     long samples;
     final Map<String, Long> stacks = new HashMap<>();
+    final Map<String, Long> inclusive = new HashMap<>();
   }
   public static void main(String[] args) throws Exception {
     long begin = Long.parseLong(args[1]);
@@ -76,6 +77,13 @@ public final class ReadPairedStackSamples {
         Group group = groups.computeIfAbsent(key, ignored -> new Group());
         group.events++;
         group.samples += samples;
+        for (String term : new String[]{"FutureTask.get", "GpuSemaphore", "codec_stats::add_pages",
+            "allocate_nesting_info", "allocate_level_decode_space", "decompress_page_data",
+            "decode_page_data", "CompactProtocolReader", "cudaStreamSynchronize",
+            "cuStreamSynchronize", "cudaMallocAsync", "cudaFreeAsync", "hostdevice_vector",
+            "materialize_all_columns", "PackedHostToDeviceCopy", "pread", "memcpy", "RmmSpark"}) {
+          if (stack.contains(term)) { group.inclusive.merge(term, samples, Long::sum); }
+        }
         if (!domain.equals("other")) { group.stacks.merge(stack, samples, Long::sum); }
       }
     }
@@ -91,7 +99,13 @@ public final class ReadPairedStackSamples {
           output.print("{\"samples\":" + entries.get(i).getValue()
               + ",\"stack\":" + json(entries.get(i).getKey()) + "}");
         }
-        output.println("]}");
+        output.print("],\"inclusive_terms\":{");
+        int index = 0;
+        for (Map.Entry<String, Long> term : group.inclusive.entrySet()) {
+          if (index++ > 0) { output.print(','); }
+          output.print(json(term.getKey()) + ":" + term.getValue());
+        }
+        output.println("}}");
       }
     }
   }

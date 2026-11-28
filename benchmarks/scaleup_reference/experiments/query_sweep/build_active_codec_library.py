@@ -28,10 +28,11 @@ root=a.work/'native-codec-library'
 root.mkdir(exist_ok=True)
 state_path=root/(a.action+'-state.json')
 if state_path.exists():
- assert a.action=='baseline' and read(state_path)['status']=='failed'
- failure='baseline-failed-'+str(time.time_ns())
+ assert a.action in ('baseline','configure-headers') and read(state_path)['status']=='failed'
+ failure=a.action+'-failed-'+str(time.time_ns())
  shutil.copyfile(state_path,root/(failure+'-state.json'))
- (root/'baseline-build.log').rename(root/(failure+'-build.log'))
+ old_log=root/('baseline-build.log' if a.action=='baseline' else 'compiler-brotli.log')
+ old_log.rename(root/(failure+'-build.log'))
 state={'status':'running','action':a.action,'owner_thread':a.thread_id,'started_unix_ns':time.time_ns(),
        'candidate_revision':a.candidate_revision,'commands':[]}
 write(state_path,state)
@@ -107,8 +108,10 @@ try:
   assert read(root/'baseline-state.json')['status']=='failed'
   compiler=root/'compiler'
   run([root/'micromamba','install','--yes','--no-rc','--root-prefix',root/'mamba-root',
-       '--prefix',compiler,'--channel','conda-forge','brotli-devel=1.2.0'],
+       '--prefix',compiler,'--channel','conda-forge','brotli=1.2.0',
+       'gxx_linux-64=14.3.0','libstdcxx=14.3.0','libgcc=14.3.0'],
        'compiler-brotli.log',600)
+  assert (compiler/'include/brotli/decode.h').exists()
   command=read(root/'configure-state.json')['commands'][-1]
   command += ['-U*BROTLI*','-DZLIB_INCLUDE_DIR='+str(compiler/'include'),
               '-DZLIB_LIBRARY_RELEASE='+str(compiler/'lib/libz.so')]

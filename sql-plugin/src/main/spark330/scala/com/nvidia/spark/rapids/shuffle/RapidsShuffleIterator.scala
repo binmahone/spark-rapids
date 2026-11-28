@@ -27,6 +27,7 @@ import scala.collection.mutable
 
 import com.nvidia.spark.rapids.{GpuSemaphore, NvtxRegistry, RapidsConf, RapidsShuffleHandle, ShuffleReceivedBufferCatalog}
 import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
+import com.nvidia.spark.rapids.Arm.closeOnExcept
 import com.nvidia.spark.rapids.jni.RmmSpark
 
 import org.apache.spark.TaskContext
@@ -369,23 +370,9 @@ class RapidsShuffleIterator(
   override def next(): ColumnarBatch = {
     NvtxRegistry.RAPIDS_SHUFFLE_ITERATOR_NEXT.push()
 
-    // If N tasks downstream are accumulating memory we run the risk OOM
-    // On the other hand, if wait here we may not start processing batches that are ready.
-    // Not entirely clear what the right answer is, at this time.
-    //
-    // It is worth noting that we can get in the situation where spilled buffers are acquired
-    // (since the scheduling does not take into account the state of the buffer in the catalog),
-    // which in turn could spill other device buffers that could have been handed off downstream
-    // without a copy. In other words, more investigation is needed to find if some heuristics
-    // could be applied to pipeline the copies back to device at acquire time.
-    //
-    // For now: picking to acquire the semaphore now. The batch fetches for *this* task are about to
-    // get started, a few lines below. Assuming that any task that is in the semaphore, has active
-    // fetches and so it could produce device memory. Note this is not allowing for some external
-    // thread to schedule the fetches for us, it may be something we consider in the future, given
-    // memory pressure.
-    // No good way to get a metric in here for semaphore time.
-    taskContext.foreach(GpuSemaphore.acquireIfNecessary)
+    // Admission limits the initial fetch fan-out. A task with no received batch releases
+    // its permit while waiting and reacquires it before materializing GPU data.
+    taskContext.foreach(GpuSemaphore.acquireIfNecessary(_))
 
     if (!started) {
       // kick off if we haven't already
@@ -394,12 +381,15 @@ class RapidsShuffleIterator(
     }
 
     val blockedStart = System.currentTimeMillis()
-    var result: Option[ShuffleClientResult] = None
-    RmmSpark.waitingOnPool()
-    try {
-      result = pollForResult(timeoutSeconds)
-    } finally {
-      RmmSpark.doneWaitingOnPool()
+    var result = Option(resolvedBatches.poll())
+    if (result.isEmpty) {
+      taskContext.foreach(GpuSemaphore.releaseIfNecessary)
+      RmmSpark.waitingOnPool()
+      try {
+        result = pollForResult(timeoutSeconds)
+      } finally {
+        RmmSpark.doneWaitingOnPool()
+      }
     }
     val blockedTime = System.currentTimeMillis() - blockedStart
 
@@ -407,6 +397,10 @@ class RapidsShuffleIterator(
       case Some(BufferReceived(handle)) =>
         NvtxRegistry.RAPIDS_SHUFFLE_ITERATOR_GOT_BATCH.push()
         try {
+          // The polled handle is no longer owned by the queue's completion cleaner.
+          closeOnExcept(handle) { _ =>
+            taskContext.foreach(GpuSemaphore.acquireIfNecessary(_))
+          }
           val (cb, memoryUsedBytes) = catalog.getColumnarBatchAndRemove(handle, sparkTypes)
           metricsUpdater.update(blockedTime, 1, memoryUsedBytes, cb.numRows())
           cb

@@ -188,7 +188,7 @@ def main():
             report['profiles'] = [{'path': str(path), 'bytes': path.stat().st_size,
                                    'sha256': sha(path)} for path in profiles]
         if a.park_events:
-            profiles = sorted(directory.glob('parks-*.jfr'))
+            profiles = sorted((directory / 'park-recordings').glob('hotspot-pid-*.jfr'))
             assert len(profiles) == 9 and all(path.stat().st_size > 1024 for path in profiles)
             report['park_profiles'] = [{'path': str(path), 'bytes': path.stat().st_size,
                                        'sha256': sha(path)} for path in profiles]

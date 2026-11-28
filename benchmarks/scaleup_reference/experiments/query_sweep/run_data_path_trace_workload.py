@@ -53,9 +53,11 @@ native_options = ('-Dai.rapids.cudf.lib-native-dir=' + str(native)
 if a.park_events:
     assert a.variant == 'code-profile' and not a.wall_stacks and not a.java_ranges
     settings = HERE / 'scan_parks.jfc'
+    recordings = a.output / 'park-recordings'
+    recordings.mkdir()
     options = (f'-XX:FlightRecorderOptions=stackdepth=128 '
                f'-XX:StartFlightRecording=name=scanparks,settings={settings},dumponexit=true,'
-               f'filename={a.output}/parks-%p.jfr,maxsize=256m')
+               f'filename={recordings},maxsize=256m')
     native_options = (native_options + ' ' if native_options else '') + options
     write(a.output / 'park-recorder.json', {'settings': str(settings), 'sha256': sha(settings),
         'threshold_ms': 1, 'stack_depth': 128, 'classification': 'Diagnostic; not a scored run'})

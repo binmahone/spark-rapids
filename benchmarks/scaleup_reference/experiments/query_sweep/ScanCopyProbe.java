@@ -25,6 +25,9 @@ public final class ScanCopyProbe {
       case "pair": mode = 2; break;
       case "paced": mode = 3; break;
       case "paced-queued": mode = 4; break;
+      case "serial-original": mode = 0; break;
+      case "serial-unlocked": mode = 3; break;
+      case "serial-locked": mode = 5; break;
       default: throw new IllegalArgumentException("Unknown copy probe mode");
     }
     Properties mapping = new Properties();

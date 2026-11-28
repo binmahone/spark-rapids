@@ -26,7 +26,7 @@ Java_com_nvidia_spark_rapids_experiments_ScanCopyProbe_install(
   JNI_NULL_CHECK(env, path, "lease path is null", );
   JNI_TRY {
     verify_shared_probe_allocator();
-    CUDF_EXPECTS(mode >= 0 && mode <= 4, "Unknown copy admission mode");
+    CUDF_EXPECTS(mode >= 0 && mode <= 5, "Unknown copy admission mode");
     cudf::jni::native_jstring lease_path(env, path);
     scan_copy_experiment::admission_path = lease_path.get();
     scan_copy_experiment::admission_mode = mode;

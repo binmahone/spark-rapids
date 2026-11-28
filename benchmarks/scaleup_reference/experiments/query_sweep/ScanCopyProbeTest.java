@@ -8,10 +8,15 @@ import ai.rapids.cudf.Cuda;
 import ai.rapids.cudf.DeviceMemoryBuffer;
 import ai.rapids.cudf.HostMemoryBuffer;
 import com.nvidia.spark.rapids.jni.PackedHostToDeviceCopy;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /** Checks large sliced inputs, empty inputs, exact copied bytes, and failure recovery. */
 public final class ScanCopyProbeTest {
-  public static void main(String[] args) {
+  private static void verify(int seed, CountDownLatch ready) throws Exception {
     Cuda.setDevice(0);
     int length = 40 * 1024 * 1024;
     try (Cuda.Stream stream = new Cuda.Stream(true);
@@ -20,10 +25,16 @@ public final class ScanCopyProbeTest {
          HostMemoryBuffer small = HostMemoryBuffer.allocate(17, true)) {
       byte[] pattern = new byte[length];
       for (int i = 0; i < length; i++) {
-        pattern[i] = (byte) ((i * 31) ^ (i >>> 8) ^ (i >>> 20));
+        pattern[i] = (byte) ((i * 31) ^ (i >>> 8) ^ (i >>> 20) ^ seed);
       }
       large.setBytes(0, pattern, 0, length);
       small.setMemory(0, 17, (byte) 0x3c);
+      if (ready != null) {
+        ready.countDown();
+        if (!ready.await(30, TimeUnit.SECONDS)) {
+          throw new AssertionError("Concurrent copy peer did not become ready");
+        }
+      }
       try (HostMemoryBuffer sliced = large.slice(7, length - 14);
            HostMemoryBuffer empty = large.slice(0, 0);
            PackedHostToDeviceCopy copy = PackedHostToDeviceCopy.copyAsync(
@@ -60,7 +71,24 @@ public final class ScanCopyProbeTest {
         if (empty.getBuffers().length != 0) { throw new AssertionError("Empty input differs"); }
       }
     }
-    System.out.println("Large sliced copy bytes, empty input, and rejection recovery passed");
+  }
+
+  public static void main(String[] args) throws Exception {
+    verify(0, null);
+    ExecutorService workers = Executors.newFixedThreadPool(2);
+    CountDownLatch ready = new CountDownLatch(2);
+    try {
+      Future<?> first = workers.submit(() -> { verify(1, ready); return null; });
+      Future<?> second = workers.submit(() -> { verify(2, ready); return null; });
+      first.get(60, TimeUnit.SECONDS);
+      second.get(60, TimeUnit.SECONDS);
+    } finally {
+      workers.shutdownNow();
+      if (!workers.awaitTermination(30, TimeUnit.SECONDS)) {
+        throw new AssertionError("Concurrent copy workers did not terminate");
+      }
+    }
+    System.out.println("Sequential and concurrent sliced copy bytes, empty input, and recovery passed");
   }
   private ScanCopyProbeTest() {}
 }

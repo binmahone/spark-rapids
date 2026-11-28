@@ -31,7 +31,7 @@ def main():
     p.add_argument('--queries', default='8,18,5')
     p.add_argument('--nvcomp-policy', choices=('STABLE', 'OFF'))
     p.add_argument('--concat-implementation', choices=('control', 'candidate'))
-    p.add_argument('--scan-copy-implementation', choices=('original', 'sync', 'pair', 'paced-control', 'paced', 'paced-queued'))
+    p.add_argument('--scan-copy-implementation', choices=('original', 'sync', 'pair', 'paced-control', 'paced', 'paced-queued', 'serial-original', 'serial-unlocked', 'serial-locked'))
     p.add_argument('--packed-view', action='store_true')
     a = p.parse_args()
     assert not a.packed_view or not (a.concat_implementation or a.scan_copy_implementation), 'Keep packed-view experiment isolated'
@@ -72,7 +72,8 @@ def main():
     scan_copy = None
     if a.scan_copy_implementation:
         assert not a.concat_implementation, 'Keep native experiments isolated'
-        native = a.work / ('native-scan-copy-paced' if a.scan_copy_implementation.startswith('paced') else 'native-scan-copy')
+        native = a.work / ('native-scan-copy-serial' if a.scan_copy_implementation.startswith('serial-') else
+                           'native-scan-copy-paced' if a.scan_copy_implementation.startswith('paced') else 'native-scan-copy')
         assert (native / 'build.exit').read_text().strip() == '0'
         subprocess.run(['sha256sum', '--check', str(native / 'artifacts.sha256')], check=True)
         scan_copy = {'implementation': a.scan_copy_implementation,
@@ -171,7 +172,7 @@ def main():
             concat['runtime_proof'] = proof
         if scan_copy:
             logs = Path(read(a.work / 'evidence/deployment.json')['scratch_root']) / run.name / 'suite'
-            mode = {'original': 0, 'sync': 1, 'pair': 2, 'paced-control': 0, 'paced': 3, 'paced-queued': 4}[a.scan_copy_implementation]
+            mode = {'original': 0, 'sync': 1, 'pair': 2, 'paced-control': 0, 'paced': 3, 'paced-queued': 4, 'serial-original': 0, 'serial-unlocked': 3, 'serial-locked': 5}[a.scan_copy_implementation]
             proof = []
             for stderr in logs.glob('worker-*/work/*/*/stderr'):
                 content = stderr.read_text()
@@ -180,9 +181,12 @@ def main():
                 if mode in (1, 2):
                     assert f'SCAN_COPY_ADMITTED mode={mode}' in content
                     assert f'SCAN_COPY_COMPLETED mode={mode}' in content
-                if mode in (3, 4):
+                if mode in (3, 4, 5):
                     branch = re.search(rf'SCAN_COPY_PACED_SUBMITTED mode={mode} bytes=(\d+) chunks=(\d+)', content)
                     assert branch and int(branch[1]) > 32 * 1024 * 1024 and int(branch[2]) > 1
+                if mode == 5:
+                    assert 'SCAN_COPY_SERIAL_ACQUIRED mode=5' in content
+                    assert 'SCAN_COPY_SERIAL_CONTENDED mode=5' in content
                 proof.append({'stderr': str(stderr), 'mode': mode,
                               'large_copy_completed': bool(mode)})
             assert len(proof) == 8

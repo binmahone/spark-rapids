@@ -12,11 +12,14 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <memory>
+#include <mutex>
 
 namespace scan_copy_experiment {
 extern int admission_mode;
 extern std::string admission_path;
 inline std::atomic<bool> entered{false}, admitted{false}, completed{false};
+inline std::mutex executor_copy_mutex;
+inline std::atomic<bool> serial_acquired{false}, serial_contended{false};
 
 class copy_admission {
 public:
@@ -68,13 +71,32 @@ inline cudaError_t submit_copies(void* const* destinations,
   if (total <= quantum) {
     return cudf::detail::memcpy_batch_async(destinations, sources, sizes, count, stream);
   }
+  std::unique_lock<std::mutex> owner(executor_copy_mutex, std::defer_lock);
+  if (admission_mode == 5) {
+    static bool const single_device = [] {
+      int count = 0;
+      CUDF_CUDA_TRY(cudaGetDeviceCount(&count));
+      CUDF_EXPECTS(count == 1, "Serial copy experiment requires one visible GPU per process");
+      return true;
+    }();
+    (void)single_device;
+    if (!owner.try_lock()) {
+      if (!serial_contended.exchange(true)) {
+        std::fprintf(stderr, "SCAN_COPY_SERIAL_CONTENDED mode=5\n");
+      }
+      owner.lock();
+    }
+    if (!serial_acquired.exchange(true)) {
+      std::fprintf(stderr, "SCAN_COPY_SERIAL_ACQUIRED mode=5\n");
+    }
+  }
   for (size_t i = 0; i < count; ++i) {
     for (size_t offset = 0; offset < sizes[i]; offset += quantum) {
       auto const bytes = std::min(quantum, sizes[i] - offset);
       CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<char*>(destinations[i]) + offset,
                                    static_cast<char const*>(sources[i]) + offset,
                                    bytes, cudaMemcpyHostToDevice, stream.get()));
-      if (admission_mode == 3) {
+      if (admission_mode == 3 || admission_mode == 5) {
         // Bound queued copy work so another task can submit decode metadata transfers.
         CUDF_CUDA_TRY(cudaStreamSynchronize(stream.get()));
       }

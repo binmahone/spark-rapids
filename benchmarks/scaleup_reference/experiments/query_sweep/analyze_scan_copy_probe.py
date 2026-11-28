@@ -30,7 +30,7 @@ for label in a.labels:
     for profile in profiles.values():
         for key, value in profile.items():
             if isinstance(value, str):
-                profile[key] = re.sub(r'scan-copy-probe.jar=(original|sync|pair|paced-control|paced-queued|paced),',
+                profile[key] = re.sub(r'scan-copy-probe.jar=(original|sync|pair|paced-control|paced-queued|paced|serial-original|serial-unlocked|serial-locked),',
                     'scan-copy-probe.jar=<implementation>,', value.replace(run.name, '<run>'))
     rows, parity = [], []
     timeline = schedule(run)

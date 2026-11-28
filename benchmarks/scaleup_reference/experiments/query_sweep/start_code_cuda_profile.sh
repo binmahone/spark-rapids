@@ -8,11 +8,15 @@ readonly query=${3:?Query number}
 readonly attempt=${4:-0}
 readonly concat_implementation=${5:-}
 readonly timeline_only=${6:-false}
+readonly scan_copy_implementation=${7:-}
 extra_args=()
 if [[ -n "$concat_implementation" ]]; then
   extra_args=(--concat-implementation "$concat_implementation")
 fi
 if [[ "$timeline_only" == true ]]; then extra_args+=(--timeline-only); fi
+if [[ -n "$scan_copy_implementation" ]]; then
+  extra_args+=(--scan-copy-implementation "$scan_copy_implementation")
+fi
 suffix=""
 if [[ "$attempt" != 0 ]]; then suffix="-attempt$attempt"; fi
 readonly here=$(cd "$(dirname "$0")" && pwd)

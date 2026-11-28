@@ -25,8 +25,10 @@ def main():
     p.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
     p.add_argument('--attempt', type=int, default=0)
     p.add_argument('--concat-implementation', choices=('control', 'candidate'))
+    p.add_argument('--scan-copy-implementation', choices=('paced-control', 'paced', 'paced-queued'))
     p.add_argument('--timeline-only', action='store_true')
     a = p.parse_args()
+    assert not (a.concat_implementation and a.scan_copy_implementation)
     work = a.work.resolve()
     owner = read(work / 'evidence/owner.json')
     assert owner['thread_id'] == a.thread_id
@@ -84,6 +86,9 @@ def main():
     if a.concat_implementation:
         assert a.variant == 'code-profile'
         command += ['--concat-implementation', a.concat_implementation]
+    if a.scan_copy_implementation:
+        assert a.variant == 'code-profile'
+        command += ['--scan-copy-implementation', a.scan_copy_implementation]
     env = dict(os.environ)
     if a.variant == 'code-profile':
         temporary = directory / 'tmp'

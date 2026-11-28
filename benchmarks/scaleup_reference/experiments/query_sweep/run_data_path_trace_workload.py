@@ -25,7 +25,9 @@ p.add_argument('--output', required=True, type=Path)
 p.add_argument('--variant', choices=('control', 'scan-pack', 'scan-split', 'scan-split-cuda', 'scan-split-cuda2', 'shuffle-buffer', 'shuffle-wait', 'code-profile'), default='control')
 p.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
 p.add_argument('--concat-implementation', choices=('control', 'candidate'))
+p.add_argument('--scan-copy-implementation', choices=('paced-control', 'paced', 'paced-queued'))
 a = p.parse_args()
+assert not (a.concat_implementation and a.scan_copy_implementation)
 assert read(a.work / 'evidence/owner.json')['thread_id'] == a.thread_id
 write(a.output / 'workload-controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),
                                             'start_time': services.start_time(os.getpid())})
@@ -54,6 +56,16 @@ if a.concat_implementation:
     write(a.output / 'native-probe.json', {'mode': a.concat_implementation,
         'agent_sha256': sha(root / 'concat-offset-probe.jar'),
         'library_sha256': sha(native / 'libconcat_offsets_probe.so')})
+if a.scan_copy_implementation:
+    assert a.variant == 'code-profile' and native_options
+    root = a.work / 'native-scan-copy-paced'
+    assert (root / 'build.exit').read_text().strip() == '0'
+    subprocess.run(['sha256sum', '--check', str(root / 'artifacts.sha256')], check=True)
+    native_options += (f' -javaagent:{root}/scan-copy-probe.jar={a.scan_copy_implementation},'
+                       f'{root}/libscan_copy_probe.so,{root}/gpu-pairs.properties,{root}/leases')
+    write(a.output / 'native-probe.json', {'kind': 'scan-copy', 'mode': a.scan_copy_implementation,
+        'agent_sha256': sha(root / 'scan-copy-probe.jar'),
+        'library_sha256': sha(root / 'libscan_copy_probe.so')})
 path, result = launch_group(a.work, 'data-path-trace-' + a.output.name.replace('-process-tree', ''),
     0, [selected], {
     'spark.rapids.sql.reader.kvikio.numThreads': '32',
@@ -67,11 +79,24 @@ path, result = launch_group(a.work, 'data-path-trace-' + a.output.name.replace('
     runtime_hash_reuse_queries=[9] if a.query == 9 else None,
     diagnostic_nvtx=not (a.variant.startswith('scan-split-cuda') or a.variant == 'code-profile'),
     diagnostic_jvm_options=native_options)
-write(a.output / 'workload.json', {'run': str(path), 'start_unix_ns': started,
-                                  'end_unix_ns': time.time_ns(), 'result': result})
 assert result['status'] == 'completed' and result['driver_exit_code'] == 0
 assert len(result['samples']) == 2 and all(s['validation']['status'] == 'passed' for s in result['samples'])
+if a.scan_copy_implementation:
+    logs = Path(read(a.work / 'evidence/deployment.json')['scratch_root']) / path.name / 'suite'
+    mode = {'paced-control': 0, 'paced': 3, 'paced-queued': 4}[a.scan_copy_implementation]
+    observed = []
+    for stderr in logs.glob('worker-*/work/*/*/stderr'):
+        content = stderr.read_text()
+        assert 'NATIVE_PROBE_RMM_SHARED registry=' in content
+        assert f'SCAN_COPY_NATIVE_ENTER mode={mode}' in content
+        if mode:
+            assert f'SCAN_COPY_PACED_SUBMITTED mode={mode}' in content
+        observed.append(str(stderr))
+    assert len(observed) == 8
+    write(a.output / 'scan-copy-runtime-proof.json', {'mode': mode, 'executor_logs': observed})
 if a.query == 9:
     for sample in result['samples']:
         assert sample['runtime_hash_reuse_proof']['physical_plan_unchanged']
         assert sum(n['metrics'].get('hashTableReuses', 0) for n in sample['plan_metrics']) > 0
+write(a.output / 'workload.json', {'run': str(path), 'start_unix_ns': started,
+                                  'end_unix_ns': time.time_ns(), 'result': result})

@@ -28,8 +28,8 @@ import scala.collection
 import scala.collection.mutable
 
 import com.nvidia.spark.rapids.{GpuSemaphore, NvtxRegistry, RapidsConf, RapidsShuffleHandle, ShuffleReceivedBufferCatalog}
-import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
 import com.nvidia.spark.rapids.Arm.closeOnExcept
+import com.nvidia.spark.rapids.ScalableTaskCompletion.onTaskCompletion
 import com.nvidia.spark.rapids.jni.RmmSpark
 
 import org.apache.spark.TaskContext

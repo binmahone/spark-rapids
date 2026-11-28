@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration version="2.0" label="Scan park intervals" description="Diagnostic Java thread park durations" provider="NVIDIA">
+  <event name="jdk.ThreadPark">
+    <setting name="enabled">true</setting>
+    <setting name="stackTrace">true</setting>
+    <setting name="threshold">1 ms</setting>
+  </event>
+  <event name="jdk.DataLoss">
+    <setting name="enabled">true</setting>
+  </event>
+</configuration>

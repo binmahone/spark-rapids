@@ -29,6 +29,7 @@ p.add_argument('--scan-copy-implementation', choices=('paced-control', 'paced', 
 p.add_argument('--java-ranges', action='store_true')
 p.add_argument('--pinned-copy-threshold', type=int, choices=(0, 65536))
 p.add_argument('--wall-stacks', action='store_true')
+p.add_argument('--park-events', action='store_true')
 a = p.parse_args()
 assert not (a.concat_implementation and a.scan_copy_implementation)
 assert read(a.work / 'evidence/owner.json')['thread_id'] == a.thread_id
@@ -49,6 +50,15 @@ if a.variant in ('scan-split', 'scan-split-cuda', 'scan-split-cuda2'):
 native = a.work / 'native-concat/lib'
 native_options = ('-Dai.rapids.cudf.lib-native-dir=' + str(native)
                   if a.variant == 'code-profile' and native.is_dir() else None)
+if a.park_events:
+    assert a.variant == 'code-profile' and not a.wall_stacks and not a.java_ranges
+    settings = HERE / 'scan_parks.jfc'
+    options = (f'-XX:FlightRecorderOptions=stackdepth=128 '
+               f'-XX:StartFlightRecording=name=scanparks,settings={settings},dumponexit=true,'
+               f'filename={a.output}/parks-%p.jfr,maxsize=256m')
+    native_options = (native_options + ' ' if native_options else '') + options
+    write(a.output / 'park-recorder.json', {'settings': str(settings), 'sha256': sha(settings),
+        'threshold_ms': 1, 'stack_depth': 128, 'classification': 'Diagnostic; not a scored run'})
 if a.wall_stacks:
     assert a.variant == 'code-profile' and not a.java_ranges
     profiler = read(a.work / 'profilers/manifest.json')

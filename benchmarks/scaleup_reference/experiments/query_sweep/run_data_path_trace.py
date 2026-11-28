@@ -31,10 +31,12 @@ def main():
     p.add_argument('--pinned-copy-threshold', type=int, choices=(0, 65536))
     p.add_argument('--kernel-proof-window', action='store_true')
     p.add_argument('--wall-stacks', action='store_true')
+    p.add_argument('--park-events', action='store_true')
     a = p.parse_args()
     assert not (a.concat_implementation and a.scan_copy_implementation)
     assert not a.kernel_proof_window or (a.timeline_only and a.pinned_copy_threshold is not None and not a.java_ranges)
     assert not a.wall_stacks or (a.kernel_proof_window and a.variant == 'code-profile')
+    assert not a.park_events or (a.kernel_proof_window and a.variant == 'code-profile' and not a.wall_stacks)
     work = a.work.resolve()
     owner = read(work / 'evidence/owner.json')
     assert owner['thread_id'] == a.thread_id
@@ -68,7 +70,8 @@ def main():
                   ['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
               'full_sql_trace': not a.kernel_proof_window,
               'start_unix_ns': time.time_ns(), 'java_ranges': a.java_ranges,
-              'wall_stacks': a.wall_stacks, 'pinned_copy_threshold': a.pinned_copy_threshold}
+              'wall_stacks': a.wall_stacks, 'park_events': a.park_events,
+              'pinned_copy_threshold': a.pinned_copy_threshold}
     write(directory / 'controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),
                                          'start_time': services.start_time(os.getpid())})
     write(directory / 'state.json', report)
@@ -98,6 +101,8 @@ def main():
         command += ['--pinned-copy-threshold', str(a.pinned_copy_threshold)]
     if a.wall_stacks:
         command += ['--wall-stacks']
+    if a.park_events:
+        command += ['--park-events']
     if a.java_ranges:
         command += ['--java-ranges']
     if a.concat_implementation:
@@ -182,6 +187,11 @@ def main():
             assert len(profiles) == 9 and all(path.stat().st_size > 1024 for path in profiles)
             report['profiles'] = [{'path': str(path), 'bytes': path.stat().st_size,
                                    'sha256': sha(path)} for path in profiles]
+        if a.park_events:
+            profiles = sorted(directory.glob('parks-*.jfr'))
+            assert len(profiles) == 9 and all(path.stat().st_size > 1024 for path in profiles)
+            report['park_profiles'] = [{'path': str(path), 'bytes': path.stat().st_size,
+                                       'sha256': sha(path)} for path in profiles]
         if not a.kernel_proof_window:
             assert (workload['end_unix_ns'] - read(directory / 'nsys-ready.json')['time_unix_ns']) / 1e9 < duration
         stop_profiler()

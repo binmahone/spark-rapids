@@ -32,6 +32,7 @@ def main():
     p.add_argument('--nvcomp-policy', choices=('STABLE', 'OFF'))
     p.add_argument('--mmap-policy', choices=('ON', 'OFF'))
     p.add_argument('--pinned-copy-threshold', type=int, choices=(0, 65536))
+    p.add_argument('--shuffle-copy-implementation', choices=('control', 'kernel'))
     p.add_argument('--concat-implementation', choices=('control', 'candidate'))
     p.add_argument('--scan-copy-implementation', choices=('original', 'sync', 'pair', 'paced-control', 'paced', 'paced-queued', 'serial-original', 'serial-unlocked', 'serial-locked', 'batch-control', 'batch-scalar', 'batch-paced'))
     p.add_argument('--packed-view', action='store_true')
@@ -88,6 +89,20 @@ def main():
                  f'-javaagent:{native}/scan-copy-probe.jar={a.scan_copy_implementation},'
                  f'{native}/libscan_copy_probe.so,{native}/gpu-pairs.properties,{native}/leases')
         options = (options + ' ' if options else '') + agent
+    shuffle_copy = None
+    if a.shuffle_copy_implementation:
+        assert not (a.concat_implementation or a.scan_copy_implementation or a.packed_view)
+        assert a.pinned_copy_threshold == 0 and not (a.mmap_policy or a.nvcomp_policy)
+        native = a.work / 'native-shuffle-copy'
+        assert read(native / 'state.json')['status'] == 'completed'
+        manifest = read(native / 'manifest.json')
+        for name, digest in manifest['artifacts'].items():
+            assert sha(native / name) == digest
+        shuffle_copy = {'implementation': a.shuffle_copy_implementation, 'manifest': manifest}
+        agent = (f'-Dai.rapids.cudf.lib-native-dir={a.work}/native-concat/lib '
+                 f'-javaagent:{native}/shuffle-copy-probe.jar={a.shuffle_copy_implementation},'
+                 f'{native}/libshuffle_copy_probe.so')
+        options = (options + ' ' if options else '') + agent
     selected = controls()
     queries = list(ORDER) if a.queries == 'all' else [int(q) for q in a.queries.split(',')]
     assert queries and len(queries) == len(set(queries)) and set(queries) <= set(ORDER)
@@ -110,6 +125,7 @@ def main():
     state = {'status': 'running', 'owner': owner, 'mode': a.mode, 'profiler': profiler,
              'concat_probe': concat,
              'scan_copy_probe': scan_copy,
+             'shuffle_copy_probe': shuffle_copy,
              'packed_view': a.packed_view,
              'pinned_copy_threshold': a.pinned_copy_threshold,
              'queries': queries, 'nvcomp_policy': a.nvcomp_policy, 'mmap_policy': a.mmap_policy,
@@ -204,6 +220,20 @@ def main():
                               'large_copy_completed': bool(mode)})
             assert len(proof) == 8
             scan_copy['runtime_proof'] = proof
+        if shuffle_copy:
+            logs = Path(read(a.work / 'evidence/deployment.json')['scratch_root']) / run.name / 'suite'
+            proof = []
+            for stderr in logs.glob('worker-*/work/*/*/stderr'):
+                content = stderr.read_text()
+                for name, count in (('BufferSendState', 1), ('BufferReceiveState', 3)):
+                    assert f'SHUFFLE_COPY_TRANSFORMED class=com/nvidia/spark/rapids/shuffle/{name} calls={count}' in content
+                for side in ('send', 'receive'):
+                    assert f'SHUFFLE_COPY_SUBMITTED side={side} mode={a.shuffle_copy_implementation}' in content
+                executed = 'SHUFFLE_COPY_KERNEL_SUBMITTED bytes=' in content
+                assert executed == (a.shuffle_copy_implementation == 'kernel')
+                proof.append({'stderr': str(stderr), 'kernel_submitted': executed})
+            assert len(proof) == 8
+            shuffle_copy['runtime_proof'] = proof
         assert all(child.poll() is None for child, _ in children), 'An observer exited during the workload'
         pools = {}
         decoder_policies = {}

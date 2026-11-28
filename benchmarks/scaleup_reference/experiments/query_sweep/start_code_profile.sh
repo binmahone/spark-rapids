@@ -13,7 +13,9 @@ readonly scan_copy_implementation=${8:-}
 readonly packed_view=${9:-false}
 readonly mmap_policy=${10:-}
 readonly pinned_copy_threshold=${11:-}
+readonly shuffle_copy_implementation=${12:-}
 decoder_args=()
+if [[ -n "$shuffle_copy_implementation" ]]; then decoder_args+=(--shuffle-copy-implementation "$shuffle_copy_implementation"); fi
 if [[ -n "$pinned_copy_threshold" ]]; then decoder_args+=(--pinned-copy-threshold "$pinned_copy_threshold"); fi
 if [[ -n "$nvcomp_policy" ]]; then
   decoder_args+=(--nvcomp-policy "$nvcomp_policy")

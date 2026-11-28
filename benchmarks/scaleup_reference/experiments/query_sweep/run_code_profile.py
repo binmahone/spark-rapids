@@ -174,6 +174,9 @@ def main():
             ('host', HERE.parent / 'runtime_prefilter/monitor_host.py', []),
             ('vm', HERE / 'monitor_vm.py', ['--thread-id', a.thread_id, '--controller', str(directory / 'controller.json')]),
             ('pool', HERE / 'monitor_read_pool.py', [])]
+        if codec_library:
+            observers.append(('native-modules', HERE / 'monitor_native_modules.py',
+                              ['--expected-directory', str(native)]))
         if a.mode == 'native-io':
             observers.append(('native-io', HERE / 'monitor_native_io.py',
                 ['--thread-id', a.thread_id, '--scratch', str(scratch),
@@ -306,6 +309,13 @@ def main():
                 else:
                     assert all(row['dataset_mappings'] == 0 for row in observations)
             state['mmap_runtime_proof'] = mmap_observations
+        if codec_library:
+            mappings = [json.loads(line) for line in (directory/'native-modules.jsonl').read_text().splitlines()]
+            assert {str(row['pid']) for row in mappings} == set(pools)
+            assert len(mappings) == 8
+            expected_runtime = str(diagnostic_library_path.resolve())
+            assert all(any(expected_runtime in line and 'libstdc++.so' in line for line in row['maps']) for row in mappings)
+            codec_library['runtime_module_mappings'] = mappings
         profiles = sorted(scratch.glob('*.jfr'))
         if a.mode == 'stacks':
             assert len(profiles) == 9 and all(p.stat().st_size > 1024 for p in profiles)

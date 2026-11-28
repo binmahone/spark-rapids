@@ -34,8 +34,11 @@ int main(int argc, char** argv)
     check(cudaMallocHost(&host, capacity));
     check(cudaMalloc(&device, capacity));
     std::memset(host, 0x5a, capacity);
-    std::filesystem::copy_file("/proc/self/numa_maps",
-      directory / ("numa-" + std::to_string(gpu) + ".txt"));
+    {
+      std::ifstream maps("/proc/self/numa_maps");
+      std::ofstream saved(directory / ("numa-" + std::to_string(gpu) + ".txt"));
+      saved << maps.rdbuf();
+    }
     for (size_t bytes : {size_t{2} << 20, size_t{64} << 20, capacity}) {
       int const copies = static_cast<int>((size_t{8} << 30) / bytes);
       check(cudaMemcpyAsync(device, host, bytes, cudaMemcpyHostToDevice, stream));

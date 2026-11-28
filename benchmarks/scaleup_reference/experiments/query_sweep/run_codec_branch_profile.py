@@ -19,6 +19,7 @@ p.add_argument('--work', type=Path, required=True)
 p.add_argument('--thread-id', required=True)
 p.add_argument('--label', required=True)
 p.add_argument('--implementation', choices=('baseline', 'candidate'), required=True)
+p.add_argument('--layout', choices=('standalone', 'integrated'), default='standalone')
 a = p.parse_args()
 assert read(a.work / 'evidence/owner.json')['thread_id'] == a.thread_id
 assert a.label.replace('-', '').isalnum()
@@ -27,9 +28,10 @@ assert not subprocess.check_output(
 for area in ('code-profile', 'data-path-trace'):
     assert all(read(path)['status'] not in ('starting', 'running')
                for path in (a.work / area).glob('*/state.json'))
-artifact = read(a.work / 'native-codec-library' / (a.implementation + '-state.json'))
+native_root = 'native-codec-stack' if a.layout == 'integrated' else 'native-codec-library'
+artifact = read(a.work / native_root / (a.implementation + '-state.json'))
 assert artifact['status'] == 'completed'
-library = a.work / 'native-codec-library' / a.implementation / 'libcudf.so'
+library = a.work / native_root / a.implementation / 'libcudf.so'
 assert sha(library) == artifact['library_sha256']
 symbols = subprocess.check_output(['nm', '--defined-only', str(library)], text=True)
 matches = [line.split() for line in symbols.splitlines()
@@ -69,7 +71,7 @@ try:
     write(out / 'state.json', state)
     subprocess.run(['bash', str(HERE / 'start_code_profile.sh'), str(a.work), a.thread_id,
                     a.label, 'control', '9', '', '', '', 'false', '', '0', '', 'false',
-                    a.implementation], check=True, timeout=600)
+                    a.implementation, a.layout], check=True, timeout=600)
     assert trace.poll() is None
     query = read(a.work / 'code-profile' / a.label / 'state.json')
     assert query['status'] == 'completed'

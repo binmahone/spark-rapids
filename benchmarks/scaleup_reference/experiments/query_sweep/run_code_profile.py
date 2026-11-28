@@ -38,6 +38,7 @@ def main():
     p.add_argument('--packed-view', action='store_true')
     p.add_argument('--frozen-native-directory', action='store_true')
     p.add_argument('--codec-library', choices=('bridge','baseline','candidate'))
+    p.add_argument('--codec-library-layout', choices=('standalone','integrated'), default='standalone')
     a = p.parse_args()
     assert not a.packed_view or not (a.concat_implementation or a.scan_copy_implementation), 'Keep packed-view experiment isolated'
     assert a.label.replace('-', '').replace('_', '').isalnum()
@@ -72,7 +73,7 @@ def main():
         assert not (a.frozen_native_directory or a.packed_view or a.concat_implementation or
                     a.scan_copy_implementation or a.shuffle_copy_implementation or a.nvcomp_policy or
                     a.mmap_policy) and a.pinned_copy_threshold == 0
-        build = a.work / 'native-codec-library'
+        build = a.work / ('native-codec-stack' if a.codec_library_layout == 'integrated' else 'native-codec-library')
         if a.codec_library == 'bridge':
             native = a.work / 'native-concat/lib'
             codec_library = {'status':'completed','action':'bridge','library_sha256':
@@ -82,7 +83,8 @@ def main():
             assert codec_library['status'] == 'completed'
             native = build / a.codec_library
         assert sha(native / 'libcudf.so') == codec_library['library_sha256']
-        diagnostic_library_path = build / 'compiler/lib'
+        codec_library['layout'] = a.codec_library_layout
+        diagnostic_library_path = a.work / 'native-codec-library/compiler/lib'
         codec_library['runtime_dependencies'] = {
             path.name: sha(path) for path in diagnostic_library_path.glob('*.so.*') if path.is_file()}
         options = (options + ' ' if options else '') + f'-Dai.rapids.cudf.lib-native-dir={native}'

@@ -16,8 +16,11 @@ readonly pinned_copy_threshold=${11:-}
 readonly shuffle_copy_implementation=${12:-}
 readonly frozen_native_directory=${13:-false}
 readonly codec_library=${14:-}
+readonly codec_library_layout=${15:-standalone}
 decoder_args=()
-if [[ -n "$codec_library" ]]; then decoder_args+=(--codec-library "$codec_library"); fi
+if [[ -n "$codec_library" ]]; then
+  decoder_args+=(--codec-library "$codec_library" --codec-library-layout "$codec_library_layout")
+fi
 if [[ "$frozen_native_directory" == true ]]; then
   decoder_args+=(--frozen-native-directory)
 else

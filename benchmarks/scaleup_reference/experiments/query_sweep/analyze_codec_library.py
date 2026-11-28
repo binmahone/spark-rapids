@@ -26,7 +26,8 @@ for label in a.labels:
  run=Path(state['run'])
  config=json.loads((run/'config.json').read_text())
  profiles=json.loads((run/'profiles.json').read_text())
- expected=a.work/('native-concat/lib' if artifact['action']=='bridge' else 'native-codec-library/'+artifact['action'])
+ native_root='native-codec-stack' if artifact.get('layout')=='integrated' else 'native-codec-library'
+ expected=a.work/('native-concat/lib' if artifact['action']=='bridge' else native_root+'/'+artifact['action'])
  for profile in profiles.values():
   for key,value in profile.items():
    if isinstance(value,str):

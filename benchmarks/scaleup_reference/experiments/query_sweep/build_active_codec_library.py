@@ -17,7 +17,7 @@ from common import read,sha,write
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work',type=Path,required=True)
 p.add_argument('--thread-id',required=True)
-p.add_argument('--action',choices=('configure','reconfigure','configure-toolchain','configure-prefix','configure-headers','baseline','candidate'),required=True)
+p.add_argument('--action',choices=('configure','reconfigure','configure-toolchain','configure-prefix','configure-headers','configure-cufile','baseline','candidate'),required=True)
 p.add_argument('--candidate-revision',required=True)
 a=p.parse_args()
 assert read(a.work/'evidence/owner.json')['thread_id']==a.thread_id
@@ -41,7 +41,7 @@ source=root/'source';build=root/'build';venv=root/'build-venv'
 def run(command,logname,timeout=900):
  command=list(map(str,command));state['commands'].append(command);write(state_path,state)
  with (root/logname).open('x') as log:
-  subprocess.run(command,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=timeout,
+  subprocess.run(command,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=timeout,cwd=root,
                  env={**os.environ,'CUDACXX':'/usr/local/cuda-13.1/bin/nvcc',
                       'PKG_CONFIG_LIBDIR':str(root/'compiler/lib/pkgconfig')+':'+str(root/'compiler/share/pkgconfig')})
 
@@ -118,6 +118,26 @@ try:
   run(command,'configure-headers.log',900)
   prior=read(root/'configure-state.json');prior.pop('error',None)
   prior.update(status='completed',commands=[command],compiler_state=str(state_path),finished_unix_ns=time.time_ns())
+  write(root/'configure-state.json',prior)
+ elif a.action=='configure-cufile':
+  assert read(root/'baseline-state.json')['status']=='failed'
+  packages={'libcufile-dev-13-1':'73c90811092b509a72962f1ec800e6e53d52650389e071be22a7b413c1e05943',
+            'libcufile-13-1':'951bbf9985805804fb51009466f3c165a562d251f7fdcfe0d0ae9d37cc93f3c1'}
+  sdk=root/'cufile-sdk'
+  for package,digest in packages.items():
+   run(['apt-get','download',package+'=1.16.1.26-1'],package+'-download.log',120)
+   archive=root/(package+'_1.16.1.26-1_amd64.deb')
+   assert sha(archive)==digest
+   run(['dpkg-deb','-x',archive,sdk],package+'-extract.log',60)
+  headers=sdk/'usr/local/cuda-13.1/targets/x86_64-linux/include'
+  library=sdk/'usr/local/cuda-13.1/targets/x86_64-linux/lib/libcufile.so'
+  assert (headers/'cufile.h').exists() and library.exists()
+  command=read(root/'configure-state.json')['commands'][-1]
+  command += ['-DCUDA_cuFile_LIBRARY='+str(library),'-DCMAKE_CXX_FLAGS=-I'+str(headers),
+              '-DCMAKE_CUDA_FLAGS=-I'+str(headers)]
+  run(command,'configure-cufile.log',900)
+  prior=read(root/'configure-state.json');prior.pop('error',None)
+  prior.update(status='completed',commands=[command],cufile_build_packages=packages,finished_unix_ns=time.time_ns())
   write(root/'configure-state.json',prior)
  elif a.action=='reconfigure':
   prior=read(root/'configure-state.json')

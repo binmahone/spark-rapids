@@ -4,6 +4,7 @@
 """Profile frozen SQL with CPU and wall stacks, preserving unprofiled controls."""
 import argparse
 from dataclasses import replace
+import json
 import os
 from pathlib import Path
 import signal
@@ -85,6 +86,14 @@ def main():
         assert result['status'] == 'completed' and result['driver_exit_code'] == 0
         assert len(result['samples']) == 2 * len(queries)
         assert all(s['validation']['status'] == 'passed' for s in result['samples'])
+        assert all(child.poll() is None for child, _ in children), 'An observer exited during the workload'
+        pools = {}
+        for line in (directory / 'pool.jsonl').read_text().splitlines():
+            for executor in json.loads(line)['executors']:
+                pools.setdefault(str(executor['pid']), set()).update(executor['thread_names'])
+        assert len(pools) == 8 and all(names == {'kvikio-' + str(i) for i in range(32)}
+                                     for names in pools.values())
+        state['native_threads'] = {pid: sorted(names) for pid, names in pools.items()}
         profiles = sorted(scratch.glob('*.jfr'))
         if a.mode == 'stacks':
             assert len(profiles) == 9 and all(p.stat().st_size > 1024 for p in profiles)

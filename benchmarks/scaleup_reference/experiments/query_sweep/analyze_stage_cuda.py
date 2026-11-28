@@ -17,6 +17,7 @@ p.add_argument('--query', type=int, required=True)
 a = p.parse_args()
 state = json.loads((a.trace / 'state.json').read_text())
 assert state['status'] == 'completed' and state['nsys_exit'] == 0
+assert state.get('full_sql_trace', True), 'Partial kernel proof is not a full-stage timeline'
 stages = schedule(Path(state['run']))
 db = sqlite3.connect('file:' + str(a.trace / ('q' + str(a.query) + '.sqlite')) + '?mode=ro', uri=True)
 epoch = db.execute('select utcEpochNs from TARGET_INFO_SESSION_START_TIME').fetchone()[0]

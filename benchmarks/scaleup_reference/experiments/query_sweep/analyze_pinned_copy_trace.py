@@ -23,6 +23,7 @@ result={'limits':['Diagnostic profiled times are not benchmark scores.',
 for label,trace in (('control',a.control),('candidate',a.candidate)):
  state=json.loads((trace/'state.json').read_text())
  assert state['status']=='completed' and state['nsys_exit']==0
+ assert state.get('full_sql_trace',True), 'Partial kernel proof is not a full-stage timeline'
  timeline=schedule(Path(state['run']))['q9-iteration2']
  stage=max(timeline['stages'],key=lambda r:r['tasks'])
  db=sqlite3.connect('file:'+str(trace/'q9.sqlite')+'?mode=ro',uri=True)

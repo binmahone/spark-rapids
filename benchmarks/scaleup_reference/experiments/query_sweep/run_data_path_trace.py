@@ -175,6 +175,26 @@ def main():
                 record = read(controller)
                 stat = Path('/proc') / str(record['pid']) / 'stat'
                 assert stat.exists() and services.start_time(record['pid']) == record['start_time'], 'Workload controller exited without a receipt'
+            if a.park_events and not (directory / 'executor-identities.json').exists():
+                identities = []
+                for proc in Path('/proc').iterdir():
+                    if not proc.name.isdigit():
+                        continue
+                    try:
+                        args = (proc / 'cmdline').read_bytes().decode().split('\0')
+                        if (proc.stat().st_uid != os.getuid() or
+                            'org.apache.spark.executor.CoarseGrainedExecutorBackend' not in args or
+                            not any(str(directory) in arg for arg in args)):
+                            continue
+                        identities.append({'pid': int(proc.name),
+                            'executor_id': args[args.index('--executor-id') + 1],
+                            'start_time': services.start_time(int(proc.name))})
+                    except (FileNotFoundError, ProcessLookupError, PermissionError):
+                        continue
+                assert len(identities) <= 8
+                if len(identities) == 8:
+                    assert len({row['executor_id'] for row in identities}) == 8
+                    write(directory / 'executor-identities.json', identities)
             time.sleep(.5)
         workload = read(directory / 'workload.json')
         result = workload['result']
@@ -188,6 +208,7 @@ def main():
             report['profiles'] = [{'path': str(path), 'bytes': path.stat().st_size,
                                    'sha256': sha(path)} for path in profiles]
         if a.park_events:
+            assert len(read(directory / 'executor-identities.json')) == 8
             profiles = sorted((directory / 'park-recordings').glob('hotspot-pid-*.jfr'))
             assert len(profiles) == 9 and all(path.stat().st_size > 1024 for path in profiles)
             report['park_profiles'] = [{'path': str(path), 'bytes': path.stat().st_size,

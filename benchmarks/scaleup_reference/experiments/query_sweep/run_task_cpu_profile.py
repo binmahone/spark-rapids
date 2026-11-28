@@ -98,7 +98,19 @@ try:
         perf=subprocess.Popen(perf_command,stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
         perf_start=services.start_time(perf.pid)
         state['perf_return_code']=perf.wait(timeout=60)
-        assert state['perf_return_code']==0,state['perf_return_code']
+        if state['perf_return_code']==-signal.SIGTERM:
+            completed=read(result)
+            assert completed['status']=='completed' and len(completed['samples'])==2
+            assert all(r['validation']['status']=='passed' for r in completed['samples'])
+            for identity in identities:
+                for task in identity['threads']:
+                    try:
+                        assert services.start_time(task['tid'])!=task['start_time'],task
+                    except (FileNotFoundError,ProcessLookupError):
+                        pass
+            state['perf_target_exit']='All selected target identities exited after both validated SQL actions; perf target-exit SIGTERM behavior has a separate CPU-only strace reproducer.'
+        else:
+            assert state['perf_return_code']==0,state['perf_return_code']
     state.update(capture_end_unix_ns=time.time_ns(),capture_end_monotonic_ns=time.monotonic_ns())
     assert query.wait(timeout=180)==0
     trial=read(a.work/'code-profile'/a.label/'state.json');assert trial['status']=='completed'

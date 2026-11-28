@@ -122,7 +122,8 @@ class RapidsShuffleWaitSuite extends RapidsShuffleTestHelper {
               case "acquire-error" =>
                 assert(intercept[IllegalStateException](iterator.next()).getMessage ==
                   "acquire failed")
-                assert(device.getRefCount == 0, "a dequeued handle must close if reacquisition fails")
+                assert(device.getRefCount == 0,
+                  "a dequeued handle must close if reacquisition fails")
                 verify(catalog, never()).getColumnarBatchAndRemove(any(), any())
               case _ =>
                 withResource(iterator.next()) { batch =>

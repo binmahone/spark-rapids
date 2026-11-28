@@ -180,7 +180,7 @@ def main():
             ('host', HERE.parent / 'runtime_prefilter/monitor_host.py', []),
             ('vm', HERE / 'monitor_vm.py', ['--thread-id', a.thread_id, '--controller', str(directory / 'controller.json')]),
             ('pool', HERE / 'monitor_read_pool.py', [])]
-        if codec_library:
+        if codec_library or a.native_io_nice is not None:
             observers.append(('native-modules', HERE / 'monitor_native_modules.py',
                               ['--expected-directory', str(native),
                                '--controller', str(directory / 'controller.json')]))
@@ -312,6 +312,9 @@ def main():
             assert max(r['unix_ns'] for r in io)<second
             state['native_io_priority']={'nice':a.native_io_nice,'records':records,
                 'applied_before_second_action':True}
+            mappings=[json.loads(line) for line in (directory/'native-modules.jsonl').read_text().splitlines()]
+            assert len(mappings)==8 and {str(row['pid']) for row in mappings}==set(pools)
+            state['native_io_priority']['runtime_module_mappings']=mappings
         if a.packed_view and a.mode == 'stacks':
             loaded = {}
             expected = str(a.work / 'artifacts/packed-view/cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar')

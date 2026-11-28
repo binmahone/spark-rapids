@@ -37,10 +37,17 @@ def launch_group(work, phase, index, cases, global_conf, collector=None,
         candidate = experimental_engine / engine.name
         assert sha(candidate) == manifest['files'][engine.name]['sha256']
         frozen = read(artifacts / 'manifest.json')
+        overlay = manifest.get('java_source_overlay')
+        if overlay:
+            assert overlay['revision'] == '32218d4495e035b4b10034d7a13f38f8c0143dd0'
+            assert overlay['baseline_engine_sha256'] == 'ec38a58426e662ce99a433e806a66fa927bb011c014465a5df0b0c31ded4d1cc'
+            assert overlay['native_base_revision'] == frozen['components']['cudf-java-version-info.properties']['revision']
         for component in ('cudf-spark-jni-version-info.properties',
                           'cudf-java-version-info.properties',
                           'cudf-spark-private-version-info.properties'):
-            assert manifest['components'][component]['revision'] == frozen['components'][component]['revision']
+            expected = (overlay['revision'] if overlay and component == 'cudf-java-version-info.properties'
+                        else frozen['components'][component]['revision'])
+            assert manifest['components'][component]['revision'] == expected
         engine = candidate
         config['experimental_engine_manifest'] = manifest
     config.update(engine=str(engine), engine_sha256=sha(engine),

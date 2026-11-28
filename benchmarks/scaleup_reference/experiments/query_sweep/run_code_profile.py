@@ -32,7 +32,9 @@ def main():
     p.add_argument('--nvcomp-policy', choices=('STABLE', 'OFF'))
     p.add_argument('--concat-implementation', choices=('control', 'candidate'))
     p.add_argument('--scan-copy-implementation', choices=('original', 'sync', 'pair'))
+    p.add_argument('--packed-view', action='store_true')
     a = p.parse_args()
+    assert not a.packed_view or not (a.concat_implementation or a.scan_copy_implementation), 'Keep packed-view experiment isolated'
     assert a.label.replace('-', '').replace('_', '').isalnum()
     owner = read(a.work / 'evidence/owner.json')
     assert owner['thread_id'] == a.thread_id
@@ -52,6 +54,8 @@ def main():
         assert sha(Path(profiler['library'])) == profiler['library_sha256']
         options = (f"-agentpath:{profiler['library']}=start,event=cpu,interval=10ms,wall=20ms,"
                    f"cstack=dwarf,jstackdepth=256,timeout=900,file={scratch}/profile-%p.jfr,log=stderr")
+        if a.packed_view:
+            options += f' -Xlog:class+load=info:file={scratch}/classes-%p.log'
     concat = None
     if a.concat_implementation:
         native = a.work / 'native-concat'
@@ -102,6 +106,7 @@ def main():
     state = {'status': 'running', 'owner': owner, 'mode': a.mode, 'profiler': profiler,
              'concat_probe': concat,
              'scan_copy_probe': scan_copy,
+             'packed_view': a.packed_view,
              'queries': queries, 'nvcomp_policy': a.nvcomp_policy,
              'scratch': str(scratch), 'started_unix_ns': time.time_ns(),
              'classification': 'Code-path diagnosis; profiler times are not benchmark scores',
@@ -133,7 +138,7 @@ def main():
             'spark.task.resource.gpu.amount': '0.25',
             'spark.rapids.sql.format.parquet.hybridScan.maxH2DPackSize': '32m',
             'spark.rapids.shuffle.ucx.bounceBuffers.size': '4m'},
-            experimental_engine=a.work / 'artifacts/decimal-null-copy',
+            experimental_engine=a.work / ('artifacts/packed-view' if a.packed_view else 'artifacts/decimal-null-copy'),
             runtime_hash_reuse_queries=[9] if 9 in queries else None,
             diagnostic_jvm_options=options)
         state.update(run=str(run), result=result)
@@ -190,6 +195,15 @@ def main():
         assert len(pools) == 8 and all(names == {'kvikio-' + str(i) for i in range(32)}
                                      for names in pools.values())
         state['native_threads'] = {pid: sorted(names) for pid, names in pools.items()}
+        if a.packed_view and a.mode == 'stacks':
+            loaded = {}
+            expected = str(a.work / 'artifacts/packed-view/cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar')
+            for pid in pools:
+                lines = (scratch / ('classes-' + pid + '.log')).read_text().splitlines()
+                matches = [line for line in lines if 'ai.rapids.cudf.ColumnVector$OffHeapState source:' in line]
+                assert len(matches) == 1 and expected in matches[0], (pid, matches)
+                loaded[pid] = matches[0]
+            state['packed_view_loaded_classes'] = loaded
         if a.nvcomp_policy:
             assert len(decoder_policies) == 8
             assert all(values == {a.nvcomp_policy} for values in decoder_policies.values())

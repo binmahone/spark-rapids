@@ -64,8 +64,9 @@ def main():
                  '--sampling-period=8000000', '--discard-environment=true',
                  '--cudabacktrace=sync:100000,memory:100000'] if a.variant == 'code-profile'
                 else ['--sample=none', '--cpuctxsw=none'])
+    duration = 420 if a.variant == 'code-profile' else 240
     command = ['nsys', 'profile', '--trace=cuda,nvtx', '--cuda-trace-scope=process-tree',
-               *sampling, '--duration=240', '--stop-on-exit=true',
+               *sampling, '--duration=' + str(duration), '--stop-on-exit=true',
                '--kill=none', '--session-new=' + session, '--output=' + str(directory / artifact),
                '--after-collection-start=' + ready,
                sys.executable, str(HERE / 'run_data_path_trace_workload.py'),
@@ -138,7 +139,7 @@ def main():
         report['result'] = {k: result[k] for k in ('status', 'driver_exit_code', 'samples')}
         assert result['status'] == 'completed' and result['driver_exit_code'] == 0
         assert len(result['samples']) == 2 and all(s['validation']['status'] == 'passed' for s in result['samples'])
-        assert (workload['end_unix_ns'] - read(directory / 'nsys-ready.json')['time_unix_ns']) / 1e9 < 240
+        assert (workload['end_unix_ns'] - read(directory / 'nsys-ready.json')['time_unix_ns']) / 1e9 < duration
         stop_profiler()
         assert report['nsys_exit'] == 0
         trace = directory / (artifact + '.nsys-rep')

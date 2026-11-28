@@ -18,7 +18,9 @@ readonly frozen_native_directory=${13:-false}
 readonly codec_library=${14:-}
 readonly codec_library_layout=${15:-standalone}
 readonly native_io_nice=${16:-}
+readonly cuda_wait_policy=${17:-}
 decoder_args=()
+if [[ -n "$cuda_wait_policy" ]]; then decoder_args+=(--cuda-wait-policy "$cuda_wait_policy"); fi
 if [[ -n "$native_io_nice" ]]; then decoder_args+=(--native-io-nice "$native_io_nice"); fi
 if [[ -n "$codec_library" ]]; then
   decoder_args+=(--codec-library "$codec_library" --codec-library-layout "$codec_library_layout")

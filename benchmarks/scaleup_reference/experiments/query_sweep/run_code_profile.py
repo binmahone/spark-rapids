@@ -40,10 +40,14 @@ def main():
     p.add_argument('--codec-library', choices=('bridge','baseline','candidate'))
     p.add_argument('--codec-library-layout', choices=('standalone','integrated'), default='standalone')
     p.add_argument('--native-io-nice',type=int,choices=(0,5))
+    p.add_argument('--cuda-wait-policy',choices=('auto','blocking'))
     a = p.parse_args()
     if a.native_io_nice is not None:
         assert a.mode=='control' and a.frozen_native_directory and a.pinned_copy_threshold==0
         assert not (a.codec_library or a.mmap_policy or a.nvcomp_policy)
+    if a.cuda_wait_policy:
+        assert a.mode=='control' and a.frozen_native_directory and a.pinned_copy_threshold==0
+        assert a.native_io_nice is None and not (a.codec_library or a.mmap_policy or a.nvcomp_policy)
     assert not a.packed_view or not (a.concat_implementation or a.scan_copy_implementation), 'Keep packed-view experiment isolated'
     assert a.label.replace('-', '').replace('_', '').isalnum()
     owner = read(a.work / 'evidence/owner.json')
@@ -71,6 +75,13 @@ def main():
         native = a.work / 'native-concat/lib'
         assert sha(native / 'libcudf.so') == '8a07e08432d9afbe80d1db24c69ce67e9a05048c703f7d65a1514dfc5620e9a3'
         options = (options + ' ' if options else '') + f'-Dai.rapids.cudf.lib-native-dir={native}'
+    wait_policy=None
+    if a.cuda_wait_policy:
+        policy_root=a.work/'native-cuda-wait-policy'
+        manifest=read(policy_root/'state.json');assert manifest['status']=='completed'
+        assert all(sha(policy_root/name)==digest for name,digest in manifest['artifacts'].items())
+        options += f' -agentpath:{policy_root}/libcuda_wait_policy.so={a.cuda_wait_policy}'
+        wait_policy={'mode':a.cuda_wait_policy,'manifest':manifest}
     codec_library = None
     diagnostic_library_path = None
     if a.codec_library:
@@ -162,6 +173,7 @@ def main():
              'packed_view': a.packed_view,
              'frozen_native_directory': a.frozen_native_directory,
              'codec_library': codec_library,
+             'cuda_wait_policy':wait_policy,
              'pinned_copy_threshold': a.pinned_copy_threshold,
              'queries': queries, 'nvcomp_policy': a.nvcomp_policy, 'mmap_policy': a.mmap_policy,
              'scratch': str(scratch), 'started_unix_ns': time.time_ns(),
@@ -180,7 +192,7 @@ def main():
             ('host', HERE.parent / 'runtime_prefilter/monitor_host.py', []),
             ('vm', HERE / 'monitor_vm.py', ['--thread-id', a.thread_id, '--controller', str(directory / 'controller.json')]),
             ('pool', HERE / 'monitor_read_pool.py', [])]
-        if codec_library or a.native_io_nice is not None:
+        if codec_library or a.native_io_nice is not None or wait_policy:
             observers.append(('native-modules', HERE / 'monitor_native_modules.py',
                               ['--expected-directory', str(native),
                                '--controller', str(directory / 'controller.json')]))
@@ -298,6 +310,22 @@ def main():
             assert all(v == {str(a.pinned_copy_threshold)} for v in pinned_copy_policies.values())
             state['pinned_copy_environment_proof'] = {k: list(v) for k,v in pinned_copy_policies.items()}
         state['native_threads'] = {pid: sorted(names) for pid, names in pools.items()}
+        if wait_policy:
+            logs=Path(read(a.work/'evidence/deployment.json')['scratch_root'])/run.name/'suite'
+            proof=[]
+            for stderr in logs.glob('worker-*/work/*/*/stderr'):
+                content=stderr.read_text()
+                assert f'CUDA_WAIT_POLICY_CONFIGURED mode={a.cuda_wait_policy}' in content
+                assert 'CUDA_WAIT_POLICY_BOUND ai/rapids/cudf/Cuda.streamSynchronize(J)V' in content
+                executed=re.search(r'CUDA_WAIT_POLICY_EXECUTED flags=(\d+) context=(\S+) stream=(\d+)',content)
+                assert executed and int(executed[1])&7==(4 if a.cuda_wait_policy=='blocking' else 0)
+                assert 'CUDA_WAIT_POLICY_FAILED' not in content
+                proof.append({'stderr':str(stderr),'flags':int(executed[1]),'context':executed[2]})
+            assert len(proof)==8
+            wait_policy['runtime_proof']=proof
+            mappings=[json.loads(line) for line in (directory/'native-modules.jsonl').read_text().splitlines()]
+            assert len(mappings)==8 and {str(row['pid']) for row in mappings}==set(pools)
+            wait_policy['runtime_module_mappings']=mappings
         if a.native_io_nice is not None:
             records=[json.loads(line) for line in (directory/'io-priority.jsonl').read_text().splitlines()]
             io=[r for r in records if r['role']=='native_io']

@@ -26,7 +26,9 @@ for area in ('code-profile','data-path-trace'):
 root=a.work/'native-codec-stack'
 root.mkdir(exist_ok=True)
 state_path=root/(a.action+'-state.json')
-assert not state_path.exists()
+previous=read(state_path) if state_path.exists() else {}
+assert not previous or previous['status']=='failed'
+if previous: shutil.copyfile(state_path,root/(a.action+'-failed-'+str(time.time_ns())+'.json'))
 state={'status':'running','action':a.action,'owner_thread':a.thread_id,
        'started_unix_ns':time.time_ns(),'commands':[],
        'jni_revision':'bd15415531c40a2e83067d91147fcfa51a317b1d',
@@ -44,13 +46,23 @@ env={**os.environ,'JAVA_HOME':str(a.work/'jdk17'),
 
 def run(command,name,timeout=900,overrides=None):
  command=list(map(str,command));state['commands'].append(command)
+ completed=previous.get('completed_steps',{}).get(name)
+ if completed and name in ('jni-init.log','jni-fetch.log','jni-checkout.log','cudf-worktree.log','boost.log'):
+  assert completed==command
+  state.setdefault('completed_steps',{})[name]=command
+  write(state_path,state)
+  return
  state.setdefault('invocations',[]).append({'argv':command,'environment':{
   key:env[key] for key in ('JAVA_HOME','PKG_CONFIG_LIBDIR','LD_LIBRARY_PATH','CUDF_ROOT','CUDF_INSTALL_DIR','CUDFJNI_BUILD_DIR')},
   'extra_environment':overrides or {}})
  write(state_path,state)
- with (root/(a.action+'-'+name)).open('x') as log:
+ log_path=root/(a.action+'-'+name)
+ if log_path.exists():log_path.rename(root/(a.action+'-'+str(time.time_ns())+'-'+name))
+ with log_path.open('x') as log:
   subprocess.run(command,cwd=root,env={**env,**(overrides or {})},stdout=log,
                  stderr=subprocess.STDOUT,check=True,timeout=timeout)
+ state.setdefault('completed_steps',{})[name]=command
+ write(state_path,state)
 
 try:
  if a.action=='tests':
@@ -130,11 +142,13 @@ try:
        '-DBUILD_FAULTINJ=OFF','-DBUILD_PROFILER=OFF','-DUSE_GDS=OFF'],'sparkjni-configure.log')
   run([cmake,'--build',jni_build,'--target','spark_rapids_jni','cudfjnistub','-j','48'],
       'sparkjni-build.log',1800)
-  artifact=root/a.action;artifact.mkdir()
+  artifact=root/a.action;artifact.mkdir(exist_ok=bool(previous))
   shutil.copyfile(jni_build/'libcudf.so',artifact/'libcudf.so')
   shutil.copyfile(jni_build/'libcudfjni.so',artifact/'libcudfjni.so')
   for name in ('libcufilejni.so','libnvmljni.so'):
-   (artifact/name).symlink_to(a.work/'native-concat/lib'/name)
+   link=artifact/name;target=a.work/'native-concat/lib'/name
+   if link.exists():assert link.resolve()==target.resolve()
+   else:link.symlink_to(target)
   exports=subprocess.check_output(['nm','-D','--defined-only',str(artifact/'libcudf.so')],text=True)
   required=['Java_com_nvidia_spark_rapids_jni_Hash_getMaxStackDepth',
             'Java_ai_rapids_cudf_HybridScanReader_materializeAllColumns']

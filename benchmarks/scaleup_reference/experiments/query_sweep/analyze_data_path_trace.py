@@ -26,7 +26,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', type=Path, required=True)
     parser.add_argument('--variant', choices=('control', 'scan-pack', 'scan-split', 'scan-split-cuda', 'scan-split-cuda2', 'shuffle-buffer', 'shuffle-wait', 'code-profile'), default='control')
-    parser.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
+    parser.add_argument('--query', type=int, choices=(5, 8, 9, 10, 18, 20), default=8)
     parser.add_argument('--attempt', type=int, default=0)
     args = parser.parse_args()
     attempt = '-attempt' + str(args.attempt) if args.attempt else ''

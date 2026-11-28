@@ -188,12 +188,18 @@ def main():
                             continue
                         identities.append({'pid': int(proc.name),
                             'executor_id': args[args.index('--executor-id') + 1],
-                            'start_time': services.start_time(int(proc.name))})
+                            'start_time': services.start_time(int(proc.name)),
+                            'cudf_mappings': [line for line in (proc / 'maps').read_text().splitlines()
+                                              if 'libcudf.so' in line]})
                     except (FileNotFoundError, ProcessLookupError, PermissionError):
                         continue
                 assert len(identities) <= 8
                 if len(identities) == 8:
                     assert len({row['executor_id'] for row in identities}) == 8
+                    library = work / 'native-concat/lib/libcudf.so'
+                    assert sha(library) == '8a07e08432d9afbe80d1db24c69ce67e9a05048c703f7d65a1514dfc5620e9a3'
+                    assert all(row['cudf_mappings'] and all(line.endswith(str(library))
+                        for line in row['cudf_mappings']) for row in identities)
                     write(directory / 'executor-identities.json', identities)
             time.sleep(.5)
         workload = read(directory / 'workload.json')

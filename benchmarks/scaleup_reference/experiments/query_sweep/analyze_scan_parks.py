@@ -72,7 +72,7 @@ def main():
             if end>begin:candidates.append((end-begin,token,stage['stage'],begin,end))
     assert candidates
     _,token,stage,begin,end=max(candidates)
-    profile=json.loads((Path(state['run'])/'profiles.json').read_text())['suite']
+    profile=json.loads((Path(state['run'])/'applications/suite/profile.json').read_text())
     tasks=defaultdict(list)
     for path in Path(urlparse(profile['spark.eventLog.dir']).path).iterdir():
         if not path.is_file() or path.name.startswith('.'):continue

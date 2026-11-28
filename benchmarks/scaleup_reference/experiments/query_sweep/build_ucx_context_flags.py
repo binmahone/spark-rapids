@@ -19,7 +19,7 @@ assert read(a.work/'evidence/owner.json')['thread_id']==a.thread_id
 assert not subprocess.check_output(['nvidia-smi','--query-compute-apps=pid','--format=csv,noheader'],text=True).strip()
 for area in ('code-profile','data-path-trace'):
     assert all(read(path)['status'] not in ('starting','running') for path in (a.work/area).glob('*/state.json'))
-root=a.work/'native-ucx-context-flags';root.mkdir(exist_ok=False)
+root=a.work/'native-ucx-context-flags-v2';root.mkdir(exist_ok=False)
 source=a.work/'ucx-source';prefix=a.work/'ucx';build=source/'src/uct/cuda'
 assert subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip()=='8a6b06fb880accbb933a79cda893883872c68d9d'
 relative='src/uct/cuda/cuda_copy/cuda_copy_md.c'
@@ -80,7 +80,7 @@ try:
     shutil.copyfile(root/'.libs/libuct_cuda.so.0.0.0',modules/'libuct_cuda.so.0.0.0')
     for name in ('libuct_cuda.so','libuct_cuda.so.0'):(modules/name).symlink_to('libuct_cuda.so.0.0.0')
     run([root/'ucx-context-flags-probe','preserve'],'candidate-probe.log',extra={
-        'UCX_MODULE_DIR':str(modules),'LD_DEBUG':'libs'})
+        'UCX_PLUGIN_PATH':str(modules),'LD_DEBUG':'libs'})
     for mode in ('baseline','candidate'):
         import json
         lines=(root/(mode+'-probe.log')).read_text().splitlines()

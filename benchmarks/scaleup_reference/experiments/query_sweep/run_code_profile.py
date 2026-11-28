@@ -42,7 +42,12 @@ def main():
     p.add_argument('--native-io-nice',type=int,choices=(0,5))
     p.add_argument('--cuda-wait-policy',choices=('auto','blocking'))
     p.add_argument('--ucx-preserve-context',action='store_true')
+    p.add_argument('--queue-index-probe',choices=('control','candidate'))
     a = p.parse_args()
+    if a.queue_index_probe:
+        assert a.mode=='control' and a.frozen_native_directory and a.pinned_copy_threshold==0
+        assert not (a.cuda_wait_policy or a.codec_library or a.mmap_policy or a.nvcomp_policy)
+        assert a.native_io_nice is None
     assert not a.ucx_preserve_context or a.cuda_wait_policy
     if a.native_io_nice is not None:
         assert a.mode=='control' and a.frozen_native_directory and a.pinned_copy_threshold==0
@@ -77,6 +82,13 @@ def main():
         native = a.work / 'native-concat/lib'
         assert sha(native / 'libcudf.so') == '8a07e08432d9afbe80d1db24c69ce67e9a05048c703f7d65a1514dfc5620e9a3'
         options = (options + ' ' if options else '') + f'-Dai.rapids.cudf.lib-native-dir={native}'
+    queue_probe=None
+    if a.queue_index_probe:
+        queue_root=a.work/'queue-index-probe'
+        manifest=read(queue_root/'state.json');assert manifest['status']=='completed'
+        assert sha(queue_root/'queue-index-probe.jar')==manifest['agent_sha256']
+        options += f' -javaagent:{queue_root}/queue-index-probe.jar={a.queue_index_probe}'
+        queue_probe={'mode':a.queue_index_probe,'manifest':manifest}
     wait_policy=None
     if a.cuda_wait_policy:
         policy_root=a.work/'native-cuda-wait-policy-v2'
@@ -183,6 +195,7 @@ def main():
              'frozen_native_directory': a.frozen_native_directory,
              'codec_library': codec_library,
              'cuda_wait_policy':wait_policy,
+             'queue_index_probe':queue_probe,
              'pinned_copy_threshold': a.pinned_copy_threshold,
              'queries': queries, 'nvcomp_policy': a.nvcomp_policy, 'mmap_policy': a.mmap_policy,
              'scratch': str(scratch), 'started_unix_ns': time.time_ns(),
@@ -201,7 +214,7 @@ def main():
             ('host', HERE.parent / 'runtime_prefilter/monitor_host.py', []),
             ('vm', HERE / 'monitor_vm.py', ['--thread-id', a.thread_id, '--controller', str(directory / 'controller.json')]),
             ('pool', HERE / 'monitor_read_pool.py', [])]
-        if codec_library or a.native_io_nice is not None or wait_policy:
+        if codec_library or a.native_io_nice is not None or wait_policy or queue_probe:
             observers.append(('native-modules', HERE / 'monitor_native_modules.py',
                               ['--expected-directory', str(native),
                                '--controller', str(directory / 'controller.json'),
@@ -322,6 +335,20 @@ def main():
             assert all(v == {str(a.pinned_copy_threshold)} for v in pinned_copy_policies.values())
             state['pinned_copy_environment_proof'] = {k: list(v) for k,v in pinned_copy_policies.items()}
         state['native_threads'] = {pid: sorted(names) for pid, names in pools.items()}
+        if queue_probe:
+            logs=Path(read(a.work/'evidence/deployment.json')['scratch_root'])/run.name/'suite'
+            proof=[]
+            for stderr in logs.glob('worker-*/work/*/*/stderr'):
+                content=stderr.read_text()
+                assert f'QUEUE_INDEX_TRANSFORMED mode={a.queue_index_probe} class=com/nvidia/spark/rapids/HashedPriorityQueue' in content
+                assert f'QUEUE_INDEX_EXECUTED mode={a.queue_index_probe} caller=UCXShuffleTransport item=PendingTransferRequest' in content
+                assert 'QUEUE_INDEX_REJECTED' not in content
+                proof.append(str(stderr))
+            assert len(proof)==8
+            queue_probe['runtime_proof']=proof
+            mappings=[json.loads(line) for line in (directory/'native-modules.jsonl').read_text().splitlines()]
+            assert len(mappings)==8 and {str(row['pid']) for row in mappings}==set(pools)
+            queue_probe['runtime_module_mappings']=mappings
         if wait_policy:
             logs=Path(read(a.work/'evidence/deployment.json')['scratch_root'])/run.name/'suite'
             proof=[]

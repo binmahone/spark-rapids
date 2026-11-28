@@ -11,9 +11,13 @@ readonly nvcomp_policy=${6:-}
 readonly concat_implementation=${7:-}
 readonly scan_copy_implementation=${8:-}
 readonly packed_view=${9:-false}
+readonly mmap_policy=${10:-}
 decoder_args=()
 if [[ -n "$nvcomp_policy" ]]; then
   decoder_args=(--nvcomp-policy "$nvcomp_policy")
+fi
+if [[ -n "$mmap_policy" ]]; then
+  decoder_args+=(--mmap-policy "$mmap_policy")
 fi
 if [[ -n "$concat_implementation" ]]; then
   decoder_args+=(--concat-implementation "$concat_implementation")

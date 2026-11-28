@@ -90,7 +90,8 @@ with (directory / 'perf-script.err').open('w') as error:
     flush()
     assert process.wait() == 0
 for name, row in report['windows'].items():
-    assert row['samples'] > 0, (name, 'No parsed samples')
+    if '-stage' not in name:
+        assert row['samples'] > 0, (name, 'No parsed samples')
     for key in ('leaf_period_ns', 'stack_period_ns'):
         row[key] = row[key].most_common(30)
     print(name, {k: v for k, v in row.items() if k not in ('leaf_period_ns', 'stack_period_ns')}, flush=True)

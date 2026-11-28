@@ -57,8 +57,14 @@ with Path(a.output).open('x', buffering=1) as output:
                 policy = next((v.partition(b'=')[2].decode() for v in
                     (proc / 'environ').read_bytes().split(b'\0')
                     if v.startswith(b'LIBCUDF_NVCOMP_POLICY=')), None)
+                mmap_policy = next((v.partition(b'=')[2].decode() for v in
+                    (proc / 'environ').read_bytes().split(b'\0')
+                    if v.startswith(b'LIBCUDF_MMAP_ENABLED=')), None)
+                mappings = sum('/daily-trend-hardened/dataset/' in line
+                               for line in (proc / 'maps').read_text().splitlines())
                 executors.append({'pid': int(proc.name), 'thread_names': sorted(names),
-                                  'nvcomp_policy': policy})
+                                  'nvcomp_policy': policy, 'mmap_policy': mmap_policy,
+                                  'dataset_mappings': mappings})
             except (FileNotFoundError, ProcessLookupError, PermissionError):
                 pass
         output.write(json.dumps({'time_unix_ns': time.time_ns(), 'executors': executors}) + '\n')

@@ -30,6 +30,7 @@ def main():
     p.add_argument('--mode', choices=('control', 'stacks', 'native-io'), required=True)
     p.add_argument('--queries', default='8,18,5')
     p.add_argument('--nvcomp-policy', choices=('STABLE', 'OFF'))
+    p.add_argument('--mmap-policy', choices=('ON', 'OFF'))
     p.add_argument('--concat-implementation', choices=('control', 'candidate'))
     p.add_argument('--scan-copy-implementation', choices=('original', 'sync', 'pair', 'paced-control', 'paced', 'paced-queued', 'serial-original', 'serial-unlocked', 'serial-locked', 'batch-control', 'batch-scalar', 'batch-paced'))
     p.add_argument('--packed-view', action='store_true')
@@ -109,7 +110,7 @@ def main():
              'concat_probe': concat,
              'scan_copy_probe': scan_copy,
              'packed_view': a.packed_view,
-             'queries': queries, 'nvcomp_policy': a.nvcomp_policy,
+             'queries': queries, 'nvcomp_policy': a.nvcomp_policy, 'mmap_policy': a.mmap_policy,
              'scratch': str(scratch), 'started_unix_ns': time.time_ns(),
              'classification': 'Code-path diagnosis; profiler times are not benchmark scores',
              'source_revision': subprocess.check_output(['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip()}
@@ -137,6 +138,8 @@ def main():
             children.append((process, log))
         decoder = ({'spark.executorEnv.LIBCUDF_NVCOMP_POLICY': a.nvcomp_policy}
                    if a.nvcomp_policy else {})
+        if a.mmap_policy:
+            decoder['spark.executorEnv.LIBCUDF_MMAP_ENABLED'] = a.mmap_policy
         run, result = launch_group(a.work, 'code-profile-' + a.label, 0, selected, {
             **decoder,
             'spark.rapids.sql.reader.kvikio.numThreads': '32',
@@ -200,11 +203,15 @@ def main():
         assert all(child.poll() is None for child, _ in children), 'An observer exited during the workload'
         pools = {}
         decoder_policies = {}
+        mmap_observations = {}
         for line in (directory / 'pool.jsonl').read_text().splitlines():
             for executor in json.loads(line)['executors']:
                 pools.setdefault(str(executor['pid']), set()).update(executor['thread_names'])
                 decoder_policies.setdefault(str(executor['pid']), set()).add(
                     executor.get('nvcomp_policy'))
+                mmap_observations.setdefault(str(executor['pid']), []).append({
+                    'policy': executor.get('mmap_policy'),
+                    'dataset_mappings': executor.get('dataset_mappings', 0)})
         assert len(pools) == 8 and all(names == {'kvikio-' + str(i) for i in range(32)}
                                      for names in pools.values())
         state['native_threads'] = {pid: sorted(names) for pid, names in pools.items()}
@@ -221,6 +228,15 @@ def main():
             assert len(decoder_policies) == 8
             assert all(values == {a.nvcomp_policy} for values in decoder_policies.values())
         state['observed_nvcomp_policies'] = {pid: list(v) for pid, v in decoder_policies.items()}
+        if a.mmap_policy:
+            assert len(mmap_observations) == 8
+            for observations in mmap_observations.values():
+                assert all(row['policy'] == a.mmap_policy for row in observations)
+                if a.mmap_policy == 'ON':
+                    assert any(row['dataset_mappings'] > 0 for row in observations)
+                else:
+                    assert all(row['dataset_mappings'] == 0 for row in observations)
+            state['mmap_runtime_proof'] = mmap_observations
         profiles = sorted(scratch.glob('*.jfr'))
         if a.mode == 'stacks':
             assert len(profiles) == 9 and all(p.stat().st_size > 1024 for p in profiles)

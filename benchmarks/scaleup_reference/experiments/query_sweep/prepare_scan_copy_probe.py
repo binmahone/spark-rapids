@@ -51,4 +51,12 @@ for name, expected in pins.items():
     (root / name).write_text(source)
     manifest['files'][name] = {'url': url, 'original_sha256': expected,
                               'transformed_sha256': hashlib.sha256(source.encode()).hexdigest()}
+template = a.work / 'native-concat/rapids_logger/cmake/logger_macros.hpp.in'
+header = template.read_text().replace('@_RAPIDS_LOGGER_MACRO_PREFIX@', 'CUDF').replace(
+    '@_RAPIDS_LOGGER_DEFAULT_LOGGER@', 'cudf::default_logger()')
+assert '@_RAPIDS_LOGGER_' not in header
+(root / 'cudf').mkdir()
+(root / 'cudf/logger_macros.hpp').write_text(header)
+manifest['logger_macros'] = {'template_sha256': hashlib.sha256(template.read_bytes()).hexdigest(),
+                            'generated_sha256': hashlib.sha256(header.encode()).hexdigest()}
 (root / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')

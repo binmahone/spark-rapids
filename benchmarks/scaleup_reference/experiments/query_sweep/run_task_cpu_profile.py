@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record instruction samples on the 32 Spark task threads during repeated Q9."""
+"""Record instruction samples on owned executor threads during repeated Q9."""
 import argparse
 import json
 import os
@@ -18,7 +18,12 @@ p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work',type=Path,required=True)
 p.add_argument('--thread-id',required=True)
 p.add_argument('--label',default='scan-task-cpu-A1')
+p.add_argument('--scope',choices=('tasks','executors'),default='tasks')
+p.add_argument('--delay-seconds',type=float,default=0)
+p.add_argument('--duration-seconds',type=float,default=20)
+p.add_argument('--frequency',type=int,default=499)
 a=p.parse_args();assert a.label.replace('-','').isalnum()
+assert 0<=a.delay_seconds<=25 and 1<=a.duration_seconds<=40 and 1<=a.frequency<=499
 assert read(a.work/'evidence/owner.json')['thread_id']==a.thread_id
 assert not subprocess.check_output(['nvidia-smi','--query-compute-apps=pid','--format=csv,noheader'],text=True).strip()
 for area in ('code-profile','data-path-trace'):
@@ -47,6 +52,7 @@ try:
         assert query.poll() is None and time.monotonic()<deadline
         time.sleep(.1)
     assert len(read(result)['samples'])==1
+    ready_monotonic=time.monotonic()
     identities=[]
     for proc in Path('/proc').iterdir():
         if not proc.name.isdigit():continue
@@ -74,10 +80,14 @@ try:
     assert len(identities)==8
     write(scratch/'executor-threads.json',identities)
     tids=[str(t['tid']) for row in identities for t in row['threads']]
-    perf_command=['sudo','-n','perf','record','-e','cpu-clock:u','-F','499','-t',','.join(tids),
-        '--no-inherit','--clockid','mono','--no-buildid-cache','--call-graph','dwarf,16384',
-        '-m','512','-o',str(scratch/'task-cpu.data'),'--','sleep','20']
-    state.update(status='recording',perf_command=perf_command,
+    target=(['-t',','.join(tids),'--no-inherit'] if a.scope=='tasks' else
+            ['-p',','.join(str(row['pid']) for row in identities)])
+    remaining=a.delay_seconds-(time.monotonic()-ready_monotonic)
+    if remaining>0:time.sleep(remaining)
+    assert query.poll() is None and len(read(result)['samples'])==1
+    perf_command=['sudo','-n','perf','record','-e','cpu-clock:u','-F',str(a.frequency),*target,'--clockid','mono','--no-buildid-cache','--call-graph','dwarf,16384',
+        '-m','512','-o',str(scratch/'task-cpu.data'),'--','sleep',str(a.duration_seconds)]
+    state.update(status='recording',scope=a.scope,delay_seconds=a.delay_seconds,perf_command=perf_command,
         capture_start_unix_ns=time.time_ns(),capture_start_monotonic_ns=time.monotonic_ns())
     write(scratch/'state.json',state)
     with (scratch/'perf-record.log').open('x') as stream:
@@ -89,7 +99,7 @@ try:
     assert len(trial['result']['samples'])==2 and all(r['validation']['status']=='passed' for r in trial['result']['samples'])
     with (scratch/'self-report.txt').open('x') as stream:
         subprocess.run(['sudo','-n','perf','report','-i',str(scratch/'task-cpu.data'),
-            '--stdio','--no-children','--call-graph','none','--sort','dso,symbol','--percent-limit','0.1'],
+            '--stdio','--no-children','--call-graph','none','--sort','dso,symbol','--percent-limit','0.1','--column-widths','30,120'],
             stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
     state.update(status='completed',run=str(run),query_samples=trial['result']['samples'],
         perf_data_bytes=(scratch/'task-cpu.data').stat().st_size)

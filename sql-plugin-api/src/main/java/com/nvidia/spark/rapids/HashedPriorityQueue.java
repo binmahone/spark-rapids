@@ -53,6 +53,7 @@ public final class HashedPriorityQueue<T> extends AbstractQueue<T> {
    * <li>right child is at 2*X+2</li></ul>
    */
   private T[] heap;
+  private MutableInt[] heapLocations;
   private int size;
 
   /**
@@ -69,6 +70,7 @@ public final class HashedPriorityQueue<T> extends AbstractQueue<T> {
   public HashedPriorityQueue(int initialHeapSize, Comparator<? super T> comparator) {
     this.comparator = comparator;
     heap = (T[]) new Object[initialHeapSize];
+    heapLocations = new MutableInt[initialHeapSize];
     size = 0;
   }
 
@@ -77,8 +79,11 @@ public final class HashedPriorityQueue<T> extends AbstractQueue<T> {
     this.comparator = comparator;
     this.heap = Arrays.copyOf(heap, size);
     this.size = size;
+    this.heapLocations = new MutableInt[size];
     locationMap.forEach((T k, MutableInt v) -> {
-      this.locationMap.put(k, new MutableInt(v.intValue()));
+      MutableInt location = new MutableInt(v.intValue());
+      this.locationMap.put(k, location);
+      this.heapLocations[v.intValue()] = location;
     });
   }
 
@@ -145,6 +150,7 @@ public final class HashedPriorityQueue<T> extends AbstractQueue<T> {
   @Override
   public void clear() {
     Arrays.fill(heap, 0, size, null);
+    Arrays.fill(heapLocations, 0, size, null);
     locationMap.clear();
     size = 0;
   }
@@ -217,12 +223,9 @@ public final class HashedPriorityQueue<T> extends AbstractQueue<T> {
     return location;
   }
 
-  private void updateHeapIndex(T obj, int heapIndex) {
-    updateHeapIndex(obj, getLocation(obj), heapIndex);
-  }
-
   private void updateHeapIndex(T obj, MutableInt location, int heapIndex) {
     heap[heapIndex] = obj;
+    heapLocations[heapIndex] = location;
     location.setValue(heapIndex);
   }
 
@@ -236,6 +239,7 @@ public final class HashedPriorityQueue<T> extends AbstractQueue<T> {
     size -= 1;
     T obj = heap[size];
     heap[size] = null;
+    heapLocations[size] = null;
     return obj;
   }
 
@@ -247,6 +251,7 @@ public final class HashedPriorityQueue<T> extends AbstractQueue<T> {
     if (heap.length <= needed) {
       long newSize = Math.min((long) heap.length * 2, Integer.MAX_VALUE);
       heap = Arrays.copyOf(heap, (int) newSize);
+      heapLocations = Arrays.copyOf(heapLocations, (int) newSize);
     }
   }
 
@@ -269,7 +274,7 @@ public final class HashedPriorityQueue<T> extends AbstractQueue<T> {
       }
 
       sifted = true;
-      updateHeapIndex(parent, heapIndex);
+      updateHeapIndex(parent, heapLocations[parentIndex], heapIndex);
       heapIndex = parentIndex;
     }
 
@@ -307,7 +312,7 @@ public final class HashedPriorityQueue<T> extends AbstractQueue<T> {
       }
 
       sifted = true;
-      updateHeapIndex(leastChild, heapIndex);
+      updateHeapIndex(leastChild, heapLocations[leastChildIndex], heapIndex);
       heapIndex = leastChildIndex;
     }
 

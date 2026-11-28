@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import shlex
 
 from analyze_critical_path import pressure, schedule
 from finalize_sol_reuse import normalize
@@ -15,8 +16,11 @@ p.add_argument('--work', type=Path, required=True)
 p.add_argument('--labels', nargs='+', required=True)
 p.add_argument('--output', type=Path, required=True)
 p.add_argument('--shuffle-copy', action='store_true', help='Compare the isolated bounce-copy probe')
+p.add_argument('--include-plain', action='store_true', help='Include a run without the shuffle probe')
 a = p.parse_args()
+assert not a.include_plain or a.shuffle_copy
 reference = None
+probe_reference = None
 runs = []
 for label in a.labels:
     directory = a.work / 'code-profile' / label
@@ -26,7 +30,15 @@ for label in a.labels:
     assert len(state['pinned_copy_environment_proof']) == 8
     if a.shuffle_copy:
         assert state['pinned_copy_threshold'] == 0
-        assert len(state['shuffle_copy_probe']['runtime_proof']) == 8
+        probe = state.get('shuffle_copy_probe')
+        if probe:
+            assert len(probe['runtime_proof']) == 8
+            if probe_reference is None:
+                probe_reference = probe['manifest']
+            else:
+                assert probe['manifest'] == probe_reference
+        else:
+            assert a.include_plain
     else:
         assert not state.get('shuffle_copy_probe')
     run = Path(state['run'])
@@ -43,6 +55,10 @@ for label in a.labels:
                     profile[key] = profile[key].replace('shuffle-copy-probe.jar=control,',
                         'shuffle-copy-probe.jar=<mode>,').replace('shuffle-copy-probe.jar=kernel,',
                         'shuffle-copy-probe.jar=<mode>,')
+                    if a.include_plain and key.endswith('.extraJavaOptions'):
+                        profile[key] = ' '.join(v for v in shlex.split(profile[key]) if not (
+                            v.startswith('-Dai.rapids.cudf.lib-native-dir=') or
+                            (v.startswith('-javaagent:') and '/shuffle-copy-probe.jar=' in v)))
     timeline = schedule(run)
     parity, rows = [], []
     for sample in state['result']['samples']:
@@ -60,18 +76,19 @@ for label in a.labels:
               'disk_GB', round(row['pressure']['sampled_disk_read_bytes_dm0'] / 1e9, 3),
               'memory_full_s', round(row['pressure']['sampled_memory_full_seconds'], 3), flush=True)
     fixed = {'engine_sha256': config['engine_sha256'], 'profiles': profiles, 'rows': parity}
-    if a.shuffle_copy:
+    if a.shuffle_copy and not a.include_plain:
         fixed['probe_manifest'] = state['shuffle_copy_probe']['manifest']
     if reference is None:
         reference = fixed
     else:
         for key in fixed:
             assert fixed[key] == reference[key], (label, key)
-    runs.append({'label': label, 'policy': state['shuffle_copy_probe']['implementation'] if a.shuffle_copy else state['pinned_copy_threshold'], 'samples': rows,
-                 'runtime_proof': state['shuffle_copy_probe']['runtime_proof'] if a.shuffle_copy else state['pinned_copy_environment_proof']})
+    runs.append({'label': label, 'policy': (probe['implementation'] if probe else 'plain') if a.shuffle_copy else state['pinned_copy_threshold'], 'samples': rows,
+                 'runtime_proof': probe['runtime_proof'] if a.shuffle_copy and probe else state['pinned_copy_environment_proof']})
 a.output.write_text(json.dumps({'runs': runs,
     'parity': 'Same engine, SQL, normalized plans, scan work and configuration except the selected copy path.',
     'limits': ['Cache residency is observed rather than controlled; inspect disk reads and pressure.',
                'Stage intervals overlap; CPU and operator time sums are not query wall time.',
                'Environment values alone are not executed-branch evidence; consult the paired CUDA trace.',
+               'When plain runs are included, the agent and native-library selection options differ; verify native artifact parity separately.',
                'Focused trials are not a full-suite score.']}, indent=2) + '\n')

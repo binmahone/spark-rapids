@@ -39,7 +39,11 @@ def main():
     p.add_argument('--frozen-native-directory', action='store_true')
     p.add_argument('--codec-library', choices=('bridge','baseline','candidate'))
     p.add_argument('--codec-library-layout', choices=('standalone','integrated'), default='standalone')
+    p.add_argument('--native-io-nice',type=int,choices=(0,5))
     a = p.parse_args()
+    if a.native_io_nice is not None:
+        assert a.mode=='control' and a.frozen_native_directory and a.pinned_copy_threshold==0
+        assert not (a.codec_library or a.mmap_policy or a.nvcomp_policy)
     assert not a.packed_view or not (a.concat_implementation or a.scan_copy_implementation), 'Keep packed-view experiment isolated'
     assert a.label.replace('-', '').replace('_', '').isalnum()
     owner = read(a.work / 'evidence/owner.json')
@@ -184,6 +188,10 @@ def main():
             observers.append(('native-io', HERE / 'monitor_native_io.py',
                 ['--thread-id', a.thread_id, '--scratch', str(scratch),
                  '--controller', str(directory / 'controller.json')]))
+        if a.native_io_nice is not None:
+            observers.append(('io-priority',HERE/'monitor_native_io_priority.py',
+                ['--controller',str(directory/'controller.json'),'--label',a.label,
+                 '--nice',str(a.native_io_nice)]))
         for name, script, extra in observers:
             log = (directory / (name + '.log')).open('x')
             process = subprocess.Popen([sys.executable, str(script), '--work', str(a.work),
@@ -290,6 +298,20 @@ def main():
             assert all(v == {str(a.pinned_copy_threshold)} for v in pinned_copy_policies.values())
             state['pinned_copy_environment_proof'] = {k: list(v) for k,v in pinned_copy_policies.items()}
         state['native_threads'] = {pid: sorted(names) for pid, names in pools.items()}
+        if a.native_io_nice is not None:
+            records=[json.loads(line) for line in (directory/'io-priority.jsonl').read_text().splitlines()]
+            io=[r for r in records if r['role']=='native_io']
+            task=[r for r in records if r['role']=='task']
+            assert len(io)==256 and {str(r['pid']) for r in io}==set(pools)
+            for pid in pools:
+                assert {r['name'] for r in io if str(r['pid'])==pid}==pools[pid]
+                assert any(str(r['pid'])==pid for r in task)
+            assert all(r['nice_after']==a.native_io_nice for r in io)
+            assert all(r['nice_after']==0 for r in task)
+            second=min(s['started_unix_ns'] for s in result['samples'] if s['iteration']==2)
+            assert max(r['unix_ns'] for r in io)<second
+            state['native_io_priority']={'nice':a.native_io_nice,'records':records,
+                'applied_before_second_action':True}
         if a.packed_view and a.mode == 'stacks':
             loaded = {}
             expected = str(a.work / 'artifacts/packed-view/cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar')

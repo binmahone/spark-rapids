@@ -17,7 +17,9 @@ readonly shuffle_copy_implementation=${12:-}
 readonly frozen_native_directory=${13:-false}
 readonly codec_library=${14:-}
 readonly codec_library_layout=${15:-standalone}
+readonly native_io_nice=${16:-}
 decoder_args=()
+if [[ -n "$native_io_nice" ]]; then decoder_args+=(--native-io-nice "$native_io_nice"); fi
 if [[ -n "$codec_library" ]]; then
   decoder_args+=(--codec-library "$codec_library" --codec-library-layout "$codec_library_layout")
 fi

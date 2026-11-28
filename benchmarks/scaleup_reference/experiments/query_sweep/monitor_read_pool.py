@@ -54,7 +54,11 @@ with Path(a.output).open('x', buffering=1) as output:
                             names.append(name)
                     except (FileNotFoundError, ProcessLookupError):
                         pass
-                executors.append({'pid': int(proc.name), 'thread_names': sorted(names)})
+                policy = next((v.partition(b'=')[2].decode() for v in
+                    (proc / 'environ').read_bytes().split(b'\0')
+                    if v.startswith(b'LIBCUDF_NVCOMP_POLICY=')), None)
+                executors.append({'pid': int(proc.name), 'thread_names': sorted(names),
+                                  'nvcomp_policy': policy})
             except (FileNotFoundError, ProcessLookupError, PermissionError):
                 pass
         output.write(json.dumps({'time_unix_ns': time.time_ns(), 'executors': executors}) + '\n')

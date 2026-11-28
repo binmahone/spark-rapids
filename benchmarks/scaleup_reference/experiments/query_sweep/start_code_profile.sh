@@ -7,6 +7,11 @@ readonly thread=${2:?Owner thread}
 readonly label=${3:?Unique capture label}
 readonly mode=${4:?control or stacks}
 readonly queries=${5:-8,18,5}
+readonly nvcomp_policy=${6:-}
+decoder_args=()
+if [[ -n "$nvcomp_policy" ]]; then
+  decoder_args=(--nvcomp-policy "$nvcomp_policy")
+fi
 readonly here=$(cd "$(dirname "$0")" && pwd)
 [[ ! -e "$work/evidence/code-profile-$label.log" ]] || exit 1
 exec > >(tee "$work/evidence/code-profile-$label.log") 2>&1
@@ -15,4 +20,4 @@ ulimit -n 65536
 export JAVA_HOME="$work/jdk17"
 export PYSPARK_PYTHON=/usr/bin/python3
 python3 "$here/run_code_profile.py" --work "$work" --thread-id "$thread" \
-  --label "$label" --mode "$mode" --queries "$queries"
+  --label "$label" --mode "$mode" --queries "$queries" "${decoder_args[@]}"

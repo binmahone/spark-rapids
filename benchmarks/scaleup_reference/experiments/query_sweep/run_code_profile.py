@@ -27,6 +27,7 @@ def main():
     p.add_argument('--label', required=True)
     p.add_argument('--mode', choices=('control', 'stacks'), required=True)
     p.add_argument('--queries', default='8,18,5')
+    p.add_argument('--nvcomp-policy', choices=('STABLE', 'OFF'))
     a = p.parse_args()
     assert a.label.replace('-', '').replace('_', '').isalnum()
     owner = read(a.work / 'evidence/owner.json')
@@ -53,7 +54,8 @@ def main():
     selected = [replace(selected[q], overrides={**selected[q].overrides,
                 'spark.rapids.sql.join.hashTable.reuse': 'false'}) for q in queries]
     state = {'status': 'running', 'owner': owner, 'mode': a.mode, 'profiler': profiler,
-             'queries': queries, 'scratch': str(scratch), 'started_unix_ns': time.time_ns(),
+             'queries': queries, 'nvcomp_policy': a.nvcomp_policy,
+             'scratch': str(scratch), 'started_unix_ns': time.time_ns(),
              'classification': 'Code-path diagnosis; profiler times are not benchmark scores',
              'source_revision': subprocess.check_output(['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip()}
     write(directory / 'controller.json', {'pid': os.getpid(), 'start_time': services.start_time(os.getpid()), 'owner_uid': os.getuid()})
@@ -73,7 +75,10 @@ def main():
             process = subprocess.Popen([sys.executable, str(script), '--work', str(a.work),
                 '--output', str(directory / (name + '.jsonl')), *extra], stdout=log, stderr=subprocess.STDOUT)
             children.append((process, log))
+        decoder = ({'spark.executorEnv.LIBCUDF_NVCOMP_POLICY': a.nvcomp_policy}
+                   if a.nvcomp_policy else {})
         run, result = launch_group(a.work, 'code-profile-' + a.label, 0, selected, {
+            **decoder,
             'spark.rapids.sql.reader.kvikio.numThreads': '32',
             'spark.rapids.sql.metrics.level': 'DEBUG',
             'spark.rapids.shuffle.compression.codec': 'none',
@@ -88,12 +93,19 @@ def main():
         assert all(s['validation']['status'] == 'passed' for s in result['samples'])
         assert all(child.poll() is None for child, _ in children), 'An observer exited during the workload'
         pools = {}
+        decoder_policies = {}
         for line in (directory / 'pool.jsonl').read_text().splitlines():
             for executor in json.loads(line)['executors']:
                 pools.setdefault(str(executor['pid']), set()).update(executor['thread_names'])
+                decoder_policies.setdefault(str(executor['pid']), set()).add(
+                    executor.get('nvcomp_policy'))
         assert len(pools) == 8 and all(names == {'kvikio-' + str(i) for i in range(32)}
                                      for names in pools.values())
         state['native_threads'] = {pid: sorted(names) for pid, names in pools.items()}
+        if a.nvcomp_policy:
+            assert len(decoder_policies) == 8
+            assert all(values == {a.nvcomp_policy} for values in decoder_policies.values())
+        state['observed_nvcomp_policies'] = {pid: list(v) for pid, v in decoder_policies.items()}
         profiles = sorted(scratch.glob('*.jfr'))
         if a.mode == 'stacks':
             assert len(profiles) == 9 and all(p.stat().st_size > 1024 for p in profiles)

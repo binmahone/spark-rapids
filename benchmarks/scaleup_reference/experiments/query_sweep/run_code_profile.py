@@ -45,7 +45,7 @@ def main():
     p.add_argument('--queue-index-probe',choices=('control','candidate'))
     a = p.parse_args()
     if a.queue_index_probe:
-        assert a.mode=='control' and a.frozen_native_directory and a.pinned_copy_threshold==0
+        assert a.mode in ('control','stacks') and a.frozen_native_directory and a.pinned_copy_threshold==0
         assert not (a.cuda_wait_policy or a.codec_library or a.mmap_policy or a.nvcomp_policy)
         assert a.native_io_nice is None
     assert not a.ucx_preserve_context or a.cuda_wait_policy

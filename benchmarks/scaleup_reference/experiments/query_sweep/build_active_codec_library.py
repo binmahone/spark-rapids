@@ -17,7 +17,7 @@ from common import read,sha,write
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work',type=Path,required=True)
 p.add_argument('--thread-id',required=True)
-p.add_argument('--action',choices=('configure','reconfigure','configure-toolchain','configure-prefix','configure-headers','configure-cufile','baseline','candidate'),required=True)
+p.add_argument('--action',choices=('configure','reconfigure','configure-toolchain','configure-prefix','configure-headers','configure-cufile','baseline','candidate','tests'),required=True)
 p.add_argument('--candidate-revision',required=True)
 a=p.parse_args()
 assert read(a.work/'evidence/owner.json')['thread_id']==a.thread_id
@@ -38,12 +38,16 @@ state={'status':'running','action':a.action,'owner_thread':a.thread_id,'started_
 write(state_path,state)
 source=root/'source';build=root/'build';venv=root/'build-venv'
 
-def run(command,logname,timeout=900):
- command=list(map(str,command));state['commands'].append(command);write(state_path,state)
+def run(command,logname,timeout=900,extra_env=None):
+ command=list(map(str,command));state['commands'].append(command)
+ explicit_env={'CUDACXX':'/usr/local/cuda-13.1/bin/nvcc',
+               'PKG_CONFIG_LIBDIR':str(root/'compiler/lib/pkgconfig')+':'+str(root/'compiler/share/pkgconfig'),
+               **(extra_env or {})}
+ state.setdefault('invocations',[]).append({'argv':command,'environment_overrides':explicit_env})
+ write(state_path,state)
  with (root/logname).open('x') as log:
   subprocess.run(command,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=timeout,cwd=root,
-                 env={**os.environ,'CUDACXX':'/usr/local/cuda-13.1/bin/nvcc',
-                      'PKG_CONFIG_LIBDIR':str(root/'compiler/lib/pkgconfig')+':'+str(root/'compiler/share/pkgconfig')})
+                 env={**os.environ,**explicit_env})
 
 try:
  if a.action=='configure':
@@ -147,10 +151,25 @@ try:
   prior.pop('error',None)
   prior.update(status='completed',reconfigure_state=str(state_path),finished_unix_ns=time.time_ns())
   write(root/'configure-state.json',prior)
+ elif a.action=='tests':
+  assert read(root/'candidate-state.json')['status']=='completed'
+  assert subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip()==a.candidate_revision
+  run([venv/'bin/cmake','--build',build,'--target','PARQUET_ACTIVE_CODECS_TEST','-j','24'],
+      'reader-tests-build.log',1200)
+  uuid=subprocess.check_output(['nvidia-smi','--id=0','--query-gpu=uuid','--format=csv,noheader'],text=True).strip()
+  test_env={'CUDA_VISIBLE_DEVICES':uuid,'LD_LIBRARY_PATH':str(root/'compiler/lib')+':/usr/local/cuda-13.1/lib64'}
+  run([build/'gtests/PARQUET_ACTIVE_CODECS_TEST','--gtest_output=xml:'+str(root/'reader-tests.xml')],
+      'reader-tests.log',300,extra_env=test_env)
+  import xml.etree.ElementTree as ET
+  result=ET.parse(root/'reader-tests.xml').getroot()
+  assert int(result.attrib['tests'])==3 and int(result.attrib['failures'])==0 and int(result.attrib['disabled'])==0
+  assert not result.findall('.//skipped')
+  state['reader_tests']=dict(result.attrib)
  else:
   assert read(root/'configure-state.json')['status']=='completed'
   if a.action=='candidate':
    assert read(root/'baseline-state.json')['status']=='completed'
+   run(['git','-C',source,'fetch','origin','experiment/aws-active-parquet-codecs-261128'],'candidate-fetch.log')
    run(['git','-C',source,'checkout','--detach',a.candidate_revision],'candidate-checkout.log')
   assert not subprocess.check_output(['git','-C',str(source),'status','--porcelain'],text=True)
   state['configuration']=read(root/'configure-state.json')
@@ -164,7 +183,8 @@ try:
   shutil.copyfile(library,artifact/'libcudf.so')
   for name in ('libcudfjni.so','libcufilejni.so','libnvmljni.so'):
    (artifact/name).symlink_to(a.work/'native-concat/lib'/name)
-  run(['ldd',artifact/'libcudf.so'],a.action+'-ldd.log',60)
+  run(['ldd',artifact/'libcudf.so'],a.action+'-ldd.log',60,
+      extra_env={'LD_LIBRARY_PATH':str(root/'compiler/lib')+':/usr/local/cuda-13.1/lib64'})
   assert 'not found' not in (root/(a.action+'-ldd.log')).read_text()
   state.update(source_revision=subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip(),
                library_sha256=sha(artifact/'libcudf.so'))

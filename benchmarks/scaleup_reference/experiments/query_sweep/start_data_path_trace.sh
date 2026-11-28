@@ -9,7 +9,7 @@ readonly query=${4:-8}
 [[ "$query" == 5 || "$query" == 8 || "$query" == 10 || "$query" == 18 || "$query" == 20 ]] || exit 2
 suffix=""
 case "$variant" in
-    control|scan-pack|scan-split|shuffle-buffer|shuffle-wait) suffix="-$variant" ;;
+    control|scan-pack|scan-split|scan-split-cuda|shuffle-buffer|shuffle-wait) suffix="-$variant" ;;
     *) exit 2 ;;
 esac
 suffix="-q$query$suffix"

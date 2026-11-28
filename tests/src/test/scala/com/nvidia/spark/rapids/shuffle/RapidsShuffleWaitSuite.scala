@@ -122,7 +122,7 @@ class RapidsShuffleWaitSuite extends RapidsShuffleTestHelper {
               case "acquire-error" =>
                 assert(intercept[IllegalStateException](iterator.next()).getMessage ==
                   "acquire failed")
-                assert(device.isClosed, "a dequeued handle must close if reacquisition fails")
+                assert(device.getRefCount == 0, "a dequeued handle must close if reacquisition fails")
                 verify(catalog, never()).getColumnarBatchAndRemove(any(), any())
               case _ =>
                 withResource(iterator.next()) { batch =>
@@ -137,7 +137,7 @@ class RapidsShuffleWaitSuite extends RapidsShuffleTestHelper {
           }
         } finally {
           // The degenerate handle has no device resource; the acquire failure owns a real one.
-          if (device != null && !device.isClosed) {
+          if (device != null && device.getRefCount > 0) {
             owned.close()
           }
           GpuSemaphore.releaseIfNecessary(context)

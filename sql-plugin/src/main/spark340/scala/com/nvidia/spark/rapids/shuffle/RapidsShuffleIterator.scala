@@ -384,7 +384,8 @@ class RapidsShuffleIterator(
 
     val blockedStart = System.currentTimeMillis()
     var result = Option(resolvedBatches.poll())
-    if (result.isEmpty) {
+    val waitedForResult = result.isEmpty
+    if (waitedForResult) {
       taskContext.foreach(GpuSemaphore.releaseIfNecessary)
       RmmSpark.waitingOnPool()
       try {
@@ -400,8 +401,10 @@ class RapidsShuffleIterator(
         NvtxRegistry.RAPIDS_SHUFFLE_ITERATOR_GOT_BATCH.push()
         try {
           // The polled handle is no longer owned by the queue's completion cleaner.
-          closeOnExcept(handle) { _ =>
-            taskContext.foreach(GpuSemaphore.acquireIfNecessary(_))
+          if (waitedForResult) {
+            closeOnExcept(handle) { _ =>
+              taskContext.foreach(GpuSemaphore.acquireIfNecessary(_))
+            }
           }
           val (cb, memoryUsedBytes) = catalog.getColumnarBatchAndRemove(handle, sparkTypes)
           metricsUpdater.update(blockedTime, 1, memoryUsedBytes, cb.numRows())

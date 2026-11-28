@@ -16,6 +16,7 @@ namespace {
 using sync_method = void(JNICALL*)(JNIEnv*, jclass, jlong);
 std::atomic<sync_method> original{nullptr};
 std::atomic<unsigned long> calls{0};
+std::atomic<unsigned long> bindings{0};
 unsigned expected_flags;
 
 void require(bool condition, char const* message)
@@ -55,7 +56,7 @@ void JNICALL checked_sync(JNIEnv* env, jclass cls, jlong stream)
   }
 }
 
-void JNICALL bound(jvmtiEnv* jvmti, JNIEnv*, jthread, jmethodID method,
+void JNICALL bound(jvmtiEnv* jvmti, JNIEnv* env, jthread, jmethodID method,
                    void* address, void** replacement)
 {
   char *name = nullptr, *signature = nullptr, *class_name = nullptr;
@@ -72,11 +73,17 @@ void JNICALL bound(jvmtiEnv* jvmti, JNIEnv*, jthread, jmethodID method,
           "Cannot identify class signature");
   bool const target = std::strcmp(class_name, "Lai/rapids/cudf/Cuda;") == 0;
   jvmti->Deallocate(reinterpret_cast<unsigned char*>(class_name));
+  env->DeleteLocalRef(declaring);
   if (!target) { return; }
-  require(original.load() == nullptr, "Repeated sync method binding");
-  original.store(reinterpret_cast<sync_method>(address));
+  auto function = reinterpret_cast<sync_method>(address);
+  sync_method previous = nullptr;
+  bool const first = original.compare_exchange_strong(previous, function);
+  require(first || previous == function, "Sync binding changed its native address");
   *replacement = reinterpret_cast<void*>(&checked_sync);
-  std::fprintf(stderr, "CUDA_WAIT_POLICY_BOUND ai/rapids/cudf/Cuda.streamSynchronize(J)V\n");
+  bindings.fetch_add(1);
+  if (first) {
+    std::fprintf(stderr, "CUDA_WAIT_POLICY_BOUND ai/rapids/cudf/Cuda.streamSynchronize(J)V\n");
+  }
 }
 }  // namespace
 
@@ -132,5 +139,5 @@ extern "C" JNIEXPORT jint JNICALL Agent_OnLoad(JavaVM* vm, char* options, void*)
 
 extern "C" JNIEXPORT void JNICALL Agent_OnUnload(JavaVM*)
 {
-  std::fprintf(stderr, "CUDA_WAIT_POLICY_COUNTS checks=%lu\n", calls.load());
+  std::fprintf(stderr, "CUDA_WAIT_POLICY_COUNTS checks=%lu bindings=%lu\n", calls.load(), bindings.load());
 }

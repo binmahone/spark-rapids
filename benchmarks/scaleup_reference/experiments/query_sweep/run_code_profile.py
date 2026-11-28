@@ -77,7 +77,7 @@ def main():
         options = (options + ' ' if options else '') + f'-Dai.rapids.cudf.lib-native-dir={native}'
     wait_policy=None
     if a.cuda_wait_policy:
-        policy_root=a.work/'native-cuda-wait-policy'
+        policy_root=a.work/'native-cuda-wait-policy-v2'
         manifest=read(policy_root/'state.json');assert manifest['status']=='completed'
         assert all(sha(policy_root/name)==digest for name,digest in manifest['artifacts'].items())
         options += f' -agentpath:{policy_root}/libcuda_wait_policy.so={a.cuda_wait_policy}'

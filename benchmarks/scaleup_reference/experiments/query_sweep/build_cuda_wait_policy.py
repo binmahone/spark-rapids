@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import resource
 from pathlib import Path
 import subprocess
 import sys
@@ -19,7 +20,8 @@ assert read(a.work/'evidence/owner.json')['thread_id']==a.thread_id
 assert not subprocess.check_output(['nvidia-smi','--query-compute-apps=pid','--format=csv,noheader'],text=True).strip()
 for area in ('code-profile','data-path-trace'):
     assert all(read(path)['status'] not in ('starting','running') for path in (a.work/area).glob('*/state.json'))
-root=a.work/'native-cuda-wait-policy';root.mkdir(exist_ok=False)
+root=a.work/'native-cuda-wait-policy-v2';root.mkdir(exist_ok=False)
+resource.setrlimit(resource.RLIMIT_CORE,(0,0))
 state={'status':'running','owner_thread':a.thread_id,'commands':[],
     'source_revision':subprocess.check_output(['git','-C',str(HERE),'rev-parse','HEAD'],text=True).strip()}
 uuid=subprocess.check_output(['nvidia-smi','--id=0','--query-gpu=uuid','--format=csv,noheader'],text=True).strip()
@@ -44,6 +46,17 @@ try:
     cp=str(engine)+':'+str(spark/'jars/*')
     run([a.work/'jdk17/bin/javac','--release','8','-cp',cp,'-d',classes,HERE/'CudaWaitPolicySmoke.java'],
         'smoke-build.log')
+    old=a.work/'native-cuda-wait-policy/libcuda_wait_policy.so'
+    assert sha(old)=='da7283fa0738ad38c9e059b8d0f81035cd385bbddb970c79f2b13901e568a389'
+    regression_command=[str(a.work/'jdk17/bin/java'),'-agentpath:'+str(old)+'=smoke-auto',
+        '-Dai.rapids.cudf.lib-native-dir='+str(a.work/'native-concat/lib'),
+        '-cp',str(classes)+':'+cp,'CudaWaitPolicySmoke']
+    state['commands'].append(regression_command)
+    with (root/'old-agent-concurrent-regression.log').open('x') as log:
+        old_result=subprocess.run(regression_command,env=env,stdout=log,stderr=subprocess.STDOUT,timeout=90)
+    assert old_result.returncode!=0
+    assert 'CUDA_WAIT_POLICY_FAILED Repeated sync method binding' in (root/'old-agent-concurrent-regression.log').read_text()
+    state['concurrent_regression']={'old_agent_rejected':True,'old_returncode':old_result.returncode}
     probes={}
     for mode in ('auto','blocking'):
         run([root/'wait-policy-probe',mode],mode+'-probe.json')
@@ -55,6 +68,9 @@ try:
         assert 'CUDA_WAIT_POLICY_SMOKE_PASSED' in content
         assert 'CUDA_WAIT_POLICY_BOUND ai/rapids/cudf/Cuda.streamSynchronize(J)V' in content
         assert 'CUDA_WAIT_POLICY_EXECUTED flags=' in content
+        import re
+        counts=re.search(r'CUDA_WAIT_POLICY_COUNTS checks=(\d+) bindings=(\d+)',content)
+        assert counts and int(counts[1])>=33 and int(counts[2])>1
     assert probes['auto']['cpu_seconds']>.1
     assert probes['blocking']['cpu_seconds']<probes['auto']['cpu_seconds']*.25
     assert all(.18<v['wall_seconds']<.3 and v['value_correct'] for v in probes.values())

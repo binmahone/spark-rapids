@@ -24,7 +24,7 @@ for label in a.labels:
     assert all(r['flags']&7==(4 if mode=='blocking' else 0) for r in policy['runtime_proof'])
     run=Path(state['run']);config=json.loads((run/'config.json').read_text())
     profiles=json.loads((run/'profiles.json').read_text())
-    agent='-agentpath:'+str(a.work/'native-cuda-wait-policy/libcuda_wait_policy.so')+'='+mode
+    agent='-agentpath:'+str(a.work/'native-cuda-wait-policy-v2/libcuda_wait_policy.so')+'='+mode
     for profile in profiles.values():
         for key,value in profile.items():
             if isinstance(value,str):

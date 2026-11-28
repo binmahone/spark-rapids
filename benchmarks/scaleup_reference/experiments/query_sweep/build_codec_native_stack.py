@@ -178,6 +178,7 @@ try:
        '-DBoost_DIR='+str(compiler/'lib/cmake/Boost-1.86.0')],'cudfjni-configure.log')
   run([cmake,'--build',java_build,'-j','48'],'cudfjni-build.log',1800)
   run([cmake,'-S',jni/'src/main/cpp','-B',jni_build,*common,
+       '-DCMAKE_CXX_FLAGS=-I'+str(sdk/'include')+' -isystem '+str(compiler/'include'),
        '-DBUILD_FAULTINJ=OFF','-DBUILD_PROFILER=OFF','-DUSE_GDS=OFF'],'sparkjni-configure.log')
   run([cmake,'--build',jni_build,'--target','spark_rapids_jni','cudfjnistub','-j','48'],
       'sparkjni-build.log',1800)

@@ -31,6 +31,7 @@ CUDA_VISIBLE_DEVICES=$(nvidia-smi --id=0 --query-gpu=uuid --format=csv,noheader)
 export LIBCUDF_NVCOMP_POLICY=STABLE
 readonly dataset=/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.1.parquet
 command=(numactl --cpunodebind=0 --membind=0 "$work/jdk17/bin/java" -Xmx4g \
+  -Dai.rapids.cudf.nvtx.enabled=true \
   -Dai.rapids.cudf.lib-native-dir="$work/native-concat/lib" \
   -cp "$output/classes:$cp" com.nvidia.spark.rapids.experiments.BoundedScanPipelineProbe \
   "$dataset")
@@ -54,7 +55,7 @@ if [[ "$kind" == timing ]]; then
 elif [[ "$kind" == ncu ]]; then
   sudo env CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES" LIBCUDF_NVCOMP_POLICY=STABLE \
     /usr/local/cuda-13.2/bin/ncu --target-processes all --kernel-name 'regex:.*unsnap_kernel.*' \
-    --launch-skip 2 --launch-count 1 --set full --export "$output/snappy" \
+    --launch-skip 0 --launch-count 1 --set full --export "$output/snappy" \
     "${command[@]}" 4 original
 else
   nsys profile --trace=cuda,nvtx --sample=none --cpuctxsw=none \

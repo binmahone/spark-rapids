@@ -1,0 +1,27 @@
+diff --git a/src/uct/cuda/cuda_copy/cuda_copy_md.c b/src/uct/cuda/cuda_copy/cuda_copy_md.c
+--- a/src/uct/cuda/cuda_copy/cuda_copy_md.c
++++ b/src/uct/cuda/cuda_copy/cuda_copy_md.c
+@@ -303,6 +303,8 @@ static ucs_status_t uct_cuda_copy_set_ctx_sync_memops(int log_level)
+         (uct_cuda_cuCtxSetFlags_t)ucs_empty_function;
+     CUdriverProcAddressQueryResult sym_status;
+     CUresult cu_err;
++    unsigned flags;
++    ucs_status_t status;
+ 
+     if (cuda_cuCtxSetFlags_func ==
+         (uct_cuda_cuCtxSetFlags_t)ucs_empty_function) {
+@@ -316,8 +318,12 @@ static ucs_status_t uct_cuda_copy_set_ctx_sync_memops(int log_level)
+     }
+ 
+     if (cuda_cuCtxSetFlags_func != NULL) {
+-        /* Synchronize future DMA operations for all memory types */
+-        UCT_CUDADRV_FUNC(cuda_cuCtxSetFlags_func(CU_CTX_SYNC_MEMOPS),
++        status = UCT_CUDADRV_FUNC(cuCtxGetFlags(&flags), log_level);
++        if (status != UCS_OK) {
++            return status;
++        }
++        /* Preserve context flags while synchronizing future DMA operations. */
++        UCT_CUDADRV_FUNC(cuda_cuCtxSetFlags_func(flags | CU_CTX_SYNC_MEMOPS),
+                          log_level);
+         return UCS_OK;
+     }

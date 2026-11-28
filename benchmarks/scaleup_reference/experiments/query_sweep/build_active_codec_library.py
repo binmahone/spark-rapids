@@ -28,11 +28,16 @@ root=a.work/'native-codec-library'
 root.mkdir(exist_ok=True)
 state_path=root/(a.action+'-state.json')
 if state_path.exists():
- assert a.action in ('baseline','configure-headers') and read(state_path)['status']=='failed'
+ assert a.action in ('baseline','configure-headers','tests') and read(state_path)['status']=='failed'
  failure=a.action+'-failed-'+str(time.time_ns())
  shutil.copyfile(state_path,root/(failure+'-state.json'))
- old_log=root/('baseline-build.log' if a.action=='baseline' else 'compiler-brotli.log')
- old_log.rename(root/(failure+'-build.log'))
+ names={'baseline':['baseline-build.log','baseline-compiler-explicit.txt'],
+        'configure-headers':['compiler-brotli.log'],
+        'tests':['reader-tests-build.log','reader-tests.log','reader-tests.xml',
+                 'tests-fetch.log','tests-checkout.log']}
+ for name in names[a.action]:
+  old_log=root/name
+  if old_log.exists(): old_log.rename(root/(failure+'-'+name))
 state={'status':'running','action':a.action,'owner_thread':a.thread_id,'started_unix_ns':time.time_ns(),
        'candidate_revision':a.candidate_revision,'commands':[]}
 write(state_path,state)
@@ -153,7 +158,16 @@ try:
   write(root/'configure-state.json',prior)
  elif a.action=='tests':
   assert read(root/'candidate-state.json')['status']=='completed'
+  if subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip()!=a.candidate_revision:
+   assert not subprocess.check_output(['git','-C',str(source),'status','--porcelain'],text=True)
+   run(['git','-C',source,'fetch','origin','experiment/aws-active-parquet-codecs-261128'],'tests-fetch.log')
+   original=read(root/'candidate-state.json')['source_revision']
+   changed=subprocess.check_output(['git','-C',str(source),'diff','--name-only',original,a.candidate_revision],text=True).splitlines()
+   assert set(changed)<= {'cpp/CMakeLists.txt','cpp/tests/CMakeLists.txt','cpp/tests/io/parquet_active_codecs_test.cu'},changed
+   state['test_build_only_changes']=changed
+   run(['git','-C',source,'checkout','--detach',a.candidate_revision],'tests-checkout.log')
   assert subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip()==a.candidate_revision
+  state['test_source_revision']=a.candidate_revision
   run([venv/'bin/cmake','--build',build,'--target','PARQUET_ACTIVE_CODECS_TEST','-j','24'],
       'reader-tests-build.log',1200)
   uuid=subprocess.check_output(['nvidia-smi','--id=0','--query-gpu=uuid','--format=csv,noheader'],text=True).strip()

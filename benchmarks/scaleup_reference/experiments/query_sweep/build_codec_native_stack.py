@@ -40,6 +40,7 @@ sdk=old/'cufile-sdk/usr/local/cuda-13.1/targets/x86_64-linux'
 source=root/'cudf';jni=root/'spark-jni';install=root/'install'
 cpp_build=root/'cpp-build';java_build=root/'cudfjni-build';jni_build=root/'spark-jni-build'
 env={**os.environ,'JAVA_HOME':str(a.work/'jdk17'),
+     'PATH':str(old/'build-venv/bin')+':'+os.environ['PATH'],
      'PKG_CONFIG_LIBDIR':str(compiler/'lib/pkgconfig')+':'+str(compiler/'share/pkgconfig'),
      'LD_LIBRARY_PATH':str(compiler/'lib')+':/usr/local/cuda-13.1/lib64',
      'CUDF_ROOT':str(source),'CUDF_INSTALL_DIR':str(install),'CUDFJNI_BUILD_DIR':str(java_build)}
@@ -53,7 +54,7 @@ def run(command,name,timeout=900,overrides=None):
   write(state_path,state)
   return
  state.setdefault('invocations',[]).append({'argv':command,'environment':{
-  key:env[key] for key in ('JAVA_HOME','PKG_CONFIG_LIBDIR','LD_LIBRARY_PATH','CUDF_ROOT','CUDF_INSTALL_DIR','CUDFJNI_BUILD_DIR')},
+  key:env[key] for key in ('PATH','JAVA_HOME','PKG_CONFIG_LIBDIR','LD_LIBRARY_PATH','CUDF_ROOT','CUDF_INSTALL_DIR','CUDFJNI_BUILD_DIR')},
   'extra_environment':overrides or {}})
  write(state_path,state)
  log_path=root/(a.action+'-'+name)

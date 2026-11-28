@@ -16,7 +16,8 @@ import time
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
 from common import read, sha, write
-from critical_path_variants import controls
+from critical_path_variants import controls, cases
+from variants import ORDER
 from run_screen import launch_group
 import services
 
@@ -64,8 +65,11 @@ def main():
                  f'{native}/lib/libconcat_offsets_probe.so')
         options = (options + ' ' if options else '') + agent
     selected = controls()
-    queries = [int(q) for q in a.queries.split(',')]
-    assert queries and len(queries) == len(set(queries)) and set(queries) <= {5, 8, 18, 20, 10}
+    queries = list(ORDER) if a.queries == 'all' else [int(q) for q in a.queries.split(',')]
+    assert queries and len(queries) == len(set(queries)) and set(queries) <= set(ORDER)
+    if 7 in queries:
+        q7 = cases()[0]
+        selected[7] = replace(q7, overrides={**selected[7].overrides, **q7.overrides})
     selected = [replace(selected[q], overrides={**selected[q].overrides,
                 'spark.rapids.sql.join.hashTable.reuse': 'false'}) for q in queries]
     state = {'status': 'running', 'owner': owner, 'mode': a.mode, 'profiler': profiler,
@@ -80,7 +84,7 @@ def main():
         raise InterruptedError('Signal ' + str(signum))
     for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGALRM):
         signal.signal(sig, interrupt)
-    signal.alarm(1200)
+    signal.alarm(3600 if a.queries == 'all' else 1200)
     children = []
     try:
         for name, script, extra in [
@@ -102,11 +106,17 @@ def main():
             'spark.rapids.sql.format.parquet.hybridScan.maxH2DPackSize': '32m',
             'spark.rapids.shuffle.ucx.bounceBuffers.size': '4m'},
             experimental_engine=a.work / 'artifacts/decimal-null-copy',
+            runtime_hash_reuse_queries=[9] if 9 in queries else None,
             diagnostic_jvm_options=options)
         state.update(run=str(run), result=result)
         assert result['status'] == 'completed' and result['driver_exit_code'] == 0
         assert len(result['samples']) == 2 * len(queries)
         assert all(s['validation']['status'] == 'passed' for s in result['samples'])
+        for sample in result['samples']:
+            if sample['query'] == 9:
+                assert sample['runtime_hash_reuse_proof']['physical_plan_unchanged']
+                assert sum(n['metrics'].get('hashTableReuses', 0)
+                           for n in sample['plan_metrics']) > 0
         if concat:
             logs = Path(read(a.work / 'evidence/deployment.json')['scratch_root']) / run.name / 'suite'
             proof = []

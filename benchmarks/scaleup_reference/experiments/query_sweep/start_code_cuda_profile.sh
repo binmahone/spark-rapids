@@ -7,10 +7,12 @@ readonly thread=${2:?Owner thread}
 readonly query=${3:?Query number}
 readonly attempt=${4:-0}
 readonly concat_implementation=${5:-}
+readonly timeline_only=${6:-false}
 extra_args=()
 if [[ -n "$concat_implementation" ]]; then
   extra_args=(--concat-implementation "$concat_implementation")
 fi
+if [[ "$timeline_only" == true ]]; then extra_args+=(--timeline-only); fi
 suffix=""
 if [[ "$attempt" != 0 ]]; then suffix="-attempt$attempt"; fi
 readonly here=$(cd "$(dirname "$0")" && pwd)

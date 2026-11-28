@@ -25,6 +25,7 @@ def main():
     p.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
     p.add_argument('--attempt', type=int, default=0)
     p.add_argument('--concat-implementation', choices=('control', 'candidate'))
+    p.add_argument('--timeline-only', action='store_true')
     a = p.parse_args()
     work = a.work.resolve()
     owner = read(work / 'evidence/owner.json')
@@ -69,7 +70,7 @@ def main():
     ready = shlex.join([sys.executable, str(HERE / 'record_scan_trace_ready.py'), str(directory), session])
     sampling = (['--sample=process-tree', '--cpuctxsw=process-tree', '--backtrace=dwarf',
                  '--sampling-period=8000000', '--discard-environment=true',
-                 '--cudabacktrace=sync:100000,memory:100000'] if a.variant == 'code-profile'
+                 '--cudabacktrace=sync:100000,memory:100000'] if a.variant == 'code-profile' and not a.timeline_only
                 else ['--sample=none', '--cpuctxsw=none'])
     duration = 420 if a.variant == 'code-profile' else 240
     command = ['nsys', 'profile', '--trace=cuda,nvtx', '--cuda-trace-scope=process-tree',

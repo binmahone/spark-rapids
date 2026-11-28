@@ -19,7 +19,7 @@ from variants import ORDER, catalog, extra_cases, targeted
 
 def launch_group(work, phase, index, cases, global_conf, collector=None,
                  view_casts=None, domain_proof=None, runtime_hash_reuse_queries=None,
-                 experimental_engine=None, diagnostic_nvtx=False):
+                 experimental_engine=None, diagnostic_nvtx=False, diagnostic_jvm_options=None):
     deployment = read(work / 'evidence/deployment.json')
     config = load_config('aws48x', work / 'evidence/deployment.json')
     config['spark_conf'].update(global_conf)
@@ -103,6 +103,8 @@ def launch_group(work, phase, index, cases, global_conf, collector=None,
         runtime[f'spark.{component}.extraJavaOptions'] = '-Djava.io.tmpdir=' + str(scratch / 'java-tmp')
         if diagnostic_nvtx:
             runtime[f'spark.{component}.extraJavaOptions'] += ' -Dai.rapids.cudf.nvtx.enabled=true'
+        if diagnostic_jvm_options:
+            runtime[f'spark.{component}.extraJavaOptions'] += ' ' + diagnostic_jvm_options
     profile.update(runtime)
     for value in profiles.values():
         value.update(runtime)

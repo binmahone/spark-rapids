@@ -311,6 +311,7 @@ def main():
                 runtime_reuse = query in config.get('experimental_runtime_hash_reuse_queries', [])
                 reuse_proof = None
                 try:
+                    started_unix_ns = time.time_ns()
                     started = time.perf_counter()
                     frame = prepare_frame(spark, candidate)
                     execution = frame._jdf.queryExecution()
@@ -334,6 +335,7 @@ def main():
                     else:
                         rows = frame._jdf.collect()
                     elapsed = time.perf_counter() - started
+                    finished_unix_ns = time.time_ns()
                     if expired.is_set():
                         raise TimeoutError('Query exceeded its limit')
                 finally:
@@ -399,6 +401,8 @@ def main():
                                                      spark._jvm, reference)
                 validation_seconds = time.perf_counter() - validation_started
                 sample = {'query': query, 'iteration': iteration, 'sql_seconds': elapsed,
+                          'started_unix_ns': started_unix_ns,
+                          'finished_unix_ns': finished_unix_ns,
                           'application_id': sc.applicationId,
                           'spark_session_identity': int(spark._jvm.java.lang.System.identityHashCode(
                               frame._jdf.sparkSession())),

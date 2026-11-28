@@ -55,11 +55,15 @@ def schedule(run):
                     'executor': info['Executor ID'], 'run_ms': m.get('Executor Run Time', 0),
                     'cpu_ns': m.get('Executor CPU Time', 0),
                     'input': (m.get('Input Metrics') or {}).get('Bytes Read', 0),
-                    'shuffle_write': (m.get('Shuffle Write Metrics') or {}).get('Shuffle Bytes Written', 0)})
+                    'shuffle_write': (m.get('Shuffle Write Metrics') or {}).get('Shuffle Bytes Written', 0),
+                    'scan_batches': {}})
                 for item in info.get('Accumulables', []):
                     value = str(item.get('Update', ''))
                     if re.fullmatch(r'-?\d+', value):
                         counters[stage][str(item['ID'])] += int(value)
+                        metadata = metrics.get(str(item['ID']), {})
+                        if metadata.get('node', '').startswith('GpuScan') and metadata.get('name') == 'output columnar batches':
+                            task_rows[stage][-1]['scan_batches'][str(item['ID'])] = int(value)
     result = {}
     for root, token in executions.items():
         window = windows[root]
@@ -79,6 +83,10 @@ def schedule(run):
                     bins[bin_id][str(stage)] += overlap / 500
             metric_values = [{**metrics[k], 'accumulator_id': k, 'task_update_sum': value}
                              for k, value in counters[stage].items() if k in metrics and value]
+            scan_ids = sorted({key for row in rows for key in row['scan_batches']})
+            scan_distribution = [{**metrics[key], 'accumulator_id': key,
+                'tasks_by_output_batches': dict(Counter(row['scan_batches'].get(key, 0) for row in rows)),
+                'total_output_batches': sum(row['scan_batches'].get(key, 0) for row in rows)} for key in scan_ids]
             stages.append({'stage': stage, 'parents': parents.get(stage, []),
                 'start_seconds': (begin - window['start']) / 1000,
                 'end_seconds': (end - window['start']) / 1000,
@@ -89,7 +97,7 @@ def schedule(run):
                 'task_cpu_sum_seconds': sum(r['cpu_ns'] for r in rows) / 1e9,
                 'input_bytes': sum(r['input'] for r in rows),
                 'shuffle_write_bytes': sum(r['shuffle_write'] for r in rows),
-                'operator_metrics': metric_values})
+                'operator_metrics': metric_values, 'scan_batch_distribution': scan_distribution})
         result[token] = {'window': window, 'stages': sorted(stages, key=lambda r: r['start_seconds']),
                          'task_occupancy_half_second': [{'start_seconds': k / 2, 'stage_mean_running_tasks': dict(v)}
                                                         for k, v in sorted(bins.items())]}

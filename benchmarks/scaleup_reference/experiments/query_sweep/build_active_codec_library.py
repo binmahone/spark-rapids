@@ -16,7 +16,7 @@ from common import read,sha,write
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work',type=Path,required=True)
 p.add_argument('--thread-id',required=True)
-p.add_argument('--action',choices=('configure','baseline','candidate'),required=True)
+p.add_argument('--action',choices=('configure','reconfigure','baseline','candidate'),required=True)
 p.add_argument('--candidate-revision',required=True)
 a=p.parse_args()
 assert read(a.work/'evidence/owner.json')['thread_id']==a.thread_id
@@ -60,6 +60,13 @@ try:
    '-Drapids-cmake-sha=8cf47a7b600985f876f428ac3c335ffd2fdeeb1d',
    '-DCMAKE_INSTALL_PREFIX='+str(root/'install')]
   run(command,'configure.log',900)
+ elif a.action=='reconfigure':
+  prior=read(root/'configure-state.json')
+  assert prior['status']=='failed'
+  shutil.copyfile(root/'configure-state.json',root/'configure-first-failed-state.json')
+  run(prior['commands'][-1],'configure-retry.log',900)
+  prior.update(status='completed',reconfigure_state=str(state_path))
+  write(root/'configure-state.json',prior)
  else:
   assert read(root/'configure-state.json')['status']=='completed'
   if a.action=='candidate':

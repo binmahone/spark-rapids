@@ -91,7 +91,11 @@ def main():
             time.sleep(.5)
         report['status'] = 'running'
         write(directory / 'state.json', report)
-        report['nsys_exit'] = profiler.wait(timeout=600)
+        deadline = time.monotonic() + 600
+        while not (directory / 'workload.json').exists():
+            assert profiler.poll() is None, 'Profiler exited before workload evidence'
+            assert time.monotonic() < deadline, 'Profiled workload did not finish'
+            time.sleep(.5)
         workload = read(directory / 'workload.json')
         result = workload['result']
         report['run'] = workload['run']

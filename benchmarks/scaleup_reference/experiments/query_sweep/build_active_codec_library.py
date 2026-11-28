@@ -17,7 +17,7 @@ from common import read,sha,write
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work',type=Path,required=True)
 p.add_argument('--thread-id',required=True)
-p.add_argument('--action',choices=('configure','reconfigure','configure-toolchain','baseline','candidate'),required=True)
+p.add_argument('--action',choices=('configure','reconfigure','configure-toolchain','configure-prefix','baseline','candidate'),required=True)
 p.add_argument('--candidate-revision',required=True)
 a=p.parse_args()
 assert read(a.work/'evidence/owner.json')['thread_id']==a.thread_id
@@ -83,6 +83,23 @@ try:
   run(command,'configure-gcc14.log',900)
   prior=read(root/'configure-state.json');prior.pop('error',None)
   prior.update(status='completed',commands=[command],compiler_state=str(state_path),finished_unix_ns=time.time_ns())
+  write(root/'configure-state.json',prior)
+ elif a.action=='configure-prefix':
+  assert read(root/'configure-toolchain-state.json')['status']=='failed'
+  compiler=root/'compiler'
+  run([root/'micromamba','install','--yes','--no-rc','--root-prefix',root/'mamba-root',
+       '--prefix',compiler,'--channel','conda-forge','zlib=1.3.2','openssl=3',
+       'gxx_linux-64=14.3.0','libstdcxx=14.3.0','libgcc=14.3.0'],
+       'compiler-dependencies.log',600)
+  run([root/'micromamba','list','--no-rc','--prefix',compiler,'--explicit'],'compiler-dependencies-explicit.txt',60)
+  command=read(root/'configure-toolchain-state.json')['commands'][-1]
+  command += ['-DCMAKE_PREFIX_PATH='+str(compiler),'-DZLIB_ROOT='+str(compiler),
+              '-DOPENSSL_ROOT_DIR='+str(compiler),'-DCMAKE_BUILD_RPATH='+str(compiler/'lib'),
+              '-DCMAKE_INSTALL_RPATH='+str(compiler/'lib')]
+  run(command,'configure-prefix.log',900)
+  prior=read(root/'configure-state.json');prior.pop('error',None)
+  prior.update(status='completed',commands=[command],compiler_prefix=str(compiler),
+               compiler_state=str(state_path),finished_unix_ns=time.time_ns())
   write(root/'configure-state.json',prior)
  elif a.action=='reconfigure':
   prior=read(root/'configure-state.json')

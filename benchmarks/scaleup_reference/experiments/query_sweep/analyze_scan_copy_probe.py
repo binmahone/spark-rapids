@@ -22,6 +22,8 @@ for label in a.labels:
     assert not state['concat_probe']
     probe = state['scan_copy_probe']
     assert len(probe['runtime_proof']) == 8
+    assert all('NATIVE_PROBE_RMM_SHARED registry=' in Path(item['stderr']).read_text()
+               for item in probe['runtime_proof']), 'Native adapter did not verify shared RMM state'
     run = Path(state['run'])
     profiles = json.loads((run / 'profiles.json').read_text())
     for profile in profiles.values():

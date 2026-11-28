@@ -26,6 +26,8 @@ for label in a.labels:
     assert config['queries'] == list(ORDER)
     assert config['engine_sha256'] == 'ec38a58426e662ce99a433e806a66fa927bb011c014465a5df0b0c31ded4d1cc'
     assert len(state['concat_probe']['runtime_proof']) == 8
+    assert all('NATIVE_PROBE_RMM_SHARED registry=' in Path(item['stderr']).read_text()
+               for item in state['concat_probe']['runtime_proof']), 'Native adapter did not verify shared RMM state'
     for profile in profiles.values():
         for key, value in profile.items():
             if isinstance(value, str):

@@ -6,7 +6,6 @@
 #include "probe_allocator.hpp"
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
-#include <rmm/cuda_stream.hpp>
 #include <chrono>
 #include <cstdint>
 #include <sstream>
@@ -27,9 +26,22 @@ double milliseconds(clock_type::time_point start)
 {
   return std::chrono::duration<double, std::milli>(clock_type::now() - start).count();
 }
+struct owned_stream {
+  cudaStream_t stream{};
+  owned_stream() { CUDF_CUDA_TRY(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking)); }
+  ~owned_stream()
+  {
+    cudaStreamSynchronize(stream);
+    cudaStreamDestroy(stream);
+  }
+  owned_stream(owned_stream const&) = delete;
+  owned_stream& operator=(owned_stream const&) = delete;
+  cudaStream_t value() const { return stream; }
+  void synchronize() const { CUDF_CUDA_TRY(cudaStreamSynchronize(stream)); }
+};
 struct streams {
-  rmm::cuda_stream compute;
-  rmm::cuda_stream allocation;
+  owned_stream compute;
+  owned_stream allocation;
   ~streams()
   {
     cudaStreamSynchronize(compute.value());

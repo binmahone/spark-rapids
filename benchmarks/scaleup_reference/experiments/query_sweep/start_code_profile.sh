@@ -21,7 +21,9 @@ readonly native_io_nice=${16:-}
 readonly cuda_wait_policy=${17:-}
 readonly ucx_preserve_context=${18:-false}
 readonly queue_index_probe=${19:-}
+readonly device_view_staging=${20:-}
 decoder_args=()
+if [[ -n "$device_view_staging" ]]; then decoder_args+=(--device-view-staging "$device_view_staging"); fi
 if [[ -n "$queue_index_probe" ]]; then decoder_args+=(--queue-index-probe "$queue_index_probe"); fi
 if [[ "$ucx_preserve_context" == true ]]; then decoder_args+=(--ucx-preserve-context); else [[ "$ucx_preserve_context" == false ]]; fi
 if [[ -n "$cuda_wait_policy" ]]; then decoder_args+=(--cuda-wait-policy "$cuda_wait_policy"); fi

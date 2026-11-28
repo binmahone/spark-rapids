@@ -43,7 +43,14 @@ def main():
     p.add_argument('--cuda-wait-policy',choices=('auto','blocking'))
     p.add_argument('--ucx-preserve-context',action='store_true')
     p.add_argument('--queue-index-probe',choices=('control','candidate'))
+    p.add_argument('--device-view-staging', choices=('control', 'isolated'))
     a = p.parse_args()
+    if a.device_view_staging:
+        assert a.mode in ('control', 'stacks') and a.pinned_copy_threshold == 0
+        assert not any((a.queue_index_probe, a.cuda_wait_policy, a.codec_library,
+            a.frozen_native_directory, a.packed_view, a.concat_implementation,
+            a.scan_copy_implementation, a.shuffle_copy_implementation, a.nvcomp_policy, a.mmap_policy))
+        assert a.native_io_nice is None
     if a.queue_index_probe:
         assert a.mode in ('control','stacks') and a.frozen_native_directory and a.pinned_copy_threshold==0
         assert not (a.cuda_wait_policy or a.codec_library or a.mmap_policy or a.nvcomp_policy)
@@ -105,6 +112,18 @@ def main():
         wait_policy['ucx_patch']=ucx_patch
     codec_library = None
     diagnostic_library_path = None
+    device_view = None
+    if a.device_view_staging:
+        build = a.work / 'native-view-stack'
+        manifest = read(build / 'state.json')
+        assert manifest['status'] == 'completed'
+        native = build / 'lib'
+        assert sha(native / 'libcudf.so') == manifest['library_sha256']
+        diagnostic_library_path = Path(manifest['runtime_library_path'])
+        device_view = {'mode': a.device_view_staging, 'manifest': manifest,
+            'runtime_dependencies': {path.name: sha(path) for path in
+                diagnostic_library_path.glob('*.so.*') if path.is_file()}}
+        options = (options + ' ' if options else '') + f'-Dai.rapids.cudf.lib-native-dir={native}'
     if a.codec_library:
         assert not (a.frozen_native_directory or a.packed_view or a.concat_implementation or
                     a.scan_copy_implementation or a.shuffle_copy_implementation or a.nvcomp_policy or
@@ -196,6 +215,7 @@ def main():
              'codec_library': codec_library,
              'cuda_wait_policy':wait_policy,
              'queue_index_probe':queue_probe,
+             'device_view_staging': device_view,
              'pinned_copy_threshold': a.pinned_copy_threshold,
              'queries': queries, 'nvcomp_policy': a.nvcomp_policy, 'mmap_policy': a.mmap_policy,
              'scratch': str(scratch), 'started_unix_ns': time.time_ns(),
@@ -214,7 +234,7 @@ def main():
             ('host', HERE.parent / 'runtime_prefilter/monitor_host.py', []),
             ('vm', HERE / 'monitor_vm.py', ['--thread-id', a.thread_id, '--controller', str(directory / 'controller.json')]),
             ('pool', HERE / 'monitor_read_pool.py', [])]
-        if codec_library or a.native_io_nice is not None or wait_policy or queue_probe:
+        if codec_library or a.native_io_nice is not None or wait_policy or queue_probe or device_view:
             observers.append(('native-modules', HERE / 'monitor_native_modules.py',
                               ['--expected-directory', str(native),
                                '--controller', str(directory / 'controller.json'),
@@ -234,6 +254,8 @@ def main():
             children.append((process, log))
         decoder = ({'spark.executorEnv.LIBCUDF_NVCOMP_POLICY': a.nvcomp_policy}
                    if a.nvcomp_policy else {})
+        if device_view:
+            decoder['spark.executorEnv.LIBCUDF_DEVICE_VIEW_STAGING'] = a.device_view_staging
         if ucx_patch:
             decoder['spark.executorEnv.UCX_PLUGIN_PATH']=str(ucx_module.parent)
         if a.mmap_policy:
@@ -335,6 +357,21 @@ def main():
             assert all(v == {str(a.pinned_copy_threshold)} for v in pinned_copy_policies.values())
             state['pinned_copy_environment_proof'] = {k: list(v) for k,v in pinned_copy_policies.items()}
         state['native_threads'] = {pid: sorted(names) for pid, names in pools.items()}
+        if device_view:
+            logs = Path(read(a.work / 'evidence/deployment.json')['scratch_root']) / run.name / 'suite'
+            proof = []
+            for stderr in logs.glob('worker-*/work/*/*/stderr'):
+                content = stderr.read_text()
+                for kind in ('table', 'column'):
+                    assert f'DEVICE_VIEW_STAGING_EXECUTED mode={a.device_view_staging} kind={kind}' in content
+                proof.append(str(stderr))
+            assert len(proof) == 8
+            mappings = [json.loads(line) for line in (directory / 'native-modules.jsonl').read_text().splitlines()]
+            assert len(mappings) == 8 and {str(row['pid']) for row in mappings} == set(pools)
+            expected_runtime = str(diagnostic_library_path.resolve())
+            assert all(any(expected_runtime in line and 'libstdc++.so' in line
+                           for line in row['maps']) for row in mappings)
+            device_view.update(runtime_proof=proof, runtime_module_mappings=mappings)
         if queue_probe:
             logs=Path(read(a.work/'evidence/deployment.json')['scratch_root'])/run.name/'suite'
             proof=[]

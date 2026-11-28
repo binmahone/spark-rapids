@@ -34,7 +34,7 @@ if state_path.exists():
  names={'baseline':['baseline-build.log','baseline-compiler-explicit.txt'],
         'configure-headers':['compiler-brotli.log'],
         'tests':['reader-tests-build.log','reader-tests.log','reader-tests.xml',
-                 'tests-fetch.log','tests-checkout.log']}
+                 'tests-fetch.log','tests-checkout.log','tests-configure.log']}
  for name in names[a.action]:
   old_log=root/name
   if old_log.exists(): old_log.rename(root/(failure+'-'+name))
@@ -168,6 +168,9 @@ try:
    run(['git','-C',source,'checkout','--detach',a.candidate_revision],'tests-checkout.log')
   assert subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip()==a.candidate_revision
   state['test_source_revision']=a.candidate_revision
+  run([venv/'bin/cmake','-S',source/'cpp','-B',build,
+       '-DCMAKE_EXE_LINKER_FLAGS=-Wl,-rpath-link,'+str(root/'compiler/lib')],
+      'tests-configure.log',300)
   run([venv/'bin/cmake','--build',build,'--target','PARQUET_ACTIVE_CODECS_TEST','-j','24'],
       'reader-tests-build.log',1200)
   uuid=subprocess.check_output(['nvidia-smi','--id=0','--query-gpu=uuid','--format=csv,noheader'],text=True).strip()

@@ -89,7 +89,7 @@ try:
     assert len(trial['result']['samples'])==2 and all(r['validation']['status']=='passed' for r in trial['result']['samples'])
     with (scratch/'self-report.txt').open('x') as stream:
         subprocess.run(['sudo','-n','perf','report','-i',str(scratch/'task-cpu.data'),
-            '--stdio','--no-children','--sort','dso,symbol','--percent-limit','0.1'],
+            '--stdio','--no-children','--call-graph','none','--sort','dso,symbol','--percent-limit','0.1'],
             stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
     state.update(status='completed',run=str(run),query_samples=trial['result']['samples'],
         perf_data_bytes=(scratch/'task-cpu.data').stat().st_size)

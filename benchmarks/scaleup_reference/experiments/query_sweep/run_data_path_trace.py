@@ -190,11 +190,14 @@ def main():
         if a.pinned_copy_threshold is not None:
             import sqlite3
             db = sqlite3.connect('file:' + str(directory / (artifact + '.sqlite')) + '?mode=ro', uri=True)
+            epoch = db.execute('select utcEpochNs from TARGET_INFO_SESSION_START_TIME').fetchone()[0]
+            predicate = ' or '.join('(k.start >= ? and k.end <= ?)' for _ in result['samples'])
+            bounds = [r[key] - epoch for r in result['samples']
+                      for key in ('started_unix_ns', 'finished_unix_ns')]
             copies = db.execute("select k.globalPid,s.value,count(*) from CUPTI_ACTIVITY_KIND_KERNEL k "
                 "join StringIds s on k.demangledName=s.id where s.value like '%cudf::detail::%copy_kernel%' "
-                "group by k.globalPid,s.value").fetchall()
+                "and (" + predicate + ") group by k.globalPid,s.value", bounds).fetchall()
             if a.kernel_proof_window:
-                epoch = db.execute('select utcEpochNs from TARGET_INFO_SESSION_START_TIME').fetchone()[0]
                 first, last = db.execute('select min(start),max(end) from CUPTI_ACTIVITY_KIND_KERNEL').fetchone()
                 assert first is not None and last > first
                 windows = [(r['iteration'], max(0, min(last+epoch,r['finished_unix_ns']) -

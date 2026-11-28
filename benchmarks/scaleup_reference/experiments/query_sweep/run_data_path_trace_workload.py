@@ -40,6 +40,7 @@ path, result = launch_group(a.work, 'data-path-trace-Q' + str(a.query) + '-' + a
     0, [selected], {
     'spark.rapids.sql.reader.kvikio.numThreads': '32',
     'spark.rapids.sql.metrics.level': 'DEBUG',
+    'spark.rapids.sql.nvtx.traceTaskGpuOwnership': 'true',
     'spark.task.resource.gpu.amount': '0.25',
     'spark.rapids.shuffle.compression.codec': 'none',
     'spark.rapids.sql.format.parquet.hybridScan.maxH2DPackSize': '128m' if a.variant == 'scan-pack' else '32m',

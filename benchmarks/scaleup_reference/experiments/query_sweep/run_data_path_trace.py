@@ -66,7 +66,7 @@ def main():
         raise InterruptedError('Signal ' + str(signum))
     for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGALRM):
         signal.signal(sig, interrupt)
-    signal.alarm(900)
+    signal.alarm(1500)
     ready = shlex.join([sys.executable, str(HERE / 'record_scan_trace_ready.py'), str(directory), session])
     sampling = (['--sample=process-tree', '--cpuctxsw=process-tree', '--backtrace=dwarf',
                  '--sampling-period=8000000', '--discard-environment=true',
@@ -106,7 +106,8 @@ def main():
             return
         if (directory / 'workload.json').exists():
             try:
-                report['nsys_exit'] = profiler.wait(timeout=120)
+                # CPU stacks can take several minutes to drain after the collection ends.
+                report['nsys_exit'] = profiler.wait(timeout=600)
                 stopped = True
                 return
             except subprocess.TimeoutExpired:

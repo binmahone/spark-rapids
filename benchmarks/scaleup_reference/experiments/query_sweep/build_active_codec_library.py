@@ -153,6 +153,10 @@ try:
    assert read(root/'baseline-state.json')['status']=='completed'
    run(['git','-C',source,'checkout','--detach',a.candidate_revision],'candidate-checkout.log')
   assert not subprocess.check_output(['git','-C',str(source),'status','--porcelain'],text=True)
+  state['configuration']=read(root/'configure-state.json')
+  run([root/'micromamba','list','--no-rc','--prefix',root/'compiler','--explicit'],
+      a.action+'-compiler-explicit.txt',60)
+  state['compiler_package_list_sha256']=sha(root/(a.action+'-compiler-explicit.txt'))
   run([venv/'bin/cmake','--build',build,'--target','cudf','-j','48'],a.action+'-build.log',3600)
   library=build/'libcudf.so'
   assert library.exists()

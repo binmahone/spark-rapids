@@ -46,7 +46,7 @@ path, result = launch_group(a.work, 'data-path-trace-Q' + str(a.query) + '-' + a
     'spark.rapids.sql.format.parquet.hybridScan.maxH2DPackSize': '128m' if a.variant == 'scan-pack' else '32m',
     'spark.rapids.shuffle.ucx.bounceBuffers.size': '16m' if a.variant == 'shuffle-buffer' else '4m'},
     experimental_engine=a.work / 'artifacts' / ('shuffle-wait' if a.variant == 'shuffle-wait' else 'decimal-null-copy'),
-    runtime_hash_reuse_queries=[9] if a.query == 9 else None)
+    runtime_hash_reuse_queries=[9] if a.query == 9 else None, diagnostic_nvtx=True)
 write(a.output / 'workload.json', {'run': str(path), 'start_unix_ns': started,
                                   'end_unix_ns': time.time_ns(), 'result': result})
 assert result['status'] == 'completed' and result['driver_exit_code'] == 0

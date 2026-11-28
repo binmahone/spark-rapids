@@ -19,7 +19,7 @@ from variants import ORDER, catalog, extra_cases, targeted
 
 def launch_group(work, phase, index, cases, global_conf, collector=None,
                  view_casts=None, domain_proof=None, runtime_hash_reuse_queries=None,
-                 experimental_engine=None):
+                 experimental_engine=None, diagnostic_nvtx=False):
     deployment = read(work / 'evidence/deployment.json')
     config = load_config('aws48x', work / 'evidence/deployment.json')
     config['spark_conf'].update(global_conf)
@@ -101,6 +101,8 @@ def launch_group(work, phase, index, cases, global_conf, collector=None,
         'spark.executorEnv.UCX_MODULE_DIR': str(Path(deployment['ucx_home']) / 'lib/ucx')}
     for component in ['driver', 'executor']:
         runtime[f'spark.{component}.extraJavaOptions'] = '-Djava.io.tmpdir=' + str(scratch / 'java-tmp')
+        if diagnostic_nvtx:
+            runtime[f'spark.{component}.extraJavaOptions'] += ' -Dai.rapids.cudf.nvtx.enabled=true'
     profile.update(runtime)
     for value in profiles.values():
         value.update(runtime)

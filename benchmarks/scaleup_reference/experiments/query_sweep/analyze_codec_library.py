@@ -61,8 +61,9 @@ if rebuilt:
  assert all(r['configuration']==rebuilt[0]['configuration'] for r in rebuilt)
  assert all(r['compiler_package_list_sha256']==rebuilt[0]['compiler_package_list_sha256'] for r in rebuilt)
 a.output.write_text(json.dumps({'runs':runs,
- 'parity':'Frozen Spark/JNI, SQL, normalized plans, scan work and runtime dependencies match; only the selected libcudf differs.',
+ 'parity':'Spark and JNI Java classes, SQL, normalized plans, scan work and runtime dependencies match; the selected native artifact differs.',
  'limits':['Rebuilt control and candidate share a compiler and dependency configuration; the frozen library bridge tests the build transition.',
+           'Integrated artifacts rebuild the native JNI code as well as cuDF. Their JNI sources are pinned; native JNI binaries are not the original nightly binaries.',
            'Cache residency is observed, not reset. Inspect storage reads and memory pressure.',
            'Native module mappings prove library identity, not execution of every changed branch.',
            'Task and operator time sums overlap and are not SQL wall seconds. Focused trials are not a suite score.']},indent=2)+'\n')

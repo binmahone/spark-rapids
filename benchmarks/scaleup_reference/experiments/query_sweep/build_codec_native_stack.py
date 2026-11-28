@@ -79,6 +79,11 @@ def smoke_check(artifact,tag):
 try:
  if a.action=='tests':
   artifact=read(root/'candidate-state.json');assert artifact['status']=='completed'
+  control=read(root/'baseline-state.json');assert control['status']=='completed'
+  assert not subprocess.check_output(['git','-C',str(source),'diff',control['source_revision'],
+   artifact['source_revision'],'--','java/src/main/native'],text=True)
+  state['identical_cudf_jni_source_tree']=subprocess.check_output(['git','-C',str(source),'rev-parse',
+   artifact['source_revision']+':java/src/main/native'],text=True).strip()
   library=root/'candidate/libcudf.so'
   assert sha(library)==artifact['library_sha256']
   executable=old/'build/gtests/PARQUET_ACTIVE_CODECS_TEST'

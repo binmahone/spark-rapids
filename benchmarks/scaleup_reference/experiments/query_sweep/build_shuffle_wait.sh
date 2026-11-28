@@ -5,7 +5,7 @@ set -euo pipefail
 readonly work=${1:?Prepared work directory}
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly root="$work/shuffle-wait-engine"
-readonly engine_revision=38c7fbec9cbb6eb48a37b2c657152326bffb485e
+readonly engine_revision=${2:?Pinned engine revision}
 mkdir -p "$work/shuffle-wait-build" "$work/tools"
 if [[ -e "$work/shuffle-wait-build/build.exit" ]]; then
   previous=$(date -u +%Y%m%dT%H%M%SZ)

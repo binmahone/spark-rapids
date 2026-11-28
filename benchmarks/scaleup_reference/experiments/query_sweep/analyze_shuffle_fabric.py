@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # Licensed under the Apache License, Version 2.0.
-"""Measure peer-transfer topology and copy activity in validated SQL windows."""
+"""Measure peer-transfer and local-copy activity in validated SQL windows."""
 import argparse
 from collections import defaultdict
 import json
@@ -26,6 +26,10 @@ for index, bus, uuid in db.execute('select id,busLocation,uuid from TARGET_INFO_
     assert node >= 0
     devices[index] = dict(bus=bus, uuid=uuid, numa=node)
 assert len(devices) == 8
+cuda_devices = {}
+for gpu, cuda_id, pid, uuid in db.execute('select gpuId,cudaId,pid,uuid from TARGET_INFO_CUDA_DEVICE'):
+    assert devices[gpu]['uuid'] == uuid
+    cuda_devices[(pid, cuda_id)] = gpu
 kinds = dict(db.execute('select id,label from ENUM_CUDA_MEMCPY_OPER'))
 assert {'Peer-to-Peer', 'Device-to-Device'} <= set(kinds.values())
 timeline = schedule(Path(state['run']))[f'q{a.query}-iteration2']
@@ -55,8 +59,9 @@ result = {'devices': devices, 'windows': [], 'limits': [
     'Bytes include whole copies intersecting each window; activity is clipped to the window.',
     'Whole-query, stage-group and individual-stage rows overlap and must not be added together.',
     'Summed copy durations include concurrency and are not query wall time.',
-    'NUMA placement is read from the same host PCI addresses; GPU IDs come from the trace.',
-    'CUDA activity device indicates the recording context; source and destination identify direction.'
+    'CUDA ordinals are process-local; activity devices are mapped through TARGET_INFO_CUDA_DEVICE.',
+    'Foreign IPC peer ordinals absent from the exported device mapping have unknown physical topology.',
+    'Do not interpret raw peer ordinals as physical GPU indices or classify their NUMA placement.'
 ]}
 for label, begin, end in windows:
     grouped = defaultdict(lambda: {'bytes': 0, 'count': 0, 'intervals': [], 'streams': set()})
@@ -67,12 +72,11 @@ for label, begin, end in windows:
         name = kinds[kind]
         if name not in ('Peer-to-Peer', 'Device-to-Device'):
             continue
-        per_device[(name, gpu)].append((max(begin,start), min(end,stop)))
-        topology = 'unknown'
-        if src in devices and dst in devices:
-            topology = ('same-gpu' if src == dst else 'within-numa'
-                        if devices[src]['numa'] == devices[dst]['numa'] else 'across-numa')
-        key = (name, topology, src, dst, gpu)
+        process = (pid >> 24) & 0xffffff
+        physical_gpu = cuda_devices[(process, gpu)]
+        per_device[(name, physical_gpu)].append((max(begin,start), min(end,stop)))
+        topology = 'same-gpu' if name == 'Device-to-Device' else 'unknown-peer'
+        key = (name, topology, src, dst, physical_gpu)
         row = grouped[key]
         row['bytes'] += size
         row['count'] += 1
@@ -80,7 +84,7 @@ for label, begin, end in windows:
         row['streams'].add((pid, stream))
     rows = []
     for (kind, topology, src, dst, gpu), row in sorted(grouped.items()):
-        rows.append(dict(kind=kind, topology=topology, source_device=src, destination_device=dst,
+        rows.append(dict(kind=kind, topology=topology, raw_source_ordinal=src, raw_destination_ordinal=dst,
             activity_device=gpu, bytes=row['bytes'], count=row['count'],
             streams=len(row['streams']), active_seconds=duration(merged(row['intervals'])),
             summed_seconds=sum(stop-start for start,stop in row['intervals'])/1e9))
@@ -92,6 +96,7 @@ for label, begin, end in windows:
         item['summed_seconds'] += row['summed_seconds']
     if label == 'whole-query':
         assert any(row['kind'] == 'Peer-to-Peer' for row in rows), 'Expected peer transfers in Q9'
+        assert len({gpu for (kind,gpu) in per_device}) == 8
     activity = [dict(kind=kind, device=gpu, active_seconds=duration(merged(intervals)))
                 for (kind,gpu), intervals in sorted(per_device.items())]
     result['windows'].append(dict(label=label, wall_seconds=(end-begin)/1e9,

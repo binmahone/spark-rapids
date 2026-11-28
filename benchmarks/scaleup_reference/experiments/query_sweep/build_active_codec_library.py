@@ -17,7 +17,7 @@ from common import read,sha,write
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work',type=Path,required=True)
 p.add_argument('--thread-id',required=True)
-p.add_argument('--action',choices=('configure','reconfigure','configure-toolchain','configure-prefix','baseline','candidate'),required=True)
+p.add_argument('--action',choices=('configure','reconfigure','configure-toolchain','configure-prefix','configure-headers','baseline','candidate'),required=True)
 p.add_argument('--candidate-revision',required=True)
 a=p.parse_args()
 assert read(a.work/'evidence/owner.json')['thread_id']==a.thread_id
@@ -29,8 +29,9 @@ root.mkdir(exist_ok=True)
 state_path=root/(a.action+'-state.json')
 if state_path.exists():
  assert a.action=='baseline' and read(state_path)['status']=='failed'
- shutil.copyfile(state_path,root/'baseline-gcc12-failed-state.json')
- (root/'baseline-build.log').rename(root/'baseline-gcc12-failed-build.log')
+ failure='baseline-failed-'+str(time.time_ns())
+ shutil.copyfile(state_path,root/(failure+'-state.json'))
+ (root/'baseline-build.log').rename(root/(failure+'-build.log'))
 state={'status':'running','action':a.action,'owner_thread':a.thread_id,'started_unix_ns':time.time_ns(),
        'candidate_revision':a.candidate_revision,'commands':[]}
 write(state_path,state)
@@ -40,7 +41,8 @@ def run(command,logname,timeout=900):
  command=list(map(str,command));state['commands'].append(command);write(state_path,state)
  with (root/logname).open('x') as log:
   subprocess.run(command,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=timeout,
-                 env={**os.environ,'CUDACXX':'/usr/local/cuda-13.1/bin/nvcc'})
+                 env={**os.environ,'CUDACXX':'/usr/local/cuda-13.1/bin/nvcc',
+                      'PKG_CONFIG_LIBDIR':str(root/'compiler/lib/pkgconfig')+':'+str(root/'compiler/share/pkgconfig')})
 
 try:
  if a.action=='configure':
@@ -100,6 +102,19 @@ try:
   prior=read(root/'configure-state.json');prior.pop('error',None)
   prior.update(status='completed',commands=[command],compiler_prefix=str(compiler),
                compiler_state=str(state_path),finished_unix_ns=time.time_ns())
+  write(root/'configure-state.json',prior)
+ elif a.action=='configure-headers':
+  assert read(root/'baseline-state.json')['status']=='failed'
+  compiler=root/'compiler'
+  run([root/'micromamba','install','--yes','--no-rc','--root-prefix',root/'mamba-root',
+       '--prefix',compiler,'--channel','conda-forge','brotli-devel=1.2.0'],
+       'compiler-brotli.log',600)
+  command=read(root/'configure-state.json')['commands'][-1]
+  command += ['-U*BROTLI*','-DZLIB_INCLUDE_DIR='+str(compiler/'include'),
+              '-DZLIB_LIBRARY_RELEASE='+str(compiler/'lib/libz.so')]
+  run(command,'configure-headers.log',900)
+  prior=read(root/'configure-state.json');prior.pop('error',None)
+  prior.update(status='completed',commands=[command],compiler_state=str(state_path),finished_unix_ns=time.time_ns())
   write(root/'configure-state.json',prior)
  elif a.action=='reconfigure':
   prior=read(root/'configure-state.json')

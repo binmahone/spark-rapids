@@ -9,9 +9,11 @@ readonly attempt=${4:-0}
 readonly concat_implementation=${5:-}
 readonly timeline_only=${6:-false}
 readonly scan_copy_implementation=${7:-}
+readonly java_ranges=${8:-false}
 extra_args=()
+if [[ "$java_ranges" == true ]]; then extra_args+=(--java-ranges); fi
 if [[ -n "$concat_implementation" ]]; then
-  extra_args=(--concat-implementation "$concat_implementation")
+  extra_args+=(--concat-implementation "$concat_implementation")
 fi
 if [[ "$timeline_only" == true ]]; then extra_args+=(--timeline-only); fi
 if [[ -n "$scan_copy_implementation" ]]; then

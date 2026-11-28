@@ -27,6 +27,7 @@ def main():
     p.add_argument('--concat-implementation', choices=('control', 'candidate'))
     p.add_argument('--scan-copy-implementation', choices=('paced-control', 'paced', 'paced-queued', 'serial-original', 'serial-unlocked', 'serial-locked', 'batch-control', 'batch-scalar', 'batch-paced'))
     p.add_argument('--timeline-only', action='store_true')
+    p.add_argument('--java-ranges', action='store_true')
     a = p.parse_args()
     assert not (a.concat_implementation and a.scan_copy_implementation)
     work = a.work.resolve()
@@ -60,7 +61,7 @@ def main():
     report = {'status': 'starting', 'owner': owner, 'classification': 'Diagnostic profiling; excluded from SOL scores',
               'nsys_session': session, 'source_revision': subprocess.check_output(
                   ['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
-              'start_unix_ns': time.time_ns()}
+              'start_unix_ns': time.time_ns(), 'java_ranges': a.java_ranges}
     write(directory / 'controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),
                                          'start_time': services.start_time(os.getpid())})
     write(directory / 'state.json', report)
@@ -83,6 +84,8 @@ def main():
                sys.executable, str(HERE / 'run_data_path_trace_workload.py'),
                '--work', str(work), '--thread-id', a.thread_id, '--output', str(directory),
                '--variant', a.variant, '--query', str(a.query)]
+    if a.java_ranges:
+        command += ['--java-ranges']
     if a.concat_implementation:
         assert a.variant == 'code-profile'
         command += ['--concat-implementation', a.concat_implementation]
@@ -165,6 +168,15 @@ def main():
         with (directory / 'export.log').open('x') as log:
             subprocess.run(['nsys', 'export', '--type=sqlite', '--output=' + str(directory / (artifact + '.sqlite')),
                             str(trace)], stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
+        if a.java_ranges:
+            import sqlite3
+            db = sqlite3.connect('file:' + str(directory / (artifact + '.sqlite')) + '?mode=ro', uri=True)
+            counts = db.execute("select (n.globalTid >> 24),count(*) from NVTX_EVENTS n "
+                "left join StringIds s on n.textId=s.id where coalesce(n.text,s.value)="
+                "'HybridScan materialize' and n.end is not null group by (n.globalTid >> 24)").fetchall()
+            db.close()
+            assert len(counts) == 8 and all(count > 0 for _, count in counts), counts
+            report['java_reader_range_counts'] = counts
         report['status'] = 'completed'
     except BaseException as error:
         report.update(status='failed', error=repr(error))

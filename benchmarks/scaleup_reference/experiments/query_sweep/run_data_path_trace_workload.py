@@ -26,6 +26,7 @@ p.add_argument('--variant', choices=('control', 'scan-pack', 'scan-split', 'scan
 p.add_argument('--query', type=int, choices=(5, 8, 9, 10, 18, 20), default=8)
 p.add_argument('--concat-implementation', choices=('control', 'candidate'))
 p.add_argument('--scan-copy-implementation', choices=('paced-control', 'paced', 'paced-queued', 'serial-original', 'serial-unlocked', 'serial-locked', 'batch-control', 'batch-scalar', 'batch-paced'))
+p.add_argument('--java-ranges', action='store_true')
 a = p.parse_args()
 assert not (a.concat_implementation and a.scan_copy_implementation)
 assert read(a.work / 'evidence/owner.json')['thread_id'] == a.thread_id
@@ -79,7 +80,7 @@ path, result = launch_group(a.work, 'data-path-trace-' + a.output.name.replace('
     'spark.rapids.shuffle.ucx.bounceBuffers.size': '16m' if a.variant == 'shuffle-buffer' else '4m'},
     experimental_engine=a.work / 'artifacts' / ('shuffle-wait' if a.variant == 'shuffle-wait' else 'decimal-null-copy'),
     runtime_hash_reuse_queries=[9] if a.query == 9 else None,
-    diagnostic_nvtx=not (a.variant.startswith('scan-split-cuda') or a.variant == 'code-profile'),
+    diagnostic_nvtx=a.java_ranges or not (a.variant.startswith('scan-split-cuda') or a.variant == 'code-profile'),
     diagnostic_jvm_options=native_options)
 assert result['status'] == 'completed' and result['driver_exit_code'] == 0
 assert len(result['samples']) == 2 and all(s['validation']['status'] == 'passed' for s in result['samples'])

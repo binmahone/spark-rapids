@@ -1908,7 +1908,7 @@ class RapidsShuffleInternalManagerBase(conf: SparkConf, val isDriver: Boolean)
       throw new IllegalStateException("The ShuffleBufferCatalog is not initialized but the " +
         "RapidsShuffleManager is configured"))
 
-  protected lazy val resolver =
+  protected lazy val resolver: ShuffleBlockResolver =
     if (shouldAlwaysFallBack) {
       wrapped.shuffleBlockResolver
     } else if (rapidsConf.isMultiThreadedShuffleManagerMode) {

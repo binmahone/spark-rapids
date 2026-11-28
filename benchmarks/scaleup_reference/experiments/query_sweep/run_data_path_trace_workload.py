@@ -7,12 +7,13 @@ from dataclasses import replace
 import os
 from pathlib import Path
 import signal
+import subprocess
 import sys
 import time
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
-from common import read, write
+from common import read, sha, write
 from critical_path_variants import controls
 from run_screen import launch_group
 import services
@@ -23,6 +24,7 @@ p.add_argument('--thread-id', required=True)
 p.add_argument('--output', required=True, type=Path)
 p.add_argument('--variant', choices=('control', 'scan-pack', 'scan-split', 'scan-split-cuda', 'scan-split-cuda2', 'shuffle-buffer', 'shuffle-wait', 'code-profile'), default='control')
 p.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
+p.add_argument('--concat-implementation', choices=('control', 'candidate'))
 a = p.parse_args()
 assert read(a.work / 'evidence/owner.json')['thread_id'] == a.thread_id
 write(a.output / 'workload-controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),
@@ -42,6 +44,16 @@ if a.variant in ('scan-split', 'scan-split-cuda', 'scan-split-cuda2'):
 native = a.work / 'native-concat/lib'
 native_options = ('-Dai.rapids.cudf.lib-native-dir=' + str(native)
                   if a.variant == 'code-profile' and native.is_dir() else None)
+if a.concat_implementation:
+    assert a.variant == 'code-profile' and native_options
+    root = native.parent
+    assert (root / 'build.exit').read_text().strip() == '0'
+    subprocess.run(['sha256sum', '--check', str(root / 'agent.sha256')], check=True)
+    native_options += (f' -javaagent:{root}/concat-offset-probe.jar={a.concat_implementation},'
+                       f'{native}/libconcat_offsets_probe.so')
+    write(a.output / 'native-probe.json', {'mode': a.concat_implementation,
+        'agent_sha256': sha(root / 'concat-offset-probe.jar'),
+        'library_sha256': sha(native / 'libconcat_offsets_probe.so')})
 path, result = launch_group(a.work, 'data-path-trace-' + a.output.name.replace('-process-tree', ''),
     0, [selected], {
     'spark.rapids.sql.reader.kvikio.numThreads': '32',

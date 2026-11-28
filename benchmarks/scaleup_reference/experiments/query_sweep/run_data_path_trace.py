@@ -24,6 +24,7 @@ def main():
     p.add_argument('--variant', choices=('control', 'scan-pack', 'scan-split', 'scan-split-cuda', 'scan-split-cuda2', 'shuffle-buffer', 'shuffle-wait', 'code-profile'), default='control')
     p.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
     p.add_argument('--attempt', type=int, default=0)
+    p.add_argument('--concat-implementation', choices=('control', 'candidate'))
     a = p.parse_args()
     work = a.work.resolve()
     owner = read(work / 'evidence/owner.json')
@@ -32,6 +33,9 @@ def main():
     build_record = work / 'evidence/shuffle-wait-build-service.json'
     if build_record.exists():
         assert not any(services.group_members(r) for r in read(build_record)), 'Build must finish before measurement'
+    native_build = work / 'evidence/native-concat-build-service.json'
+    if native_build.exists():
+        assert not any(services.group_members(r) for r in read(native_build))
     assert not subprocess.check_output(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader'], text=True).strip()
     suffix = '-' + a.variant
     assert a.attempt >= 0
@@ -76,6 +80,9 @@ def main():
                sys.executable, str(HERE / 'run_data_path_trace_workload.py'),
                '--work', str(work), '--thread-id', a.thread_id, '--output', str(directory),
                '--variant', a.variant, '--query', str(a.query)]
+    if a.concat_implementation:
+        assert a.variant == 'code-profile'
+        command += ['--concat-implementation', a.concat_implementation]
     env = dict(os.environ)
     if a.variant == 'code-profile':
         temporary = directory / 'tmp'

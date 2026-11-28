@@ -67,6 +67,16 @@ def main():
                 'scan_summed_task_seconds': {key: sum(n['metrics'].get(key, 0)
                     for n in sample['plan_metrics'] if n['node'].startswith('GpuScan')) / 1e9
                     for key in ('bufferTime', 'gpuDecodeTime', 'opTimeNew', 'opTimeNew_exSemWait')},
+                'shuffle_exchanges': [
+                    {'node': n['node'], 'bytes_written': n['metrics'].get('shuffleBytesWritten', 0),
+                     'rows_written': n['metrics'].get('shuffleRecordsWritten', 0),
+                     'queue_wait_summed_task_seconds': n['metrics'].get('fetchWaitTime', 0) / 1e3,
+                     'read_ex_sem_wait_summed_task_seconds': n['metrics'].get('opTimeNewShuffleRead_exSemWait', 0) / 1e9,
+                     'read_summed_task_seconds': n['metrics'].get('opTimeNewShuffleRead', 0) / 1e9}
+                    for n in sample['plan_metrics'] if 'shuffleBytesWritten' in n['metrics']],
+                'coalesce_ex_sem_wait_summed_task_seconds': sum(
+                    n['metrics'].get('opTimeNew_exSemWait', 0) for n in sample['plan_metrics']
+                    if n['node'] == 'GpuCoalesceBatches') / 1e9,
                 'scheduler_overlap': scheduler_overlap(app, q, slots)})
     assert all(c == configs[0] for c in configs), 'Configuration differences exceed the selected data-path setting'
     assert all(p == profiles[0] for p in profiles), 'Effective query profiles differ'

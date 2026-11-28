@@ -16,13 +16,14 @@ p.add_argument('--work', type=Path, required=True)
 p.add_argument('--thread-id', required=True)
 p.add_argument('--label', required=True)
 p.add_argument('--mutation', action='store_true')
+p.add_argument('--support-dir', type=Path)
 a = p.parse_args()
 assert json.loads((a.work / 'evidence/owner.json').read_text())['thread_id'] == a.thread_id
 assert not subprocess.check_output(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader'], text=True).strip()
 assert a.label.replace('-', '').isalnum()
 out = a.work / 'code-profile' / a.label
 out.mkdir(exist_ok=False)
-support = a.work / 'packed-view-tests'
+support = a.support_dir or a.work / 'packed-view-tests'
 manifest = json.loads((support / 'manifest.json').read_text())
 for name, digest in manifest['sha256'].items():
     assert hashlib.sha256((support / name).read_bytes()).hexdigest() == digest

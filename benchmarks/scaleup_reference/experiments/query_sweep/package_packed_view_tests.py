@@ -21,7 +21,7 @@ p.add_argument('--output', type=Path, required=True)
 a = p.parse_args()
 a.output.mkdir(exist_ok=False)
 revision = subprocess.check_output(['git', '-C', str(a.cudf_source), 'rev-parse', 'HEAD'], text=True).strip()
-assert revision == '32218d4495e035b4b10034d7a13f38f8c0143dd0'
+assert revision == 'ce2c4e471601e207cc5ca2e513fefba3105f0f52'
 for directory, name, suffix in [('java/target/test-classes', 'tests.jar', '*.class'),
                                 ('java/src/test/resources', 'test-resources.zip', '*')]:
     base = a.cudf_source / directory

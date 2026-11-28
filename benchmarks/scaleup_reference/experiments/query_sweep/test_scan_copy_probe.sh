@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Licensed under the Apache License, Version 2.0.
+set -euo pipefail
+readonly work=${1:?Prepared work directory}
+readonly root="$work/native-scan-copy"
+[[ $(cat "$root/build.exit") == 0 ]]
+[[ -z $(nvidia-smi --query-compute-apps=pid --format=csv,noheader) ]]
+sha256sum --check "$root/artifacts.sha256"
+export CUDA_VISIBLE_DEVICES
+CUDA_VISIBLE_DEVICES=$(nvidia-smi --id=0 --query-gpu=uuid --format=csv,noheader)
+for mode in original sync pair; do
+  "$work/jdk17/bin/java" -Dai.rapids.cudf.lib-native-dir="$work/native-concat/lib" \
+    -javaagent:"$root/scan-copy-probe.jar=$mode,$root/libscan_copy_probe.so,$root/gpu-pairs.properties,$root/leases" \
+    -cp "$root/scan-copy-probe.jar:$work/artifacts/decimal-null-copy/cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar" \
+    com.nvidia.spark.rapids.experiments.ScanCopyProbeTest 2>&1 | tee "$root/test-$mode.log"
+done

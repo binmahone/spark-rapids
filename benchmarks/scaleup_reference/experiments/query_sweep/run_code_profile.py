@@ -31,6 +31,7 @@ def main():
     p.add_argument('--queries', default='8,18,5')
     p.add_argument('--nvcomp-policy', choices=('STABLE', 'OFF'))
     p.add_argument('--concat-implementation', choices=('control', 'candidate'))
+    p.add_argument('--scan-copy-implementation', choices=('original', 'sync', 'pair'))
     a = p.parse_args()
     assert a.label.replace('-', '').replace('_', '').isalnum()
     owner = read(a.work / 'evidence/owner.json')
@@ -64,6 +65,21 @@ def main():
                  f'-javaagent:{native}/concat-offset-probe.jar={a.concat_implementation},'
                  f'{native}/lib/libconcat_offsets_probe.so')
         options = (options + ' ' if options else '') + agent
+    scan_copy = None
+    if a.scan_copy_implementation:
+        assert not a.concat_implementation, 'Keep native experiments isolated'
+        native = a.work / 'native-scan-copy'
+        assert (native / 'build.exit').read_text().strip() == '0'
+        subprocess.run(['sha256sum', '--check', str(native / 'artifacts.sha256')], check=True)
+        scan_copy = {'implementation': a.scan_copy_implementation,
+                     'agent_sha256': sha(native / 'scan-copy-probe.jar'),
+                     'library_sha256': sha(native / 'libscan_copy_probe.so'),
+                     'manifest': read(native / 'manifest.json'),
+                     'pair_mapping': read(native / 'gpu-pairs.json')}
+        agent = (f'-Dai.rapids.cudf.lib-native-dir={a.work}/native-concat/lib '
+                 f'-javaagent:{native}/scan-copy-probe.jar={a.scan_copy_implementation},'
+                 f'{native}/libscan_copy_probe.so,{native}/gpu-pairs.properties,{native}/leases')
+        options = (options + ' ' if options else '') + agent
     selected = controls()
     queries = list(ORDER) if a.queries == 'all' else [int(q) for q in a.queries.split(',')]
     assert queries and len(queries) == len(set(queries)) and set(queries) <= set(ORDER)
@@ -74,6 +90,7 @@ def main():
                 'spark.rapids.sql.join.hashTable.reuse': 'false'}) for q in queries]
     state = {'status': 'running', 'owner': owner, 'mode': a.mode, 'profiler': profiler,
              'concat_probe': concat,
+             'scan_copy_probe': scan_copy,
              'queries': queries, 'nvcomp_policy': a.nvcomp_policy,
              'scratch': str(scratch), 'started_unix_ns': time.time_ns(),
              'classification': 'Code-path diagnosis; profiler times are not benchmark scores',
@@ -135,6 +152,20 @@ def main():
                     'shutdown_counters': list(match.groups()) if match else None})
             assert len(proof) == 8
             concat['runtime_proof'] = proof
+        if scan_copy:
+            logs = Path(read(a.work / 'evidence/deployment.json')['scratch_root']) / run.name / 'suite'
+            mode = {'original': 0, 'sync': 1, 'pair': 2}[a.scan_copy_implementation]
+            proof = []
+            for stderr in logs.glob('worker-*/work/*/*/stderr'):
+                content = stderr.read_text()
+                assert f'SCAN_COPY_NATIVE_ENTER mode={mode}' in content
+                if mode:
+                    assert f'SCAN_COPY_ADMITTED mode={mode}' in content
+                    assert f'SCAN_COPY_COMPLETED mode={mode}' in content
+                proof.append({'stderr': str(stderr), 'mode': mode,
+                              'large_copy_completed': bool(mode)})
+            assert len(proof) == 8
+            scan_copy['runtime_proof'] = proof
         assert all(child.poll() is None for child, _ in children), 'An observer exited during the workload'
         pools = {}
         decoder_policies = {}

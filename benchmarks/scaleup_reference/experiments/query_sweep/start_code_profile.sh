@@ -9,12 +9,16 @@ readonly mode=${4:?control or stacks}
 readonly queries=${5:-8,18,5}
 readonly nvcomp_policy=${6:-}
 readonly concat_implementation=${7:-}
+readonly scan_copy_implementation=${8:-}
 decoder_args=()
 if [[ -n "$nvcomp_policy" ]]; then
   decoder_args=(--nvcomp-policy "$nvcomp_policy")
 fi
 if [[ -n "$concat_implementation" ]]; then
   decoder_args+=(--concat-implementation "$concat_implementation")
+fi
+if [[ -n "$scan_copy_implementation" ]]; then
+  decoder_args+=(--scan-copy-implementation "$scan_copy_implementation")
 fi
 readonly here=$(cd "$(dirname "$0")" && pwd)
 [[ ! -e "$work/evidence/code-profile-$label.log" ]] || exit 1

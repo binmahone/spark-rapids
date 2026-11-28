@@ -13,7 +13,7 @@ import time
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
-from common import read, write
+from common import read, sha, write
 import services
 
 
@@ -30,9 +30,11 @@ def main():
     p.add_argument('--java-ranges', action='store_true')
     p.add_argument('--pinned-copy-threshold', type=int, choices=(0, 65536))
     p.add_argument('--kernel-proof-window', action='store_true')
+    p.add_argument('--wall-stacks', action='store_true')
     a = p.parse_args()
     assert not (a.concat_implementation and a.scan_copy_implementation)
     assert not a.kernel_proof_window or (a.timeline_only and a.pinned_copy_threshold is not None and not a.java_ranges)
+    assert not a.wall_stacks or (a.kernel_proof_window and a.variant == 'code-profile')
     work = a.work.resolve()
     owner = read(work / 'evidence/owner.json')
     assert owner['thread_id'] == a.thread_id
@@ -65,7 +67,8 @@ def main():
               'nsys_session': session, 'source_revision': subprocess.check_output(
                   ['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
               'full_sql_trace': not a.kernel_proof_window,
-              'start_unix_ns': time.time_ns(), 'java_ranges': a.java_ranges, 'pinned_copy_threshold': a.pinned_copy_threshold}
+              'start_unix_ns': time.time_ns(), 'java_ranges': a.java_ranges,
+              'wall_stacks': a.wall_stacks, 'pinned_copy_threshold': a.pinned_copy_threshold}
     write(directory / 'controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),
                                          'start_time': services.start_time(os.getpid())})
     write(directory / 'state.json', report)
@@ -93,6 +96,8 @@ def main():
                '--variant', a.variant, '--query', str(a.query)]
     if a.pinned_copy_threshold is not None:
         command += ['--pinned-copy-threshold', str(a.pinned_copy_threshold)]
+    if a.wall_stacks:
+        command += ['--wall-stacks']
     if a.java_ranges:
         command += ['--java-ranges']
     if a.concat_implementation:
@@ -172,6 +177,11 @@ def main():
         report['result'] = {k: result[k] for k in ('status', 'driver_exit_code', 'samples')}
         assert result['status'] == 'completed' and result['driver_exit_code'] == 0
         assert len(result['samples']) == 2 and all(s['validation']['status'] == 'passed' for s in result['samples'])
+        if a.wall_stacks:
+            profiles = sorted(directory.glob('profile-*.jfr'))
+            assert len(profiles) == 9 and all(path.stat().st_size > 1024 for path in profiles)
+            report['profiles'] = [{'path': str(path), 'bytes': path.stat().st_size,
+                                   'sha256': sha(path)} for path in profiles]
         if not a.kernel_proof_window:
             assert (workload['end_unix_ns'] - read(directory / 'nsys-ready.json')['time_unix_ns']) / 1e9 < duration
         stop_profiler()

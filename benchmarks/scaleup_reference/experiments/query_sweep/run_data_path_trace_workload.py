@@ -28,6 +28,7 @@ p.add_argument('--concat-implementation', choices=('control', 'candidate'))
 p.add_argument('--scan-copy-implementation', choices=('paced-control', 'paced', 'paced-queued', 'serial-original', 'serial-unlocked', 'serial-locked', 'batch-control', 'batch-scalar', 'batch-paced'))
 p.add_argument('--java-ranges', action='store_true')
 p.add_argument('--pinned-copy-threshold', type=int, choices=(0, 65536))
+p.add_argument('--wall-stacks', action='store_true')
 a = p.parse_args()
 assert not (a.concat_implementation and a.scan_copy_implementation)
 assert read(a.work / 'evidence/owner.json')['thread_id'] == a.thread_id
@@ -48,6 +49,14 @@ if a.variant in ('scan-split', 'scan-split-cuda', 'scan-split-cuda2'):
 native = a.work / 'native-concat/lib'
 native_options = ('-Dai.rapids.cudf.lib-native-dir=' + str(native)
                   if a.variant == 'code-profile' and native.is_dir() else None)
+if a.wall_stacks:
+    assert a.variant == 'code-profile' and not a.java_ranges
+    profiler = read(a.work / 'profilers/manifest.json')
+    assert sha(Path(profiler['library'])) == profiler['library_sha256']
+    options = (f"-agentpath:{profiler['library']}=start,event=cpu,interval=10ms,wall=20ms,"
+               f"cstack=dwarf,jstackdepth=256,timeout=900,file={a.output}/profile-%p.jfr,log=stderr")
+    native_options = (native_options + ' ' if native_options else '') + options
+    write(a.output / 'wall-profiler.json', profiler)
 if a.concat_implementation:
     assert a.variant == 'code-profile' and native_options
     root = native.parent

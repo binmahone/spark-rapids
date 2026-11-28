@@ -12,7 +12,9 @@ readonly scan_copy_implementation=${7:-}
 readonly java_ranges=${8:-false}
 readonly pinned_copy_threshold=${9:-}
 readonly kernel_proof_window=${10:-false}
+readonly wall_stacks=${11:-false}
 extra_args=()
+if [[ "$wall_stacks" == true ]]; then extra_args+=(--wall-stacks); fi
 if [[ "$kernel_proof_window" == true ]]; then extra_args+=(--kernel-proof-window); fi
 if [[ -n "$pinned_copy_threshold" ]]; then extra_args+=(--pinned-copy-threshold "$pinned_copy_threshold"); fi
 if [[ "$java_ranges" == true ]]; then extra_args+=(--java-ranges); fi

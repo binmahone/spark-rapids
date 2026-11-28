@@ -21,7 +21,7 @@ p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work', required=True, type=Path)
 p.add_argument('--thread-id', required=True)
 p.add_argument('--output', required=True, type=Path)
-p.add_argument('--variant', choices=('control', 'scan-pack', 'shuffle-buffer', 'shuffle-wait'), default='control')
+p.add_argument('--variant', choices=('control', 'scan-pack', 'scan-split', 'shuffle-buffer', 'shuffle-wait'), default='control')
 p.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
 a = p.parse_args()
 assert read(a.work / 'evidence/owner.json')['thread_id'] == a.thread_id
@@ -36,6 +36,9 @@ assert (a.work / 'evidence/prepare.exit').read_text().strip() == '0'
 selected = controls()[a.query]
 selected = replace(selected, overrides={**selected.overrides,
     'spark.rapids.sql.join.hashTable.reuse': 'false'})
+if a.variant == 'scan-split':
+    selected = replace(selected, overrides={**selected.overrides,
+        'spark.sql.files.maxPartitionBytes': '1g'})
 path, result = launch_group(a.work, 'data-path-trace-Q' + str(a.query) + '-' + a.variant,
     0, [selected], {
     'spark.rapids.sql.reader.kvikio.numThreads': '32',

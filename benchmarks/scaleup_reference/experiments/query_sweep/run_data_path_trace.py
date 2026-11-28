@@ -21,7 +21,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', type=Path, required=True)
     p.add_argument('--thread-id', required=True)
-    p.add_argument('--variant', choices=('control', 'scan-pack', 'shuffle-buffer', 'shuffle-wait'), default='control')
+    p.add_argument('--variant', choices=('control', 'scan-pack', 'scan-split', 'shuffle-buffer', 'shuffle-wait'), default='control')
     p.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
     a = p.parse_args()
     work = a.work.resolve()

@@ -25,7 +25,7 @@ def duration(intervals):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', type=Path, required=True)
-    parser.add_argument('--variant', choices=('control', 'scan-pack', 'shuffle-buffer', 'shuffle-wait'), default='control')
+    parser.add_argument('--variant', choices=('control', 'scan-pack', 'scan-split', 'shuffle-buffer', 'shuffle-wait'), default='control')
     parser.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
     args = parser.parse_args()
     trace = args.work / ('data-path-trace/Q' + str(args.query) + '-process-tree-' + args.variant)

@@ -21,7 +21,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', type=Path, required=True)
     p.add_argument('--thread-id', required=True)
-    p.add_argument('--variant', choices=('control', 'scan-pack', 'scan-split', 'scan-split-cuda', 'scan-split-cuda2', 'shuffle-buffer', 'shuffle-wait'), default='control')
+    p.add_argument('--variant', choices=('control', 'scan-pack', 'scan-split', 'scan-split-cuda', 'scan-split-cuda2', 'shuffle-buffer', 'shuffle-wait', 'code-profile'), default='control')
     p.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
     a = p.parse_args()
     work = a.work.resolve()
@@ -36,7 +36,14 @@ def main():
     label = 'Q' + str(a.query)
     artifact = 'q' + str(a.query)
     directory = work / ('data-path-trace/' + label + '-process-tree' + suffix)
-    directory.mkdir(parents=True, exist_ok=False)
+    if a.variant == 'code-profile':
+        scratch = Path(read(work / 'evidence/deployment.json')['scratch_root']) / 'cuda-code-profiles' / label
+        scratch.mkdir(parents=True, exist_ok=False)
+        assert subprocess.check_output(['findmnt', '-no', 'TARGET', '-T', str(scratch)], text=True).strip() != '/'
+        directory.parent.mkdir(exist_ok=True)
+        directory.symlink_to(scratch, target_is_directory=True)
+    else:
+        directory.mkdir(parents=True, exist_ok=False)
     space = os.statvfs(directory)
     assert space.f_bavail * space.f_frsize > 15 * 2**30
     session = 'data-path-' + a.thread_id + '-' + artifact + '-tree' + suffix
@@ -53,14 +60,23 @@ def main():
         signal.signal(sig, interrupt)
     signal.alarm(900)
     ready = shlex.join([sys.executable, str(HERE / 'record_scan_trace_ready.py'), str(directory), session])
+    sampling = (['--sample=process-tree', '--cpuctxsw=process-tree', '--backtrace=dwarf',
+                 '--cudabacktrace=sync:100000,memory:100000'] if a.variant == 'code-profile'
+                else ['--sample=none', '--cpuctxsw=none'])
     command = ['nsys', 'profile', '--trace=cuda,nvtx', '--cuda-trace-scope=process-tree',
-               '--sample=none', '--cpuctxsw=none', '--duration=240', '--stop-on-exit=true',
+               *sampling, '--duration=240', '--stop-on-exit=true',
                '--kill=none', '--session-new=' + session, '--output=' + str(directory / artifact),
                '--after-collection-start=' + ready,
                sys.executable, str(HERE / 'run_data_path_trace_workload.py'),
                '--work', str(work), '--thread-id', a.thread_id, '--output', str(directory),
                '--variant', a.variant, '--query', str(a.query)]
-    profiler, profiler_record = services.launch(command, directory / 'nsys.log', dict(os.environ))
+    env = dict(os.environ)
+    if a.variant == 'code-profile':
+        temporary = directory / 'tmp'
+        temporary.mkdir()
+        env['TMPDIR'] = str(temporary.resolve())
+        report['profiler_tmpdir'] = env['TMPDIR']
+    profiler, profiler_record = services.launch(command, directory / 'nsys.log', env)
     report['profiler'] = profiler_record
     report['profiler_command'] = command
     write(directory / 'profiler-service.json', [profiler_record])
@@ -107,6 +123,8 @@ def main():
             assert time.monotonic() < deadline, 'Profiled workload did not finish'
             space = os.statvfs(directory)
             assert space.f_bavail * space.f_frsize > 20 * 2**30, 'Profiler storage reserve exhausted'
+            root_space = os.statvfs('/')
+            assert root_space.f_bavail * root_space.f_frsize > 20 * 2**30, 'Root storage reserve exhausted'
             controller = directory / 'workload-controller.json'
             if controller.exists():
                 record = read(controller)

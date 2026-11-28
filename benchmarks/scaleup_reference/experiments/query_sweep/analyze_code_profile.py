@@ -20,6 +20,7 @@ output = directory / 'analysis'
 output.mkdir(exist_ok=True)
 summary = {'limits': ['Sample counts are not a decomposition of SQL wall time.',
     'Inclusive frames overlap; idle background threads must be separated from task critical paths.',
+    'Thread names may reflect later tasks; stage attribution requires timestamps and Spark events.',
     'CPU and wall samples are separate populations and cannot be added.'], 'windows': []}
 for sample in state['result']['samples']:
     window = {'query': sample['query'], 'iteration': sample['iteration'], 'sql_seconds': sample['sql_seconds']}
@@ -41,7 +42,7 @@ for sample in state['result']['samples']:
             leaves[frames[-1]] += count
             for frame in set(frames[1:]):
                 all_frames[frame] += count
-            if 'Executor task launch worker' in frames[0]:
+            if 'org/apache/spark/executor/Executor$TaskRunner.run' in stack:
                 task_total += count
                 task_leaves[frames[-1]] += count
                 for frame in set(frames[1:]):
@@ -50,7 +51,9 @@ for sample in state['result']['samples']:
         window[mode] = {'total_samples': total, 'task_samples': task_total,
             'threads': threads.most_common(30), 'leaves': leaves.most_common(35),
             'inclusive_frames': all_frames.most_common(60),
-            'task_inclusive_frames': task_frames.most_common(70), 'task_leaves': task_leaves.most_common(45)}
+            'task_inclusive_frames': task_frames.most_common(70), 'task_leaves': task_leaves.most_common(45),
+            'domain_inclusive_frames': [(frame, count) for frame, count in all_frames.most_common()
+                if any(term in frame for term in ('com/nvidia/', 'ai/rapids/', 'cudf::', 'kvikio::', 'rmm::', 'ucp_', 'uct_', 'ucs_'))][:100]}
     summary['windows'].append(window)
 (output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
 print(json.dumps([{k: row[k] for k in ('query', 'iteration', 'sql_seconds')} for row in summary['windows']]))

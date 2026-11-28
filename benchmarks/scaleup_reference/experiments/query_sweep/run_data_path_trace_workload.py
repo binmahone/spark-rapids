@@ -21,7 +21,7 @@ p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work', required=True, type=Path)
 p.add_argument('--thread-id', required=True)
 p.add_argument('--output', required=True, type=Path)
-p.add_argument('--variant', choices=('control', 'scan-pack', 'shuffle-buffer'), default='control')
+p.add_argument('--variant', choices=('control', 'scan-pack', 'shuffle-buffer', 'shuffle-wait'), default='control')
 p.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
 a = p.parse_args()
 assert read(a.work / 'evidence/owner.json')['thread_id'] == a.thread_id
@@ -34,17 +34,17 @@ for sig in (signal.SIGTERM, signal.SIGINT):
 started = time.time_ns()
 assert (a.work / 'evidence/prepare.exit').read_text().strip() == '0'
 selected = controls()[a.query]
-if a.query == 9:
-    selected = replace(selected, overrides={**selected.overrides,
-        'spark.rapids.sql.join.hashTable.reuse': 'false'})
+selected = replace(selected, overrides={**selected.overrides,
+    'spark.rapids.sql.join.hashTable.reuse': 'false'})
 path, result = launch_group(a.work, 'data-path-trace-Q' + str(a.query) + '-' + a.variant,
     0, [selected], {
     'spark.rapids.sql.reader.kvikio.numThreads': '32',
     'spark.rapids.sql.metrics.level': 'DEBUG',
+    'spark.task.resource.gpu.amount': '0.25',
     'spark.rapids.shuffle.compression.codec': 'none',
     'spark.rapids.sql.format.parquet.hybridScan.maxH2DPackSize': '128m' if a.variant == 'scan-pack' else '32m',
     'spark.rapids.shuffle.ucx.bounceBuffers.size': '16m' if a.variant == 'shuffle-buffer' else '4m'},
-    experimental_engine=a.work / 'artifacts/decimal-null-copy',
+    experimental_engine=a.work / 'artifacts' / ('shuffle-wait' if a.variant == 'shuffle-wait' else 'decimal-null-copy'),
     runtime_hash_reuse_queries=[9] if a.query == 9 else None)
 write(a.output / 'workload.json', {'run': str(path), 'start_unix_ns': started,
                                   'end_unix_ns': time.time_ns(), 'result': result})

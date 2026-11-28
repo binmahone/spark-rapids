@@ -14,7 +14,7 @@ from verify_slot_overlap import scheduler_overlap
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', type=Path, required=True)
-    parser.add_argument('--family', choices=('scan-pack', 'shuffle-buffer'), required=True)
+    parser.add_argument('--family', choices=('scan-pack', 'shuffle-buffer', 'shuffle-wait'), required=True)
     parser.add_argument('--phases', nargs='+', default=['A0', 'B1', 'B2', 'A3'])
     args = parser.parse_args()
     rows = []
@@ -32,19 +32,23 @@ def main():
         kind = 'candidate' if state['candidate'] else 'control'
         identities.setdefault(kind, config['engine_sha256'])
         assert identities[kind] == config['engine_sha256']
-        assert config['engine_sha256'] == 'ec38a58426e662ce99a433e806a66fa927bb011c014465a5df0b0c31ded4d1cc'
+        if args.family != 'shuffle-wait' or not state['candidate']:
+            assert config['engine_sha256'] == 'ec38a58426e662ce99a433e806a66fa927bb011c014465a5df0b0c31ded4d1cc'
         slots = state['slots_per_executor']
         assert slots == 4
         assert config['spark_conf']['spark.task.resource.gpu.amount'] == '0.25'
         changed_key = state['changed_key']
-        expected = state['overrides'][changed_key]
-        assert config['spark_conf'][changed_key] == expected
-        config['spark_conf'][changed_key] = '<experimental-setting>'
-        configs.append(config)
+        if changed_key:
+            expected = state['overrides'][changed_key]
+            assert config['spark_conf'][changed_key] == expected
+            config['spark_conf'][changed_key] = '<experimental-setting>'
+        excluded = {'engine', 'engine_sha256', 'experimental_engine_manifest'} if args.family == 'shuffle-wait' else set()
+        configs.append({k: v for k, v in config.items() if k not in excluded})
         profile = json.loads((run / 'profiles.json').read_text())
         for entries in profile.values():
-            assert entries[changed_key] == expected
-            entries[changed_key] = '<experimental-setting>'
+            if changed_key:
+                assert entries[changed_key] == expected
+                entries[changed_key] = '<experimental-setting>'
             for key, value in entries.items():
                 if isinstance(value, str):
                     entries[key] = value.replace(config['engine'], '<engine>').replace(run.name, '<run>')
@@ -66,6 +70,8 @@ def main():
                 'scheduler_overlap': scheduler_overlap(app, q, slots)})
     assert all(c == configs[0] for c in configs), 'Configuration differences exceed the selected data-path setting'
     assert all(p == profiles[0] for p in profiles), 'Effective query profiles differ'
+    if args.family == 'shuffle-wait':
+        assert identities['candidate'] != identities['control']
     decisions = []
     for query in sorted({r['query'] for r in rows}):
         group = [r for r in rows if r['query'] == query]

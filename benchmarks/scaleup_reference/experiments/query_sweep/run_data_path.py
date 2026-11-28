@@ -26,13 +26,16 @@ def main():
     parser.add_argument('--work', type=Path, required=True)
     parser.add_argument('--thread-id', required=True)
     parser.add_argument('--phase', choices=('A0', 'B1', 'B2', 'A3', 'full-B1', 'full-A2'), required=True)
-    parser.add_argument('--family', choices=('scan-pack', 'shuffle-buffer'), required=True)
+    parser.add_argument('--family', choices=('scan-pack', 'shuffle-buffer', 'shuffle-wait'), required=True)
     parser.add_argument('--queries')
     args = parser.parse_args()
     work = args.work
     owner = read(work / 'evidence/owner.json')
     assert owner['thread_id'] == args.thread_id
     assert (work / 'evidence/prepare.exit').read_text().strip() == '0'
+    build_record = work / 'evidence/shuffle-wait-build-service.json'
+    if build_record.exists():
+        assert not any(services.group_members(r) for r in read(build_record)), 'Build must finish before measurement'
     assert not subprocess.check_output(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader'], text=True).strip()
     assert Path('/proc/sys/vm/watermark_scale_factor').read_text().strip() == '10'
     assert int(Path('/sys/kernel/mm/lru_gen/enabled').read_text().strip(), 0) == 7
@@ -52,20 +55,24 @@ def main():
         q7 = cases()[0]
         selected[7] = replace(q7, overrides={**selected[7].overrides, **q7.overrides})
     candidate = 'B' in args.phase
-    engine = work / 'artifacts/decimal-null-copy'
+    engine = work / 'artifacts' / ('shuffle-wait' if candidate and args.family == 'shuffle-wait' else 'decimal-null-copy')
+    if args.family == 'shuffle-wait':
+        assert (work / 'shuffle-wait-build/build.exit').read_text().strip() == '0'
     slots = 4
     overrides = {
         'spark.rapids.sql.format.parquet.hybridScan.maxH2DPackSize': '32m',
         'spark.rapids.shuffle.ucx.bounceBuffers.size': '4m'}
     changed_key = ('spark.rapids.sql.format.parquet.hybridScan.maxH2DPackSize'
                    if args.family == 'scan-pack' else 'spark.rapids.shuffle.ucx.bounceBuffers.size')
-    if candidate:
+    if args.family == 'shuffle-wait':
+        changed_key = None
+    elif candidate:
         overrides[changed_key] = '128m' if args.family == 'scan-pack' else '16m'
     state = {'status': 'running', 'owner': owner, 'candidate': candidate, 'slots_per_executor': slots, 'queries': queries,
              'family': args.family, 'changed_key': changed_key, 'overrides': overrides,
              'source_revision': subprocess.check_output(['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
              'start_unix_ns': time.time_ns(), 'observers': [],
-             'classification': 'Data path granularity experiment; identical engine, SQL, task slots and dynamic GPU admission; no compression; 32 native read threads',
+             'classification': 'Single-variable data path experiment; identical SQL, task slots and dynamic GPU admission; no compression; 32 native read threads',
              'gate': 'Worst candidate second-action SQL must beat best control by 3%, with no SQL+cleanup regression; full suite required for total score'}
     write(directory / 'state.json', state)
     def interrupt(signum, frame):

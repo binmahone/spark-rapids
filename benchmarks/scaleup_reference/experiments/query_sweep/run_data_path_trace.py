@@ -21,13 +21,16 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', type=Path, required=True)
     p.add_argument('--thread-id', required=True)
-    p.add_argument('--variant', choices=('control', 'scan-pack', 'shuffle-buffer'), default='control')
+    p.add_argument('--variant', choices=('control', 'scan-pack', 'shuffle-buffer', 'shuffle-wait'), default='control')
     p.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
     a = p.parse_args()
     work = a.work.resolve()
     owner = read(work / 'evidence/owner.json')
     assert owner['thread_id'] == a.thread_id
     assert (work / 'evidence/prepare.exit').read_text().strip() == '0'
+    build_record = work / 'evidence/shuffle-wait-build-service.json'
+    if build_record.exists():
+        assert not any(services.group_members(r) for r in read(build_record)), 'Build must finish before measurement'
     assert not subprocess.check_output(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader'], text=True).strip()
     suffix = '-' + a.variant
     label = 'Q' + str(a.query)

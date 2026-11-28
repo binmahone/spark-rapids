@@ -17,7 +17,7 @@ import services
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work', type=Path, required=True)
 p.add_argument('--thread-id', required=True)
-p.add_argument('--family', choices=('scan-pack', 'shuffle-buffer'), required=True)
+p.add_argument('--family', choices=('scan-pack', 'shuffle-buffer', 'shuffle-wait'), required=True)
 a = p.parse_args()
 assert read(a.work / 'evidence/owner.json')['thread_id'] == a.thread_id
 directory = a.work / 'data-path' / (a.family + '-matrix')

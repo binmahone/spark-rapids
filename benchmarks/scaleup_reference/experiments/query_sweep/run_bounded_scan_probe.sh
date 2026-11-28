@@ -10,7 +10,7 @@ readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly output="$work/bounded-scan/$label"
 readonly engine="$work/artifacts/decimal-null-copy/cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar"
 [[ "$label" =~ ^[a-zA-Z0-9_-]+$ ]]
-[[ "$kind" == timing || "$kind" == ncu || "$kind" == timeline ]]
+[[ "$kind" == timing || "$kind" == ncu || "$kind" == timeline || "$kind" == stacks ]]
 [[ -z $(nvidia-smi --query-compute-apps=pid --format=csv,noheader) ]]
 [[ $(sha256sum "$engine" | cut -d ' ' -f 1) == ec38a58426e662ce99a433e806a66fa927bb011c014465a5df0b0c31ded4d1cc ]]
 mkdir -p "$work/bounded-scan"
@@ -30,8 +30,20 @@ export CUDA_VISIBLE_DEVICES
 CUDA_VISIBLE_DEVICES=$(nvidia-smi --id=0 --query-gpu=uuid --format=csv,noheader)
 export LIBCUDF_NVCOMP_POLICY=STABLE
 readonly dataset=/opt/dlami/nvme/daily-trend-hardened/dataset/lineitem/lineitem.1.parquet
+profile_options=()
+if [[ "$kind" == stacks ]]; then
+  profiler=$(python3 - "$work/profilers/manifest.json" <<'PY'
+import hashlib, json, pathlib, sys
+p = json.loads(pathlib.Path(sys.argv[1]).read_text())
+assert hashlib.sha256(pathlib.Path(p['library']).read_bytes()).hexdigest() == p['library_sha256']
+print(p['library'])
+PY
+)
+  profile_options=("-agentpath:$profiler=start,event=cpu,interval=1ms,wall=2ms,cstack=dwarf,jstackdepth=256,file=$output/profile.jfr")
+fi
 command=(numactl --cpunodebind=0 --membind=0 "$work/jdk17/bin/java" -Xmx4g \
   -Dai.rapids.cudf.nvtx.enabled=true \
+  "${profile_options[@]}" \
   -Dai.rapids.cudf.lib-native-dir="$work/native-concat/lib" \
   -cp "$output/classes:$cp" com.nvidia.spark.rapids.experiments.BoundedScanPipelineProbe \
   "$dataset")
@@ -52,6 +64,8 @@ s = data.stat()
 PY
 if [[ "$kind" == timing ]]; then
   "${command[@]}" 16 all
+elif [[ "$kind" == stacks ]]; then
+  "${command[@]}" 128 pipeline
 elif [[ "$kind" == ncu ]]; then
   sudo env CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES" LIBCUDF_NVCOMP_POLICY=STABLE \
     /usr/local/cuda-13.2/bin/ncu --target-processes all --kernel-name 'regex:.*unsnap_kernel.*' \

@@ -41,7 +41,9 @@ def main():
     p.add_argument('--codec-library-layout', choices=('standalone','integrated'), default='standalone')
     p.add_argument('--native-io-nice',type=int,choices=(0,5))
     p.add_argument('--cuda-wait-policy',choices=('auto','blocking'))
+    p.add_argument('--ucx-preserve-context',action='store_true')
     a = p.parse_args()
+    assert not a.ucx_preserve_context or a.cuda_wait_policy
     if a.native_io_nice is not None:
         assert a.mode=='control' and a.frozen_native_directory and a.pinned_copy_threshold==0
         assert not (a.codec_library or a.mmap_policy or a.nvcomp_policy)
@@ -82,6 +84,13 @@ def main():
         assert all(sha(policy_root/name)==digest for name,digest in manifest['artifacts'].items())
         options += f' -agentpath:{policy_root}/libcuda_wait_policy.so={a.cuda_wait_policy}'
         wait_policy={'mode':a.cuda_wait_policy,'manifest':manifest}
+    ucx_patch=None
+    if a.ucx_preserve_context:
+        ucx_root=a.work/'native-ucx-context-flags-v2'
+        ucx_patch=read(ucx_root/'state.json');assert ucx_patch['status']=='completed'
+        ucx_module=ucx_root/'modules/libuct_cuda.so'
+        assert sha(ucx_module)==ucx_patch['module_sha256']
+        wait_policy['ucx_patch']=ucx_patch
     codec_library = None
     diagnostic_library_path = None
     if a.codec_library:
@@ -195,7 +204,8 @@ def main():
         if codec_library or a.native_io_nice is not None or wait_policy:
             observers.append(('native-modules', HERE / 'monitor_native_modules.py',
                               ['--expected-directory', str(native),
-                               '--controller', str(directory / 'controller.json')]))
+                               '--controller', str(directory / 'controller.json'),
+                               *(['--expected-ucx-module',str(ucx_module)] if ucx_patch else [])]))
         if a.mode == 'native-io':
             observers.append(('native-io', HERE / 'monitor_native_io.py',
                 ['--thread-id', a.thread_id, '--scratch', str(scratch),
@@ -211,6 +221,8 @@ def main():
             children.append((process, log))
         decoder = ({'spark.executorEnv.LIBCUDF_NVCOMP_POLICY': a.nvcomp_policy}
                    if a.nvcomp_policy else {})
+        if ucx_patch:
+            decoder['spark.executorEnv.UCX_PLUGIN_PATH']=str(ucx_module.parent)
         if a.mmap_policy:
             decoder['spark.executorEnv.LIBCUDF_MMAP_ENABLED'] = a.mmap_policy
         if a.pinned_copy_threshold is not None:
@@ -326,6 +338,9 @@ def main():
             mappings=[json.loads(line) for line in (directory/'native-modules.jsonl').read_text().splitlines()]
             assert len(mappings)==8 and {str(row['pid']) for row in mappings}==set(pools)
             wait_policy['runtime_module_mappings']=mappings
+            if ucx_patch:
+                assert all(row['expected_ucx_module']==str(ucx_module) for row in mappings)
+                assert sha(ucx_module)==ucx_patch['module_sha256']
         if a.native_io_nice is not None:
             records=[json.loads(line) for line in (directory/'io-priority.jsonl').read_text().splitlines()]
             io=[r for r in records if r['role']=='native_io']

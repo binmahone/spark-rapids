@@ -44,7 +44,8 @@ for label in a.labels:
             'sql_plus_cleanup_seconds')},'pressure':pressure(directory,timeline[token]['window']),
             'schedule':timeline[token],'plan_metrics':sample['plan_metrics']})
     fixed={'engine_sha256':config['engine_sha256'],'profiles':profiles,'rows':parity,
-        'probe_artifacts':policy['manifest']['artifacts']}
+        'probe_artifacts':policy['manifest']['artifacts'],
+        'ucx_module_sha256':policy.get('ucx_patch',{}).get('module_sha256')}
     if reference is None:reference=fixed
     else:
         for key in fixed:assert fixed[key]==reference[key],(label,key)

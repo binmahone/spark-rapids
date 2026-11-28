@@ -19,7 +19,9 @@ readonly codec_library=${14:-}
 readonly codec_library_layout=${15:-standalone}
 readonly native_io_nice=${16:-}
 readonly cuda_wait_policy=${17:-}
+readonly ucx_preserve_context=${18:-false}
 decoder_args=()
+if [[ "$ucx_preserve_context" == true ]]; then decoder_args+=(--ucx-preserve-context); else [[ "$ucx_preserve_context" == false ]]; fi
 if [[ -n "$cuda_wait_policy" ]]; then decoder_args+=(--cuda-wait-policy "$cuda_wait_policy"); fi
 if [[ -n "$native_io_nice" ]]; then decoder_args+=(--native-io-nice "$native_io_nice"); fi
 if [[ -n "$codec_library" ]]; then

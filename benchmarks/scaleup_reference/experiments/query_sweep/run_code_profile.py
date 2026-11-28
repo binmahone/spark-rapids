@@ -6,6 +6,7 @@ import argparse
 from dataclasses import replace
 import json
 import os
+import re
 from pathlib import Path
 import signal
 import subprocess
@@ -28,6 +29,7 @@ def main():
     p.add_argument('--mode', choices=('control', 'stacks'), required=True)
     p.add_argument('--queries', default='8,18,5')
     p.add_argument('--nvcomp-policy', choices=('STABLE', 'OFF'))
+    p.add_argument('--concat-implementation', choices=('control', 'candidate'))
     a = p.parse_args()
     assert a.label.replace('-', '').replace('_', '').isalnum()
     owner = read(a.work / 'evidence/owner.json')
@@ -48,12 +50,26 @@ def main():
         assert sha(Path(profiler['library'])) == profiler['library_sha256']
         options = (f"-agentpath:{profiler['library']}=start,event=cpu,interval=10ms,wall=20ms,"
                    f"cstack=dwarf,jstackdepth=256,timeout=900,file={scratch}/profile-%p.jfr,log=stderr")
+    concat = None
+    if a.concat_implementation:
+        native = a.work / 'native-concat'
+        assert (native / 'build.exit').read_text().strip() == '0'
+        subprocess.run(['sha256sum', '--check', str(native / 'agent.sha256')], check=True)
+        concat = {'implementation': a.concat_implementation,
+                  'agent_sha256': sha(native / 'concat-offset-probe.jar'),
+                  'library_sha256': sha(native / 'lib/libconcat_offsets_probe.so'),
+                  'sdk': read(native / 'sdk-manifest.json')}
+        agent = (f'-Dai.rapids.cudf.lib-native-dir={native}/lib '
+                 f'-javaagent:{native}/concat-offset-probe.jar={a.concat_implementation},'
+                 f'{native}/lib/libconcat_offsets_probe.so')
+        options = (options + ' ' if options else '') + agent
     selected = controls()
     queries = [int(q) for q in a.queries.split(',')]
     assert queries and len(queries) == len(set(queries)) and set(queries) <= {5, 8, 18, 20, 10}
     selected = [replace(selected[q], overrides={**selected[q].overrides,
                 'spark.rapids.sql.join.hashTable.reuse': 'false'}) for q in queries]
     state = {'status': 'running', 'owner': owner, 'mode': a.mode, 'profiler': profiler,
+             'concat_probe': concat,
              'queries': queries, 'nvcomp_policy': a.nvcomp_policy,
              'scratch': str(scratch), 'started_unix_ns': time.time_ns(),
              'classification': 'Code-path diagnosis; profiler times are not benchmark scores',
@@ -91,6 +107,20 @@ def main():
         assert result['status'] == 'completed' and result['driver_exit_code'] == 0
         assert len(result['samples']) == 2 * len(queries)
         assert all(s['validation']['status'] == 'passed' for s in result['samples'])
+        if concat:
+            logs = Path(read(a.work / 'evidence/deployment.json')['scratch_root']) / run.name / 'suite'
+            proof = []
+            for stderr in logs.glob('worker-*/work/*/*/stderr'):
+                match = re.search(r'CONCAT_OFFSET_PROBE_COUNTS mode=(\w+) calls=(\d+) '
+                    r'candidate_string_columns=(\d+) input_tables=(\d+)', stderr.read_text())
+                assert match, 'Missing native execution counters: ' + str(stderr)
+                assert match[1] == a.concat_implementation and int(match[2]) > 0
+                proof.append({'stderr': str(stderr), 'calls': int(match[2]),
+                    'candidate_string_columns': int(match[3]), 'input_tables': int(match[4])})
+            assert len(proof) == 8
+            if a.concat_implementation == 'candidate' and 5 in queries:
+                assert all(v['candidate_string_columns'] > 0 for v in proof)
+            concat['runtime_proof'] = proof
         assert all(child.poll() is None for child, _ in children), 'An observer exited during the workload'
         pools = {}
         decoder_policies = {}

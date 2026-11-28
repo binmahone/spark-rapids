@@ -8,9 +8,13 @@ readonly label=${3:?Unique capture label}
 readonly mode=${4:?control or stacks}
 readonly queries=${5:-8,18,5}
 readonly nvcomp_policy=${6:-}
+readonly concat_implementation=${7:-}
 decoder_args=()
 if [[ -n "$nvcomp_policy" ]]; then
   decoder_args=(--nvcomp-policy "$nvcomp_policy")
+fi
+if [[ -n "$concat_implementation" ]]; then
+  decoder_args+=(--concat-implementation "$concat_implementation")
 fi
 readonly here=$(cd "$(dirname "$0")" && pwd)
 [[ ! -e "$work/evidence/code-profile-$label.log" ]] || exit 1

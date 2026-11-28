@@ -165,6 +165,8 @@ try:
   assert int(result.attrib['tests'])==3 and int(result.attrib['failures'])==0 and int(result.attrib['disabled'])==0
   assert not result.findall('.//skipped')
   state['reader_tests']=dict(result.attrib)
+  state['tested_library_sha256']=sha(build/'libcudf.so')
+  assert state['tested_library_sha256']==read(root/'candidate-state.json')['library_sha256']
  else:
   assert read(root/'configure-state.json')['status']=='completed'
   if a.action=='candidate':

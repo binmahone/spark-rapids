@@ -18,7 +18,7 @@ p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work',type=Path,required=True)
 p.add_argument('--thread-id',required=True)
 p.add_argument('--label',default='scan-task-cpu-A1')
-p.add_argument('--scope',choices=('tasks','executors'),default='tasks')
+p.add_argument('--scope',choices=('tasks','shuffle'),default='tasks')
 p.add_argument('--delay-seconds',type=float,default=0)
 p.add_argument('--duration-seconds',type=float,default=20)
 p.add_argument('--frequency',type=int,default=499)
@@ -61,27 +61,31 @@ try:
             if (proc.stat().st_uid!=os.getuid() or
                 'org.apache.spark.executor.CoarseGrainedExecutorBackend' not in args or
                 not any(a.label in arg for arg in args)):continue
-            tids=[]
+            tids=[];all_threads=[]
             for task in (proc/'task').iterdir():
                 try:
                     name=(task/'comm').read_text().strip()
-                    if name.startswith('Executor task'):
-                        tids.append({'tid':int(task.name),'name':name,
-                            'start_time':services.start_time(int(task.name))})
+                    row={'tid':int(task.name),'name':name,'start_time':services.start_time(int(task.name))}
+                    all_threads.append(row)
+                    if name.startswith('Executor task') or (a.scope=='shuffle' and
+                        name.startswith(('shuffle-','ucx-','progress-thread','async shuffle'))):
+                        tids.append(row)
                 except (FileNotFoundError,ProcessLookupError):continue
-            assert len(tids)==4,(proc.name,tids)
+            assert sum(t['name'].startswith('Executor task') for t in tids)==4,(proc.name,tids)
+            if a.scope=='shuffle':
+                for prefix in ('shuffle-client','shuffle-server','progress-thread','ucx-'):
+                    assert any(t['name'].startswith(prefix) for t in tids),(prefix,tids)
             maps=(proc/'maps').read_text()
             cudf=[line.split() for line in maps.splitlines() if 'libcudf.so' in line]
             assert cudf and all(Path(row[5]).resolve()==native.resolve() and
                 int(row[4])==native.stat().st_ino for row in cudf)
             identities.append({'pid':int(proc.name),'executor':args[args.index('--executor-id')+1],
-                'start_time':services.start_time(int(proc.name)),'threads':tids,'maps':maps})
+                'start_time':services.start_time(int(proc.name)),'threads':tids,'all_threads':all_threads,'maps':maps})
         except (FileNotFoundError,ProcessLookupError):continue
     assert len(identities)==8
     write(scratch/'executor-threads.json',identities)
     tids=[str(t['tid']) for row in identities for t in row['threads']]
-    target=(['-t',','.join(tids),'--no-inherit'] if a.scope=='tasks' else
-            ['-p',','.join(str(row['pid']) for row in identities)])
+    target=['-t',','.join(tids),'--no-inherit']
     remaining=a.delay_seconds-(time.monotonic()-ready_monotonic)
     if remaining>0:time.sleep(remaining)
     assert query.poll() is None and len(read(result)['samples'])==1
@@ -103,6 +107,8 @@ try:
         subprocess.run(['sudo','-n','perf','report','-i',str(scratch/'task-cpu.data'),
             '--stdio','--no-children','--call-graph','none','--sort','dso,symbol','--percent-limit','0.1','--column-widths','30,120'],
             stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
+    assert 'Total Lost Samples: 0' in (scratch/'self-report.txt').read_text()
+    assert 'Ignored open failure' not in (scratch/'perf-record.log').read_text()
     state.update(status='completed',run=str(run),query_samples=trial['result']['samples'],
         perf_data_bytes=(scratch/'task-cpu.data').stat().st_size)
 except BaseException as error:

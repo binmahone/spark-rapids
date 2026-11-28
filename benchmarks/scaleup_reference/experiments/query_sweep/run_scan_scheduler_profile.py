@@ -48,7 +48,7 @@ try:
         assert time.monotonic()<deadline
         time.sleep(.1)
     assert len(read(result)['samples'])==1
-    identities=[]
+    identities=[];snapshot_errors=[]
     for proc in Path('/proc').iterdir():
         if not proc.name.isdigit():continue
         try:
@@ -58,15 +58,23 @@ try:
                 not any(a.label in arg for arg in args)):continue
             threads=[]
             for task in (proc/'task').iterdir():
-                status=dict(line.split(':',1) for line in (task/'status').read_text().splitlines() if ':' in line)
-                threads.append({'tid':int(task.name),'name':(task/'comm').read_text().strip(),
-                    'cpus_allowed':status['Cpus_allowed_list'].strip()})
+                try:
+                    status=dict(line.split(':',1) for line in (task/'status').read_text().splitlines() if ':' in line)
+                    threads.append({'tid':int(task.name),'name':(task/'comm').read_text().strip(),
+                        'cpus_allowed':status['Cpus_allowed_list'].strip()})
+                except (FileNotFoundError,ProcessLookupError):
+                    snapshot_errors.append({'tid':task.name,'error':'Thread exited during snapshot'})
+            try:pages=(proc/'numa_maps').read_text()
+            except PermissionError:
+                pages=subprocess.check_output(['sudo','-n','cat',str(proc/'numa_maps')],text=True)
             identities.append({'pid':int(proc.name),'executor':args[args.index('--executor-id')+1],
                 'start_time':services.start_time(int(proc.name)),'threads':threads,
-                'numa_maps':(proc/'numa_maps').read_text()})
-        except (FileNotFoundError,ProcessLookupError,PermissionError):continue
-    assert len(identities)==8
+                'numa_maps':pages})
+        except (FileNotFoundError,ProcessLookupError,PermissionError) as error:
+            snapshot_errors.append({'pid':proc.name,'error':repr(error)})
+    write(scratch/'snapshot-errors.json',snapshot_errors)
     write(scratch/'executor-threads.json',identities)
+    assert len(identities)==8,[(r['pid'],r['executor']) for r in identities]
     for phase in ('before',):
         write(scratch/(phase+'-numa.json'),{str(path):path.read_text() for path in Path('/sys/devices/system/node').glob('node*/meminfo')})
     state.update(status='recording',capture_start_unix_ns=time.time_ns(),capture_start_monotonic_ns=time.monotonic_ns())

@@ -19,7 +19,8 @@ from variants import ORDER, catalog, extra_cases, targeted
 
 def launch_group(work, phase, index, cases, global_conf, collector=None,
                  view_casts=None, domain_proof=None, runtime_hash_reuse_queries=None,
-                 experimental_engine=None, diagnostic_nvtx=False, diagnostic_jvm_options=None):
+                 experimental_engine=None, diagnostic_nvtx=False, diagnostic_jvm_options=None,
+                 diagnostic_library_path=None):
     deployment = read(work / 'evidence/deployment.json')
     config = load_config('aws48x', work / 'evidence/deployment.json')
     config['spark_conf'].update(global_conf)
@@ -94,6 +95,9 @@ def launch_group(work, phase, index, cases, global_conf, collector=None,
         (scratch / name).mkdir(parents=True, exist_ok=True)
     native = str(Path(deployment['ucx_home']) / 'lib')
     native += ':/usr/local/cuda-13.1/lib64:/usr/local/cuda-13.1/targets/x86_64-linux/lib'
+    if diagnostic_library_path is not None:
+        assert Path(diagnostic_library_path).is_dir()
+        native = str(diagnostic_library_path) + ':' + native
     classpath = str(engine) + ':' + config['tools']
     if helper:
         classpath += ':' + str(helper)

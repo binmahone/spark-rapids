@@ -37,7 +37,7 @@ def main():
     p.add_argument('--scan-copy-implementation', choices=('original', 'sync', 'pair', 'paced-control', 'paced', 'paced-queued', 'serial-original', 'serial-unlocked', 'serial-locked', 'batch-control', 'batch-scalar', 'batch-paced'))
     p.add_argument('--packed-view', action='store_true')
     p.add_argument('--frozen-native-directory', action='store_true')
-    p.add_argument('--codec-library', choices=('baseline','candidate'))
+    p.add_argument('--codec-library', choices=('bridge','baseline','candidate'))
     a = p.parse_args()
     assert not a.packed_view or not (a.concat_implementation or a.scan_copy_implementation), 'Keep packed-view experiment isolated'
     assert a.label.replace('-', '').replace('_', '').isalnum()
@@ -67,15 +67,24 @@ def main():
         assert sha(native / 'libcudf.so') == '8a07e08432d9afbe80d1db24c69ce67e9a05048c703f7d65a1514dfc5620e9a3'
         options = (options + ' ' if options else '') + f'-Dai.rapids.cudf.lib-native-dir={native}'
     codec_library = None
+    diagnostic_library_path = None
     if a.codec_library:
         assert not (a.frozen_native_directory or a.packed_view or a.concat_implementation or
                     a.scan_copy_implementation or a.shuffle_copy_implementation or a.nvcomp_policy or
                     a.mmap_policy) and a.pinned_copy_threshold == 0
         build = a.work / 'native-codec-library'
-        codec_library = read(build / (a.codec_library + '-state.json'))
-        assert codec_library['status'] == 'completed'
-        native = build / a.codec_library
+        if a.codec_library == 'bridge':
+            native = a.work / 'native-concat/lib'
+            codec_library = {'status':'completed','action':'bridge','library_sha256':
+                '8a07e08432d9afbe80d1db24c69ce67e9a05048c703f7d65a1514dfc5620e9a3'}
+        else:
+            codec_library = read(build / (a.codec_library + '-state.json'))
+            assert codec_library['status'] == 'completed'
+            native = build / a.codec_library
         assert sha(native / 'libcudf.so') == codec_library['library_sha256']
+        diagnostic_library_path = build / 'compiler/lib'
+        codec_library['runtime_dependencies'] = {
+            path.name: sha(path) for path in diagnostic_library_path.glob('*.so.*') if path.is_file()}
         options = (options + ' ' if options else '') + f'-Dai.rapids.cudf.lib-native-dir={native}'
     concat = None
     if a.concat_implementation:
@@ -190,7 +199,7 @@ def main():
             'spark.rapids.shuffle.ucx.bounceBuffers.size': '4m'},
             experimental_engine=a.work / ('artifacts/packed-view' if a.packed_view else 'artifacts/decimal-null-copy'),
             runtime_hash_reuse_queries=[9] if 9 in queries else None,
-            diagnostic_jvm_options=options)
+            diagnostic_jvm_options=options, diagnostic_library_path=diagnostic_library_path)
         state.update(run=str(run), result=result)
         assert result['status'] == 'completed' and result['driver_exit_code'] == 0
         assert len(result['samples']) == 2 * len(queries)

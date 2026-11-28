@@ -85,14 +85,16 @@ try:
     remaining=a.delay_seconds-(time.monotonic()-ready_monotonic)
     if remaining>0:time.sleep(remaining)
     assert query.poll() is None and len(read(result)['samples'])==1
-    perf_command=['sudo','-n','perf','record','-e','cpu-clock:u','-F',str(a.frequency),*target,'--clockid','mono','--no-buildid-cache','--call-graph','dwarf,16384',
+    perf_command=['sudo','-n','prlimit','--nofile=65536:65536','perf','record','-e','cpu-clock:u','-F',str(a.frequency),*target,'--clockid','mono','--no-buildid-cache','--call-graph','dwarf,16384',
         '-m','512','-o',str(scratch/'task-cpu.data'),'--','sleep',str(a.duration_seconds)]
     state.update(status='recording',scope=a.scope,delay_seconds=a.delay_seconds,perf_command=perf_command,
         capture_start_unix_ns=time.time_ns(),capture_start_monotonic_ns=time.monotonic_ns())
     write(scratch/'state.json',state)
     with (scratch/'perf-record.log').open('x') as stream:
         perf=subprocess.Popen(perf_command,stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
-        perf_start=services.start_time(perf.pid);assert perf.wait(timeout=60)==0
+        perf_start=services.start_time(perf.pid)
+        state['perf_return_code']=perf.wait(timeout=60)
+        assert state['perf_return_code']==0,state['perf_return_code']
     state.update(capture_end_unix_ns=time.time_ns(),capture_end_monotonic_ns=time.monotonic_ns())
     assert query.wait(timeout=180)==0
     trial=read(a.work/'code-profile'/a.label/'state.json');assert trial['status']=='completed'

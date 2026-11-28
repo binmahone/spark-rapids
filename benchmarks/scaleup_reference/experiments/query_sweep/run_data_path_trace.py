@@ -21,7 +21,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--work', type=Path, required=True)
     p.add_argument('--thread-id', required=True)
-    p.add_argument('--variant', choices=('control', 'scan-pack', 'scan-split', 'scan-split-cuda', 'shuffle-buffer', 'shuffle-wait'), default='control')
+    p.add_argument('--variant', choices=('control', 'scan-pack', 'scan-split', 'scan-split-cuda', 'scan-split-cuda2', 'shuffle-buffer', 'shuffle-wait'), default='control')
     p.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
     a = p.parse_args()
     work = a.work.resolve()
@@ -74,14 +74,24 @@ def main():
             report['nsys_exit'] = profiler.returncode
             stopped = True
             return
+        if (directory / 'workload.json').exists():
+            try:
+                report['nsys_exit'] = profiler.wait(timeout=120)
+                stopped = True
+                return
+            except subprocess.TimeoutExpired:
+                pass
         with (directory / 'nsys-stop.log').open('a') as log:
             stop = subprocess.run(['nsys', 'stop', '--session=' + session], stdout=log,
                                   stderr=subprocess.STDOUT, timeout=180)
             report['nsys_stop_exit'] = stop.returncode
-            shutdown = subprocess.run(['nsys', 'shutdown', '--session=' + session, '--kill=none'],
-                                      stdout=log, stderr=subprocess.STDOUT, timeout=60)
-            report['nsys_shutdown_exit'] = shutdown.returncode
-        report['nsys_exit'] = profiler.wait(timeout=60)
+            try:
+                report['nsys_exit'] = profiler.wait(timeout=180)
+            except subprocess.TimeoutExpired:
+                shutdown = subprocess.run(['nsys', 'shutdown', '--session=' + session, '--kill=none'],
+                                          stdout=log, stderr=subprocess.STDOUT, timeout=60)
+                report['nsys_shutdown_exit'] = shutdown.returncode
+                report['nsys_exit'] = profiler.wait(timeout=60)
         stopped = True
     try:
         deadline = time.monotonic() + 45

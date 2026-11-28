@@ -136,6 +136,8 @@ try:
    '-DBUILD_BENCHMARKS=OFF','-DCUDF_DEPENDENCY_PIN_MODE=pinned',
    '-DRMM_LOGGING_LEVEL=OFF','-DLIBCUDF_LOGGING_LEVEL=OFF',
    '-DCMAKE_PREFIX_PATH='+str(compiler),'-DCMAKE_INSTALL_LIBDIR=lib64',
+   '-DZLIB_ROOT='+str(compiler),'-DZLIB_INCLUDE_DIR='+str(compiler/'include'),
+   '-DZLIB_LIBRARY_RELEASE='+str(compiler/'lib/libz.so'),
    '-DCMAKE_BUILD_RPATH='+str(compiler/'lib'),
    '-DCMAKE_EXE_LINKER_FLAGS=-Wl,-rpath-link,'+str(compiler/'lib'),
    '-DCMAKE_CXX_FLAGS=-I'+str(sdk/'include'),'-DCMAKE_CUDA_FLAGS=-I'+str(sdk/'include'),
@@ -158,7 +160,8 @@ try:
   run([cmake,'--build',cpp_build,'--target','install','-j','48'],'cpp-build.log',3600)
   run([cmake,'-S',source/'java/src/main/native','-B',java_build,*common,
        '-DBUILD_SHARED_LIBS=OFF','-DCUDF_JNI_LIBCUDF_STATIC=ON','-DUSE_GDS=OFF',
-       '-DBOOST_ROOT='+str(compiler)],'cudfjni-configure.log')
+       '-DBOOST_ROOT='+str(compiler),'-DBoost_ROOT='+str(compiler),
+       '-DBoost_DIR='+str(compiler/'lib/cmake/Boost-1.86.0')],'cudfjni-configure.log')
   run([cmake,'--build',java_build,'-j','48'],'cudfjni-build.log',1800)
   run([cmake,'-S',jni/'src/main/cpp','-B',jni_build,*common,
        '-DBUILD_FAULTINJ=OFF','-DBUILD_PROFILER=OFF','-DUSE_GDS=OFF'],'sparkjni-configure.log')

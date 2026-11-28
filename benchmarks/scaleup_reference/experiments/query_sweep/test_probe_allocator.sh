@@ -20,6 +20,7 @@ if [[ "$kind" == scan ]]; then
   root="$work/native-scan-copy"
   [[ "$mode" != paced* ]] || root="$work/native-scan-copy-paced"
   [[ "$mode" != serial-* ]] || root="$work/native-scan-copy-serial"
+  [[ "$mode" != batch-* ]] || root="$work/native-scan-copy-batch"
   agent="$root/scan-copy-probe.jar=$mode,$root/libscan_copy_probe.so,$root/gpu-pairs.properties,$root/leases"
 elif [[ "$kind" == concat ]]; then
   root="$work/native-concat"

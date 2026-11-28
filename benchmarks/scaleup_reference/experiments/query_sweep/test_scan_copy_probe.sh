@@ -5,16 +5,20 @@ set -euo pipefail
 ulimit -c 0
 readonly work=${1:?Prepared work directory}
 readonly family=${2:-admission}
-[[ "$family" == admission || "$family" == pacing || "$family" == serial ]]
+[[ "$family" == admission || "$family" == pacing || "$family" == serial || "$family" == batch ]]
 root="$work/native-scan-copy"
 modes=(original sync pair)
-if [[ "$family" == pacing || "$family" == serial ]]; then
+if [[ "$family" == pacing || "$family" == serial || "$family" == batch ]]; then
   root="$work/native-scan-copy-paced"
   modes=(paced-control paced-queued paced)
 fi
-if [[ "$family" == serial ]]; then
+if [[ "$family" == serial || "$family" == batch ]]; then
   root="$work/native-scan-copy-serial"
   modes=(serial-original serial-unlocked serial-locked)
+fi
+if [[ "$family" == batch ]]; then
+  root="$work/native-scan-copy-batch"
+  modes=(batch-control batch-scalar batch-paced)
 fi
 [[ $(cat "$root/build.exit") == 0 ]]
 [[ -z $(nvidia-smi --query-compute-apps=pid --format=csv,noheader) ]]

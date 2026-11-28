@@ -25,7 +25,7 @@ p.add_argument('--output', required=True, type=Path)
 p.add_argument('--variant', choices=('control', 'scan-pack', 'scan-split', 'scan-split-cuda', 'scan-split-cuda2', 'shuffle-buffer', 'shuffle-wait', 'code-profile'), default='control')
 p.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
 p.add_argument('--concat-implementation', choices=('control', 'candidate'))
-p.add_argument('--scan-copy-implementation', choices=('paced-control', 'paced', 'paced-queued', 'serial-original', 'serial-unlocked', 'serial-locked'))
+p.add_argument('--scan-copy-implementation', choices=('paced-control', 'paced', 'paced-queued', 'serial-original', 'serial-unlocked', 'serial-locked', 'batch-control', 'batch-scalar', 'batch-paced'))
 a = p.parse_args()
 assert not (a.concat_implementation and a.scan_copy_implementation)
 assert read(a.work / 'evidence/owner.json')['thread_id'] == a.thread_id
@@ -58,7 +58,8 @@ if a.concat_implementation:
         'library_sha256': sha(native / 'libconcat_offsets_probe.so')})
 if a.scan_copy_implementation:
     assert a.variant == 'code-profile' and native_options
-    root = a.work / ('native-scan-copy-serial' if a.scan_copy_implementation.startswith('serial-')
+    root = a.work / ('native-scan-copy-batch' if a.scan_copy_implementation.startswith('batch-') else
+                           'native-scan-copy-serial' if a.scan_copy_implementation.startswith('serial-')
                      else 'native-scan-copy-paced')
     assert (root / 'build.exit').read_text().strip() == '0'
     subprocess.run(['sha256sum', '--check', str(root / 'artifacts.sha256')], check=True)
@@ -84,7 +85,7 @@ assert result['status'] == 'completed' and result['driver_exit_code'] == 0
 assert len(result['samples']) == 2 and all(s['validation']['status'] == 'passed' for s in result['samples'])
 if a.scan_copy_implementation:
     logs = Path(read(a.work / 'evidence/deployment.json')['scratch_root']) / path.name / 'suite'
-    mode = {'paced-control': 0, 'paced': 3, 'paced-queued': 4, 'serial-original': 0, 'serial-unlocked': 3, 'serial-locked': 5}[a.scan_copy_implementation]
+    mode = {'paced-control': 0, 'paced': 3, 'paced-queued': 4, 'serial-original': 0, 'serial-unlocked': 3, 'serial-locked': 5, 'batch-control': 0, 'batch-scalar': 3, 'batch-paced': 6}[a.scan_copy_implementation]
     observed = []
     for stderr in logs.glob('worker-*/work/*/*/stderr'):
         content = stderr.read_text()

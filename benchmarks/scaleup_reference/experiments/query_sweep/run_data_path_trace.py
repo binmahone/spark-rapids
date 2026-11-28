@@ -25,7 +25,7 @@ def main():
     p.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
     p.add_argument('--attempt', type=int, default=0)
     p.add_argument('--concat-implementation', choices=('control', 'candidate'))
-    p.add_argument('--scan-copy-implementation', choices=('paced-control', 'paced', 'paced-queued', 'serial-original', 'serial-unlocked', 'serial-locked'))
+    p.add_argument('--scan-copy-implementation', choices=('paced-control', 'paced', 'paced-queued', 'serial-original', 'serial-unlocked', 'serial-locked', 'batch-control', 'batch-scalar', 'batch-paced'))
     p.add_argument('--timeline-only', action='store_true')
     a = p.parse_args()
     assert not (a.concat_implementation and a.scan_copy_implementation)

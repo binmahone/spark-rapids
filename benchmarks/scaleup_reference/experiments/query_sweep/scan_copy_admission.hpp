@@ -93,10 +93,16 @@ inline cudaError_t submit_copies(void* const* destinations,
   for (size_t i = 0; i < count; ++i) {
     for (size_t offset = 0; offset < sizes[i]; offset += quantum) {
       auto const bytes = std::min(quantum, sizes[i] - offset);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<char*>(destinations[i]) + offset,
-                                   static_cast<char const*>(sources[i]) + offset,
-                                   bytes, cudaMemcpyHostToDevice, stream.get()));
-      if (admission_mode == 3 || admission_mode == 5) {
+      void* destination = static_cast<char*>(destinations[i]) + offset;
+      void const* source = static_cast<char const*>(sources[i]) + offset;
+      if (admission_mode == 6) {
+        CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
+          &destination, &source, &bytes, 1, stream));
+      } else {
+        CUDF_CUDA_TRY(cudaMemcpyAsync(destination, source, bytes,
+                                     cudaMemcpyHostToDevice, stream.get()));
+      }
+      if (admission_mode == 3 || admission_mode == 5 || admission_mode == 6) {
         // Bound queued copy work so another task can submit decode metadata transfers.
         CUDF_CUDA_TRY(cudaStreamSynchronize(stream.get()));
       }

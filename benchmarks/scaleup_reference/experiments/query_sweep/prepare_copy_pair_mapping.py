@@ -10,7 +10,7 @@ import subprocess
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work', type=Path, required=True)
-p.add_argument('--output-name', choices=('native-scan-copy', 'native-scan-copy-paced', 'native-scan-copy-serial'), default='native-scan-copy')
+p.add_argument('--output-name', choices=('native-scan-copy', 'native-scan-copy-paced', 'native-scan-copy-serial', 'native-scan-copy-batch'), default='native-scan-copy')
 a = p.parse_args()
 groups = defaultdict(list)
 for line in subprocess.check_output(['nvidia-smi', '--query-gpu=index,uuid,pci.bus_id',

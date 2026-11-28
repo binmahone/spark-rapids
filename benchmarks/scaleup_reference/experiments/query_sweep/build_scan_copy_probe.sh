@@ -6,7 +6,7 @@ readonly work=${1:?Prepared work directory}
 readonly thread=${2:?Owner thread}
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly output_name=${3:-native-scan-copy}
-[[ "$output_name" == native-scan-copy || "$output_name" == native-scan-copy-paced || "$output_name" == native-scan-copy-serial ]]
+[[ "$output_name" == native-scan-copy || "$output_name" == native-scan-copy-paced || "$output_name" == native-scan-copy-serial || "$output_name" == native-scan-copy-batch ]]
 readonly root="$work/$output_name"
 readonly sdk="$work/native-concat"
 [[ -z $(nvidia-smi --query-compute-apps=pid --format=csv,noheader) ]]

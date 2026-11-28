@@ -17,6 +17,7 @@ class Intervals:
     def switch(self,stamp,prev,state,nxt):
         if prev in self.tids:
             if prev in self.running:self.emit(prev,'cpu',self.running.pop(prev),stamp)
+            self.queued.pop(prev,None);self.blocked.pop(prev,None)
             if state in ('R','R+'):
                 self.queued[prev]=(stamp,'preempted_runnable')
             else:self.blocked[prev]=stamp
@@ -28,6 +29,7 @@ class Intervals:
             self.running[nxt]=stamp
     def wake(self,stamp,tid):
         if tid not in self.tids:return
+        if tid in self.running:return
         if tid in self.blocked:self.emit(tid,'blocked_until_waking',self.blocked.pop(tid),stamp)
         self.queued.setdefault(tid,(stamp,'waking_to_cpu'))
 

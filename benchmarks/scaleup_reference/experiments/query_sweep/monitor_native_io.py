@@ -83,7 +83,7 @@ def main():
                     if len(found) == 8 and all(len(threads) == 32 for threads in found.values()):
                         targets = [item for threads in found.values() for item in threads]
                         command = ['sudo', '-n', 'perf', 'record', '-e', 'cpu-clock',
-                                   '-F', '99', '--call-graph', 'dwarf,8192', '--clockid', 'mono',
+                                   '-F', '19', '--call-graph', 'dwarf,4096', '--clockid', 'mono',
                                    '--sample-cpu', '--no-buildid-cache', '--max-size', '2G',
                                    '-t', ','.join(str(item['tid']) for item in targets),
                                    '-o', str(data)]

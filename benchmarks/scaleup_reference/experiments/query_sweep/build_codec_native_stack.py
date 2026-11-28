@@ -125,6 +125,17 @@ try:
   assert not subprocess.check_output(['git','-C',str(source),'status','--porcelain'],text=True)
   run([old/'micromamba','list','--no-rc','--prefix',compiler,'--explicit'],'compiler.txt',60)
   state['compiler_package_list_sha256']=sha(root/(a.action+'-compiler.txt'))
+  jdk_sdk=root/'jdk-build-sdk'
+  jdk_sdk.mkdir(exist_ok=True)
+  jdk_version='17.0.21.1+2-1~22.04.1'
+  for package in ('openjdk-17-jdk','openjdk-17-jre'):
+   deb=root/(package+'_'+jdk_version+'_amd64.deb')
+   if not deb.exists():
+    run(['apt-get','download',package+'='+jdk_version],package+'-download.log',300)
+   run(['dpkg-deb','-x',deb,jdk_sdk],package+'-extract.log',60)
+   state.setdefault('jdk_build_packages',{})[deb.name]=sha(deb)
+  jdk_awt=jdk_sdk/'usr/lib/jvm/java-17-openjdk-amd64'
+  assert (jdk_awt/'include/jawt.h').is_file() and (jdk_awt/'lib/libjawt.so').is_file()
   common=['-G','Ninja','-DCMAKE_BUILD_TYPE=Release',
    '-DCMAKE_C_COMPILER='+str(compiler/'bin/x86_64-conda-linux-gnu-gcc'),
    '-DCMAKE_CXX_COMPILER='+str(compiler/'bin/x86_64-conda-linux-gnu-g++'),
@@ -138,6 +149,8 @@ try:
    '-DCMAKE_PREFIX_PATH='+str(compiler),'-DCMAKE_INSTALL_LIBDIR=lib64',
    '-DZLIB_ROOT='+str(compiler),'-DZLIB_INCLUDE_DIR='+str(compiler/'include'),
    '-DZLIB_LIBRARY_RELEASE='+str(compiler/'lib/libz.so'),
+   '-DJAVA_AWT_INCLUDE_PATH='+str(jdk_awt/'include'),
+   '-DJAVA_AWT_LIBRARY='+str(jdk_awt/'lib/libjawt.so'),
    '-DCMAKE_BUILD_RPATH='+str(compiler/'lib'),
    '-DCMAKE_EXE_LINKER_FLAGS=-Wl,-rpath-link,'+str(compiler/'lib'),
    '-DCMAKE_CXX_FLAGS=-I'+str(sdk/'include'),'-DCMAKE_CUDA_FLAGS=-I'+str(sdk/'include'),

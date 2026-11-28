@@ -14,7 +14,7 @@ from verify_slot_overlap import scheduler_overlap
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', type=Path, required=True)
-    parser.add_argument('--family', choices=('scan-pack', 'shuffle-buffer', 'shuffle-wait'), required=True)
+    parser.add_argument('--family', choices=('scan-pack', 'scan-split', 'shuffle-buffer', 'shuffle-wait'), required=True)
     parser.add_argument('--phases', nargs='+', default=['A0', 'B1', 'B2', 'A3'])
     args = parser.parse_args()
     rows = []
@@ -42,6 +42,10 @@ def main():
             expected = state['overrides'][changed_key]
             assert config['spark_conf'][changed_key] == expected
             config['spark_conf'][changed_key] = '<experimental-setting>'
+            for overrides in config.get('case_overrides', {}).values():
+                if changed_key in overrides:
+                    assert overrides[changed_key] == expected
+                    overrides[changed_key] = '<experimental-setting>'
         excluded = {'engine', 'engine_sha256', 'experimental_engine_manifest'} if args.family == 'shuffle-wait' else set()
         configs.append({k: v for k, v in config.items() if k not in excluded})
         profile = json.loads((run / 'profiles.json').read_text())
@@ -85,8 +89,12 @@ def main():
     decisions = []
     for query in sorted({r['query'] for r in rows}):
         group = [r for r in rows if r['query'] == query]
-        for key in ('sql_sha256', 'plan_sha256', 'reader_metrics'):
+        for key in ('sql_sha256', 'plan_sha256'):
             assert all(r[key] == group[0][key] for r in group), (query, key)
+        input_metrics = [{k: v for k, v in r['reader_metrics'].items()
+                          if args.family != 'scan-split' or k != 'hybridScanSplits'}
+                         for r in group]
+        assert all(r == input_metrics[0] for r in input_metrics), (query, 'reader_metrics')
         candidates = [r['sql_seconds'] for r in group if r['candidate']]
         controls = [r['sql_seconds'] for r in group if not r['candidate']]
         complete = len(candidates) >= 2 and len(controls) >= 2

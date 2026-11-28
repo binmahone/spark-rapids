@@ -26,7 +26,7 @@ def main():
     parser.add_argument('--work', type=Path, required=True)
     parser.add_argument('--thread-id', required=True)
     parser.add_argument('--phase', choices=('A0', 'B1', 'B2', 'A3', 'full-B1', 'full-A2'), required=True)
-    parser.add_argument('--family', choices=('scan-pack', 'shuffle-buffer', 'shuffle-wait'), required=True)
+    parser.add_argument('--family', choices=('scan-pack', 'scan-split', 'shuffle-buffer', 'shuffle-wait'), required=True)
     parser.add_argument('--queries')
     args = parser.parse_args()
     work = args.work
@@ -45,7 +45,7 @@ def main():
     write(directory / 'controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),
                                          'start_time': services.start_time(os.getpid())})
     queries = list(ORDER) if args.phase.startswith('full') else [int(q) for q in
-        (args.queries or ('8,20' if args.family == 'scan-pack' else '18,5,10')).split(',')]
+        (args.queries or ('8,20' if args.family.startswith('scan-') else '18,5,10')).split(',')]
     assert queries and len(set(queries)) == len(queries) and set(queries) <= set(ORDER)
     selected = controls()
     for q in queries:
@@ -66,6 +66,12 @@ def main():
                    if args.family == 'scan-pack' else 'spark.rapids.shuffle.ucx.bounceBuffers.size')
     if args.family == 'shuffle-wait':
         changed_key = None
+    elif args.family == 'scan-split':
+        changed_key = 'spark.sql.files.maxPartitionBytes'
+        overrides[changed_key] = '1g' if candidate else '2g'
+        for q in queries:
+            selected[q] = replace(selected[q], overrides={**selected[q].overrides,
+                changed_key: overrides[changed_key]})
     elif candidate:
         overrides[changed_key] = '128m' if args.family == 'scan-pack' else '16m'
     state = {'status': 'running', 'owner': owner, 'candidate': candidate, 'slots_per_executor': slots, 'queries': queries,

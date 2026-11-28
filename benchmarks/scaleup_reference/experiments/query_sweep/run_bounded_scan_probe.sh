@@ -10,7 +10,7 @@ readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly output="$work/bounded-scan/$label"
 readonly engine="$work/artifacts/decimal-null-copy/cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar"
 [[ "$label" =~ ^[a-zA-Z0-9_-]+$ ]]
-[[ "$kind" == timing || "$kind" == ncu || "$kind" == timeline || "$kind" == stacks ]]
+[[ "$kind" == timing || "$kind" == ncu || "$kind" == timeline || "$kind" == stacks || "$kind" == windowed || "$kind" == windowtrace ]]
 [[ -z $(nvidia-smi --query-compute-apps=pid --format=csv,noheader) ]]
 [[ $(sha256sum "$engine" | cut -d ' ' -f 1) == ec38a58426e662ce99a433e806a66fa927bb011c014465a5df0b0c31ded4d1cc ]]
 mkdir -p "$work/bounded-scan"
@@ -64,6 +64,8 @@ s = data.stat()
 PY
 if [[ "$kind" == timing ]]; then
   "${command[@]}" 16 all
+elif [[ "$kind" == windowed ]]; then
+  "${command[@]}" 32 windowed
 elif [[ "$kind" == stacks ]]; then
   "${command[@]}" 128 pipeline
 elif [[ "$kind" == ncu ]]; then
@@ -72,6 +74,8 @@ elif [[ "$kind" == ncu ]]; then
     --launch-skip 0 --launch-count 1 --set full --export "$output/snappy" \
     "${command[@]}" 4 original
 else
+  mode=all
+  [[ "$kind" != windowtrace ]] || mode=windowed
   nsys profile --trace=cuda,nvtx --sample=none --cpuctxsw=none \
-    --output="$output/timeline" "${command[@]}" 8 all
+    --output="$output/timeline" "${command[@]}" 8 "$mode"
 fi

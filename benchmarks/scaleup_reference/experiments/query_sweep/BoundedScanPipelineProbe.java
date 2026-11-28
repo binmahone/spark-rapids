@@ -8,6 +8,7 @@ import ai.rapids.cudf.BinaryOp;
 import ai.rapids.cudf.ColumnVector;
 import ai.rapids.cudf.Cuda;
 import ai.rapids.cudf.DType;
+import ai.rapids.cudf.DeviceMemoryBuffer;
 import ai.rapids.cudf.HostMemoryBuffer;
 import ai.rapids.cudf.HybridScanReader;
 import ai.rapids.cudf.NvtxColor;
@@ -25,6 +26,10 @@ import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /** Isolates bounded H2D lookahead on real compressed input; not a Spark benchmark. */
 public final class BoundedScanPipelineProbe {
@@ -57,7 +62,7 @@ public final class BoundedScanPipelineProbe {
       rows = reader.totalRowsInRowGroups(groups);
       var ranges = reader.allColumnChunksByteRanges(groups);
       long bytes = Arrays.stream(ranges).mapToLong(range -> range.size()).sum();
-      if (bytes <= 0 || bytes > INPUT_LIMIT / 2) {
+      if (bytes <= 0 || bytes + 8L * ranges.length > INPUT_LIMIT / 2) {
         throw new IllegalArgumentException("Split exceeds the two-input memory budget: " + bytes);
       }
       backing = PinnedMemoryPool.tryAllocate(bytes);
@@ -139,6 +144,131 @@ public final class BoundedScanPipelineProbe {
     }
   }
 
+  /** Two fixed input slots; the worker performs no device allocation or decoding. */
+  private static final class CopyWindow implements AutoCloseable {
+    final DeviceMemoryBuffer[] buffers = new DeviceMemoryBuffer[2];
+    final DeviceMemoryBuffer[][] chunks = new DeviceMemoryBuffer[2][];
+    final ExecutorService worker = Executors.newSingleThreadExecutor();
+    final Cuda.Stream stream;
+    final Batch[] batches;
+    final long chunkBytes;
+
+    CopyWindow(Batch[] batches, Cuda.Stream stream, long chunkBytes) {
+      this.batches = batches;
+      this.stream = stream;
+      this.chunkBytes = chunkBytes;
+      try {
+        long before = Rmm.getTotalBytesAllocated();
+        long bytes = 0;
+        for (int slot = 0; slot < 2; slot++) {
+          buffers[slot] = DeviceMemoryBuffer.allocate(batches[slot].backing.getLength());
+          bytes += buffers[slot].getLength();
+          chunks[slot] = new DeviceMemoryBuffer[batches[slot].chunks.length];
+          long offset = 0;
+          for (int i = 0; i < chunks[slot].length; i++) {
+            long size = batches[slot].chunks[i].getLength();
+            chunks[slot][i] = buffers[slot].slice(offset, size);
+            offset += size;
+          }
+        }
+        if (bytes > INPUT_LIMIT || Rmm.getTotalBytesAllocated() - before < bytes) {
+          throw new AssertionError("Input budget or RMM accounting violation");
+        }
+        Cuda.DEFAULT_STREAM.sync();
+      } catch (Throwable error) {
+        try { close(); } catch (Throwable cleanup) { error.addSuppressed(cleanup); }
+        throw error;
+      }
+    }
+
+    Future<?> submit(int slot) {
+      return worker.submit(() -> {
+        Cuda.setDevice(0);
+        HostMemoryBuffer host = batches[slot].backing;
+        for (long offset = 0; offset < host.getLength(); offset += chunkBytes) {
+          long length = Math.min(chunkBytes, host.getLength() - offset);
+          buffers[slot].copyFromHostBufferAsync(offset, host, offset, length, stream);
+          // One transfer in flight permits decode metadata transfers to enter the copy queue.
+          stream.sync();
+        }
+      });
+    }
+
+    @Override
+    public void close() {
+      worker.shutdown();
+      boolean interrupted = false;
+      for (;;) {
+        try {
+          if (worker.awaitTermination(1, TimeUnit.SECONDS)) {
+            break;
+          }
+        } catch (InterruptedException error) {
+          interrupted = true;
+        }
+      }
+      try {
+        // Every queued transfer finishes before its input or destination is released.
+        for (DeviceMemoryBuffer[] views : chunks) {
+          if (views != null) {
+            for (DeviceMemoryBuffer view : views) {
+              if (view != null) {
+                view.close();
+              }
+            }
+          }
+        }
+        for (DeviceMemoryBuffer buffer : buffers) {
+          if (buffer != null) {
+            buffer.close();
+          }
+        }
+      } finally {
+        if (interrupted) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    }
+  }
+
+  private static void runWindowed(String mode, int iterations, HostMemoryBuffer footer,
+      Batch[] batches, Cuda.Stream stream, Table[] references) throws Exception {
+    boolean lookahead = mode.equals("paced") || mode.equals("unpaced");
+    long chunkBytes = mode.equals("paced") || mode.equals("pacedserial")
+        ? 32 * 1024 * 1024 : 2 * GIB;
+    try (CopyWindow window = new CopyWindow(batches, stream, chunkBytes)) {
+      long start = System.nanoTime();
+      try (NvtxRange range = new NvtxRange("bounded-scan-" + mode, NvtxColor.BLUE)) {
+        Future<?> pending = window.submit(0);
+        for (int i = 0; i < iterations; i++) {
+          int slot = i % 2;
+          pending.get();
+          if (lookahead && i + 1 < iterations) {
+            pending = window.submit((i + 1) % 2);
+          }
+          try (HybridScanReader reader = new HybridScanReader(footer, OPTIONS);
+              Table output = reader.materializeAllColumns(batches[slot].groups, window.chunks[slot])) {
+            if (output.getRowCount() != batches[slot].rows) {
+              throw new AssertionError("Decoded row count differs");
+            }
+            if (references != null) {
+              equal(references[slot], output);
+            }
+            // Input slots can be overwritten only after their last GPU reader finishes.
+            Cuda.DEFAULT_STREAM.sync();
+          }
+          if (!lookahead && i + 1 < iterations) {
+            pending = window.submit((i + 1) % 2);
+          }
+        }
+      }
+      System.out.printf("{\"mode\":\"%s\",\"iterations\":%d,\"seconds\":%.9f,"
+          + "\"full_comparison\":%s,\"chunk_bytes\":%d,\"retained_input_bytes\":%d}%n",
+          mode, iterations, (System.nanoTime() - start) / 1e9, references != null,
+          chunkBytes, batches[0].backing.getLength() + batches[1].backing.getLength());
+    }
+  }
+
   private static void run(String mode, int iterations, HostMemoryBuffer footer,
       Batch[] batches, Cuda.Stream copyStream, Cuda.Event[] events, Table[] reference) {
     Cuda.Stream stream = mode.equals("original") ? Cuda.DEFAULT_STREAM : copyStream;
@@ -185,7 +315,7 @@ public final class BoundedScanPipelineProbe {
       throw new IllegalArgumentException("Expected Parquet path, iterations, mode (all/original/serial/pipeline)");
     }
     int iterations = Integer.parseInt(args[1]);
-    if (iterations < 2 || !Arrays.asList("all", "original", "serial", "pipeline").contains(args[2])) {
+    if (iterations < 2 || !Arrays.asList("all", "original", "serial", "pipeline", "windowed").contains(args[2])) {
       throw new IllegalArgumentException("Invalid iteration count or mode");
     }
     Cuda.setDevice(0);
@@ -219,10 +349,20 @@ public final class BoundedScanPipelineProbe {
               Table reference1 = reference(footer, second, event1)) {
             Table[] reference = {reference0, reference1};
             run("pipeline", 4, footer, batches, stream, events, reference);
+            if (args[2].equals("windowed")) {
+              for (String mode : new String[]{"bulkserial", "unpaced", "pacedserial", "paced"}) {
+                runWindowed(mode, 4, footer, batches, stream, reference);
+              }
+            }
           }
           if (args[2].equals("all")) {
             for (String mode : new String[]{"original", "serial", "pipeline", "pipeline", "serial", "original"}) {
               run(mode, iterations, footer, batches, stream, events, null);
+            }
+          } else if (args[2].equals("windowed")) {
+            for (String mode : new String[]{"bulkserial", "unpaced", "pacedserial", "paced",
+                "paced", "pacedserial", "unpaced", "bulkserial"}) {
+              runWindowed(mode, iterations, footer, batches, stream, null);
             }
           } else {
             run(args[2], iterations, footer, batches, stream, events, null);

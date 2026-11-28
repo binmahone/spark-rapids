@@ -111,15 +111,19 @@ def main():
             logs = Path(read(a.work / 'evidence/deployment.json')['scratch_root']) / run.name / 'suite'
             proof = []
             for stderr in logs.glob('worker-*/work/*/*/stderr'):
+                content = stderr.read_text()
+                first_call = re.search(r'CONCAT_OFFSET_PROBE_FIRST_CALL mode=(\w+)', content)
+                assert first_call and first_call[1] == a.concat_implementation
+                first_string = 'CONCAT_OFFSET_PROBE_FIRST_STRING mode=candidate' in content
+                if a.concat_implementation == 'candidate' and 5 in queries:
+                    assert first_string, 'Candidate string branch not observed: ' + str(stderr)
+                # Worker termination can bypass JVM shutdown hooks; first dispatches are synchronous.
                 match = re.search(r'CONCAT_OFFSET_PROBE_COUNTS mode=(\w+) calls=(\d+) '
-                    r'candidate_string_columns=(\d+) input_tables=(\d+)', stderr.read_text())
-                assert match, 'Missing native execution counters: ' + str(stderr)
-                assert match[1] == a.concat_implementation and int(match[2]) > 0
-                proof.append({'stderr': str(stderr), 'calls': int(match[2]),
-                    'candidate_string_columns': int(match[3]), 'input_tables': int(match[4])})
+                    r'candidate_string_columns=(\d+) input_tables=(\d+)', content)
+                proof.append({'stderr': str(stderr), 'first_native_call': first_call[1],
+                    'first_candidate_string_call': first_string,
+                    'shutdown_counters': list(match.groups()) if match else None})
             assert len(proof) == 8
-            if a.concat_implementation == 'candidate' and 5 in queries:
-                assert all(v['candidate_string_columns'] > 0 for v in proof)
             concat['runtime_proof'] = proof
         assert all(child.poll() is None for child, _ in children), 'An observer exited during the workload'
         pools = {}

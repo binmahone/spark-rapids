@@ -5,13 +5,20 @@ set -euo pipefail
 readonly work=${1:?Prepared work directory}
 readonly thread=${2:?Owner thread}
 readonly revision=${3:?Pinned candidate cuDF revision}
+readonly mode=${4:-all}
 readonly here=$(cd "$(dirname "$0")" && pwd)
 readonly root="$work/native-concat"
 mkdir -p "$root"
 rm -f "$root/build.exit"
 exec > >(tee -a "$root/build.log") 2>&1
 trap 'code=$?; printf "%s\n" "$code" > "$root/build.exit"' EXIT
-python3 "$here/prepare_native_concat.py" --work "$work" --thread-id "$thread" --cudf-revision "$revision"
+if [[ "$mode" == all ]]; then
+  python3 "$here/prepare_native_concat.py" --work "$work" --thread-id "$thread" --cudf-revision "$revision"
+else
+  [[ "$mode" == agent ]]
+  [[ $(git -C "$root/cudf" rev-parse HEAD) == "$revision" ]]
+  [[ -z $(nvidia-smi --query-compute-apps=pid --format=csv,noheader) ]]
+fi
 readonly cuda=/usr/local/cuda-13.1
 common=(-std=c++20 -O3 -DNDEBUG --extended-lambda --expt-relaxed-constexpr \
   --default-stream per-thread -DCUDA_API_PER_THREAD_DEFAULT_STREAM=1 \
@@ -19,6 +26,7 @@ common=(-std=c++20 -O3 -DNDEBUG --extended-lambda --expt-relaxed-constexpr \
   -I"$root/include" -I"$root/cudf/cpp/include" -I"$root/CCCL/libcudacxx/include" \
   -I"$root/CCCL/thrust" -I"$root/CCCL/cub" -I"$root/rmm/cpp/include" \
   -I"$root/nvtx3/c/include" -I"$root/rapids_logger/include" -I"$root/spdlog/include")
+if [[ "$mode" == all ]]; then
 "$cuda/bin/nvcc" "${common[@]}" -Xcompiler -fPIC -c "$root/candidate.cu" -o "$root/candidate.o"
 "$cuda/bin/nvcc" "${common[@]}" -Xcompiler -fPIC -c \
   "$root/cudf/cpp/src/table/table_device_view.cu" -o "$root/table_device_view.o"
@@ -27,6 +35,7 @@ common=(-std=c++20 -O3 -DNDEBUG --extended-lambda --expt-relaxed-constexpr \
   -L"$root/lib" -lcudf -Xlinker -rpath -Xlinker "$root/lib" \
   -ldl -lpthread -lrt -o "$root/native-concat-probe"
 sha256sum "$root/native-concat-probe" > "$root/probe.sha256"
+fi
 printf '%s\n' '{ global: Java_com_nvidia_spark_rapids_experiments_ConcatOffsetProbe_*; local: *; };' \
   > "$root/exports.map"
 "$cuda/bin/nvcc" "${common[@]}" -shared -Xcompiler -fPIC \

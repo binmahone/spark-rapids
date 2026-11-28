@@ -48,7 +48,9 @@ jlongArray concatenate(JNIEnv* env, jclass, jlongArray handles)
       if (std::all_of(columns.begin(), columns.end(), [](auto const& column) {
         return column.type().id() == cudf::type_id::STRING;
       })) {
-        string_columns.fetch_add(1, std::memory_order_relaxed);
+        if (string_columns.fetch_add(1, std::memory_order_relaxed) == 0) {
+          std::fprintf(stderr, "CONCAT_OFFSET_PROBE_FIRST_STRING mode=candidate\n");
+        }
         output.push_back(cudf::strings::offset_experiment::concatenate(
           columns, cudf::get_default_stream(), cudf::get_current_device_resource_ref()));
       } else {

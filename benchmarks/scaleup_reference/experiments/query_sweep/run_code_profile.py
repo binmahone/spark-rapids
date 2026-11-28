@@ -31,6 +31,7 @@ def main():
     p.add_argument('--queries', default='8,18,5')
     p.add_argument('--nvcomp-policy', choices=('STABLE', 'OFF'))
     p.add_argument('--mmap-policy', choices=('ON', 'OFF'))
+    p.add_argument('--pinned-copy-threshold', type=int, choices=(0, 65536))
     p.add_argument('--concat-implementation', choices=('control', 'candidate'))
     p.add_argument('--scan-copy-implementation', choices=('original', 'sync', 'pair', 'paced-control', 'paced', 'paced-queued', 'serial-original', 'serial-unlocked', 'serial-locked', 'batch-control', 'batch-scalar', 'batch-paced'))
     p.add_argument('--packed-view', action='store_true')
@@ -110,6 +111,7 @@ def main():
              'concat_probe': concat,
              'scan_copy_probe': scan_copy,
              'packed_view': a.packed_view,
+             'pinned_copy_threshold': a.pinned_copy_threshold,
              'queries': queries, 'nvcomp_policy': a.nvcomp_policy, 'mmap_policy': a.mmap_policy,
              'scratch': str(scratch), 'started_unix_ns': time.time_ns(),
              'classification': 'Code-path diagnosis; profiler times are not benchmark scores',
@@ -140,6 +142,8 @@ def main():
                    if a.nvcomp_policy else {})
         if a.mmap_policy:
             decoder['spark.executorEnv.LIBCUDF_MMAP_ENABLED'] = a.mmap_policy
+        if a.pinned_copy_threshold is not None:
+            decoder['spark.executorEnv.LIBCUDF_KERNEL_PINNED_COPY_THRESHOLD'] = str(a.pinned_copy_threshold)
         run, result = launch_group(a.work, 'code-profile-' + a.label, 0, selected, {
             **decoder,
             'spark.rapids.sql.reader.kvikio.numThreads': '32',
@@ -203,17 +207,23 @@ def main():
         assert all(child.poll() is None for child, _ in children), 'An observer exited during the workload'
         pools = {}
         decoder_policies = {}
+        pinned_copy_policies = {}
         mmap_observations = {}
         for line in (directory / 'pool.jsonl').read_text().splitlines():
             for executor in json.loads(line)['executors']:
                 pools.setdefault(str(executor['pid']), set()).update(executor['thread_names'])
                 decoder_policies.setdefault(str(executor['pid']), set()).add(
                     executor.get('nvcomp_policy'))
+                pinned_copy_policies.setdefault(str(executor['pid']), set()).add(executor.get('pinned_copy_threshold'))
                 mmap_observations.setdefault(str(executor['pid']), []).append({
                     'policy': executor.get('mmap_policy'),
                     'dataset_mappings': executor.get('dataset_mappings', 0)})
         assert len(pools) == 8 and all(names == {'kvikio-' + str(i) for i in range(32)}
                                      for names in pools.values())
+        if a.pinned_copy_threshold is not None:
+            assert len(pinned_copy_policies) == 8
+            assert all(v == {str(a.pinned_copy_threshold)} for v in pinned_copy_policies.values())
+            state['pinned_copy_environment_proof'] = {k: list(v) for k,v in pinned_copy_policies.items()}
         state['native_threads'] = {pid: sorted(names) for pid, names in pools.items()}
         if a.packed_view and a.mode == 'stacks':
             loaded = {}

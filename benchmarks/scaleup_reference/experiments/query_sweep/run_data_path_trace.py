@@ -28,6 +28,7 @@ def main():
     p.add_argument('--scan-copy-implementation', choices=('paced-control', 'paced', 'paced-queued', 'serial-original', 'serial-unlocked', 'serial-locked', 'batch-control', 'batch-scalar', 'batch-paced'))
     p.add_argument('--timeline-only', action='store_true')
     p.add_argument('--java-ranges', action='store_true')
+    p.add_argument('--pinned-copy-threshold', type=int, choices=(0, 65536))
     a = p.parse_args()
     assert not (a.concat_implementation and a.scan_copy_implementation)
     work = a.work.resolve()
@@ -61,7 +62,7 @@ def main():
     report = {'status': 'starting', 'owner': owner, 'classification': 'Diagnostic profiling; excluded from SOL scores',
               'nsys_session': session, 'source_revision': subprocess.check_output(
                   ['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
-              'start_unix_ns': time.time_ns(), 'java_ranges': a.java_ranges}
+              'start_unix_ns': time.time_ns(), 'java_ranges': a.java_ranges, 'pinned_copy_threshold': a.pinned_copy_threshold}
     write(directory / 'controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),
                                          'start_time': services.start_time(os.getpid())})
     write(directory / 'state.json', report)
@@ -84,6 +85,8 @@ def main():
                sys.executable, str(HERE / 'run_data_path_trace_workload.py'),
                '--work', str(work), '--thread-id', a.thread_id, '--output', str(directory),
                '--variant', a.variant, '--query', str(a.query)]
+    if a.pinned_copy_threshold is not None:
+        command += ['--pinned-copy-threshold', str(a.pinned_copy_threshold)]
     if a.java_ranges:
         command += ['--java-ranges']
     if a.concat_implementation:
@@ -177,6 +180,18 @@ def main():
             db.close()
             assert len(counts) == 8 and all(count > 0 for _, count in counts), counts
             report['java_reader_range_counts'] = counts
+        if a.pinned_copy_threshold is not None:
+            import sqlite3
+            db = sqlite3.connect('file:' + str(directory / (artifact + '.sqlite')) + '?mode=ro', uri=True)
+            copies = db.execute("select k.globalPid,s.value,count(*) from CUPTI_ACTIVITY_KIND_KERNEL k "
+                "join StringIds s on k.demangledName=s.id where s.value like '%cudf::detail::%copy_kernel%' "
+                "group by k.globalPid,s.value").fetchall()
+            db.close()
+            if a.pinned_copy_threshold:
+                assert len({row[0] for row in copies}) == 8, copies
+            else:
+                assert not copies, copies
+            report['pinned_copy_kernel_proof'] = copies
         report['status'] = 'completed'
     except BaseException as error:
         report.update(status='failed', error=repr(error))

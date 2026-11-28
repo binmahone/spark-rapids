@@ -10,7 +10,9 @@ readonly concat_implementation=${5:-}
 readonly timeline_only=${6:-false}
 readonly scan_copy_implementation=${7:-}
 readonly java_ranges=${8:-false}
+readonly pinned_copy_threshold=${9:-}
 extra_args=()
+if [[ -n "$pinned_copy_threshold" ]]; then extra_args+=(--pinned-copy-threshold "$pinned_copy_threshold"); fi
 if [[ "$java_ranges" == true ]]; then extra_args+=(--java-ranges); fi
 if [[ -n "$concat_implementation" ]]; then
   extra_args+=(--concat-implementation "$concat_implementation")

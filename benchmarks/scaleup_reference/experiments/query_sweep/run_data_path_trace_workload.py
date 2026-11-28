@@ -27,6 +27,7 @@ p.add_argument('--query', type=int, choices=(5, 8, 9, 10, 18, 20), default=8)
 p.add_argument('--concat-implementation', choices=('control', 'candidate'))
 p.add_argument('--scan-copy-implementation', choices=('paced-control', 'paced', 'paced-queued', 'serial-original', 'serial-unlocked', 'serial-locked', 'batch-control', 'batch-scalar', 'batch-paced'))
 p.add_argument('--java-ranges', action='store_true')
+p.add_argument('--pinned-copy-threshold', type=int, choices=(0, 65536))
 a = p.parse_args()
 assert not (a.concat_implementation and a.scan_copy_implementation)
 assert read(a.work / 'evidence/owner.json')['thread_id'] == a.thread_id
@@ -71,6 +72,8 @@ if a.scan_copy_implementation:
         'library_sha256': sha(root / 'libscan_copy_probe.so')})
 path, result = launch_group(a.work, 'data-path-trace-' + a.output.name.replace('-process-tree', ''),
     0, [selected], {
+    **({'spark.executorEnv.LIBCUDF_KERNEL_PINNED_COPY_THRESHOLD': str(a.pinned_copy_threshold)}
+       if a.pinned_copy_threshold is not None else {}),
     'spark.rapids.sql.reader.kvikio.numThreads': '32',
     'spark.rapids.sql.metrics.level': 'DEBUG',
     'spark.rapids.sql.nvtx.traceTaskGpuOwnership': 'false' if a.variant.startswith('scan-split-cuda') or a.variant == 'code-profile' else 'true',

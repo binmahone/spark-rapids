@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.request
 
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE.parents[1]/'scripts'))
@@ -16,7 +17,7 @@ from common import read,sha,write
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work',type=Path,required=True)
 p.add_argument('--thread-id',required=True)
-p.add_argument('--action',choices=('configure','reconfigure','baseline','candidate'),required=True)
+p.add_argument('--action',choices=('configure','reconfigure','configure-toolchain','baseline','candidate'),required=True)
 p.add_argument('--candidate-revision',required=True)
 a=p.parse_args()
 assert read(a.work/'evidence/owner.json')['thread_id']==a.thread_id
@@ -26,7 +27,10 @@ for area in ('code-profile','data-path-trace'):
 root=a.work/'native-codec-library'
 root.mkdir(exist_ok=True)
 state_path=root/(a.action+'-state.json')
-assert not state_path.exists()
+if state_path.exists():
+ assert a.action=='baseline' and read(state_path)['status']=='failed'
+ shutil.copyfile(state_path,root/'baseline-gcc12-failed-state.json')
+ (root/'baseline-build.log').rename(root/'baseline-gcc12-failed-build.log')
 state={'status':'running','action':a.action,'owner_thread':a.thread_id,'started_unix_ns':time.time_ns(),
        'candidate_revision':a.candidate_revision,'commands':[]}
 write(state_path,state)
@@ -60,12 +64,33 @@ try:
    '-Drapids-cmake-sha=8cf47a7b600985f876f428ac3c335ffd2fdeeb1d',
    '-DCMAKE_INSTALL_PREFIX='+str(root/'install')]
   run(command,'configure.log',900)
+ elif a.action=='configure-toolchain':
+  assert read(root/'baseline-state.json')['status']=='failed'
+  executable=root/'micromamba'
+  with urllib.request.urlopen('https://github.com/mamba-org/micromamba-releases/releases/download/2.10.0-0/micromamba-linux-64',timeout=60) as response:
+   executable.write_bytes(response.read())
+  assert sha(executable)=='701f39c06f8e6a670a0e186c8479b9e5c0502a2f0cda6cef65d83bdd2875e8bd'
+  executable.chmod(0o755)
+  compiler=root/'compiler'
+  run([executable,'create','--yes','--no-rc','--root-prefix',root/'mamba-root','--prefix',compiler,
+       '--channel','conda-forge','gxx_linux-64=14.3.0','libstdcxx=14.3.0','libgcc=14.3.0'],
+      'compiler-install.log',600)
+  run([executable,'list','--no-rc','--prefix',compiler,'--explicit'],'compiler-explicit.txt',60)
+  build.rename(root/'build-gcc12')
+  command=read(root/'configure-state.json')['commands'][-1]
+  command=[arg.replace('=gcc-12','='+str(compiler/'bin/x86_64-conda-linux-gnu-gcc')).replace(
+      '=g++-12','='+str(compiler/'bin/x86_64-conda-linux-gnu-g++')) for arg in command]
+  run(command,'configure-gcc14.log',900)
+  prior=read(root/'configure-state.json');prior.pop('error',None)
+  prior.update(status='completed',commands=[command],compiler_state=str(state_path),finished_unix_ns=time.time_ns())
+  write(root/'configure-state.json',prior)
  elif a.action=='reconfigure':
   prior=read(root/'configure-state.json')
   assert prior['status']=='failed'
   shutil.copyfile(root/'configure-state.json',root/'configure-first-failed-state.json')
   run(prior['commands'][-1],'configure-retry.log',900)
-  prior.update(status='completed',reconfigure_state=str(state_path))
+  prior.pop('error',None)
+  prior.update(status='completed',reconfigure_state=str(state_path),finished_unix_ns=time.time_ns())
   write(root/'configure-state.json',prior)
  else:
   assert read(root/'configure-state.json')['status']=='completed'

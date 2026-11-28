@@ -62,6 +62,14 @@ for name in ['CCCL', 'rmm', 'nvtx3', 'rapids_logger', 'spdlog']:
         target.mkdir()
         command('tar', '-xzf', str(archive), '--strip-components=1', '-C', str(target))
     records[name] = {'url': url, 'sha256': digest}
+version = (root / 'rmm/VERSION').read_text().strip()
+assert version == '26.12.00'
+generated = root / 'include/rmm'
+generated.mkdir(parents=True, exist_ok=True)
+(generated / 'version_config.hpp').write_text('#pragma once\n' + ''.join(
+    f'#define RMM_VERSION_{key} {int(value)}\n'
+    for key, value in zip(('MAJOR', 'MINOR', 'PATCH'), version.split('.'))) +
+    '#define RMM_VERSION "' + version + '"\n')
 engine = a.work / 'artifacts/decimal-null-copy/cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar'
 assert sha(engine) == 'ec38a58426e662ce99a433e806a66fa927bb011c014465a5df0b0c31ded4d1cc'
 native = root / 'lib'
@@ -95,6 +103,7 @@ assert body.count(needle) == 1
 body = body.replace(needle, 'namespace cudf {\nnamespace strings {\nnamespace offset_experiment {\nusing namespace cudf::strings::detail;')
 (root / 'candidate.cu').write_text(body)
 record = {'cudf_revision': a.cudf_revision, 'dependencies': records, 'libcudf_sha256': sha(target),
+          'rmm_version_header_sha256': sha(generated / 'version_config.hpp'),
           'candidate_source_sha256': sha(root / 'candidate.cu'),
           'transformation': 'Only the implementation namespace changes for side-by-side comparison'}
 (root / 'sdk-manifest.json').write_text(json.dumps(record, indent=2) + '\n')

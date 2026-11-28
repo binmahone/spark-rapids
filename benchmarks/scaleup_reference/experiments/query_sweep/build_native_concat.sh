@@ -15,7 +15,7 @@ readonly cuda=/usr/local/cuda-13.1
 "$cuda/bin/nvcc" -std=c++20 -O3 -DNDEBUG --extended-lambda --expt-relaxed-constexpr \
   --default-stream per-thread -DCUDA_API_PER_THREAD_DEFAULT_STREAM=1 \
   -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=1 -arch=sm_120 -ccbin g++-12 \
-  -I"$root/cudf/cpp/include" -I"$root/CCCL/libcudacxx/include" \
+  -I"$root/include" -I"$root/cudf/cpp/include" -I"$root/CCCL/libcudacxx/include" \
   -I"$root/CCCL/thrust" -I"$root/CCCL/cub" -I"$root/rmm/cpp/include" \
   -I"$root/nvtx3/c/include" -I"$root/rapids_logger/include" -I"$root/spdlog/include" \
   "$root/candidate.cu" "$here/native_concat_probe.cu" \

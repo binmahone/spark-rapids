@@ -15,7 +15,9 @@ readonly mmap_policy=${10:-}
 readonly pinned_copy_threshold=${11:-}
 readonly shuffle_copy_implementation=${12:-}
 readonly frozen_native_directory=${13:-false}
+readonly codec_library=${14:-}
 decoder_args=()
+if [[ -n "$codec_library" ]]; then decoder_args+=(--codec-library "$codec_library"); fi
 if [[ "$frozen_native_directory" == true ]]; then
   decoder_args+=(--frozen-native-directory)
 else

@@ -71,6 +71,10 @@ try:
   assert library.exists()
   artifact=root/a.action;artifact.mkdir()
   shutil.copyfile(library,artifact/'libcudf.so')
+  for name in ('libcudfjni.so','libcufilejni.so','libnvmljni.so'):
+   (artifact/name).symlink_to(a.work/'native-concat/lib'/name)
+  run(['ldd',artifact/'libcudf.so'],a.action+'-ldd.log',60)
+  assert 'not found' not in (root/(a.action+'-ldd.log')).read_text()
   state.update(source_revision=subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip(),
                library_sha256=sha(artifact/'libcudf.so'))
  state['status']='completed'

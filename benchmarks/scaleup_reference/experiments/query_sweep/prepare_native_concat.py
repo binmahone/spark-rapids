@@ -101,10 +101,15 @@ body = (source / 'cpp/src/strings/copying/concatenate.cu').read_text()
 needle = 'namespace cudf {\nnamespace strings {\nnamespace detail {'
 assert body.count(needle) == 1
 body = body.replace(needle, 'namespace cudf {\nnamespace strings {\nnamespace offset_experiment {\nusing namespace cudf::strings::detail;')
+assert body.count('cudf::detail::create_null_mask(') == 1
+body = body.replace('cudf::detail::create_null_mask(', 'cudf::create_null_mask(')
 (root / 'candidate.cu').write_text(body)
 record = {'cudf_revision': a.cudf_revision, 'dependencies': records, 'libcudf_sha256': sha(target),
           'rmm_version_header_sha256': sha(generated / 'version_config.hpp'),
           'candidate_source_sha256': sha(root / 'candidate.cu'),
-          'transformation': 'Only the implementation namespace changes for side-by-side comparison'}
+          'support_source_sha256': sha(source / 'cpp/src/table/table_device_view.cu'),
+          'transformation': 'Separate implementation namespace; the public null-mask wrapper delegates '
+                            'to the same internal implementation; unchanged pinned device-view '
+                            'template support is compiled because its specialization is not exported'}
 (root / 'sdk-manifest.json').write_text(json.dumps(record, indent=2) + '\n')
 print(json.dumps(record))

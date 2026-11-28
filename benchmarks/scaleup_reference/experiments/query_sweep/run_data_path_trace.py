@@ -23,6 +23,7 @@ def main():
     p.add_argument('--thread-id', required=True)
     p.add_argument('--variant', choices=('control', 'scan-pack', 'scan-split', 'scan-split-cuda', 'scan-split-cuda2', 'shuffle-buffer', 'shuffle-wait', 'code-profile'), default='control')
     p.add_argument('--query', type=int, choices=(5, 8, 10, 18, 20), default=8)
+    p.add_argument('--attempt', type=int, default=0)
     a = p.parse_args()
     work = a.work.resolve()
     owner = read(work / 'evidence/owner.json')
@@ -33,7 +34,9 @@ def main():
         assert not any(services.group_members(r) for r in read(build_record)), 'Build must finish before measurement'
     assert not subprocess.check_output(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader'], text=True).strip()
     suffix = '-' + a.variant
-    label = 'Q' + str(a.query)
+    assert a.attempt >= 0
+    attempt = '-attempt' + str(a.attempt) if a.attempt else ''
+    label = 'Q' + str(a.query) + attempt
     artifact = 'q' + str(a.query)
     directory = work / ('data-path-trace/' + label + '-process-tree' + suffix)
     if a.variant == 'code-profile':
@@ -46,7 +49,7 @@ def main():
         directory.mkdir(parents=True, exist_ok=False)
     space = os.statvfs(directory)
     assert space.f_bavail * space.f_frsize > 15 * 2**30
-    session = 'data-path-' + a.thread_id + '-' + artifact + '-tree' + suffix
+    session = 'data-path-' + a.thread_id + '-' + artifact + '-tree' + suffix + attempt
     report = {'status': 'starting', 'owner': owner, 'classification': 'Diagnostic profiling; excluded from SOL scores',
               'nsys_session': session, 'source_revision': subprocess.check_output(
                   ['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),

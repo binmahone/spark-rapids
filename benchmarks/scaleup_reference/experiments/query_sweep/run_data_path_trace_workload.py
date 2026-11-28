@@ -39,7 +39,10 @@ selected = replace(selected, overrides={**selected.overrides,
 if a.variant in ('scan-split', 'scan-split-cuda', 'scan-split-cuda2'):
     selected = replace(selected, overrides={**selected.overrides,
         'spark.sql.files.maxPartitionBytes': '1g'})
-path, result = launch_group(a.work, 'data-path-trace-Q' + str(a.query) + '-' + a.variant,
+native = a.work / 'native-concat/lib'
+native_options = ('-Dai.rapids.cudf.lib-native-dir=' + str(native)
+                  if a.variant == 'code-profile' and native.is_dir() else None)
+path, result = launch_group(a.work, 'data-path-trace-' + a.output.name.replace('-process-tree', ''),
     0, [selected], {
     'spark.rapids.sql.reader.kvikio.numThreads': '32',
     'spark.rapids.sql.metrics.level': 'DEBUG',
@@ -50,7 +53,8 @@ path, result = launch_group(a.work, 'data-path-trace-Q' + str(a.query) + '-' + a
     'spark.rapids.shuffle.ucx.bounceBuffers.size': '16m' if a.variant == 'shuffle-buffer' else '4m'},
     experimental_engine=a.work / 'artifacts' / ('shuffle-wait' if a.variant == 'shuffle-wait' else 'decimal-null-copy'),
     runtime_hash_reuse_queries=[9] if a.query == 9 else None,
-    diagnostic_nvtx=not (a.variant.startswith('scan-split-cuda') or a.variant == 'code-profile'))
+    diagnostic_nvtx=not (a.variant.startswith('scan-split-cuda') or a.variant == 'code-profile'),
+    diagnostic_jvm_options=native_options)
 write(a.output / 'workload.json', {'run': str(path), 'start_unix_ns': started,
                                   'end_unix_ns': time.time_ns(), 'result': result})
 assert result['status'] == 'completed' and result['driver_exit_code'] == 0

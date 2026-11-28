@@ -18,7 +18,8 @@ readonly cuda=/usr/local/cuda-13.1
   -I"$root/include" -I"$root/cudf/cpp/include" -I"$root/CCCL/libcudacxx/include" \
   -I"$root/CCCL/thrust" -I"$root/CCCL/cub" -I"$root/rmm/cpp/include" \
   -I"$root/nvtx3/c/include" -I"$root/rapids_logger/include" -I"$root/spdlog/include" \
-  "$root/candidate.cu" "$here/native_concat_probe.cu" \
+  "$root/candidate.cu" "$root/cudf/cpp/src/table/table_device_view.cu" \
+  "$here/native_concat_probe.cu" \
   -L"$root/lib" -lcudf -Xlinker -rpath -Xlinker "$root/lib" \
   -ldl -lpthread -lrt -o "$root/native-concat-probe"
 sha256sum "$root/native-concat-probe" > "$root/probe.sha256"

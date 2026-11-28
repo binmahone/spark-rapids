@@ -11,6 +11,7 @@ p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work',type=Path,required=True)
 p.add_argument('--output',type=Path,required=True)
 p.add_argument('--expected-directory',type=Path,required=True)
+p.add_argument('--controller',type=Path)
 a=p.parse_args()
 expected=a.expected_directory/'libcudf.so'
 expected_stat=expected.stat()
@@ -39,5 +40,15 @@ with a.output.open('x',buffering=1) as output:
                             'expected_library':str(expected),'expected_inode':expected_stat.st_ino,
                             'unix_ns':time.time_ns(),'maps':selected})+'\n')
     seen.add(proc.name)
+    if len(seen)>8:
+     if a.controller:
+      owner=json.loads(a.controller.read_text())
+      parent=Path('/proc')/str(owner['pid'])
+      assert parent.stat().st_uid==owner['owner_uid']==os.getuid()
+      assert (parent/'stat').read_text().rsplit(')',1)[1].split()[19]==str(owner['start_time'])
+      parent_command=(parent/'cmdline').read_bytes()
+      assert b'run_code_profile.py' in parent_command and str(a.work).encode() in parent_command
+      os.kill(owner['pid'],signal.SIGTERM)
+     raise RuntimeError('Executor replacement invalidates this eight-executor native-library trial')
    except (FileNotFoundError,ProcessLookupError,PermissionError):continue
   time.sleep(.5)

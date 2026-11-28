@@ -178,7 +178,8 @@ def main():
             ('pool', HERE / 'monitor_read_pool.py', [])]
         if codec_library:
             observers.append(('native-modules', HERE / 'monitor_native_modules.py',
-                              ['--expected-directory', str(native)]))
+                              ['--expected-directory', str(native),
+                               '--controller', str(directory / 'controller.json')]))
         if a.mode == 'native-io':
             observers.append(('native-io', HERE / 'monitor_native_io.py',
                 ['--thread-id', a.thread_id, '--scratch', str(scratch),

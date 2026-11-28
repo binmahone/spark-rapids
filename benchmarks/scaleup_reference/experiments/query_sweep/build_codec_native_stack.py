@@ -64,6 +64,18 @@ def run(command,name,timeout=900,overrides=None):
  state.setdefault('completed_steps',{})[name]=command
  write(state_path,state)
 
+def smoke_check(artifact,tag):
+ smoke=root/'smoke';smoke.mkdir(exist_ok=True)
+ engine=a.work/'artifacts/decimal-null-copy/cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar'
+ assert sha(engine)=='ec38a58426e662ce99a433e806a66fa927bb011c014465a5df0b0c31ded4d1cc'
+ spark=Path(read(a.work/'evidence/deployment.json')['spark_home'])
+ classpath=str(engine)+':'+str(spark/'jars/*')
+ run([a.work/'jdk17/bin/javac','-cp',classpath,'-d',smoke,HERE/'NativeStackSmoke.java'],tag+'-smoke-compile.log',120)
+ uuid=subprocess.check_output(['nvidia-smi','--id=0','--query-gpu=uuid','--format=csv,noheader'],text=True).strip()
+ run([a.work/'jdk17/bin/java','-Dai.rapids.cudf.lib-native-dir='+str(artifact),
+      '-cp',str(smoke)+':'+classpath,'NativeStackSmoke'],tag+'-smoke.log',120,{'CUDA_VISIBLE_DEVICES':uuid})
+ assert 'NATIVE_STACK_SMOKE_PASSED' in (root/(a.action+'-'+tag+'-smoke.log')).read_text()
+
 try:
  if a.action=='tests':
   artifact=read(root/'candidate-state.json');assert artifact['status']=='completed'
@@ -85,6 +97,11 @@ try:
   assert len(loaded)==1 and loaded[0].endswith('calling init: '+str(library)),loaded
   state.update(reader_tests=dict(result.attrib),tested_library_sha256=sha(library),
                tested_executable_sha256=sha(executable),tested_library_load_evidence=loaded)
+  for implementation in ('baseline','candidate'):
+   identity=read(root/(implementation+'-state.json'))
+   assert identity['status']=='completed' and sha(root/implementation/'libcudf.so')==identity['library_sha256']
+   smoke_check(root/implementation,implementation)
+  state['java_gpu_smoke']={'baseline':'passed','candidate':'passed'}
  else:
   if a.action=='baseline':
    assert shutil.disk_usage(root).free>80*1024**3
@@ -158,16 +175,7 @@ try:
   state.update(source_revision=subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip(),
                library_sha256=sha(artifact/'libcudf.so'),jni_stub_sha256=sha(artifact/'libcudfjni.so'),
                required_exports=required)
-  smoke=root/'smoke';smoke.mkdir(exist_ok=True)
-  engine=a.work/'artifacts/decimal-null-copy/cudf-spark_2.12-26.12.0-SNAPSHOT-cuda13.jar'
-  assert sha(engine)=='ec38a58426e662ce99a433e806a66fa927bb011c014465a5df0b0c31ded4d1cc'
-  spark=Path(read(a.work/'evidence/deployment.json')['spark_home'])
-  classpath=str(engine)+':'+str(spark/'jars/*')
-  run([a.work/'jdk17/bin/javac','-cp',classpath,'-d',smoke,HERE/'NativeStackSmoke.java'],'smoke-compile.log',120)
-  uuid=subprocess.check_output(['nvidia-smi','--id=0','--query-gpu=uuid','--format=csv,noheader'],text=True).strip()
-  run([a.work/'jdk17/bin/java','-Dai.rapids.cudf.lib-native-dir='+str(artifact),
-       '-cp',str(smoke)+':'+classpath,'NativeStackSmoke'],'smoke.log',120,{'CUDA_VISIBLE_DEVICES':uuid})
-  assert 'NATIVE_STACK_SMOKE_PASSED' in (root/(a.action+'-smoke.log')).read_text()
+  smoke_check(artifact,a.action)
   state['java_gpu_smoke']='passed'
  state['status']='completed'
 except BaseException as error:

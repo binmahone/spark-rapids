@@ -88,6 +88,17 @@ def main():
         selected[7] = replace(q7, overrides={**selected[7].overrides, **q7.overrides})
     selected = [replace(selected[q], overrides={**selected[q].overrides,
                 'spark.rapids.sql.join.hashTable.reuse': 'false'}) for q in queries]
+    # Validate guarded SQL prerequisites before allocating executors or running earlier queries.
+    if any(case.name == 'critical_witness_int32' for case in selected):
+        proof = read(a.work / 'critical/oracle.json')
+        dataset = '/opt/dlami/nvme/daily-trend-hardened/dataset'
+        assert proof['status'] == 'passed' and proof['dataset_bounds']['dataset'] == dataset
+        records = proof['dataset_bounds']['files']
+        assert {str(p) for p in Path(dataset).joinpath('lineitem').rglob('*.parquet')} == {
+            r['path'] for r in records}
+        for record in records:
+            actual = Path(record['path']).stat()
+            assert (actual.st_size, actual.st_mtime_ns) == (record['bytes'], record['mtime_ns'])
     state = {'status': 'running', 'owner': owner, 'mode': a.mode, 'profiler': profiler,
              'concat_probe': concat,
              'scan_copy_probe': scan_copy,

@@ -29,8 +29,10 @@ def main():
     p.add_argument('--timeline-only', action='store_true')
     p.add_argument('--java-ranges', action='store_true')
     p.add_argument('--pinned-copy-threshold', type=int, choices=(0, 65536))
+    p.add_argument('--kernel-proof-window', action='store_true')
     a = p.parse_args()
     assert not (a.concat_implementation and a.scan_copy_implementation)
+    assert not a.kernel_proof_window or (a.timeline_only and a.pinned_copy_threshold is not None and not a.java_ranges)
     work = a.work.resolve()
     owner = read(work / 'evidence/owner.json')
     assert owner['thread_id'] == a.thread_id
@@ -62,6 +64,7 @@ def main():
     report = {'status': 'starting', 'owner': owner, 'classification': 'Diagnostic profiling; excluded from SOL scores',
               'nsys_session': session, 'source_revision': subprocess.check_output(
                   ['git', '-C', str(HERE), 'rev-parse', 'HEAD'], text=True).strip(),
+              'full_sql_trace': not a.kernel_proof_window,
               'start_unix_ns': time.time_ns(), 'java_ranges': a.java_ranges, 'pinned_copy_threshold': a.pinned_copy_threshold}
     write(directory / 'controller.json', {'pid': os.getpid(), 'owner_uid': os.getuid(),
                                          'start_time': services.start_time(os.getpid())})
@@ -76,9 +79,12 @@ def main():
                  '--sampling-period=8000000', '--discard-environment=true',
                  '--cudabacktrace=sync:100000,memory:100000'] if a.variant == 'code-profile' and not a.timeline_only
                 else ['--sample=none', '--cpuctxsw=none'])
-    duration = 420 if a.variant == 'code-profile' else 240
-    command = ['nsys', 'profile', '--trace=cuda,nvtx', '--cuda-trace-scope=process-tree',
-               *sampling, '--duration=' + str(duration), '--stop-on-exit=true',
+    duration = 10 if a.kernel_proof_window else (420 if a.variant == 'code-profile' else 240)
+    delay = 75 if a.kernel_proof_window else 0
+    report['capture_delay_seconds'] = delay
+    report['capture_duration_seconds'] = duration
+    command = ['nsys', 'profile', '--trace=cuda' if a.kernel_proof_window else '--trace=cuda,nvtx', '--cuda-trace-scope=process-tree',
+               *sampling, '--delay=' + str(delay), '--duration=' + str(duration), '--stop-on-exit=true',
                '--kill=none', '--wait=primary', '--session-new=' + session,
                '--output=' + str(directory / artifact),
                '--after-collection-start=' + ready,
@@ -136,7 +142,7 @@ def main():
                 report['nsys_exit'] = profiler.wait(timeout=60)
         stopped = True
     try:
-        deadline = time.monotonic() + 45
+        deadline = time.monotonic() + delay + 45
         while not (directory / 'nsys-ready.json').exists():
             assert profiler.poll() is None, 'Profiler exited before the collection-start callback'
             assert time.monotonic() < deadline, 'Profiler collection did not start'
@@ -163,7 +169,8 @@ def main():
         report['result'] = {k: result[k] for k in ('status', 'driver_exit_code', 'samples')}
         assert result['status'] == 'completed' and result['driver_exit_code'] == 0
         assert len(result['samples']) == 2 and all(s['validation']['status'] == 'passed' for s in result['samples'])
-        assert (workload['end_unix_ns'] - read(directory / 'nsys-ready.json')['time_unix_ns']) / 1e9 < duration
+        if not a.kernel_proof_window:
+            assert (workload['end_unix_ns'] - read(directory / 'nsys-ready.json')['time_unix_ns']) / 1e9 < duration
         stop_profiler()
         assert report['nsys_exit'] == 0
         trace = directory / (artifact + '.nsys-rep')
@@ -186,6 +193,15 @@ def main():
             copies = db.execute("select k.globalPid,s.value,count(*) from CUPTI_ACTIVITY_KIND_KERNEL k "
                 "join StringIds s on k.demangledName=s.id where s.value like '%cudf::detail::%copy_kernel%' "
                 "group by k.globalPid,s.value").fetchall()
+            if a.kernel_proof_window:
+                epoch = db.execute('select utcEpochNs from TARGET_INFO_SESSION_START_TIME').fetchone()[0]
+                first, last = db.execute('select min(start),max(end) from CUPTI_ACTIVITY_KIND_KERNEL').fetchone()
+                assert first is not None and last > first
+                windows = [(r['iteration'], max(0, min(last+epoch,r['finished_unix_ns']) -
+                    max(first+epoch,r['started_unix_ns'])) / 1e9) for r in result['samples']]
+                assert any(seconds > 0 for _,seconds in windows), windows
+                report['partial_kernel_window'] = {'start_unix_ns':first+epoch,
+                    'end_unix_ns':last+epoch,'sql_overlap_seconds':windows}
             db.close()
             if a.pinned_copy_threshold:
                 assert len({row[0] for row in copies}) == 8, copies

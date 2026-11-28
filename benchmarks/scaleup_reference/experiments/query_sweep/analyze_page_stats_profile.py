@@ -21,11 +21,17 @@ assert 'lost' not in text.lower() and 'error' not in text.lower()
 shift=trace['started_unix_ns']-trace['started_monotonic_ns']
 for line in text.splitlines():
  if not line.startswith('PAGE_STATS,'):continue
- end,pid,tid,codec,pages,selection,duration=map(int,line.split(',')[1:])
- assert codec in (1,2,4,6,7) and selection in (0,1) and 0<=pages<100000000
+ values=list(map(int,line.split(',')[1:]))
+ end,pid,tid,codec,pages,selection,duration=values[:7]
+ output_bytes=values[7] if len(values)==8 else None
+ assert codec in (1,2,4,6,7)
+ if 'argument_layout' in trace:
+  assert selection in (0,1) and 0<=pages<100000000 and output_bytes is not None
+ else:
+  pages=selection=None
  assert 0<duration<10000000000
  rows.append(dict(start_ns=end-duration+shift,end_ns=end+shift,pid=pid,tid=tid,
-                  codec=codec,pages=pages,selection=selection,duration_ns=duration))
+                  codec=codec,pages=pages,selection=selection,duration_ns=duration,output_bytes=output_bytes))
 pids={int(v) for v in query['native_threads']}
 assert {row['pid'] for row in rows}==pids
 
@@ -35,10 +41,11 @@ def summary(items):
          'median_call_us':statistics.median(r['duration_ns'] for r in items)/1e3,
          'p95_call_us':sorted(r['duration_ns'] for r in items)[int(.95*(len(items)-1))]/1e3,
          'max_call_ms':max(r['duration_ns'] for r in items)/1e6,
-         'median_pages':statistics.median(r['pages'] for r in items),
-         'max_pages':max(r['pages'] for r in items)}
+         'median_pages':statistics.median(r['pages'] for r in items) if items[0]['pages'] is not None else None,
+         'max_pages':max(r['pages'] for r in items) if items[0]['pages'] is not None else None,
+         'zero_output_calls':sum(r['output_bytes']==0 for r in items) if items[0]['output_bytes'] is not None else None}
 
-result={'calls':len(rows),'executors':sorted(pids),'iterations':[],
+result={'calls':len(rows),'invalid_argument_fields_discarded':'argument_layout' not in trace,'executors':sorted(pids),'iterations':[],
         'limits':['Call durations include uprobe overhead and possible descheduling.',
                   'Summed thread time overlaps across executor tasks and is not SQL wall time.',
                   'Non-Snappy codecs are not labeled redundant without actual input codec proof.',

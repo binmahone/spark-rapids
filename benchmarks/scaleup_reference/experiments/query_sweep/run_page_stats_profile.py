@@ -37,16 +37,21 @@ script.write_text('''interval:s:1 { if (@ready == 0) { printf("BPF_READY\\n"); @
 uprobe:LIBRARY:SYMBOL {
   @started[tid] = nsecs;
   @codec[tid] = *(uint8*)arg0;
-  @pages[tid] = arg4;
-  @selection[tid] = arg5;
+  @pages[tid] = *(uint64*)(reg("sp") + 0x28);
+  @selection[tid] = arg1;
+  @stats[tid] = arg0;
+  @output[tid] = *(uint64*)(arg0 + 0x28);
 }
 uretprobe:LIBRARY:SYMBOL /@started[tid]/ {
-  printf("PAGE_STATS,%llu,%d,%d,%llu,%llu,%llu,%llu\\n", nsecs, pid, tid,
-         @codec[tid], @pages[tid], @selection[tid], nsecs - @started[tid]);
+  printf("PAGE_STATS,%llu,%d,%d,%llu,%llu,%llu,%llu,%llu\\n", nsecs, pid, tid,
+         @codec[tid], @pages[tid], @selection[tid], nsecs - @started[tid],
+         *(uint64*)(@stats[tid] + 0x28) - @output[tid]);
   delete(@started[tid]); delete(@codec[tid]); delete(@pages[tid]); delete(@selection[tid]);
+  delete(@stats[tid]); delete(@output[tid]);
 }
 '''.replace('LIBRARY',str(library)).replace('SYMBOL',symbol))
 state={'status':'starting','owner_thread':a.thread_id,'symbol':symbol,'symbol_address':match[0][0],
+       'argument_layout':'x86_64 frozen ELF: pages.size at entry rsp+0x28; selection in rsi; codec at this+0; output at this+0x28',
        'library_sha256':sha(library),'started_unix_ns':time.time_ns(),'started_monotonic_ns':time.monotonic_ns(),
        'classification':'Diagnostic uprobe durations include instrumentation overhead; not benchmark scores.'}
 write(out/'state.json',state)

@@ -67,7 +67,8 @@ def main():
     duration = 420 if a.variant == 'code-profile' else 240
     command = ['nsys', 'profile', '--trace=cuda,nvtx', '--cuda-trace-scope=process-tree',
                *sampling, '--duration=' + str(duration), '--stop-on-exit=true',
-               '--kill=none', '--session-new=' + session, '--output=' + str(directory / artifact),
+               '--kill=none', '--wait=primary', '--session-new=' + session,
+               '--output=' + str(directory / artifact),
                '--after-collection-start=' + ready,
                sys.executable, str(HERE / 'run_data_path_trace_workload.py'),
                '--work', str(work), '--thread-id', a.thread_id, '--output', str(directory),

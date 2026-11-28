@@ -177,9 +177,11 @@ try:
   tested_library=root/'candidate/libcudf.so'
   assert sha(tested_library)==read(root/'candidate-state.json')['library_sha256']
   test_env={'CUDA_VISIBLE_DEVICES':uuid,
-            'LD_LIBRARY_PATH':str(root/'candidate')+':'+str(root/'compiler/lib')+':/usr/local/cuda-13.1/lib64',
+            'LD_LIBRARY_PATH':str(root/'candidate')+':'+str(root/'compiler/lib')+':'+str(build)+':/usr/local/cuda-13.1/lib64',
             'LD_DEBUG':'libs'}
-  run([build/'gtests/PARQUET_ACTIVE_CODECS_TEST','--gtest_output=xml:'+str(root/'reader-tests.xml')],
+  run(['/lib64/ld-linux-x86-64.so.2','--inhibit-rpath','',
+       '--library-path',test_env['LD_LIBRARY_PATH'],build/'gtests/PARQUET_ACTIVE_CODECS_TEST',
+       '--gtest_output=xml:'+str(root/'reader-tests.xml')],
       'reader-tests.log',300,extra_env=test_env)
   import xml.etree.ElementTree as ET
   result=ET.parse(root/'reader-tests.xml').getroot()

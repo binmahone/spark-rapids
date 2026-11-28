@@ -33,7 +33,7 @@ symbol=match[0][2]
 out=a.work/'native-page-stats'/a.label
 out.mkdir(parents=True,exist_ok=False)
 script=out/'page-stats.bt'
-script.write_text('''BEGIN { printf("BPF_READY\\n"); }
+script.write_text('''interval:s:1 { if (@ready == 0) { printf("BPF_READY\\n"); @ready = 1; } }
 uprobe:LIBRARY:SYMBOL {
   @started[tid] = nsecs;
   @codec[tid] = *(uint8*)arg0;

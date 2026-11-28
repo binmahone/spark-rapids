@@ -18,11 +18,16 @@ import services
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work', type=Path, required=True)
 p.add_argument('--thread-id', required=True)
+p.add_argument('--label', default='pinned-h2d-probe')
+p.add_argument('--groups', nargs='+', choices=('one-gpu', 'eight-gpu', 'same-pair',
+               'different-pairs', 'different-sockets', 'one-per-pair'),
+               default=['one-gpu', 'eight-gpu'])
 a = p.parse_args()
+assert a.label.replace('-', '').isalnum() and len(set(a.groups)) == len(a.groups)
 assert read(a.work / 'evidence/owner.json')['thread_id'] == a.thread_id
 assert not subprocess.check_output(['nvidia-smi', '--query-compute-apps=pid',
                                     '--format=csv,noheader'], text=True).strip()
-output = a.work / 'pinned-h2d-probe'
+output = a.work / a.label
 output.mkdir(exist_ok=False)
 binary = output / 'pinned-h2d-probe'
 cuda = Path('/usr/local/cuda-13.1')
@@ -46,7 +51,12 @@ manifest = {'owner_thread': a.thread_id, 'build_command': command,
             'gpu_numa_nodes': nodes, 'limits': ['Diagnostic copy ceiling, not a query speedup.',
             'One stream per GPU; repeated copies of a GPU-local pinned allocation.']}
 write(output / 'manifest.json', manifest)
-for name, gpus in [('one-gpu', [0]), ('eight-gpu', list(range(8)))]:
+groups = {'one-gpu': [0], 'eight-gpu': list(range(8)), 'same-pair': [0, 1],
+          'different-pairs': [0, 2], 'different-sockets': [0, 4], 'one-per-pair': [0, 2, 4, 6]}
+manifest['groups'] = {name: groups[name] for name in a.groups}
+write(output / 'manifest.json', manifest)
+for name in a.groups:
+    gpus = groups[name]
     directory = output / name
     directory.mkdir()
     children, records = [], []

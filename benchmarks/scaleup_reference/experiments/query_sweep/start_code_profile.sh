@@ -5,7 +5,7 @@ set -euo pipefail
 readonly work=${1:?Prepared work directory}
 readonly thread=${2:?Owner thread}
 readonly label=${3:?Unique capture label}
-readonly mode=${4:?control or stacks}
+readonly mode=${4:?control, stacks or native-io}
 readonly queries=${5:-8,18,5}
 readonly nvcomp_policy=${6:-}
 readonly concat_implementation=${7:-}

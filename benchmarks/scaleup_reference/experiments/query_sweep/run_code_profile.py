@@ -27,7 +27,7 @@ def main():
     p.add_argument('--work', type=Path, required=True)
     p.add_argument('--thread-id', required=True)
     p.add_argument('--label', required=True)
-    p.add_argument('--mode', choices=('control', 'stacks'), required=True)
+    p.add_argument('--mode', choices=('control', 'stacks', 'native-io'), required=True)
     p.add_argument('--queries', default='8,18,5')
     p.add_argument('--nvcomp-policy', choices=('STABLE', 'OFF'))
     p.add_argument('--concat-implementation', choices=('control', 'candidate'))
@@ -122,10 +122,15 @@ def main():
     signal.alarm(3600 if a.queries == 'all' else 1200)
     children = []
     try:
-        for name, script, extra in [
+        observers = [
             ('host', HERE.parent / 'runtime_prefilter/monitor_host.py', []),
             ('vm', HERE / 'monitor_vm.py', ['--thread-id', a.thread_id, '--controller', str(directory / 'controller.json')]),
-            ('pool', HERE / 'monitor_read_pool.py', [])]:
+            ('pool', HERE / 'monitor_read_pool.py', [])]
+        if a.mode == 'native-io':
+            observers.append(('native-io', HERE / 'monitor_native_io.py',
+                ['--thread-id', a.thread_id, '--scratch', str(scratch),
+                 '--controller', str(directory / 'controller.json')]))
+        for name, script, extra in observers:
             log = (directory / (name + '.log')).open('x')
             process = subprocess.Popen([sys.executable, str(script), '--work', str(a.work),
                 '--output', str(directory / (name + '.jsonl')), *extra], stdout=log, stderr=subprocess.STDOUT)
@@ -233,6 +238,11 @@ def main():
                 state['status'] = 'failed'
             log.close()
         state['finished_unix_ns'] = time.time_ns()
+        if a.mode == 'native-io':
+            receipt = directory / 'native-io.receipt.json'
+            state['native_io'] = read(receipt) if receipt.exists() else {'status': 'missing'}
+            if state['native_io']['status'] != 'completed':
+                state['status'] = 'failed'
         write(directory / 'state.json', state)
 
 

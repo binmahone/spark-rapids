@@ -14,7 +14,13 @@ readonly packed_view=${9:-false}
 readonly mmap_policy=${10:-}
 readonly pinned_copy_threshold=${11:-}
 readonly shuffle_copy_implementation=${12:-}
+readonly frozen_native_directory=${13:-false}
 decoder_args=()
+if [[ "$frozen_native_directory" == true ]]; then
+  decoder_args+=(--frozen-native-directory)
+else
+  [[ "$frozen_native_directory" == false ]]
+fi
 if [[ -n "$shuffle_copy_implementation" ]]; then decoder_args+=(--shuffle-copy-implementation "$shuffle_copy_implementation"); fi
 if [[ -n "$pinned_copy_threshold" ]]; then decoder_args+=(--pinned-copy-threshold "$pinned_copy_threshold"); fi
 if [[ -n "$nvcomp_policy" ]]; then

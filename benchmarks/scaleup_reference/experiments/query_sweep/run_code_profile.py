@@ -36,6 +36,7 @@ def main():
     p.add_argument('--concat-implementation', choices=('control', 'candidate'))
     p.add_argument('--scan-copy-implementation', choices=('original', 'sync', 'pair', 'paced-control', 'paced', 'paced-queued', 'serial-original', 'serial-unlocked', 'serial-locked', 'batch-control', 'batch-scalar', 'batch-paced'))
     p.add_argument('--packed-view', action='store_true')
+    p.add_argument('--frozen-native-directory', action='store_true')
     a = p.parse_args()
     assert not a.packed_view or not (a.concat_implementation or a.scan_copy_implementation), 'Keep packed-view experiment isolated'
     assert a.label.replace('-', '').replace('_', '').isalnum()
@@ -59,6 +60,11 @@ def main():
                    f"cstack=dwarf,jstackdepth=256,timeout=900,file={scratch}/profile-%p.jfr,log=stderr")
         if a.packed_view:
             options += f' -Xlog:class+load=info:file={scratch}/classes-%p.log'
+    if a.frozen_native_directory:
+        assert not (a.packed_view or a.concat_implementation or a.scan_copy_implementation or a.shuffle_copy_implementation)
+        native = a.work / 'native-concat/lib'
+        assert sha(native / 'libcudf.so') == '8a07e08432d9afbe80d1db24c69ce67e9a05048c703f7d65a1514dfc5620e9a3'
+        options = (options + ' ' if options else '') + f'-Dai.rapids.cudf.lib-native-dir={native}'
     concat = None
     if a.concat_implementation:
         native = a.work / 'native-concat'
@@ -127,6 +133,7 @@ def main():
              'scan_copy_probe': scan_copy,
              'shuffle_copy_probe': shuffle_copy,
              'packed_view': a.packed_view,
+             'frozen_native_directory': a.frozen_native_directory,
              'pinned_copy_threshold': a.pinned_copy_threshold,
              'queries': queries, 'nvcomp_policy': a.nvcomp_policy, 'mmap_policy': a.mmap_policy,
              'scratch': str(scratch), 'started_unix_ns': time.time_ns(),

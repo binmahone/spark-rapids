@@ -2,10 +2,8 @@
 """Audit retained JFR stack coverage and map executor differences to physical workers."""
 import argparse
 from collections import Counter
-from datetime import datetime
 import json
 from pathlib import Path
-import re
 import subprocess
 
 p=argparse.ArgumentParser(description=__doc__)
@@ -17,28 +15,27 @@ state=json.loads((a.trace/'state.json').read_text())
 run=Path(state['run']);config=json.loads((run/'config.json').read_text())
 scratch=Path(config['deployment']['scratch_root'])/run.name/'suite'
 inventory=json.loads((scratch/'gpu-inventory.json').read_text())
-records=json.loads(next((run/'services/suite').glob('*.json')).read_text())
-if isinstance(records,dict):
-    records=json.loads(next(path for path in (run/'services/suite').glob('*.json')
-        if not path.name.endswith('.stopped.json')).read_text())
+records=json.loads(next(path for path in (run/'services/suite').glob('*.json')
+    if not path.name.endswith('.stopped.json')).read_text())
+out=a.trace/'park-audit';out.mkdir(exist_ok=True)
+classes=out/'classes';classes.mkdir(exist_ok=True)
+subprocess.run([a.work/'jdk17/bin/javac','--release','17','-d',classes,
+    Path(__file__).with_name('ReadParkIntervals.java')],check=True)
 results=[]
 for row in s['executors']:
     pid=row['pid'];executor=row['executor_id']
     logs=list(scratch.glob(f'worker-*/work/*/{executor}/stderr'));assert len(logs)==1
     worker=int(logs[0].parents[3].name.split('-')[1])
     recording=next((a.trace/'park-recordings').glob(f'hotspot-pid-{pid}-*.jfr'))
-    parsed=json.loads(subprocess.check_output([a.work/'jdk17/bin/jfr','print','--json',
-        '--stack-depth','256','--events','jdk.ThreadPark',recording],text=True))
+    parsed=out/f'parks-{pid}.jsonl'
+    subprocess.run([a.work/'jdk17/bin/java','-cp',classes,
+        'com.nvidia.spark.rapids.experiments.ReadParkIntervals',recording,
+        str(s['begin_unix_ns']),str(s['end_unix_ns']),parsed],check=True)
     counts=Counter();frame_counts=Counter();unclassified=Counter()
-    for event in parsed['recording']['events']:
-        v=event['values']
-        start=round(datetime.fromisoformat(v['startTime'].replace('Z','+00:00')).timestamp()*1e9)
-        duration=float(re.fullmatch(r'PT([\d.]+)S',v['duration'])[1])*1e9
-        if start+duration<=s['begin_unix_ns'] or start>=s['end_unix_ns']:continue
-        trace=v.get('stackTrace') or {};frames=trace.get('frames',[])
-        stack=';'.join(f['method']['type']['name'].replace('/','.')+'.'+f['method']['name'] for f in frames)
-        counts['events']+=1;counts['truncated']+=bool(trace.get('truncated'))
-        frame_counts[len(frames)]+=1
+    for line in parsed.read_text().splitlines():
+        event=json.loads(line);stack=event['stack']
+        counts['events']+=1;counts['truncated']+=event['truncated']
+        frame_counts[event['frame_count']]+=1
         if 'MultiFileCloudPartitionReaderBase.getNextBuffersAndMeta' in stack:
             counts['reader_waits']+=1
             counts['reader_waits_without_task_runner']+='Executor$TaskRunner.run' not in stack

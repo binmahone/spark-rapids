@@ -46,6 +46,10 @@ public final class ReadParkIntervals {
           }
         }
         output.println("{\"start\":" + start + ",\"end\":" + stop
+            + ",\"truncated\":" + (event.getStackTrace() != null
+                && event.getStackTrace().isTruncated())
+            + ",\"frame_count\":" + (event.getStackTrace() == null ? 0
+                : event.getStackTrace().getFrames().size())
             + ",\"os_tid\":" + thread.getOSThreadId()
             + ",\"thread\":" + json(thread.getJavaName())
             + ",\"stack\":" + json(stack.toString()) + "}");

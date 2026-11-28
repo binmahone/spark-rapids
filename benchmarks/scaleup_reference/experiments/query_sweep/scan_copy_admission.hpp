@@ -4,11 +4,13 @@
  */
 #pragma once
 #include "copy_admission.hpp"
+#include <algorithm>
 #include <atomic>
 #include <cstdio>
 #include <cuda/stream>
 #include <cuda_runtime_api.h>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <memory>
 
 namespace scan_copy_experiment {
@@ -22,7 +24,7 @@ public:
     if (!entered.exchange(true)) {
       std::fprintf(stderr, "SCAN_COPY_NATIVE_ENTER mode=%d\n", admission_mode);
     }
-    active_ = admission_mode != 0 && bytes >= 32 * 1024 * 1024;
+    active_ = (admission_mode == 1 || admission_mode == 2) && bytes >= 32 * 1024 * 1024;
     if (!active_) {
       return;
     }
@@ -51,4 +53,38 @@ private:
   bool active_ = false;
   std::unique_ptr<file_copy_lease> lease_;
 };
+
+inline cudaError_t submit_copies(void* const* destinations,
+                                 void const* const* sources,
+                                 size_t const* sizes,
+                                 size_t count,
+                                 cuda::stream_ref stream) {
+  if (admission_mode < 3) {
+    return cudf::detail::memcpy_batch_async(destinations, sources, sizes, count, stream);
+  }
+  constexpr size_t quantum = 32 * 1024 * 1024;
+  size_t total = 0, chunks = 0;
+  for (size_t i = 0; i < count; ++i) total += sizes[i];
+  if (total <= quantum) {
+    return cudf::detail::memcpy_batch_async(destinations, sources, sizes, count, stream);
+  }
+  for (size_t i = 0; i < count; ++i) {
+    for (size_t offset = 0; offset < sizes[i]; offset += quantum) {
+      auto const bytes = std::min(quantum, sizes[i] - offset);
+      CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<char*>(destinations[i]) + offset,
+                                   static_cast<char const*>(sources[i]) + offset,
+                                   bytes, cudaMemcpyHostToDevice, stream.get()));
+      if (admission_mode == 3) {
+        // Bound queued copy work so another task can submit decode metadata transfers.
+        CUDF_CUDA_TRY(cudaStreamSynchronize(stream.get()));
+      }
+      ++chunks;
+    }
+  }
+  if (!completed.exchange(true)) {
+    std::fprintf(stderr, "SCAN_COPY_PACED_SUBMITTED mode=%d bytes=%zu chunks=%zu\n",
+                 admission_mode, total, chunks);
+  }
+  return cudaSuccess;
+}
 } // namespace scan_copy_experiment

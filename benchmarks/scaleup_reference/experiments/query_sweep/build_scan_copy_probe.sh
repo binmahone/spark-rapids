@@ -5,10 +5,12 @@ set -euo pipefail
 readonly work=${1:?Prepared work directory}
 readonly thread=${2:?Owner thread}
 readonly here=$(cd "$(dirname "$0")" && pwd)
-readonly root="$work/native-scan-copy"
+readonly output_name=${3:-native-scan-copy}
+[[ "$output_name" == native-scan-copy || "$output_name" == native-scan-copy-paced ]]
+readonly root="$work/$output_name"
 readonly sdk="$work/native-concat"
 [[ -z $(nvidia-smi --query-compute-apps=pid --format=csv,noheader) ]]
-python3 "$here/prepare_scan_copy_probe.py" --work "$work" --thread-id "$thread"
+python3 "$here/prepare_scan_copy_probe.py" --work "$work" --thread-id "$thread" --output-name "$output_name"
 exec > >(tee "$root/build.log") 2>&1
 trap 'code=$?; printf "%s\n" "$code" > "$root/build.exit"' EXIT
 common=(-std=c++20 -O3 -DNDEBUG --extended-lambda --expt-relaxed-constexpr \
@@ -36,4 +38,4 @@ printf '%s\n' 'Premain-Class: com.nvidia.spark.rapids.experiments.ScanCopyProbe'
   > "$root/agent-manifest.mf"
 "$work/jdk17/bin/jar" cfm "$root/scan-copy-probe.jar" "$root/agent-manifest.mf" -C "$root/classes" .
 sha256sum "$root/libscan_copy_probe.so" "$root/scan-copy-probe.jar" > "$root/artifacts.sha256"
-python3 "$here/prepare_copy_pair_mapping.py" --work "$work"
+python3 "$here/prepare_copy_pair_mapping.py" --work "$work" --output-name "$output_name"

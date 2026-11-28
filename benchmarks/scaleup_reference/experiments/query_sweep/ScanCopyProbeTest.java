@@ -18,7 +18,11 @@ public final class ScanCopyProbeTest {
          Cuda.Event event = new Cuda.Event();
          HostMemoryBuffer large = HostMemoryBuffer.allocate(length, true);
          HostMemoryBuffer small = HostMemoryBuffer.allocate(17, true)) {
-      large.setMemory(0, length, (byte) 0x5a);
+      byte[] pattern = new byte[length];
+      for (int i = 0; i < length; i++) {
+        pattern[i] = (byte) ((i * 31) ^ (i >>> 8) ^ (i >>> 20));
+      }
+      large.setBytes(0, pattern, 0, length);
       small.setMemory(0, 17, (byte) 0x3c);
       try (HostMemoryBuffer sliced = large.slice(7, length - 14);
            HostMemoryBuffer empty = large.slice(0, 0);
@@ -36,9 +40,9 @@ public final class ScanCopyProbeTest {
             actual.copyFromDeviceBuffer(buffers[index], stream);
             byte[] values = new byte[count];
             actual.getBytes(values, 0, 0, count);
-            byte expected = index == 0 ? (byte) 0x5a : (byte) 0x3c;
-            for (byte value : values) {
-              if (value != expected) { throw new AssertionError("Copied bytes differ"); }
+            for (int i = 0; i < values.length; i++) {
+              byte expected = index == 0 ? pattern[i + 7] : (byte) 0x3c;
+              if (values[i] != expected) { throw new AssertionError("Copied bytes differ at " + i); }
             }
           }
         }

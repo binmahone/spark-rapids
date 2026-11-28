@@ -10,6 +10,7 @@ import subprocess
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work', type=Path, required=True)
+p.add_argument('--output-name', choices=('native-scan-copy', 'native-scan-copy-paced'), default='native-scan-copy')
 a = p.parse_args()
 groups = defaultdict(list)
 for line in subprocess.check_output(['nvidia-smi', '--query-gpu=index,uuid,pci.bus_id',
@@ -24,6 +25,6 @@ rows = []
 for group, members in sorted(groups.items()):
     label = group.rsplit('/', 1)[-1].replace(':', '-')
     rows.extend(member['uuid'] + '=' + label + '\n' for member in members)
-root = a.work / 'native-scan-copy'
+root = a.work / a.output_name
 (root / 'gpu-pairs.properties').write_text(''.join(rows))
 (root / 'gpu-pairs.json').write_text(json.dumps(groups, indent=2) + '\n')

@@ -18,6 +18,7 @@ export CUDA_VISIBLE_DEVICES
 CUDA_VISIBLE_DEVICES=$(nvidia-smi --id=0 --query-gpu=uuid --format=csv,noheader)
 if [[ "$kind" == scan ]]; then
   root="$work/native-scan-copy"
+  [[ "$mode" != paced* ]] || root="$work/native-scan-copy-paced"
   agent="$root/scan-copy-probe.jar=$mode,$root/libscan_copy_probe.so,$root/gpu-pairs.properties,$root/leases"
 elif [[ "$kind" == concat ]]; then
   root="$work/native-concat"

@@ -20,8 +20,11 @@ public final class ScanCopyProbe {
     int mode;
     switch (parts[0]) {
       case "original": mode = 0; break;
+      case "paced-control": mode = 0; break;
       case "sync": mode = 1; break;
       case "pair": mode = 2; break;
+      case "paced": mode = 3; break;
+      case "paced-queued": mode = 4; break;
       default: throw new IllegalArgumentException("Unknown copy probe mode");
     }
     Properties mapping = new Properties();

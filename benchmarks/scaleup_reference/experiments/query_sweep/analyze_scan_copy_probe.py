@@ -14,6 +14,7 @@ from finalize_sol_reuse import normalize
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--work', type=Path, required=True)
 p.add_argument('--labels', nargs='+', required=True)
+p.add_argument('--output', type=Path)
 a = p.parse_args()
 runs, reference = [], None
 for label in a.labels:
@@ -29,7 +30,7 @@ for label in a.labels:
     for profile in profiles.values():
         for key, value in profile.items():
             if isinstance(value, str):
-                profile[key] = re.sub(r'scan-copy-probe.jar=(original|sync|pair),',
+                profile[key] = re.sub(r'scan-copy-probe.jar=(original|sync|pair|paced-control|paced-queued|paced),',
                     'scan-copy-probe.jar=<implementation>,', value.replace(run.name, '<run>'))
     rows, parity = [], []
     timeline = schedule(run)
@@ -65,4 +66,4 @@ report = {'runs': runs, 'parity': 'Same SQL, normalized plans, read work, config
                      'Synchronization moves wait time between operators; query elapsed time is the objective.',
                      'Stage spans overlap and task metric sums are not query elapsed time.',
                      'This native adapter is a diagnostic experiment, not a full JNI product build.']}
-(a.work / 'code-profile/scan-copy-comparison.json').write_text(json.dumps(report, indent=2) + '\n')
+(a.output or a.work / 'code-profile/scan-copy-comparison.json').write_text(json.dumps(report, indent=2) + '\n')
